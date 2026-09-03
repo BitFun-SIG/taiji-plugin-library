@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "generatedFrom": "src/shared/interactive-capabilities/catalog.json",
-  "catalogDigest": "5e37241d2ab62bb1b4224eb9b335c31bc99c148b3a5dd95e4ca4a4ab249619eb",
+  "catalogDigest": "381856ac19a19b3e37535412fb107647f66d57851f37c43f9a396fd76837cc06",
   "count": 217,
   "reasonCounts": {
     "externalAuth": 4,
@@ -703,8 +703,8 @@
     {
       "capabilityId": "feature.files-editor",
       "itemId": "attachments",
-      "titleZh": "在 Desktop 本地会话中粘贴本机文件、文件夹与图片，或在支持本机路径拖放的平台拖入",
-      "titleEn": "Paste local files, folders, and images in Desktop local sessions, or drop them where native path drop is available",
+      "titleZh": "在 Desktop 本地会话中粘贴或拖入本机文件、文件夹与图片",
+      "titleEn": "Paste or drop local files, folders, and images into Desktop local sessions",
       "reasonCode": "visualSelection",
       "reasonZh": "该流程需要用户选择或提供本地附件；Agent 可读取已经进入会话的文件，但不会自行声称完成了用户侧拖放或剪贴板选择。",
       "reasonEn": "This flow requires the user to select or provide local attachments; the Agent can read files already in context without pretending it performed the user's drag, drop, or clipboard selection.",
@@ -714,9 +714,11 @@
       },
       "evidence": [
         "command:get_clipboard_files",
+        "command:resolve_browser_dropped_file_paths",
         "command:upload_image_contexts",
         "source:src/web-ui/src/flow_chat/utils/externalFileIntake.ts#buildExternalFileContexts",
         "source:src/web-ui/src/flow_chat/utils/externalFileIntake.test.ts#buildExternalFileContexts",
+        "source:src/web-ui/src/infrastructure/files/resolveBrowserDroppedFilePaths.ts#resolveBrowserDroppedFilePaths",
         "source:src/web-ui/src/infrastructure/files/useLocalFileDrop.ts#useLocalFileDrop"
       ]
     },

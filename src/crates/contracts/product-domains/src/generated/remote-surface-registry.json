@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "digest": "fnv1a64:5f1e2838385bd3f4",
+  "digest": "fnv1a64:7bd6881b6749a7fa",
   "retiredCommandPrefixes": [
     {
       "prefix": "lsp_",
@@ -5999,6 +5999,18 @@
     },
     {
       "id": "resize_agent_companion_desktop_pet",
+      "surface": "tauri_command",
+      "remoteWorkspace": "LocalOnly",
+      "peer": {
+        "kind": "controller_local"
+      },
+      "cliPeer": {
+        "kind": "unsupported",
+        "reason": "the controller keeps this command; peer hosts refuse it before dispatch"
+      }
+    },
+    {
+      "id": "resolve_browser_dropped_file_paths",
       "surface": "tauri_command",
       "remoteWorkspace": "LocalOnly",
       "peer": {

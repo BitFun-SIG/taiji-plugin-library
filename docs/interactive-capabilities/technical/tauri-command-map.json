@@ -1,11 +1,11 @@
 {
   "schemaVersion": 2,
   "generatedFrom": "src/shared/interactive-capabilities/catalog.json",
-  "catalogDigest": "5e37241d2ab62bb1b4224eb9b335c31bc99c148b3a5dd95e4ca4a4ab249619eb",
-  "commandCount": 665,
+  "catalogDigest": "381856ac19a19b3e37535412fb107647f66d57851f37c43f9a396fd76837cc06",
+  "commandCount": 666,
   "coverage": {
-    "commandCount": 665,
-    "documentedCommandCount": 628,
+    "commandCount": 666,
+    "documentedCommandCount": 629,
     "implementationCommandCount": 37,
     "implementationDigest": "d408fe66b84766dfa669cc71ab4401a666092243f3b17afdc46f65f7f0fefa35"
   },
@@ -7757,6 +7757,22 @@
       "rustPath": "appearance::resize_agent_companion_desktop_pet",
       "sourceFile": "src/apps/desktop/src/appearance.rs",
       "signature": "fn resize_agent_companion_desktop_pet( app: tauri::AppHandle, width: f64, height: f64, ) -> Result<(), String>",
+      "remoteWorkspacePolicy": "LocalOnly"
+    },
+    {
+      "id": "resolve_browser_dropped_file_paths",
+      "moduleId": "browser_file_drop",
+      "capabilityId": "feature.files-editor",
+      "capabilityIds": [
+        "feature.files-editor"
+      ],
+      "documentedItemIds": [
+        "feature.files-editor:attachments"
+      ],
+      "visibility": "documented",
+      "rustPath": "api::browser_file_drop_api::resolve_browser_dropped_file_paths",
+      "sourceFile": "src/apps/desktop/src/api/browser_file_drop_api.rs",
+      "signature": "fn resolve_browser_dropped_file_paths( webview: tauri::WebviewWindow, request: ResolveBrowserDroppedFilePathsRequest, ) -> Result<Vec<String>, String>",
       "remoteWorkspacePolicy": "LocalOnly"
     },
     {
