@@ -1,6 +1,6 @@
 use crate::agentic::coordination::{
     get_global_coordinator, BackgroundSubagentOutcome, BackgroundSubagentWaitMode,
-    BackgroundSubagentWaitResult,
+    BackgroundSubagentWaitResult, BackgroundSubagentWaitStatus,
 };
 use crate::agentic::tools::framework::{
     PermissionIntent, Tool, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
@@ -11,8 +11,9 @@ use serde_json::{json, Value};
 use std::collections::HashSet;
 use tokio::time::Duration;
 
-const DEFAULT_TIMEOUT_MS: u64 = 600_000;
-const MAX_TIMEOUT_MS: u64 = 60 * 60 * 1_000;
+const MIN_TIMEOUT_SECONDS: u64 = 30 * 60;
+const DEFAULT_TIMEOUT_SECONDS: u64 = MIN_TIMEOUT_SECONDS;
+const MAX_TIMEOUT_SECONDS: u64 = 60 * 60;
 
 /// DEPRECATED. Use SessionMessage for sub-agent communication (async, no waiting needed).
 /// Max 10min, only for short waits confirming session creation, not for long-running tasks.
@@ -22,7 +23,7 @@ pub struct AgentWaitTool;
 struct AgentWaitRequest {
     bg_task_ids: Vec<String>,
     wait_mode: BackgroundSubagentWaitMode,
-    timeout_ms: u64,
+    timeout_seconds: u64,
 }
 
 impl Default for AgentWaitTool {
@@ -70,11 +71,12 @@ impl AgentWaitTool {
                 "bg_task_ids must contain at least one non-empty string".to_string(),
             ));
         }
+        let wait_mode = Self::parse_wait_mode(object.get("wait_mode"))?;
 
         Ok(AgentWaitRequest {
             bg_task_ids,
-            wait_mode: Self::parse_wait_mode(object.get("wait_mode"))?,
-            timeout_ms: Self::parse_timeout_ms(object.get("timeout_ms")),
+            wait_mode,
+            timeout_seconds: Self::parse_timeout_seconds(object.get("timeout_seconds")),
         })
     }
 
@@ -100,43 +102,11 @@ impl AgentWaitTool {
         Ok(wait_mode)
     }
 
-    fn parse_timeout_ms(timeout_ms: Option<&Value>) -> u64 {
-        Self::parse_timeout_ms_with_bounds(timeout_ms, DEFAULT_TIMEOUT_MS, MAX_TIMEOUT_MS)
-    }
-
-    fn parse_timeout_ms_with_bounds(
-        timeout_ms: Option<&Value>,
-        default_timeout_ms: u64,
-        max_timeout_ms: u64,
-    ) -> u64 {
-        timeout_ms
+    fn parse_timeout_seconds(timeout_seconds: Option<&Value>) -> u64 {
+        timeout_seconds
             .and_then(Value::as_u64)
-            .filter(|timeout_ms| *timeout_ms > 0)
-            .unwrap_or(default_timeout_ms)
-            .min(max_timeout_ms)
-    }
-
-    /// Resolve the configured AgentWait default/max timeouts
-    /// (`ai.thresholds.tool_timeout.agent_wait_default_ms` / `agent_wait_max_ms`),
-    /// falling back to the legacy 600s/3600s constants when unset or invalid.
-    async fn configured_agent_wait_timeout_bounds() -> (u64, u64) {
-        use crate::service::config::get_global_config_service;
-        let Ok(config_service) = get_global_config_service().await else {
-            return (DEFAULT_TIMEOUT_MS, MAX_TIMEOUT_MS);
-        };
-        let Ok(thresholds) = config_service
-            .get_config::<crate::service::config::types::AiThresholdsConfig>(Some("ai.thresholds"))
-            .await
-        else {
-            return (DEFAULT_TIMEOUT_MS, MAX_TIMEOUT_MS);
-        };
-        let timeouts = &thresholds.tool_timeout;
-        (
-            timeouts.agent_wait_default_ms.max(1),
-            timeouts
-                .agent_wait_max_ms
-                .max(timeouts.agent_wait_default_ms.max(1)),
-        )
+            .unwrap_or(DEFAULT_TIMEOUT_SECONDS)
+            .clamp(MIN_TIMEOUT_SECONDS, MAX_TIMEOUT_SECONDS)
     }
 
     fn outcome_json(outcome: &BackgroundSubagentOutcome) -> Value {
@@ -154,15 +124,21 @@ impl AgentWaitTool {
     /// 全文留在 data JSON（outcome_json 含 content/error），父会话按需取 data；
     /// 避免显式等待返回面携带「通知 + 全文」双路。
     fn assistant_result(result: &BackgroundSubagentWaitResult) -> String {
+        let finished = if result.status == BackgroundSubagentWaitStatus::Steered {
+            "AgentWait ended early because user steering arrived. Background agents continue running."
+                .to_string()
+        } else {
+            format!("AgentWait finished with status {}.", result.status.as_str())
+        };
         if result.outcomes.is_empty() {
             return format!(
-                "AgentWait finished with status {}. Pending background task IDs: {}.",
-                result.status.as_str(),
+                "{} Pending background task IDs: {}.",
+                finished,
                 result.pending_bg_task_ids.join(", ")
             );
         }
 
-        let mut message = format!("AgentWait finished with status {}.", result.status.as_str());
+        let mut message = finished;
         for outcome in &result.outcomes {
             message.push_str(&format!(
                 "\n<result bg_task_id=\"{}\" agent_id=\"{}\" status=\"{}\">",
@@ -196,15 +172,17 @@ impl Tool for AgentWaitTool {
         true
     }
 
+    fn round_injection_yieldable(&self) -> bool {
+        true
+    }
+
     async fn description(&self) -> BitFunResult<String> {
-        Ok("Wait for background subagent results.
-Set wait_mode to `any` to return after any selected task completes, or `all` to wait for every selected task.
-Provide bg_task_ids when known; omit it or pass [] to select all unconsumed background tasks.
-The selected task set is fixed when the call starts. wait_mode defaults to `all`; the tool also returns when `timeout_ms` has elapsed.".to_string())
+        Ok("Wait for background agent results.
+Wait for every selected task to complete. The tool also returns when `timeout_seconds` has elapsed.".to_string())
     }
 
     fn short_description(&self) -> String {
-        "Wait for selected background subagent results.".to_string()
+        "Wait for selected background agent results.".to_string()
     }
 
     fn input_schema(&self) -> Value {
@@ -214,19 +192,19 @@ The selected task set is fixed when the call starts. wait_mode defaults to `all`
                 "bg_task_ids": {
                     "type": "array",
                     "items": { "type": "string" },
-                    "description": "Optional background task IDs returned by Task tool. Omit this field or pass [] to select all unconsumed background subagent results."
+                    "description": "Background task IDs whose results should be collected."
                 },
                 "wait_mode": {
                     "type": "string",
                     "enum": ["any", "all"],
-                    "default": "all",
-                    "description": "Defaults to `all`."
+                    "description": "Whether to return when any selected task finishes (\"any\") or wait for all of them (\"all\", default)."
                 },
-                "timeout_ms": {
+                "timeout_seconds": {
                     "type": "integer",
-                    "description": "Maximum time to wait in milliseconds. Defaults to 10 minutes."
+                    "description": "Maximum time to wait in seconds, with a minimum of 30 minutes (default) and a maximum of 1 hour."
                 }
             },
+            "required": ["bg_task_ids"],
             "additionalProperties": false
         })
     }
@@ -277,11 +255,7 @@ The selected task set is fixed when the call starts. wait_mode defaults to `all`
         input: &Value,
         context: &ToolUseContext,
     ) -> BitFunResult<Vec<ToolResult>> {
-        let mut request = Self::parse_request(input)?;
-        // 阈值参数配置化：ai.thresholds.tool_timeout.agent_wait_default_ms / agent_wait_max_ms
-        let (default_ms, max_ms) = Self::configured_agent_wait_timeout_bounds().await;
-        request.timeout_ms =
-            Self::parse_timeout_ms_with_bounds(input.get("timeout_ms"), default_ms, max_ms);
+        let request = Self::parse_request(input)?;
         let session_id = context
             .session_id
             .as_deref()
@@ -296,14 +270,14 @@ The selected task set is fixed when the call starts. wait_mode defaults to `all`
                 session_id,
                 &request.bg_task_ids,
                 request.wait_mode,
-                Duration::from_millis(request.timeout_ms),
+                Duration::from_secs(request.timeout_seconds),
                 dialog_turn_id,
                 context.cancellation_token(),
+                context.round_injection_preemption_token(),
             )
             .await?;
         let data = json!({
             "status": result.status.as_str(),
-            "wait_mode": request.wait_mode.as_str(),
             "results": result.outcomes.iter().map(Self::outcome_json).collect::<Vec<_>>(),
             "pending_bg_task_ids": result.pending_bg_task_ids,
         });
@@ -317,56 +291,27 @@ The selected task set is fixed when the call starts. wait_mode defaults to `all`
 
 #[cfg(test)]
 mod tests {
-    use super::{AgentWaitTool, DEFAULT_TIMEOUT_MS, MAX_TIMEOUT_MS};
-    use crate::agentic::coordination::BackgroundSubagentWaitMode;
+    use super::{AgentWaitTool, DEFAULT_TIMEOUT_SECONDS, MAX_TIMEOUT_SECONDS, MIN_TIMEOUT_SECONDS};
     use crate::agentic::tools::framework::Tool;
 
     #[test]
-    fn schema_exposes_only_parent_scoped_background_task_ids() {
-        let schema = AgentWaitTool::new().input_schema();
-
-        assert_eq!(schema["properties"]["bg_task_ids"]["type"], "array");
-        assert!(schema["properties"].get("background_task_ids").is_none());
+    fn agent_wait_owns_timeout_and_yields_to_round_injection() {
+        let tool = AgentWaitTool::new();
+        assert!(tool.manages_own_execution_timeout());
+        assert!(tool.round_injection_yieldable());
     }
 
     #[test]
-    fn empty_input_uses_the_default_timeout_and_session_selector() {
+    fn missing_or_empty_task_ids_are_tolerated_by_the_parser() {
         let request = AgentWaitTool::parse_request(&serde_json::json!({})).expect("valid request");
         assert!(request.bg_task_ids.is_empty());
-        assert_eq!(request.wait_mode, BackgroundSubagentWaitMode::All);
-        assert_eq!(request.timeout_ms, DEFAULT_TIMEOUT_MS);
-    }
-
-    #[test]
-    fn explicit_wait_mode_applies_to_session_and_exact_task_selectors() {
-        let any = AgentWaitTool::parse_request(&serde_json::json!({
-            "wait_mode": "any"
-        }))
-        .expect("any wait mode must be valid");
-        assert!(any.bg_task_ids.is_empty());
-        assert_eq!(any.wait_mode, BackgroundSubagentWaitMode::Any);
-
-        let all = AgentWaitTool::parse_request(&serde_json::json!({
-            "wait_mode": "all"
-        }))
-        .expect("all wait mode must be valid");
-        assert!(all.bg_task_ids.is_empty());
-        assert_eq!(all.wait_mode, BackgroundSubagentWaitMode::All);
+        assert_eq!(request.timeout_seconds, DEFAULT_TIMEOUT_SECONDS);
 
         let empty = AgentWaitTool::parse_request(&serde_json::json!({
-            "bg_task_ids": [],
-            "wait_mode": "any"
+            "bg_task_ids": []
         }))
         .expect("an empty selector must be valid");
-        assert_eq!(empty.wait_mode, BackgroundSubagentWaitMode::Any);
-
-        let exact = AgentWaitTool::parse_request(&serde_json::json!({
-            "bg_task_ids": ["bg1", "bg2"],
-            "wait_mode": "any"
-        }))
-        .expect("exact task IDs must be valid");
-        assert_eq!(exact.wait_mode, BackgroundSubagentWaitMode::Any);
-        assert_eq!(exact.bg_task_ids, ["bg1", "bg2"]);
+        assert!(empty.bg_task_ids.is_empty());
     }
 
     #[test]
@@ -376,7 +321,6 @@ mod tests {
         }))
         .expect("a single task ID string must be accepted");
         assert_eq!(request.bg_task_ids, ["bg1"]);
-        assert_eq!(request.wait_mode, BackgroundSubagentWaitMode::All);
     }
 
     #[test]
@@ -407,24 +351,24 @@ mod tests {
     }
 
     #[test]
-    fn timeout_and_unknown_parameters_are_tolerated() {
+    fn timeout_uses_seconds_and_is_clamped_to_supported_bounds() {
         let defaulted = AgentWaitTool::parse_request(&serde_json::json!({
-            "timeout_ms": "invalid",
+            "timeout_seconds": "invalid",
             "unused": true
         }))
         .expect("invalid timeout and unknown parameters must be tolerated");
-        assert_eq!(defaulted.timeout_ms, DEFAULT_TIMEOUT_MS);
+        assert_eq!(defaulted.timeout_seconds, DEFAULT_TIMEOUT_SECONDS);
 
         let capped = AgentWaitTool::parse_request(&serde_json::json!({
-            "timeout_ms": MAX_TIMEOUT_MS + 1
+            "timeout_seconds": MAX_TIMEOUT_SECONDS + 1
         }))
         .expect("large timeout must be capped");
-        assert_eq!(capped.timeout_ms, MAX_TIMEOUT_MS);
+        assert_eq!(capped.timeout_seconds, MAX_TIMEOUT_SECONDS);
 
-        let zero = AgentWaitTool::parse_request(&serde_json::json!({
-            "timeout_ms": 0
+        let raised = AgentWaitTool::parse_request(&serde_json::json!({
+            "timeout_seconds": MIN_TIMEOUT_SECONDS - 1
         }))
-        .expect("zero timeout must use the default");
-        assert_eq!(zero.timeout_ms, DEFAULT_TIMEOUT_MS);
+        .expect("short timeout must be raised to the minimum");
+        assert_eq!(raised.timeout_seconds, MIN_TIMEOUT_SECONDS);
     }
 }

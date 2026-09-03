@@ -291,7 +291,7 @@ mod baseline_tests {
             "CreateCanvas",
             "WebSearch",
             "ListMCPResources",
-            "Git",
+            "Worktree",
             "ComputerUse",
         ] {
             assert!(

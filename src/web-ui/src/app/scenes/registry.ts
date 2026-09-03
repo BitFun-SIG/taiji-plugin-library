@@ -2,16 +2,15 @@
  * SCENE_TAB_REGISTRY — static definitions for all scene tab types.
  *
  * Rules:
- *  - Max MAX_OPEN_SCENES open tabs total.
- *  - pinned = true: protected from auto-eviction and manual close.
- *  - pinned = false: can be auto-evicted and manually closed.
+ *  - Every explicitly opened scene remains open until the user closes it.
+ *  - pinned = true: stays ahead of regular tabs while open.
+ *  - closable = false: protected from manual close; pinning is independent.
+ *  - Scene ids are unique, while Mini Apps use one id per app instance.
  */
 
+import React from 'react';
+import { Icon, type IconName } from '@bitfun/ui';
 import {
-  MessageSquare,
-  Terminal,
-  GitBranch,
-  Settings,
   FileCode2,
   CircleUserRound,
   Users,
@@ -19,41 +18,33 @@ import {
   Wrench,
   Boxes,
   PanelsTopLeft,
-  Globe,
-  User,
   BarChart3,
   CalendarClock,
-  ExternalLink,
+  Network,
 } from 'lucide-react';
-import type { SceneTabDef, SceneTabId } from '../components/SceneBar/types';
+import type { SceneTabDef, SceneTabIcon, SceneTabId } from '../components/SceneBar/types';
 
-/** Upper bound for concurrent open scene tabs (top bar); oldest closable tab is evicted when exceeded. */
-export const MAX_OPEN_SCENES = 3;
+function catalogSceneIcon(name: IconName): SceneTabIcon {
+  return function CatalogSceneIcon() {
+    return React.createElement(Icon, { name, size: 'lg', 'aria-hidden': true });
+  };
+}
 
 export const SCENE_TAB_REGISTRY: SceneTabDef[] = [
-  {
-    id: 'welcome' as SceneTabId,
-    label: 'Welcome',
-    labelKey: 'welcomeScene.tabLabel',
-    pinned: false,
-    singleton: true,
-    defaultOpen: true,
-  },
   {
     id: 'session' as SceneTabId,
     label: 'Session',
     labelKey: 'scenes.aiAgent',
-    Icon: MessageSquare,
+    Icon: catalogSceneIcon('session'),
     pinned: true,
-    fixed: true,
-    closable: false,
+    closable: true,
     singleton: true,
     defaultOpen: false,
   },
   {
     id: 'terminal' as SceneTabId,
     label: 'Terminal',
-    Icon: Terminal,
+    Icon: catalogSceneIcon('terminal'),
     pinned: false,
     singleton: true,
     defaultOpen: false,
@@ -61,7 +52,7 @@ export const SCENE_TAB_REGISTRY: SceneTabDef[] = [
   {
     id: 'git' as SceneTabId,
     label: 'Git',
-    Icon: GitBranch,
+    Icon: catalogSceneIcon('git'),
     pinned: false,
     singleton: true,
     defaultOpen: false,
@@ -70,7 +61,7 @@ export const SCENE_TAB_REGISTRY: SceneTabDef[] = [
     id: 'settings' as SceneTabId,
     label: 'Settings',
     labelKey: 'shared:features.settings',
-    Icon: Settings,
+    Icon: catalogSceneIcon('settings'),
     pinned: false,
     singleton: true,
     defaultOpen: false,
@@ -104,7 +95,16 @@ export const SCENE_TAB_REGISTRY: SceneTabDef[] = [
     id: 'skills' as SceneTabId,
     label: 'Skills',
     labelKey: 'scenes.skills',
-    Icon: Puzzle,
+    Icon: catalogSceneIcon('extension'),
+    pinned: false,
+    singleton: true,
+    defaultOpen: false,
+  },
+  {
+    id: 'ecosystem-compatibility' as SceneTabId,
+    label: 'Ecosystem Compatibility',
+    labelKey: 'nav.items.ecosystemCompatibility',
+    Icon: Network,
     pinned: false,
     singleton: true,
     defaultOpen: false,
@@ -139,7 +139,7 @@ export const SCENE_TAB_REGISTRY: SceneTabDef[] = [
     id: 'browser' as SceneTabId,
     label: 'Browser',
     labelKey: 'scenes.browser',
-    Icon: Globe,
+    Icon: catalogSceneIcon('browser'),
     pinned: false,
     singleton: true,
     defaultOpen: false,
@@ -148,7 +148,7 @@ export const SCENE_TAB_REGISTRY: SceneTabDef[] = [
     id: 'assistant' as SceneTabId,
     label: 'Assistant',
     labelKey: 'scenes.assistant',
-    Icon: User,
+    Icon: catalogSceneIcon('user'),
     pinned: false,
     singleton: true,
     defaultOpen: false,
@@ -164,7 +164,7 @@ export const SCENE_TAB_REGISTRY: SceneTabDef[] = [
   },
   {
     id: 'todos' as SceneTabId,
-    label: 'Todos',
+    label: 'Task Board',
     labelKey: 'scenes.todos',
     Icon: CalendarClock,
     pinned: false,
@@ -184,7 +184,7 @@ export const SCENE_TAB_REGISTRY: SceneTabDef[] = [
     id: 'shell' as SceneTabId,
     label: 'Shell',
     labelKey: 'scenes.shell',
-    Icon: Terminal,
+    Icon: catalogSceneIcon('terminal'),
     pinned: false,
     singleton: true,
     defaultOpen: false,
@@ -193,9 +193,8 @@ export const SCENE_TAB_REGISTRY: SceneTabDef[] = [
     id: 'panel-view' as SceneTabId,
     label: 'Panel View',
     labelKey: 'scenes.panelView',
-    Icon: ExternalLink,
+    Icon: catalogSceneIcon('arrow-up-right'),
     pinned: false,
-    fixed: false,
     closable: true,
     singleton: true,
     defaultOpen: false,
@@ -204,6 +203,11 @@ export const SCENE_TAB_REGISTRY: SceneTabDef[] = [
 
 export function getSceneDef(id: SceneTabId): SceneTabDef | undefined {
   return SCENE_TAB_REGISTRY.find(d => d.id === id);
+}
+
+/** Shared closeability policy for the scene store and every tab interaction. */
+export function isSceneTabClosable(def: SceneTabDef | undefined): boolean {
+  return def !== undefined && def.closable !== false;
 }
 
 /** Static singleton scene def for the panel-view scene. */
@@ -215,9 +219,8 @@ export function getMiniAppSceneDef(appId: string, appName?: string): SceneTabDef
   return {
     id,
     label: appName ?? appId,
-    Icon: Puzzle,
+    Icon: catalogSceneIcon('mini-app'),
     pinned: false,
-    fixed: false,
     closable: true,
     singleton: false,
     defaultOpen: false,

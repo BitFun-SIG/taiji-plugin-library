@@ -4,6 +4,7 @@ use std::collections::BTreeMap;
 
 use serde_json::{json, Value};
 
+use bitfun_core::agentic::tools::bitfun_control_config::global_shared_product_control_executor;
 use bitfun_core::service::config::get_global_config_service;
 use bitfun_core::util::errors::BitFunError;
 
@@ -100,20 +101,55 @@ pub(crate) async fn set_config(state: &PeerHostState, args: &Value) -> Result<Va
         .cloned()
         .ok_or_else(|| "Missing 'value' field".to_string())?;
 
-    let config_service = get_global_config_service()
+    let outcome = global_shared_product_control_executor()
+        .await?
+        .configure_legacy_path(&path, value)
         .await
-        .map_err(|e| format!("Failed to get config service: {e}"))?;
-
-    config_service.set_config(&path, value).await.map_err(|e| {
-        tracing::error!("Failed to set config: path={path}, error={e}");
-        format!("Failed to set config: {e}")
-    })?;
+        .map_err(|error| {
+            tracing::error!(
+                "Failed to set config through ProductControl: path={path}, error={error}"
+            );
+            format!("Failed to set config: {error}")
+        })?;
 
     // Config changed on this host via a peer controller — schedule the cloud
     // push so other same-account devices converge.
     state.account_runtime.notify_local_settings_changed();
 
-    Ok(json!("Configuration set successfully"))
+    Ok(outcome)
+}
+
+pub(crate) async fn get_web_search_credential_status(args: &Value) -> Result<Value, String> {
+    let request = request_value(args);
+    let provider = request
+        .get("provider")
+        .and_then(Value::as_str)
+        .ok_or_else(|| "Missing or invalid 'provider' field".to_string())?;
+    let status = bitfun_core::service::web_search::get_web_search_credential_status(provider)
+        .await
+        .map_err(|error| format!("Failed to read WebSearch credential status: {error}"))?;
+    serde_json::to_value(status)
+        .map_err(|error| format!("Failed to serialize WebSearch credential status: {error}"))
+}
+
+pub(crate) async fn save_web_search_credential(args: &Value) -> Result<Value, String> {
+    let request = serde_json::from_value(request_value(args).clone())
+        .map_err(|error| format!("Invalid WebSearch credential request: {error}"))?;
+    let status = bitfun_core::service::web_search::save_web_search_credential(request)
+        .await
+        .map_err(|error| format!("Failed to save WebSearch credential: {error}"))?;
+    serde_json::to_value(status)
+        .map_err(|error| format!("Failed to serialize WebSearch credential status: {error}"))
+}
+
+pub(crate) async fn clear_web_search_credential(args: &Value) -> Result<Value, String> {
+    let request = serde_json::from_value(request_value(args).clone())
+        .map_err(|error| format!("Invalid WebSearch credential clear request: {error}"))?;
+    let status = bitfun_core::service::web_search::clear_web_search_credential(request)
+        .await
+        .map_err(|error| format!("Failed to clear WebSearch credential: {error}"))?;
+    serde_json::to_value(status)
+        .map_err(|error| format!("Failed to serialize WebSearch credential status: {error}"))
 }
 
 pub(crate) async fn get_agent_profile_config(args: &Value) -> Result<Value, String> {

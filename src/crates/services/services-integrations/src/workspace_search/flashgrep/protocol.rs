@@ -123,8 +123,6 @@ pub(crate) struct SearchParams {
     pub query: QuerySpec,
     #[serde(default)]
     pub scope: PathScope,
-    #[serde(default)]
-    pub allow_scan_fallback: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

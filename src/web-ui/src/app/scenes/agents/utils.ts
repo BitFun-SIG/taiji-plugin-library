@@ -9,8 +9,6 @@ import {
 
 const MODE_DESCRIPTION_KEY_BY_ID: Record<string, string> = {
   agentic: 'Agentic',
-  plan: 'Plan',
-  debug: 'Debug',
   cowork: 'Cowork',
   computeruse: 'ComputerUse',
   deepresearch: 'DeepResearch',
@@ -21,7 +19,7 @@ const MODE_DESCRIPTION_KEY_BY_ID: Record<string, string> = {
 };
 
 interface AgentBadgeConfig {
-  variant: 'accent' | 'info' | 'success' | 'purple' | 'neutral';
+  variant: 'accent' | 'info' | 'success' | 'neutral';
   label: string;
 }
 
@@ -59,7 +57,7 @@ function getAgentBadge(
       return { variant: 'success', label: t('agentCard.badges.userMode') };
     }
     if (source === 'project') {
-      return { variant: 'purple', label: t('agentCard.badges.projectMode') };
+      return { variant: 'accent', label: t('agentCard.badges.projectMode') };
     }
     // Legacy workflow-orchestrator mode ("Legion" registry id) gets the
     // workflow badge instead of the generic agent badge.
@@ -75,7 +73,7 @@ function getAgentBadge(
     case 'user':
       return { variant: 'success', label: t('agentCard.badges.userSubagent') };
     case 'project':
-      return { variant: 'purple', label: t('agentCard.badges.projectSubagent') };
+      return { variant: 'accent', label: t('agentCard.badges.projectSubagent') };
     default:
       return { variant: 'info', label: t('agentCard.badges.subagent') };
   }
@@ -107,10 +105,6 @@ function codingAnalysisCapabilities() {
   return [{ category: 'coding' as const, level: 4 }, { category: 'analysis' as const, level: 4 }];
 }
 
-function analysisCapabilities() {
-  return [{ category: 'analysis' as const, level: 4 }];
-}
-
 function enrichCapabilities(agent: AgentWithCapabilities): AgentWithCapabilities {
   if (agent.capabilities?.length) {
     return {
@@ -126,15 +120,12 @@ function enrichCapabilities(agent: AgentWithCapabilities): AgentWithCapabilities
   if (agent.agentKind === 'mode') {
     if (id === 'agentic') return { ...agent, capabilities: [{ category: 'coding', level: 5 }, { category: 'analysis', level: 4 }] };
     if (id === 'plan') return { ...agent, capabilities: [{ category: 'analysis', level: 5 }, { category: 'docs', level: 3 }] };
-    if (id === 'debug') return { ...agent, capabilities: [{ category: 'coding', level: 5 }, { category: 'analysis', level: 3 }] };
     if (id === 'cowork') return { ...agent, capabilities: [{ category: 'analysis', level: 4 }, { category: 'creative', level: 3 }] };
     if (id === 'computeruse') return { ...agent, capabilities: [{ category: 'ops', level: 5 }, { category: 'analysis', level: 3 }] };
     if (id === 'deepresearch') return { ...agent, capabilities: [{ category: 'analysis', level: 5 }, { category: 'docs', level: 4 }] };
-    if (id === 'multitask') return { ...agent, capabilities: codingAnalysisCapabilities() };
-    if (id === 'team') return { ...agent, capabilities: analysisCapabilities() };
   }
 
-  if (id === 'explore' || id === 'filefinder' || id === 'researchspecialist') return { ...agent, capabilities: [{ category: 'analysis', level: 4 }] };
+  if (id === 'explore' || id === 'researchspecialist') return { ...agent, capabilities: [{ category: 'analysis', level: 4 }] };
   if (id === 'generalpurpose' || id === 'reviewfixer') {
     return { ...agent, capabilities: codingAnalysisCapabilities() };
   }

@@ -17,6 +17,8 @@ use crate::agentic::tools::restrictions::get_session_restrictions;
 use crate::agentic::tools::tool_context_runtime;
 use crate::agentic::tools::tool_context_runtime::ToolUseContext;
 use crate::agentic::tools::tool_result_storage;
+#[cfg(feature = "opencode-plugin-host")]
+use crate::agentic::WorkspaceBinding;
 use crate::native_hooks::{self, NativeHookSessionFacts};
 use crate::service::config::types::ExecutionThresholds;
 use crate::util::elapsed_ms_u64;
@@ -59,11 +61,20 @@ use tool_runtime::pipeline::{
 
 fn resolve_contextual_tool(
     tool: Arc<dyn crate::agentic::tools::framework::Tool>,
-    workspace_root: Option<&Path>,
-    remote: bool,
+    context: &ToolUseContext,
 ) -> Option<Arc<dyn crate::agentic::tools::framework::Tool>> {
+    // Remote 路由隔离（与 product_runtime/catalog.rs 同判例）：远程 workspace 用
+    // 不可路由 sentinel 根，只解析被挪位的本地实现，避免与远程 Tool Runtime 同路径串台。
     #[cfg(feature = "external-sources")]
     {
+        let workspace_root = context
+            .workspace
+            .as_ref()
+            .map(|workspace| workspace.root_path());
+        let remote = context
+            .workspace
+            .as_ref()
+            .is_some_and(|workspace| workspace.is_remote());
         crate::external_tools::resolve_external_tool_for_workspace(
             tool,
             crate::external_tools::external_tool_route_root(workspace_root, remote),
@@ -71,7 +82,7 @@ fn resolve_contextual_tool(
     }
     #[cfg(not(feature = "external-sources"))]
     {
-        let _ = (workspace_root, remote);
+        let _ = context;
         Some(tool)
     }
 }
@@ -283,6 +294,53 @@ enum StaleSpecReloadOutcome {
     NotReloadable(&'static str),
 }
 
+#[cfg(feature = "opencode-plugin-host")]
+struct PluginAfterPresentation {
+    title: String,
+    output: String,
+    metadata: serde_json::Value,
+}
+
+#[cfg(feature = "opencode-plugin-host")]
+fn plugin_after_presentation(
+    tool_name: &str,
+    tool_result: &ModelToolResult,
+) -> PluginAfterPresentation {
+    let object = tool_result.result.as_object();
+    let title = object
+        .and_then(|value| value.get("title"))
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or(tool_name)
+        .to_string();
+    let output = tool_result
+        .result_for_assistant
+        .clone()
+        .or_else(|| {
+            object
+                .and_then(|value| value.get("output"))
+                .and_then(serde_json::Value::as_str)
+                .map(str::to_string)
+        })
+        .unwrap_or_else(|| tool_result.result.to_string());
+    let metadata = object
+        .and_then(|value| value.get("metadata"))
+        .filter(|value| value.is_object())
+        .cloned()
+        .unwrap_or_else(|| serde_json::json!({"isError": tool_result.is_error}));
+    PluginAfterPresentation {
+        title,
+        output,
+        metadata,
+    }
+}
+
+#[cfg(feature = "opencode-plugin-host")]
+fn local_plugin_workspace_scope(workspace: &WorkspaceBinding) -> Option<String> {
+    (!workspace.is_remote())
+        .then(|| crate::plugin_host::canonical_plugin_workspace_scope(workspace.root_path()))
+        .flatten()
+}
+
 /// Convert framework::ToolResult to core::ToolResult
 ///
 /// Ensure always has result_for_assistant, avoid tool message content being empty
@@ -304,6 +362,12 @@ fn convert_tool_result(
             // next decision.
             let assistant_text = result_for_assistant
                 .or_else(|| Some(render_tool_result_for_assistant(effective_tool_name, &data)));
+            // Tools with a typed response envelope can report a recoverable
+            // domain failure without throwing away their structured error and
+            // hints. Preserve that payload, but propagate its semantic status
+            // so the tool card, hooks, persistence, and model all agree that
+            // `{ ok: false }` is a failure rather than a completed operation.
+            let is_error = data.get("ok").and_then(|value| value.as_bool()) == Some(false);
 
             ModelToolResult {
                 tool_id: tool_id.to_string(),
@@ -314,7 +378,7 @@ fn convert_tool_result(
                 ),
                 result: data,
                 result_for_assistant: assistant_text,
-                is_error: false,
+                is_error,
                 duration_ms: None,
                 image_attachments,
             }
@@ -609,6 +673,9 @@ const ROUND_INJECTION_RUNNING_TOOL_CANCELLED_MESSAGE: &str =
     "Tool execution cancelled because a pending round injection requested running-tool preemption for this turn.";
 
 fn should_retry_tool_error(error: &BitFunError) -> bool {
+    if matches!(error, BitFunError::OutcomeUnknown(_)) {
+        return false;
+    }
     matches!(
         error,
         BitFunError::Timeout(_)
@@ -778,7 +845,7 @@ fn permission_resource_case_sensitivity(
     }
 }
 
-const SUBAGENT_LAUNCH_TOOL_NAME: &str = "Task";
+const SUBAGENT_LAUNCH_TOOL_NAMES: &[&str] = &["Task", "AgentSpawn"];
 
 /// Native hook session facts derived from one tool task.
 fn native_hook_session_facts<'a>(
@@ -1059,28 +1126,20 @@ impl ToolPipeline {
             return None;
         }
 
+        let tool_context = self.build_tool_use_context(task, CancellationToken::new());
         let tool = {
             let registry = self.tool_registry.read().await;
             registry
                 .get_tool(task.effective_tool_name())
-                .and_then(|tool| {
-                    resolve_contextual_tool(
-                        tool,
-                        task.context
-                            .workspace
-                            .as_ref()
-                            .map(|workspace| workspace.root_path()),
-                        task.context
-                            .workspace
-                            .as_ref()
-                            .is_some_and(|workspace| workspace.is_remote()),
-                    )
-                })
+                .and_then(|tool| resolve_contextual_tool(tool, &tool_context))
         }?;
-        let tool_context = self.build_tool_use_context(task, CancellationToken::new());
-        tool.validate_non_relaxable_input(&task.original_effective_arguments, Some(&tool_context))
-            .await
-            .filter(bitfun_agent_tools::ValidationResult::blocks_input_rewrite)
+        let validation = tool
+            .validate_input_rewrite_invariants(
+                &task.original_effective_arguments,
+                Some(&tool_context),
+            )
+            .await;
+        validation.blocks_input_rewrite().then_some(validation)
     }
 
     async fn apply_hook_input_rewrite(
@@ -1112,7 +1171,7 @@ impl ToolPipeline {
     /// but cannot relax non-relaxable validation of the original input.
     async fn apply_pre_tool_use_hooks(&self, task_ids: &[String]) {
         for task_id in task_ids {
-            let Some(task) = self.state_manager.get_task(task_id) else {
+            let Some(mut task) = self.state_manager.get_task(task_id) else {
                 continue;
             };
             if task.invocation_resolution_error.is_some()
@@ -1122,6 +1181,52 @@ impl ToolPipeline {
                 continue;
             }
             let tool_name = task.invocation.effective_tool_name.clone();
+            #[cfg(feature = "opencode-plugin-host")]
+            if let Some(workspace_scope) = task
+                .context
+                .workspace
+                .as_ref()
+                .and_then(local_plugin_workspace_scope)
+            {
+                match native_hooks::dispatch_plugin_tool_before(
+                    &workspace_scope,
+                    &tool_name,
+                    Some(&task.context.session_id),
+                    Some(&task.tool_call.tool_id),
+                    Some(&task.context.agent_type),
+                    task.invocation.effective_arguments.clone(),
+                )
+                .await
+                {
+                    Ok(Some(updated_input)) => {
+                        if self.apply_hook_input_rewrite(&task, updated_input).await {
+                            info!(
+                                "OpenCode plugin hook rewrite was rejected by original-input constraints: tool_name={}, tool_id={}",
+                                tool_name, task_id
+                            );
+                            continue;
+                        }
+                        let Some(updated_task) = self.state_manager.get_task(task_id) else {
+                            continue;
+                        };
+                        task = updated_task;
+                    }
+                    Ok(None) => {}
+                    Err(reason) => {
+                        error!(
+                            "OpenCode plugin before hook rejected tool execution: tool_name={}, tool_id={}, error={}",
+                            tool_name, task_id, reason
+                        );
+                        self.permission_plans.lock().await.insert(
+                            task_id.clone(),
+                            PermissionExecutionPlan::Rejected {
+                                reason: format!("OpenCode plugin before hook failed: {reason}"),
+                            },
+                        );
+                        continue;
+                    }
+                }
+            }
             let decision = native_hooks::dispatch_pre_tool_use(
                 native_hook_session_facts(&task.context, &task.options),
                 &tool_name,
@@ -1165,52 +1270,104 @@ impl ToolPipeline {
         }
     }
 
-    async fn concurrency_flags_for_final_inputs(
+    async fn execution_traits_for_final_inputs(
         &self,
         task_ids: &[String],
         subagent_call_count: usize,
         subagent_batch_execution_policy: SubagentBatchExecutionPolicy,
-    ) -> Vec<bool> {
+    ) -> Vec<(bool, bool)> {
         let registry = self.tool_registry.read().await;
         task_ids
             .iter()
             .map(|task_id| {
                 let Some(task) = self.state_manager.get_task(task_id) else {
-                    return false;
+                    return (false, false);
                 };
                 if task.invocation_resolution_error.is_some() {
-                    return false;
+                    return (false, false);
                 }
-                let tool_is_concurrency_safe = registry
+                let tool_context = self.build_tool_use_context(&task, CancellationToken::new());
+                let tool = registry
                     .get_tool(task.effective_tool_name())
-                    .and_then(|tool| {
-                        resolve_contextual_tool(
-                            tool,
-                            task.context
-                                .workspace
-                                .as_ref()
-                                .map(|workspace| workspace.root_path()),
-                            task.context
-                                .workspace
-                                .as_ref()
-                                .is_some_and(|workspace| workspace.is_remote()),
-                        )
-                    })
+                    .and_then(|tool| resolve_contextual_tool(tool, &tool_context));
+                let tool_is_concurrency_safe = tool
+                    .as_ref()
                     .map(|tool| tool.is_concurrency_safe(Some(task.effective_arguments())))
                     .unwrap_or(false);
-                tool_call_concurrency_safe_for_batch(
+                let concurrency_safe = tool_call_concurrency_safe_for_batch(
                     task.effective_tool_name(),
                     tool_is_concurrency_safe,
                     subagent_call_count,
                     subagent_batch_execution_policy,
-                )
+                );
+                let round_injection_yieldable = tool
+                    .as_ref()
+                    .is_some_and(|tool| tool.round_injection_yieldable());
+                (concurrency_safe, round_injection_yieldable)
             })
             .collect()
     }
 
-    /// Run PostToolUse hooks for a completed tool call and fold blocking
+    /// Give the OpenCode after-hook the complete model-visible output before
+    /// large-result storage replaces it with a file reference.
+    async fn apply_plugin_post_tool_use_hook(
+        &self,
+        task: &ToolTask,
+        tool_name: &str,
+        tool_id: &str,
+        tool_result: &mut ModelToolResult,
+    ) {
+        #[cfg(feature = "opencode-plugin-host")]
+        if let Some(workspace_scope) = task
+            .context
+            .workspace
+            .as_ref()
+            .and_then(local_plugin_workspace_scope)
+        {
+            let presentation = plugin_after_presentation(tool_name, tool_result);
+            match native_hooks::dispatch_plugin_tool_after(
+                &workspace_scope,
+                tool_name,
+                Some(&task.context.session_id),
+                Some(tool_id),
+                Some(&task.context.agent_type),
+                task.invocation.effective_arguments.clone(),
+                presentation.title,
+                presentation.output,
+                presentation.metadata,
+            )
+            .await
+            {
+                Ok(Some(transformed)) => {
+                    // Keep the canonical raw tool result immutable for audit
+                    // and persistence. OpenCode's presentation output is the
+                    // model-visible result consumed by the rest of the turn.
+                    tool_result.result_for_assistant = Some(transformed.into_model_output());
+                }
+                Ok(None) => {}
+                Err(reason) => {
+                    // The tool has already executed. Surface the hook failure
+                    // on this result without returning to the retry loop.
+                    error!(
+                        "OpenCode plugin after hook failed after tool execution: tool_name={}, tool_id={}, error={}",
+                        tool_name, tool_id, reason
+                    );
+                    let original = tool_result.result_for_assistant.take().unwrap_or_default();
+                    let failure = format!("OpenCode plugin after hook failed: {reason}");
+                    tool_result.result_for_assistant = Some(if original.is_empty() {
+                        failure
+                    } else {
+                        format!("{original}\n\n{failure}")
+                    });
+                    tool_result.is_error = true;
+                }
+            }
+        }
+    }
+
+    /// Run native PostToolUse hooks after storage compaction and fold blocking
     /// feedback and additional context into the model-visible result text.
-    async fn apply_post_tool_use_hooks(
+    async fn apply_native_post_tool_use_hooks(
         &self,
         task: &ToolTask,
         tool_name: &str,
@@ -1629,6 +1786,20 @@ impl ToolPipeline {
         true
     }
 
+    async fn cancel_tools_for_round_injection(
+        &self,
+        task_ids: impl IntoIterator<Item = String>,
+    ) -> BitFunResult<()> {
+        for task_id in task_ids {
+            self.cancel_tool(
+                &task_id,
+                ROUND_INJECTION_RUNNING_TOOL_CANCELLED_MESSAGE.to_string(),
+            )
+            .await?;
+        }
+        Ok(())
+    }
+
     /// R-WF-22 write-tool protection consumer for the round injection
     /// interruption path (CancelRunningCooperatively/Forcefully → cancel_tool):
     /// returns true while a write-like tool is running, deferring the cancel
@@ -1691,21 +1862,33 @@ impl ToolPipeline {
         }
     }
 
-    async fn cancel_tools_for_round_injection(
+    async fn preempt_tools_for_round_injection(
         &self,
         task_ids: impl IntoIterator<Item = String>,
+        preemption: RoundInjectionToolPreemption,
     ) -> BitFunResult<()> {
         for task_id in task_ids {
-            self.cancel_tool(
-                &task_id,
-                ROUND_INJECTION_RUNNING_TOOL_CANCELLED_MESSAGE.to_string(),
-            )
-            .await?;
+            let Some(task) = self.state_manager.get_task(&task_id) else {
+                continue;
+            };
+            if tool_task_state_kind(&task.state).is_terminal() {
+                continue;
+            }
+
+            if let Some(token) = task.round_injection_preemption_token {
+                token.cancel();
+            } else if preemption.should_cancel_running_tools() {
+                self.cancel_tool(
+                    &task_id,
+                    ROUND_INJECTION_RUNNING_TOOL_CANCELLED_MESSAGE.to_string(),
+                )
+                .await?;
+            }
         }
         Ok(())
     }
 
-    fn spawn_round_injection_cancellation_watch(
+    fn spawn_round_injection_preemption_watch(
         &self,
         task_ids: Vec<String>,
         interrupt: Option<crate::agentic::round_preempt::DialogRoundInjectionInterrupt>,
@@ -1719,19 +1902,23 @@ impl ToolPipeline {
             };
 
             loop {
-                if interrupt.should_cancel_running_tools() {
+                let preemption = interrupt.pending_tool_preemption();
+                if preemption.should_interrupt_after_current_atomic_unit() {
                     // R-WF-22: while a write-like tool is running, defer the
                     // cancel until the atomic unit completes (avoid
                     // half-written files). With no write-like tool running,
-                    // cancel proceeds immediately as before.
-                    if pipeline
-                        .should_defer_cancel_for_active_write_like_tools()
-                        .await
+                    // cooperative/forceful cancel proceeds immediately.
+                    if preemption.should_cancel_running_tools()
+                        && pipeline
+                            .should_defer_cancel_for_active_write_like_tools()
+                            .await
                     {
                         tokio::time::sleep(Duration::from_millis(25)).await;
                         continue;
                     }
-                    let _ = pipeline.cancel_tools_for_round_injection(task_ids).await;
+                    let _ = pipeline
+                        .preempt_tools_for_round_injection(task_ids, preemption)
+                        .await;
                     break;
                 }
                 tokio::time::sleep(Duration::from_millis(25)).await;
@@ -1789,7 +1976,7 @@ impl ToolPipeline {
         let subagent_call_count = resolved_tool_calls
             .iter()
             .filter(|(_, invocation, _)| {
-                invocation.effective_tool_name == SUBAGENT_LAUNCH_TOOL_NAME
+                SUBAGENT_LAUNCH_TOOL_NAMES.contains(&invocation.effective_tool_name.as_str())
             })
             .count();
 
@@ -1816,14 +2003,27 @@ impl ToolPipeline {
         self.apply_pre_tool_use_hooks(&task_ids).await;
 
         // Hook rewrites can change whether a command is concurrency-safe.
-        // Resolve scheduling from the final arguments.
-        let concurrency_flags = self
-            .concurrency_flags_for_final_inputs(
+        // Resolve all execution traits from the final arguments, then attach
+        // cooperative preemption tokens before scheduling starts.
+        let execution_traits = self
+            .execution_traits_for_final_inputs(
                 &task_ids,
                 subagent_call_count,
                 options.subagent_batch_execution_policy,
             )
             .await;
+        for (task_id, (_, round_injection_yieldable)) in
+            task_ids.iter().zip(execution_traits.iter())
+        {
+            if *round_injection_yieldable {
+                self.state_manager
+                    .set_round_injection_preemption_token(task_id, Some(CancellationToken::new()));
+            }
+        }
+        let concurrency_flags = execution_traits
+            .iter()
+            .map(|(concurrency_safe, _)| *concurrency_safe)
+            .collect::<Vec<_>>();
         let concurrency_safe_count = concurrency_flags.iter().filter(|&&flag| flag).count();
 
         if let Err(error) = self.prepare_permission_plans(&task_ids).await {
@@ -1939,7 +2139,7 @@ impl ToolPipeline {
             .and_then(|task_id| self.state_manager.get_task(task_id))
             .and_then(|task| task.context.steering_interrupt.clone());
         let watch_handle =
-            self.spawn_round_injection_cancellation_watch(task_ids.clone(), batch_interrupt);
+            self.spawn_round_injection_preemption_watch(task_ids.clone(), batch_interrupt);
 
         let futures: Vec<_> = task_ids
             .iter()
@@ -1963,12 +2163,45 @@ impl ToolPipeline {
         Ok(all_results)
     }
 
+    fn spawn_round_injection_cancellation_watch(
+        &self,
+        task_ids: Vec<String>,
+        interrupt: Option<crate::agentic::round_preempt::DialogRoundInjectionInterrupt>,
+    ) -> Option<tokio::task::JoinHandle<()>> {
+        interrupt.as_ref()?;
+
+        let pipeline = self.clone();
+        Some(tokio::spawn(async move {
+            let Some(interrupt) = interrupt else {
+                return;
+            };
+
+            loop {
+                if interrupt.should_cancel_running_tools() {
+                    // R-WF-22: while a write-like tool is running, defer the
+                    // cancel until the atomic unit completes (avoid
+                    // half-written files). With no write-like tool running,
+                    // cancel proceeds immediately as before.
+                    if pipeline
+                        .should_defer_cancel_for_active_write_like_tools()
+                        .await
+                    {
+                        tokio::time::sleep(Duration::from_millis(25)).await;
+                        continue;
+                    }
+                    let _ = pipeline.cancel_tools_for_round_injection(task_ids).await;
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(25)).await;
+            }
+        }))
+    }
+
     /// Execute tools sequentially
     async fn execute_sequential(
         &self,
         task_ids: Vec<String>,
-    ) -> BitFunResult<Vec<ToolExecutionResult>> {
-        let mut results = Vec::new();
+    ) -> BitFunResult<Vec<ToolExecutionResult>> {        let mut results = Vec::new();
 
         let mut task_iter = task_ids.into_iter().peekable();
         while let Some(task_id) = task_iter.next() {
@@ -2010,7 +2243,7 @@ impl ToolPipeline {
 
             let interrupt = task.and_then(|task| task.context.steering_interrupt.clone());
             let watch_handle =
-                self.spawn_round_injection_cancellation_watch(vec![task_id.clone()], interrupt);
+                self.spawn_round_injection_preemption_watch(vec![task_id.clone()], interrupt);
             let result = self.execute_single_tool(task_id.clone()).await;
             if let Some(handle) = watch_handle {
                 handle.abort();
@@ -2744,6 +2977,12 @@ impl ToolPipeline {
         match result {
             Ok(tool_result) => {
                 let duration_ms = elapsed_ms_u64(start_time);
+                let mut tool_result = tool_result;
+                tool_result.duration_ms = Some(duration_ms);
+
+                self.apply_plugin_post_tool_use_hook(&task, &tool_name, &tool_id, &mut tool_result)
+                    .await;
+
                 let mut tool_result =
                     tool_result_storage::maybe_persist_large_tool_result_for_tool(
                         tool_result,
@@ -2751,7 +2990,6 @@ impl ToolPipeline {
                         &tool_context,
                     )
                     .await;
-                tool_result.duration_ms = Some(duration_ms);
 
                 if !matches!(repair_kind, ToolArgumentRepairKind::None) || recovered_from_truncation
                 {
@@ -2773,8 +3011,13 @@ impl ToolPipeline {
                     });
                 }
 
-                self.apply_post_tool_use_hooks(&task, &tool_name, &tool_id, &mut tool_result)
-                    .await;
+                self.apply_native_post_tool_use_hooks(
+                    &task,
+                    &tool_name,
+                    &tool_id,
+                    &mut tool_result,
+                )
+                .await;
 
                 self.state_manager
                     .update_state(
@@ -2995,11 +3238,7 @@ impl ToolPipeline {
 
         let execution_future = tool.call(task.effective_arguments(), &tool_context);
 
-        let timeout_owner = resolve_contextual_tool(
-            Arc::clone(&tool),
-            tool_context.workspace_root(),
-            tool_context.is_remote(),
-        );
+        let timeout_owner = resolve_contextual_tool(Arc::clone(&tool), &tool_context);
         let pipeline_timeout_secs = if timeout_owner
             .as_ref()
             .is_some_and(|selected| selected.manages_own_execution_timeout())
@@ -3342,6 +3581,140 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "opencode-plugin-host")]
+    #[test]
+    fn plugin_after_presentation_prefers_model_visible_output_over_structured_output() {
+        let result = ModelToolResult {
+            tool_id: "call-a".to_string(),
+            tool_name: "ExecCommand".to_string(),
+            effective_tool_name: None,
+            result: json!({
+                "title": "ExecCommand",
+                "output": "raw terminal output",
+                "metadata": {"tty": true},
+                "session_id": 42
+            }),
+            result_for_assistant: Some("Process is still running with session ID 42.".to_string()),
+            is_error: false,
+            duration_ms: None,
+            image_attachments: None,
+        };
+
+        let presentation = plugin_after_presentation("ExecCommand", &result);
+        assert_eq!(presentation.title, "ExecCommand");
+        assert_eq!(
+            presentation.output,
+            "Process is still running with session ID 42."
+        );
+        assert_eq!(presentation.metadata["tty"], true);
+    }
+
+    #[cfg(feature = "opencode-plugin-host")]
+    #[test]
+    fn plugin_after_presentation_preserves_specialized_exec_and_stdin_results() {
+        let cases = [
+            (
+                "ExecCommand",
+                json!({"output": "", "tty": false}),
+                "Command completed successfully.",
+            ),
+            (
+                "ExecCommand",
+                json!({"output": "\u{1b}[?25l", "tty": true, "session_id": 73}),
+                "Process is still running with session ID 73.",
+            ),
+            (
+                "WriteStdin",
+                json!({"output": "done", "session_id": 73}),
+                "Wrote input to session 73.",
+            ),
+            (
+                "WriteStdin",
+                json!({"output": "", "requested_session_id": 999}),
+                "Session 999 was not found.",
+            ),
+        ];
+
+        for (tool_name, structured_result, assistant_result) in cases {
+            let result = ModelToolResult {
+                tool_id: "call-a".to_string(),
+                tool_name: tool_name.to_string(),
+                effective_tool_name: None,
+                result: structured_result,
+                result_for_assistant: Some(assistant_result.to_string()),
+                is_error: false,
+                duration_ms: None,
+                image_attachments: None,
+            };
+
+            assert_eq!(
+                plugin_after_presentation(tool_name, &result).output,
+                assistant_result
+            );
+        }
+    }
+
+    #[cfg(feature = "opencode-plugin-host")]
+    #[test]
+    fn plugin_after_presentation_falls_back_to_plugin_output_without_assistant_text() {
+        let result = ModelToolResult {
+            tool_id: "call-a".to_string(),
+            tool_name: "report".to_string(),
+            effective_tool_name: None,
+            result: json!({
+                "title": "Generated report",
+                "output": "report ready",
+                "metadata": {"path": "report.md"}
+            }),
+            result_for_assistant: None,
+            is_error: false,
+            duration_ms: None,
+            image_attachments: None,
+        };
+
+        assert_eq!(
+            plugin_after_presentation("report", &result).output,
+            "report ready"
+        );
+    }
+
+    #[cfg(feature = "opencode-plugin-host")]
+    #[test]
+    fn plugin_after_presentation_normalizes_non_object_metadata() {
+        let result = ModelToolResult {
+            tool_id: "call-a".to_string(),
+            tool_name: "report".to_string(),
+            effective_tool_name: None,
+            result: json!({
+                "title": "Generated report",
+                "output": "report ready",
+                "metadata": ["legacy"]
+            }),
+            result_for_assistant: Some("report ready".to_string()),
+            is_error: false,
+            duration_ms: None,
+            image_attachments: None,
+        };
+
+        let presentation = plugin_after_presentation("report", &result);
+        assert_eq!(presentation.metadata, json!({"isError": false}));
+    }
+
+    #[cfg(feature = "opencode-plugin-host")]
+    #[test]
+    fn remote_workspace_never_resolves_a_local_plugin_hook_scope() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        let local = WorkspaceBinding::new(None, workspace.path().to_path_buf());
+        let mut remote = local.clone();
+        remote.backend = crate::agentic::workspace::WorkspaceBackend::Remote {
+            connection_id: "remote-a".to_string(),
+            connection_name: "Remote A".to_string(),
+        };
+
+        assert!(local_plugin_workspace_scope(&local).is_some());
+        assert!(local_plugin_workspace_scope(&remote).is_none());
+    }
+
     #[test]
     fn recovered_write_without_separator_is_rejected_as_potentially_truncated_path() {
         assert!(recovered_write_has_potentially_truncated_marked_path(
@@ -3419,6 +3792,7 @@ mod tests {
         response: serde_json::Value,
         delay_ms: u64,
         readonly: bool,
+        round_injection_yieldable: bool,
     }
 
     struct CapturingTestTool {
@@ -3653,19 +4027,21 @@ mod tests {
             }
         }
 
-        async fn validate_non_relaxable_input(
+        async fn validate_input_rewrite_invariants(
             &self,
             input: &serde_json::Value,
             _context: Option<&ToolUseContext>,
-        ) -> Option<ValidationResult> {
-            (input.get("city").and_then(serde_json::Value::as_str) == Some("protected")).then(
-                || ValidationResult {
+        ) -> ValidationResult {
+            if input.get("city").and_then(serde_json::Value::as_str) == Some("protected") {
+                ValidationResult {
                     result: false,
                     message: Some("the original target is protected".to_string()),
                     error_code: Some(403),
                     meta: Some(json!({ "blocks_input_rewrite": true })),
-                },
-            )
+                }
+            } else {
+                ValidationResult::default()
+            }
         }
 
         async fn call_impl(
@@ -3703,6 +4079,10 @@ mod tests {
             self.readonly
         }
 
+        fn round_injection_yieldable(&self) -> bool {
+            self.round_injection_yieldable
+        }
+
         fn input_schema(&self) -> serde_json::Value {
             json!({ "type": "object" })
         }
@@ -3723,10 +4103,20 @@ mod tests {
         async fn call_impl(
             &self,
             _input: &serde_json::Value,
-            _context: &ToolUseContext,
+            context: &ToolUseContext,
         ) -> BitFunResult<Vec<ToolResult>> {
             if self.delay_ms > 0 {
-                sleep(Duration::from_millis(self.delay_ms)).await;
+                if let Some(token) = context
+                    .round_injection_preemption_token()
+                    .filter(|_| self.round_injection_yieldable)
+                {
+                    tokio::select! {
+                        _ = sleep(Duration::from_millis(self.delay_ms)) => {}
+                        _ = token.cancelled() => {}
+                    }
+                } else {
+                    sleep(Duration::from_millis(self.delay_ms)).await;
+                }
             }
             Ok(vec![ToolResult::Result {
                 data: self.response.clone(),
@@ -3864,6 +4254,25 @@ mod tests {
                 response,
                 delay_ms,
                 readonly: true,
+                round_injection_yieldable: false,
+            }));
+    }
+
+    async fn register_yieldable_test_tool(
+        pipeline: &ToolPipeline,
+        name: &str,
+        response: serde_json::Value,
+    ) {
+        pipeline
+            .tool_registry
+            .write()
+            .await
+            .register_tool(Arc::new(StaticTestTool {
+                name: name.to_string(),
+                response,
+                delay_ms: 30_000,
+                readonly: true,
+                round_injection_yieldable: true,
             }));
     }
 
@@ -3940,6 +4349,7 @@ mod tests {
                 response: json!({ "unexpected": true }),
                 delay_ms: 0,
                 readonly: false,
+                round_injection_yieldable: false,
             }));
         let mut options = ToolExecutionOptions::default();
         options.permission_policy = ResolvedPermissionPolicy::new(
@@ -4314,12 +4724,13 @@ mod tests {
 
         assert!(
             pipeline
-                .concurrency_flags_for_final_inputs(
+                .execution_traits_for_final_inputs(
                     std::slice::from_ref(&tool_id),
                     0,
                     SubagentBatchExecutionPolicy::SafeOnly,
                 )
                 .await[0]
+                .0
         );
         assert!(
             !pipeline
@@ -4328,12 +4739,13 @@ mod tests {
         );
         assert!(
             !pipeline
-                .concurrency_flags_for_final_inputs(
+                .execution_traits_for_final_inputs(
                     std::slice::from_ref(&tool_id),
                     0,
                     SubagentBatchExecutionPolicy::SafeOnly,
                 )
                 .await[0]
+                .0
         );
     }
 
@@ -4391,6 +4803,308 @@ mod tests {
             calls.load(Ordering::SeqCst),
             0,
             "a denied tool must not execute even when a hook approved it"
+        );
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn complete_shell_hook_workdir_rewrites_preserve_guard_and_model_observation() {
+        use crate::agentic::execution::edit_constraint_guard::{
+            ConstraintMatcher, ConstraintOperationScope, ConstraintSource, EditConstraintState,
+            ExtractedConstraint,
+        };
+        use crate::agentic::tools::implementations::exec_command::ExecCommandTool;
+        let temp = tempfile::tempdir().unwrap();
+        let repo = temp.path().join("repo");
+        let scratch = temp.path().join("scratch");
+        std::fs::create_dir(&repo).unwrap();
+        std::fs::create_dir(&scratch).unwrap();
+        let state = EditConstraintState {
+            constraints: vec![ExtractedConstraint {
+                id: "fixture:protected".into(),
+                description: "Do not modify protected fixtures".into(),
+                operation_scope: ConstraintOperationScope::All,
+                matcher: ConstraintMatcher::PathUnderDir {
+                    dirs: vec![repo.to_string_lossy().into_owned()],
+                },
+                source: ConstraintSource::Legacy,
+                source_text: None,
+            }],
+            ..Default::default()
+        };
+        let protected_cmd = format!("printf x > '{}'", repo.join("victim").display());
+        let allowed_cmd = format!("printf x > '{}'", scratch.join("victim").display());
+        for (case, original_cwd, final_cwd, original_cmd, final_cmd) in [
+            (
+                "original-cwd",
+                &repo,
+                &scratch,
+                "printf x > victim",
+                "printf x > victim",
+            ),
+            (
+                "final-cwd",
+                &scratch,
+                &repo,
+                "printf x > victim",
+                "printf x > victim",
+            ),
+            (
+                "original-cmd",
+                &repo,
+                &repo,
+                protected_cmd.as_str(),
+                allowed_cmd.as_str(),
+            ),
+            (
+                "final-cmd",
+                &repo,
+                &repo,
+                allowed_cmd.as_str(),
+                protected_cmd.as_str(),
+            ),
+        ] {
+            let pipeline = test_tool_pipeline();
+            let mut tool = ExecCommandTool::new();
+            tool.guard_fixture_state = Some(state.clone());
+            pipeline
+                .tool_registry
+                .write()
+                .await
+                .register_tool(Arc::new(tool));
+            let mut task = test_tool_task_with_arguments(
+                case,
+                "ExecCommand",
+                json!({"cmd":original_cmd, "workdir":original_cwd}),
+            );
+            task.context.workspace = Some(WorkspaceBinding::new(None, repo.clone()));
+            let id = pipeline.state_manager.create_task(task.clone()).await;
+            assert_eq!(
+                pipeline
+                    .apply_hook_input_rewrite(&task, json!({"cmd":final_cmd, "workdir":final_cwd}))
+                    .await,
+                case.starts_with("original")
+            );
+            let persisted = pipeline.state_manager.get_task(&id).unwrap();
+            assert_eq!(
+                persisted.input_rewrite_rejection.is_some(),
+                case.starts_with("original")
+            );
+            let error = pipeline
+                .execute_single_tool(id.clone())
+                .await
+                .expect_err("guard must reject before execution");
+            assert!(error.to_string().contains("Command was not executed"));
+            let observation = build_error_execution_result(&id, Some(persisted), &error);
+            let text = observation.result.result_for_assistant.unwrap();
+            assert!(
+                text.contains("executed") && text.contains("false"),
+                "{text}"
+            );
+            assert!(
+                text.contains("deny_constraint") && text.contains("fixture:protected"),
+                "{text}"
+            );
+            assert!(!text.contains("your own implementation"));
+            assert!(!repo.join("victim").exists());
+            assert!(!scratch.join("victim").exists());
+        }
+    }
+
+    #[tokio::test]
+    async fn hook_rewrite_cannot_hide_a_non_relaxable_original_input_rejection() {
+        let pipeline = test_tool_pipeline();
+        let received_arguments = Arc::new(Mutex::new(None));
+        register_capturing_test_tool(&pipeline, "get_weather", Arc::clone(&received_arguments))
+            .await;
+        let task = test_tool_task_with_arguments(
+            "rewrite-protected-original",
+            "get_weather",
+            json!({ "city": "protected" }),
+        );
+        let tool_id = pipeline.state_manager.create_task(task.clone()).await;
+
+        assert!(
+            pipeline
+                .apply_hook_input_rewrite(&task, json!({ "city": "copy" }))
+                .await
+        );
+        let persisted = pipeline
+            .state_manager
+            .get_task(&tool_id)
+            .expect("rewritten task");
+        assert_eq!(
+            persisted.original_effective_arguments,
+            json!({ "city": "protected" })
+        );
+        assert_eq!(persisted.effective_arguments(), &json!({ "city": "copy" }));
+        assert!(persisted
+            .input_rewrite_rejection
+            .as_ref()
+            .is_some_and(ValidationResult::blocks_input_rewrite));
+
+        let error = pipeline
+            .execute_single_tool(tool_id)
+            .await
+            .expect_err("protected original input must block execution");
+        assert!(matches!(error, BitFunError::Validation(_)));
+        assert!(received_arguments
+            .lock()
+            .expect("capturing tool argument lock")
+            .is_none());
+    }
+
+    #[tokio::test]
+    async fn hook_rewrite_cannot_hide_a_protected_target_behind_a_repairable_error() {
+        let pipeline = test_tool_pipeline();
+        let received_arguments = Arc::new(Mutex::new(None));
+        register_capturing_test_tool(&pipeline, "get_weather", Arc::clone(&received_arguments))
+            .await;
+        let task = test_tool_task_with_arguments(
+            "rewrite-malformed-protected-original",
+            "get_weather",
+            json!({ "city": "protected", "unexpected": true }),
+        );
+        let tool_id = pipeline.state_manager.create_task(task.clone()).await;
+
+        assert!(
+            pipeline
+                .apply_hook_input_rewrite(&task, json!({ "city": "Paris" }))
+                .await,
+            "a repairable schema error must not hide a protected original target"
+        );
+        let persisted = pipeline
+            .state_manager
+            .get_task(&tool_id)
+            .expect("rewritten task");
+        assert!(persisted
+            .input_rewrite_rejection
+            .as_ref()
+            .is_some_and(ValidationResult::blocks_input_rewrite));
+
+        let error = pipeline
+            .execute_single_tool(tool_id)
+            .await
+            .expect_err("protected original target must block execution");
+        assert!(matches!(error, BitFunError::Validation(_)));
+        assert!(received_arguments
+            .lock()
+            .expect("capturing tool argument lock")
+            .is_none());
+    }
+
+    #[tokio::test]
+    async fn hook_rewrite_can_repair_an_ordinary_validation_failure() {
+        let pipeline = test_tool_pipeline();
+        let received_arguments = Arc::new(Mutex::new(None));
+        register_capturing_test_tool(&pipeline, "get_weather", Arc::clone(&received_arguments))
+            .await;
+        let task = test_tool_task_with_arguments(
+            "rewrite-repairable-original",
+            "get_weather",
+            json!({ "legacy_city": "Paris" }),
+        );
+        let tool_id = pipeline.state_manager.create_task(task.clone()).await;
+
+        assert!(
+            !pipeline
+                .apply_hook_input_rewrite(&task, json!({ "city": "Paris" }))
+                .await
+        );
+        let persisted = pipeline
+            .state_manager
+            .get_task(&tool_id)
+            .expect("rewritten task");
+        assert_eq!(
+            persisted.original_effective_arguments,
+            json!({ "legacy_city": "Paris" })
+        );
+        assert_eq!(persisted.effective_arguments(), &json!({ "city": "Paris" }));
+        assert!(persisted.input_rewrite_rejection.is_none());
+
+        pipeline
+            .execute_single_tool(tool_id)
+            .await
+            .expect("repaired input should execute");
+        assert_eq!(
+            *received_arguments
+                .lock()
+                .expect("capturing tool argument lock"),
+            Some(json!({ "city": "Paris" }))
+        );
+    }
+
+    #[tokio::test]
+    async fn final_validation_rejects_a_hook_rewrite_into_a_protected_input() {
+        let pipeline = test_tool_pipeline();
+        let received_arguments = Arc::new(Mutex::new(None));
+        register_capturing_test_tool(&pipeline, "get_weather", Arc::clone(&received_arguments))
+            .await;
+        let task = test_tool_task_with_arguments(
+            "rewrite-protected-final",
+            "get_weather",
+            json!({ "city": "Paris" }),
+        );
+        let tool_id = pipeline.state_manager.create_task(task.clone()).await;
+
+        assert!(
+            !pipeline
+                .apply_hook_input_rewrite(&task, json!({ "city": "protected" }))
+                .await
+        );
+        assert!(pipeline
+            .state_manager
+            .get_task(&tool_id)
+            .expect("rewritten task")
+            .input_rewrite_rejection
+            .is_none());
+
+        let error = pipeline
+            .execute_single_tool(tool_id)
+            .await
+            .expect_err("protected final input must fail final validation");
+        assert!(matches!(error, BitFunError::Validation(_)));
+        assert!(received_arguments
+            .lock()
+            .expect("capturing tool argument lock")
+            .is_none());
+    }
+
+    #[tokio::test]
+    async fn hook_rewrite_recomputes_concurrency_from_final_input() {
+        let pipeline = test_tool_pipeline();
+        register_capturing_test_tool(&pipeline, "get_weather", Arc::new(Mutex::new(None))).await;
+        let task = test_tool_task_with_arguments(
+            "rewrite-concurrency",
+            "get_weather",
+            json!({ "city": "Paris" }),
+        );
+        let tool_id = pipeline.state_manager.create_task(task.clone()).await;
+
+        assert!(
+            pipeline
+                .execution_traits_for_final_inputs(
+                    std::slice::from_ref(&tool_id),
+                    0,
+                    SubagentBatchExecutionPolicy::SafeOnly,
+                )
+                .await[0]
+                .0
+        );
+        assert!(
+            !pipeline
+                .apply_hook_input_rewrite(&task, json!({ "city": "unsafe" }))
+                .await
+        );
+        assert!(
+            !pipeline
+                .execution_traits_for_final_inputs(
+                    std::slice::from_ref(&tool_id),
+                    0,
+                    SubagentBatchExecutionPolicy::SafeOnly,
+                )
+                .await[0]
+                .0
         );
     }
 
@@ -5275,7 +5989,7 @@ mod tests {
 
     #[test]
     fn error_result_preserves_full_raw_arguments_for_unparseable_calls() {
-        let mut task = test_tool_task("tool_1", "Git");
+        let mut task = test_tool_task("tool_1", "Worktree");
         task.tool_call.arguments = json!({});
         task.tool_call.is_error = true;
         let raw_arguments = format!("{{\"operation\":\"{}", "log".repeat(512));
@@ -5307,7 +6021,7 @@ mod tests {
 
     #[test]
     fn error_result_omits_arguments_for_parsed_validation_errors() {
-        let mut task = test_tool_task("tool_1", "Git");
+        let mut task = test_tool_task("tool_1", "Worktree");
         task.tool_call.raw_arguments = Some(r#"{\"operation\":\"log\"}"#.to_string());
 
         let result = build_error_execution_result(
@@ -5319,7 +6033,9 @@ mod tests {
         assert!(result.result.result["provided_arguments"].is_null());
         assert_eq!(
             result.result.result_for_assistant.as_deref(),
-            Some("Tool 'Git' failed (invalid_arguments): Validation error: operation is not supported")
+            Some(
+                "Tool 'Worktree' failed (invalid_arguments): Validation error: operation is not supported"
+            )
         );
     }
 
@@ -5807,6 +6523,62 @@ mod tests {
         assert_ne!(results[0].result.result["category"], json!("cancelled"));
     }
 
+    #[tokio::test]
+    async fn yieldable_tools_end_normally_for_every_non_none_round_injection_policy() {
+        for policy in [
+            RoundInjectionToolPreemption::InterruptAfterCurrentAtomicUnit,
+            RoundInjectionToolPreemption::CancelRunningCooperatively,
+            RoundInjectionToolPreemption::CancelRunningForcefully,
+        ] {
+            let pipeline = test_tool_pipeline();
+            register_yieldable_test_tool(&pipeline, "AgentWait", json!({ "status": "steered" }))
+                .await;
+
+            let buffer = Arc::new(SessionRoundInjectionBuffer::default());
+            let buffer_for_injection = buffer.clone();
+            tokio::spawn(async move {
+                sleep(Duration::from_millis(50)).await;
+                buffer_for_injection.push(
+                    "session_1",
+                    test_round_injection(RoundInjectionKind::UserSteering, policy),
+                );
+            });
+
+            let mut context = test_tool_execution_context();
+            context.steering_interrupt = Some(DialogRoundInjectionInterrupt::new(
+                "session_1".to_string(),
+                "turn_1".to_string(),
+                buffer,
+            ));
+            let results = pipeline
+                .execute_tools(
+                    vec![test_tool_call("agent_wait", "AgentWait")],
+                    context,
+                    ToolExecutionOptions::default(),
+                )
+                .await
+                .expect("yieldable tool should finish normally");
+
+            assert_eq!(results.len(), 1, "policy: {policy:?}");
+            assert!(!results[0].result.is_error, "policy: {policy:?}");
+            assert_eq!(
+                results[0].result.result["status"],
+                json!("steered"),
+                "policy: {policy:?}"
+            );
+            assert!(
+                matches!(
+                    pipeline
+                        .state_manager
+                        .get_task("agent_wait")
+                        .map(|task| task.state),
+                    Some(ToolExecutionState::Completed { .. })
+                ),
+                "policy: {policy:?}"
+            );
+        }
+    }
+
     #[test]
     fn fallback_assistant_text_preserves_full_structured_result() {
         let result = convert_tool_result(
@@ -5821,8 +6593,8 @@ mod tests {
                 image_attachments: None,
             },
             "tool_1",
-            "Bash",
-            "Bash",
+            "ExecCommand",
+            "ExecCommand",
         );
 
         let assistant_text = result.result_for_assistant.unwrap_or_default();
@@ -5830,6 +6602,36 @@ mod tests {
         assert!(assistant_text.contains("\"exit_code\": 1"));
         assert!(assistant_text.contains("\"working_directory\": \"/private/tmp\""));
         assert!(!assistant_text.contains("completed with error"));
+    }
+
+    #[test]
+    fn typed_ok_false_result_is_a_semantic_tool_error() {
+        let result = convert_tool_result(
+            FrameworkToolResult::Result {
+                data: json!({
+                    "ok": false,
+                    "domain": "browser",
+                    "action": "open_builtin",
+                    "error": {
+                        "code": "TIMEOUT",
+                        "message": "target did not become ready",
+                    },
+                }),
+                result_for_assistant: Some("TIMEOUT: target did not become ready".to_string()),
+                image_attachments: None,
+            },
+            "tool_1",
+            "ControlHub",
+            "ControlHub",
+        );
+
+        assert!(result.is_error);
+        assert_eq!(result.result["ok"], false);
+        assert_eq!(result.result["error"]["code"], "TIMEOUT");
+        assert_eq!(
+            result.result_for_assistant.as_deref(),
+            Some("TIMEOUT: target did not become ready")
+        );
     }
 
     #[test]
@@ -5866,11 +6668,12 @@ mod tests {
         task.context.loaded_deferred_tool_specs = vec![loaded_spec("WebFetch", 0)];
         task.context.runtime_tool_restrictions = ToolRuntimeRestrictions {
             allowed_tool_names: ["WebFetch"].into_iter().map(str::to_string).collect(),
-            denied_tool_names: ["Bash"].into_iter().map(str::to_string).collect(),
+            denied_tool_names: ["ExecCommand"].into_iter().map(str::to_string).collect(),
             denied_tool_messages: Default::default(),
             path_policy: Default::default(),
             allowed_operation_classes: Default::default(),
             denied_operation_classes: Default::default(),
+            miniapp_context_scope: None,
         };
 
         let context = pipeline.build_tool_use_context(&task, CancellationToken::new());
@@ -5887,7 +6690,9 @@ mod tests {
         assert!(context
             .runtime_tool_restrictions
             .is_tool_allowed("WebFetch"));
-        assert!(!context.runtime_tool_restrictions.is_tool_allowed("Bash"));
+        assert!(!context
+            .runtime_tool_restrictions
+            .is_tool_allowed("ExecCommand"));
         assert_eq!(context.custom_data["turn_index"], json!(7));
         assert!(!context.custom_data.contains_key("primary_model_provider"));
         assert!(!context

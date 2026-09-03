@@ -757,12 +757,14 @@ fn memory_phase2_tool_restrictions(memory_root: &std::path::Path) -> ToolRuntime
         denied_tool_names: BTreeSet::from(["Task".to_string()]),
         denied_tool_messages,
         path_policy: ToolPathPolicy {
+            read_roots: vec![root.clone()],
             write_roots: vec![root.clone()],
             edit_roots: vec![root.clone()],
             delete_roots: vec![root],
         },
         allowed_operation_classes: BTreeSet::new(),
         denied_operation_classes: BTreeSet::new(),
+        miniapp_context_scope: None,
     }
 }
 
@@ -949,6 +951,10 @@ mod tests {
         assert!(restrictions.is_tool_allowed("Edit"));
         assert!(!restrictions.is_tool_allowed("Task"));
         assert!(!restrictions.is_tool_allowed("WebFetch"));
+        assert_eq!(
+            restrictions.path_policy.read_roots,
+            vec![root.to_string_lossy().to_string()]
+        );
         assert_eq!(
             restrictions.path_policy.write_roots,
             vec![root.to_string_lossy().to_string()]

@@ -17,7 +17,7 @@ mod tool_card_bridge;
 
 pub use config::{
     AcpClientConfig, AcpClientConfigFile, AcpClientInfo, AcpClientPermissionMode,
-    AcpClientRequirementProbe, AcpClientStatus, AcpRequirementProbeItem,
+    AcpClientRequirementProbe, AcpClientStatus, AcpClientSubagentConfig, AcpRequirementProbeItem,
     RemoteAcpClientRequirementSnapshot,
 };
 pub use launch_policy::{apply_launch_policy, LaunchPolicyResult};

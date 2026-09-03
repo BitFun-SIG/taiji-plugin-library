@@ -2,9 +2,10 @@
 
 import { api } from './ApiClient';
 import { createTauriCommandError } from '../errors/TauriCommandError';
+import { copyTextToClipboard } from '@/shared/utils/textSelection';
 import { openUrl } from '@tauri-apps/plugin-opener';
-import { disable as autostartDisable, enable as autostartEnable, isEnabled as autostartIsEnabled } from '@tauri-apps/plugin-autostart';
 import { createLogger } from '@/shared/utils/logger';
+import { productControlAPI } from './ProductControlAPI';
 
 
 const log = createLogger('SystemAPI');
@@ -142,11 +143,12 @@ export class SystemAPI {
    
   async setClipboard(text: string): Promise<void> {
     try {
-      await api.invoke('set_clipboard', { 
-        request: { text } 
-      });
+      const copied = await copyTextToClipboard(text);
+      if (!copied) {
+        throw new Error('Clipboard write failed');
+      }
     } catch (error) {
-      throw createTauriCommandError('set_clipboard', error, { text });
+      throw createTauriCommandError('set_clipboard', error);
     }
   }
 
@@ -184,10 +186,15 @@ export class SystemAPI {
       return false;
     }
     try {
-      return await autostartIsEnabled();
+      const result = await productControlAPI.get('setting.application.general');
+      const enabled = result.currentOptionValues['launch-at-login'];
+      if (typeof enabled !== 'boolean') {
+        throw new Error('ProductControl returned a non-boolean launch-at-login state');
+      }
+      return enabled;
     } catch (error) {
       log.error('Failed to read launch-at-login state', error);
-      throw createTauriCommandError('autostart_is_enabled', error);
+      throw error;
     }
   }
 
@@ -211,37 +218,34 @@ export class SystemAPI {
       return;
     }
     try {
-      if (enabled) {
-        await autostartEnable();
-      } else {
-        await autostartDisable();
-      }
+      await productControlAPI.configure(
+        'setting.application.general',
+        'launch-at-login',
+        enabled,
+      );
     } catch (error) {
       log.error('Failed to set launch-at-login', { enabled, error });
-      throw createTauriCommandError('autostart_set', error, { enabled });
+      throw error;
     }
   }
 
   /** Desktop only: whether BitFun should keep the local computer awake. */
   async getPreventSleepEnabled(): Promise<boolean> {
-    try {
-      return await api.invoke('get_prevent_sleep_enabled', {
-        request: {}
-      });
-    } catch (error) {
-      throw createTauriCommandError('get_prevent_sleep_enabled', error);
+    const result = await productControlAPI.get('setting.application.general');
+    const enabled = result.currentOptionValues['prevent-sleep'];
+    if (typeof enabled !== 'boolean') {
+      throw new Error('ProductControl returned a non-boolean prevent-sleep state');
     }
+    return enabled;
   }
 
   /** Desktop only: apply and persist the app-wide sleep-prevention preference. */
   async setPreventSleepEnabled(enabled: boolean): Promise<void> {
-    try {
-      await api.invoke('set_prevent_sleep_enabled', {
-        request: { enabled }
-      });
-    } catch (error) {
-      throw createTauriCommandError('set_prevent_sleep_enabled', error, { enabled });
-    }
+    await productControlAPI.configure(
+      'setting.application.general',
+      'prevent-sleep',
+      enabled,
+    );
   }
 
   // ─── Window / Tray behavior ────────────────────────────────────────────────

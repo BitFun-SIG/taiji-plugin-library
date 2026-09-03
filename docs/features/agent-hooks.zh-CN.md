@@ -189,7 +189,7 @@ sys.exit(0)
 | `[features] hooks = false` | 使用 `app.hooks.enabled` |
 | 插件内置与托管 Hooks（`PLUGIN_ROOT`、`managed_dir`） | 不支持 |
 | `prompt` 与 `agent` 处理器类型 | 会被解析（以便共享配置文件保持有效）但跳过 —— 只有 `type: "command"` 会执行 |
-| 远程工作区 | 完全跳过 Hooks：本地 Hook 进程与远程工作区路径描述的不是同一个文件系统 |
+| 远程工作区 | 不派发 Hooks：本地 Hook 进程与远程工作区路径描述的不是同一个文件系统。跳过不是静默的：当宿主为该事件配置了规则时，每个会话第一次跳过会记录一条警告，Hook 概览也带有 `remote_workspace_unsupported`，供界面说明已配置的规则没有运行 |
 
 ### 尚未填充的字段
 
@@ -227,7 +227,7 @@ Hook 是以你的用户权限运行的任意代码，且每次对应事件触发
 - 启用任何非你本人编写的 Hook 之前先审阅它。
 - 除非你信任所有能向仓库提交代码的人，否则保持项目级 Hooks 关闭。
 - Hook 命令如果直接写文件，会绕过工具管道及其 `validate_input` 检查。工具参数重写
-  应使用 `updatedInput`；无法接受外部进程副作用时，应禁用不可信命令 Hook 或将其
+  应使用 `updatedInput`；无法接受外部进程副作时，应禁用不可信命令 Hook 或将其
   放入 sandbox。
 - 载荷中的值（提示词、工具参数、文件路径）是模型和用户提供的文本。请按 JSON 解析，
   不要拼接进 shell 命令 —— 上面的示例正是为此用 `jq` / `json.load` 读取字段。
@@ -238,7 +238,7 @@ Hook 是以你的用户权限运行的任意代码，且每次对应事件触发
 
 | 现象 | 原因 |
 | --- | --- |
-| 完全没有 Hook 运行 | `app.hooks.enabled` 为 `false`、文件不在文档所述路径，或工作区是远程工作区。 |
+| 完全没有 Hook 运行 | `app.hooks.enabled` 为 `false`、文件不在文档所述路径，或工作区是远程工作区（此时日志会为每个会话第一次跳过的派发记录一条警告）。 |
 | 项目 Hooks 不运行 | `app.hooks.project_hooks_enabled` 为 `false`（默认值）。 |
 | 整个文件被忽略 | JSON 无效，或存在 `description`/`hooks` 之外的根级字段。 |
 | 某个事件被忽略 | 事件名拼写错误 —— 事件名区分大小写。 |

@@ -135,6 +135,7 @@ impl MessageDelta {
         UnifiedResponse {
             text: None,
             reasoning_content: None,
+            reasoning_content_kind: None,
             thinking_signature: None,
             tool_call: None,
             usage: self.usage.map(|usage| usage.into_unified(semantics)),

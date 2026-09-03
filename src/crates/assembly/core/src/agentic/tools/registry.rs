@@ -572,6 +572,11 @@ mod tests {
             "GetTime",
             "ListModels",
             "Task",
+            "AgentSpawn",
+            "AgentSendInput",
+            "AgentInterrupt",
+            "AgentList",
+            "AgentDelete",
             "AgentWait",
             "LaunchReviewAgent",
             "Skill",
@@ -587,6 +592,7 @@ mod tests {
             "submit_code_review",
             "GetToolSpec",
             "CallDeferredTool",
+            "BitFunControl",
             "GetFileDiff",
             "CreateCanvas",
             "ReadCanvas",
@@ -611,6 +617,7 @@ mod tests {
             "delete_group_chat",
             "update_group_member_tools",
             "update_group_wiring",
+            "PortForward",
             "WebSearch",
             "WebFetch",
             "ListMCPResources",
@@ -618,12 +625,12 @@ mod tests {
             "ListMCPPrompts",
             "GetMCPPrompt",
             "GenerativeUI",
-            "Git",
             "Worktree",
             "ReviewPlatform",
             "InitMiniApp",
             "FinalizeMiniApp",
             "PublishMiniApp",
+            "FrontendWorkbench",
             "PublishAppearance",
             "PageDeploy",
             "PagePublish",
@@ -690,6 +697,7 @@ mod tests {
                 "core.computer-use",
                 "core.review",
                 "core.miniapp",
+                "core.creation",
                 "core.canvas",
             ],
             "provider groups must preserve the reviewed atomic ownership order"
@@ -721,6 +729,7 @@ mod tests {
                 .unwrap_or_else(|| panic!("{tool_name} tool should be registered"));
             let assistant_text = tool.render_result_for_assistant(&json!({
                 "success": true,
+                "snapshot_recorded": true,
                 "file_path": "workspace/demo.txt"
             }));
 
@@ -815,7 +824,6 @@ mod tests {
         assert!(registry.is_tool_deferred("GetFileDiff"));
         assert!(registry.is_tool_deferred("ListModels"));
         assert!(!registry.is_tool_deferred("GetToolSpec"));
-        assert!(registry.is_tool_deferred("Git"));
         assert!(registry.is_tool_deferred("Worktree"));
         assert!(registry.is_tool_deferred("ReviewPlatform"));
         assert!(!registry.is_tool_deferred("InitMiniApp"));
@@ -845,6 +853,7 @@ mod tests {
                 "acp_message",
                 "acp_history",
                 "Cron",
+                "PortForward",
                 "WebSearch",
                 "WebFetch",
                 "ListMCPResources",
@@ -852,7 +861,6 @@ mod tests {
                 "ListMCPPrompts",
                 "GetMCPPrompt",
                 "GenerativeUI",
-                "Git",
                 "Worktree",
                 "ReviewPlatform",
                 "ControlHub",
@@ -886,6 +894,7 @@ mod tests {
                 "KnowledgeBaseSearch",
                 "GetTime",
                 "ListModels",
+                "AgentList",
                 "Skill",
                 "AskUserQuestion",
                 "get_goal",
@@ -1156,6 +1165,7 @@ mod tests {
 
             let assistant_text = tool.render_result_for_assistant(&json!({
                 "success": true,
+                "snapshot_recorded": true,
                 "file_path": "workspace/demo.txt"
             }));
 
@@ -1163,6 +1173,16 @@ mod tests {
                 assistant_text.contains("snapshot system"),
                 "expected snapshot wrapper text for {tool_name}, got: {assistant_text}"
             );
+            for recorded in [Value::Null, Value::Bool(false)] {
+                let unrecorded_text = tool.render_result_for_assistant(&json!({
+                    "success": true, "snapshot_recorded": recorded,
+                    "file_path": "workspace/demo.txt"
+                }));
+                assert!(
+                    !unrecorded_text.contains("snapshot system"),
+                    "successful file mutation alone cannot claim snapshot coverage"
+                );
+            }
         }
 
         let read_text = registry

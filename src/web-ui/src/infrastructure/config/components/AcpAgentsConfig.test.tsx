@@ -3,7 +3,9 @@
 import React, { act } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRoot, type Root } from 'react-dom/client';
-import AcpAgentsConfig from './AcpAgentsConfig';
+import AcpAgentsConfigPage from './AcpAgentsConfig';
+
+const AcpAgentsConfig = () => <AcpAgentsConfigPage navigationRequestId={0} />;
 
 const loadJsonConfigMock = vi.hoisted(() => vi.fn());
 const getClientsMock = vi.hoisted(() => vi.fn());
@@ -25,7 +27,30 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-vi.mock('@/component-library', () => ({
+vi.mock('@bitfun/ui', async importOriginal => ({
+  ...await importOriginal<typeof import('@bitfun/ui')>(),
+  ConfirmDialog: ({
+    confirmText,
+    message,
+    onConfirm,
+    open,
+    title,
+  }: {
+    confirmText: string;
+    message: React.ReactNode;
+    onConfirm: () => void;
+    open: boolean;
+    title: string;
+  }) => open ? (
+    <div role="dialog">
+      <h2>{title}</h2>
+      <div>{message}</div>
+      <button type="button" data-testid="confirm-install" onClick={onConfirm}>
+        {confirmText}
+      </button>
+    </div>
+  ) : null,
+  Tooltip: ({ children }: React.PropsWithChildren) => <>{children}</>,
   Button: ({
     children,
     disabled,
@@ -81,17 +106,59 @@ vi.mock('@/component-library', () => ({
       ))}
     </select>
   ),
+  TabGroup: ({
+    items,
+    onValueChange,
+    value,
+  }: {
+    items: Array<{ label: React.ReactNode; value: string }>;
+    onValueChange: (value: string) => void;
+    value: string;
+  }) => (
+    <div role="tablist">
+      {items.map((item) => (
+        <button
+          key={item.value}
+          type="button"
+          role="tab"
+          aria-selected={item.value === value}
+          onClick={() => onValueChange(item.value)}
+        >
+          {item.label}
+        </button>
+      ))}
+    </div>
+  ),
   Textarea: React.forwardRef<HTMLTextAreaElement, React.TextareaHTMLAttributes<HTMLTextAreaElement>>(
     (props, ref) => <textarea ref={ref} {...props} />,
   ),
 }));
 
 vi.mock('./common', () => ({
+  ConfigLoadingState: ({ label }: { label: string }) => <div>{label}</div>,
+  ConfigMessage: ({ message }: { message: { text: string } | null }) => (
+    message ? <div>{message.text}</div> : null
+  ),
+  ConfigRetryState: ({ message, onRetry, retryLabel }: {
+    message: string;
+    onRetry: () => void;
+    retryLabel: string;
+  }) => (
+    <div>
+      <span>{message}</span>
+      <button type="button" onClick={onRetry}>{retryLabel}</button>
+    </div>
+  ),
   ConfigPageContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  ConfigPageHeader: ({ title, subtitle }: { title: string; subtitle: string }) => (
+  ConfigPageHeader: ({ title, subtitle, extra }: {
+    title: string;
+    subtitle: string;
+    extra?: React.ReactNode;
+  }) => (
     <header>
       <h1>{title}</h1>
       <p>{subtitle}</p>
+      {extra}
     </header>
   ),
   ConfigPageLayout: ({ children }: { children: React.ReactNode }) => <main>{children}</main>,
@@ -155,6 +222,17 @@ vi.mock('@/shared/utils/logger', () => ({
     warn: vi.fn(),
   }),
 }));
+
+async function openView(container: HTMLElement, label: string): Promise<void> {
+  const tab = Array.from(container.querySelectorAll<HTMLButtonElement>('[role="tab"]'))
+    .find(button => button.textContent === label);
+  expect(tab).toBeTruthy();
+  await act(async () => {
+    tab?.click();
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+}
 
 describe('AcpAgentsConfig', () => {
   let container: HTMLDivElement;
@@ -226,6 +304,120 @@ describe('AcpAgentsConfig', () => {
     expect(container.textContent).not.toContain('registry.configInvalid');
   });
 
+  it('omits the redundant CLI capability column from local agent rows', async () => {
+    probeClientRequirementsMock.mockResolvedValue([{
+      id: 'opencode',
+      tool: { name: 'opencode', installed: false },
+      runnable: false,
+      notes: [],
+    }]);
+
+    await act(async () => {
+      root.render(<AcpAgentsConfig />);
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const row = Array.from(
+      container.querySelectorAll('.bitfun-acp-agents__registry-row'),
+    ).find(candidate => candidate.querySelector('.bitfun-acp-agents__registry-name')
+      ?.textContent === 'opencode');
+    expect(row).toBeTruthy();
+
+    const status = row?.querySelector(
+      '[data-bf-component="status-pill"][data-bf-state="not_installed"]',
+    );
+
+    expect(row?.querySelector('[data-bf-part="capabilities"]')).toBeNull();
+    expect(row?.querySelectorAll('[data-bf-component="status-pill"]')).toHaveLength(1);
+    expect(status?.getAttribute('data-tone')).toBe('neutral');
+  });
+
+  it('keeps page help and agent detection with their owning surfaces', async () => {
+    await act(async () => {
+      root.render(<AcpAgentsConfig />);
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(container.querySelector('header')?.textContent).toContain('actions.learnMore');
+    const registryHeading = Array.from(container.querySelectorAll('h2'))
+      .find(heading => heading.textContent === 'registry.title');
+    const registrySection = registryHeading?.closest('section');
+    expect(registrySection?.textContent).toContain('actions.refresh');
+    expect(registrySection?.textContent).toContain('presets.opencode.description');
+    expect(registrySection?.textContent).not.toContain('registry.description');
+    expect(registrySection?.textContent).not.toContain('Native ACP coding agent');
+  });
+
+  it('separates local agents, SSH hosts, and advanced JSON into focused views', async () => {
+    await act(async () => {
+      root.render(<AcpAgentsConfig />);
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain('registry.title');
+    expect(container.textContent).not.toContain('remote.title');
+    expect(container.textContent).not.toContain('security.secretWarning');
+
+    await openView(container, 'views.ssh');
+    expect(container.textContent).toContain('remote.title');
+    expect(container.textContent).not.toContain('registry.title');
+
+    await openView(container, 'views.json');
+    expect(container.textContent).toContain('json.title');
+    expect(container.textContent).toContain('security.secretWarning');
+    expect(container.textContent).not.toContain('registry.title');
+    expect(container.textContent).not.toContain('remote.title');
+  });
+
+  it('asks before leaving advanced JSON with unsaved changes', async () => {
+    await act(async () => {
+      root.render(<AcpAgentsConfig />);
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await openView(container, 'views.json');
+    const editor = container.querySelector<HTMLTextAreaElement>('textarea');
+    expect(editor).not.toBeNull();
+
+    await act(async () => {
+      if (!editor) return;
+      const valueSetter = Object.getOwnPropertyDescriptor(
+        HTMLTextAreaElement.prototype,
+        'value',
+      )?.set;
+      valueSetter?.call(editor, `${editor.value}\n`);
+      editor.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+
+    await openView(container, 'views.local');
+    expect(container.textContent).toContain('json.discardTitle');
+    expect(container.textContent).toContain('json.title');
+
+    const discardButton = container.querySelector<HTMLButtonElement>(
+      '[data-testid="confirm-install"]',
+    );
+    await act(async () => {
+      discardButton?.click();
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain('registry.title');
+    expect(container.textContent).not.toContain('json.title');
+    expect(saveJsonConfigMock).not.toHaveBeenCalled();
+  });
+
   it('renders saved remote servers as global agent rows without override controls', async () => {
     listSavedConnectionsMock.mockResolvedValue([{
       id: 'huawei-server',
@@ -244,6 +436,8 @@ describe('AcpAgentsConfig', () => {
       await Promise.resolve();
       await Promise.resolve();
     });
+    expect(container.textContent).not.toContain('huawei-server');
+    await openView(container, 'views.ssh');
 
     expect(container.textContent).toContain('huawei-server');
     expect(container.textContent).toContain('ssh-root@119.8.182.138');
@@ -272,6 +466,7 @@ describe('AcpAgentsConfig', () => {
       await Promise.resolve();
       await Promise.resolve();
     });
+    await openView(container, 'views.ssh');
 
     const hideButton = container.querySelector<HTMLButtonElement>(
       'button[aria-label="remote.hideConnection"]'
@@ -311,6 +506,7 @@ describe('AcpAgentsConfig', () => {
       await Promise.resolve();
       await Promise.resolve();
     });
+    await openView(container, 'views.ssh');
 
     const showHiddenButton = Array.from(container.querySelectorAll('button'))
       .find(button => button.textContent?.includes('remote.showHiddenConnections'));
@@ -358,6 +554,7 @@ describe('AcpAgentsConfig', () => {
       await Promise.resolve();
       await Promise.resolve();
     });
+    await openView(container, 'views.ssh');
 
     expect(probeClientRequirementsMock).not.toHaveBeenCalledWith({
       remoteConnectionId: 'huawei-server',
@@ -578,6 +775,13 @@ describe('AcpAgentsConfig', () => {
     await act(async () => {
       installButtons[0].click();
       await Promise.resolve();
+    });
+    const confirmInstall = container.querySelector<HTMLButtonElement>(
+      '[data-testid="confirm-install"]',
+    );
+    expect(confirmInstall).not.toBeNull();
+    await act(async () => {
+      confirmInstall?.click();
       await Promise.resolve();
     });
 
@@ -745,6 +949,7 @@ describe('AcpAgentsConfig', () => {
       await Promise.resolve();
       await Promise.resolve();
     });
+    await openView(container, 'views.ssh');
 
     const installButtons = Array.from(container.querySelectorAll('button'))
       .filter(button => button.textContent?.includes('actions.installCli'));
@@ -752,6 +957,14 @@ describe('AcpAgentsConfig', () => {
 
     await act(async () => {
       installButtons[installButtons.length - 1].click();
+      await Promise.resolve();
+    });
+    const confirmInstall = container.querySelector<HTMLButtonElement>(
+      '[data-testid="confirm-install"]',
+    );
+    expect(confirmInstall).not.toBeNull();
+    await act(async () => {
+      confirmInstall?.click();
       await Promise.resolve();
     });
 

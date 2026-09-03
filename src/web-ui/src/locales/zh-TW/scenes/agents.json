@@ -8,17 +8,18 @@
   "goManage": "前往管理",
   "loading": "載入中…",
   "page": {
-    "title": "專業智能體",
-    "subtitle": "查看與管理核心模式、Agent 與 Sub-Agent，設定工具與 Skills。",
+    "title": "智能體",
+    "subtitle": "管理智能體及其執行框架，讓不同任務使用合適的能力組合。",
     "searchPlaceholder": "搜尋 Agent 名稱或描述…",
     "newAgent": "新增 Agent",
     "newLegion": "新建工作流"
   },
   "nav": {
-    "coreAgents": "核心智能體",
-    "agents": "Agent",
+    "coreAgents": "已接入 Agent",
+    "agents": "智能體",
     "legions": "工作流",
-    "teams": "Agent Team"
+    "teams": "Agent Team",
+    "harness": "Agent Harness"
   },
   "filters": {
     "source": "來源",
@@ -27,18 +28,20 @@
     "user": "用戶",
     "project": "項目",
     "external": "外部",
-    "mode": "Agent",
-    "subagent": "Sub-Agent"
+    "mode": "可直接呼叫",
+    "subagent": "協作 Agent",
+    "anySource": "來源不限",
+    "anyKind": "類型不限"
   },
   "coreAgentsZone": {
-    "title": "核心智能體",
-    "subtitle": "平臺內置的核心 Agent，覆蓋主流 AI 工作流，開箱即用。",
+    "title": "已接入 Agent",
+    "subtitle": "目前已經可以設定的 Runtime Agent；遷移期間仍會顯示舊 Mode 接線。",
     "empty": "暫未檢測到核心智能體",
     "roleLabel": "主要應用 · ",
     "computerUseDisabledBadge": "已在設定中停用",
     "modes": {
       "agentic": {
-        "role": "編碼專業智能體"
+        "role": "編碼智能體"
       },
       "cowork": {
         "role": "辦公智能體"
@@ -49,8 +52,8 @@
     }
   },
   "agentsZone": {
-    "title": "Agent 總覽",
-    "subtitle": "查看所有 Agent / Sub-Agent，並直接管理工具與 Skills。",
+    "title": "智能體",
+    "subtitle": "統一查看內置、用戶、項目和外部智能體，點擊卡片查看與設定能力。",
     "empty": {
       "noAgents": "目前沒有可用的 Agent",
       "noMatch": "沒有匹配的 Agent"
@@ -86,6 +89,16 @@
       "primary": "主力模型",
       "auto": "自動選擇",
       "updateFailed": "更新 Sub-Agent 模型失敗"
+    },
+    "status": {
+      "connected": "已接入"
+    },
+    "metrics": {
+      "tools": "工具",
+      "skills": "技能",
+      "collaboration": "協作",
+      "capabilities": "能力",
+      "model": "模型"
     }
   },
   "capabilityCategories": {
@@ -160,7 +173,10 @@
       "miniapp": "MiniApp",
       "canvas": "畫布",
       "gstack": "gstack",
-      "other": "其他"
+      "other": "其他",
+      "debugging": "偵錯",
+      "coordination": "協作調度",
+      "planning": "規劃"
     },
     "skillGroupPicker": {
       "builtin": "內置分組",
@@ -248,7 +264,7 @@
     "editAgent": "編輯",
     "deleteAgent": "刪除",
     "externalActions": "外部 Agent",
-    "manageExternalAgent": "前往外部 AI 應用管理",
+    "manageExternalAgent": "前往生態兼容管理",
     "deleteConfirm": "確定刪除自定義 Agent「{{name}}」？此操作不可恢復。",
     "deleteSuccess": "已刪除「{{name}}」",
     "deleteFailed": "刪除失敗：",
@@ -266,12 +282,12 @@
       "kind": "類型",
       "kindAgentTooltip": "建立後可在對話輸入框的模式選擇器中作為獨立模式直接選擇。",
       "kindSubagentTooltip": "建立後主 Agent 可透過委派它完成子任務；不會作為可直接選擇的模式。",
-      "id": "ID",
-      "idPlaceholder": "用於設定和路由的穩定識別符",
+      "id": "Agent ID",
+      "idPlaceholder": "用於模型識別、設定和路由，建立後不可修改",
       "idRequired": "ID 不能為空",
       "idFormat": "只能以字母開頭，包含字母/數字/下劃線/連字符",
-      "name": "名稱",
-      "namePlaceholder": "介面顯示名稱",
+      "name": "名稱（選填）",
+      "namePlaceholder": "僅用於顯示，留空時使用 Agent ID",
       "nameRequired": "名稱不能為空",
       "level": "級別",
       "modeUserOnly": "目前版本中，自定義 mode 僅支援用戶級。",
@@ -283,13 +299,13 @@
       "promptRequired": "系統提示詞不能為空",
       "readonly": "只讀模式",
       "model": "模型",
-      "modelPlaceholder": "可填寫 inherit、auto、fast 或具體模型 ID",
+      "modelPlaceholder": "可填寫 inherit、primary、fast 或具體模型 ID",
       "modelRequired": "模型不能為空",
       "tools": "工具",
       "toolsOptional": "可選",
       "toolsHint": "（{{optionalLabel}}，不選則使用預設）",
       "contextPolicy": "運行時上下文",
-      "contextPolicyHint": "（選擇注入到提示詞中的工作區上下文片段）",
+      "contextPolicyHint": "（選擇 Agent 運行時自動注入的工作區上下文）",
       "contextWorkspaceContext": "工作區上下文",
       "contextWorkspaceContextTooltip": "加入目前工作區身分和會話級概況，幫助 Agent 知道自己正在處理哪個專案。",
       "contextWorkspaceInstructions": "工作區說明",
@@ -302,7 +318,24 @@
       "createSuccess": "已建立 Agent「{{name}}」",
       "createFailed": "建立失敗：",
       "review": "審查",
-      "reviewToolsHint": "補充檢查僅使用唯讀工具。"
+      "reviewToolsHint": "補充檢查僅使用唯讀工具。",
+      "basicInformation": "基本資訊",
+      "contextPreviewLabel": "運行時自動注入",
+      "contextPreviewEmpty": "未選擇任何工作區上下文"
+    },
+    "detail": {
+      "configuration": "配置",
+      "basicInfo": "基本資訊",
+      "basicInfoHint": "Agent 的身份、用途與運行屬性",
+      "behaviorContext": "行為與上下文",
+      "behaviorContextHint": "執行側重點與共享設定關係",
+      "name": "Agent 名稱",
+      "source": "來源",
+      "type": "類型",
+      "followUp": "連續對話",
+      "description": "用途描述",
+      "supported": "支援",
+      "unsupported": "不支援"
     }
   },
   "reviewTeams": {
@@ -461,7 +494,8 @@
     "Plan": "規劃模式：制定詳細的任務計劃和執行步驟",
     "Debug": "除錯模式：系統性地診斷和修復程式碼中的錯誤",
     "Claw": "抓取模式：從外部來源提取和整合資訊",
-    "Team": "團隊模式：協調多個智慧體協同完成複雜任務"
+    "Team": "團隊模式：協調多個智慧體協同完成複雜任務",
+    "Ultra": "群體規劃模式：將複雜工作拆成邊界清晰的智慧體任務，協調執行並彙總審查結果"
   },
   "legionsZone": {
     "title": "工作流",
@@ -792,6 +826,30 @@
       "resetFailed": "重設工具失敗: {{error}}",
       "refreshFailed": "重新整理工具失敗: {{error}}",
       "saveFirst": "請先儲存目前的工具變更。"
+    }
+  },
+  "harnessZone": {
+    "title": "Agent Harness",
+    "subtitle": "決定根 Agent 如何組織任務、呼叫工具、協同智能體並整合結果。",
+    "gearLabel": "{{level}} 檔",
+    "creativeTrack": "創意方向",
+    "profiles": {
+      "minimal": {
+        "name": "極簡",
+        "purpose": "精簡流程，快速推進，適合輕量任務。"
+      },
+      "balanced": {
+        "name": "標準",
+        "purpose": "平衡效率與品質，適用於大多數日常工作。"
+      },
+      "ultimate": {
+        "name": "極致",
+        "purpose": "深度拆解與智能協同，適合複雜與高價值任務。"
+      },
+      "creative": {
+        "name": "創造",
+        "purpose": "面向創新與探索，支援更靈活的執行與產出方式。"
+      }
     }
   }
 }

@@ -1,4 +1,4 @@
-﻿//! Product domain owner crate.
+//! Product domain owner crate.
 //!
 //! Product subdomains live here when they can be compiled without depending on
 //! the full BitFun core runtime assembly.
@@ -8,6 +8,10 @@ pub mod agent_catalog;
 pub mod canvas;
 pub mod mcp;
 pub mod native_hooks;
+pub mod product_control;
+pub mod product_control_owner_registry;
+pub mod product_search;
+pub mod remote_surface;
 pub mod tool_permissions;
 
 #[cfg(feature = "appearance-market")]
@@ -33,6 +37,9 @@ pub mod external_sources;
 
 #[cfg(feature = "external-sources")]
 pub mod external_subagents;
+
+#[cfg(feature = "external-sources")]
+pub mod plugin_capabilities;
 
 #[cfg(feature = "external-sources")]
 pub mod workspace_references;

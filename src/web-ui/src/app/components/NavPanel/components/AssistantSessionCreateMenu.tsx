@@ -1,11 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronDown, Plus, Users } from 'lucide-react';
-import { Tooltip } from '@/component-library';
+import { Users } from 'lucide-react';
+import { Icon, Menu, MenuItem, Tooltip } from '@bitfun/ui';
+
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import type { WorkspaceInfo } from '@/shared/types';
 import { useAnchoredPopoverPosition } from '@/shared/utils/useAnchoredPopoverPosition';
+import { isImeOwnedKeyboardEvent } from '@/shared/utils/ime';
 
 interface AssistantSessionCreateMenuProps {
   assistants: WorkspaceInfo[];
@@ -65,7 +67,7 @@ const AssistantSessionCreateMenu: React.FC<AssistantSessionCreateMenuProps> = ({
       closeMenu();
     };
     const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') closeMenu();
+      if (event.key === 'Escape' && !isImeOwnedKeyboardEvent(event)) closeMenu();
     };
 
     document.addEventListener('mousedown', handleMouseDown);
@@ -104,7 +106,7 @@ const AssistantSessionCreateMenu: React.FC<AssistantSessionCreateMenuProps> = ({
             }}
             data-testid="nav-primary-assistant-session-add-btn"
           >
-            <Plus size={13} />
+            <Icon name="plus" size="xs" />
           </button>
         </Tooltip>
         <Tooltip content={chooseAssistantLabel} placement="right" followCursor disabled={menuOpen}>
@@ -118,19 +120,15 @@ const AssistantSessionCreateMenu: React.FC<AssistantSessionCreateMenuProps> = ({
             onClick={() => setMenuOpen(open => !open)}
             data-testid="nav-assistant-session-menu-toggle"
           >
-            <ChevronDown size={11} />
+            <Icon name="chevron-down" size="2xs" />
           </button>
         </Tooltip>
       </div>
 
       {menuOpen ? createPortal(
-        <div
+        <Menu
           ref={menuRef}
           className="bitfun-nav-panel__assistant-session-menu"
-          data-bf-component="nav-panel"
-          data-bf-part="assistantSessionMenu"
-          data-bf-placement={menuLayout?.placement ?? 'bottom'}
-          role="menu"
           aria-label={chooseAssistantLabel}
           data-testid="nav-assistant-session-menu"
           style={{
@@ -141,13 +139,10 @@ const AssistantSessionCreateMenu: React.FC<AssistantSessionCreateMenuProps> = ({
         >
           {orderedAssistants.map(workspace => {
             const assistantName = getAssistantDisplayName(workspace);
-            const isPrimary = workspace.id === primaryAssistant?.id;
             return (
-              <button
+              <MenuItem
                 key={workspace.id}
-                type="button"
-                className="bitfun-nav-panel__assistant-session-menu-item"
-                role="menuitem"
+                leading={<Icon name="plus" size="xs" aria-hidden="true" />}
                 aria-label={t('nav.sessions.newAssistantSessionFor', { assistantName })}
                 onClick={() => {
                   closeMenu();
@@ -155,21 +150,13 @@ const AssistantSessionCreateMenu: React.FC<AssistantSessionCreateMenuProps> = ({
                 }}
                 data-testid={`nav-assistant-session-menu-item-${workspace.id}`}
               >
-                <Plus size={13} aria-hidden="true" />
                 <span className="bitfun-nav-panel__assistant-session-menu-name">{assistantName}</span>
-                {isPrimary ? (
-                  <span className="bitfun-nav-panel__assistant-session-menu-badge">
-                    {t('nav.workspaces.primaryAssistant')}
-                  </span>
-                ) : null}
-              </button>
+              </MenuItem>
             );
           })}
           {onCreateGroupChat ? (
-            <button
-              type="button"
-              className="bitfun-nav-panel__assistant-session-menu-item"
-              role="menuitem"
+            <MenuItem
+              leading={<Users size={13} aria-hidden="true" />}
               aria-label={createGroupChatLabel}
               onClick={() => {
                 closeMenu();
@@ -177,11 +164,10 @@ const AssistantSessionCreateMenu: React.FC<AssistantSessionCreateMenuProps> = ({
               }}
               data-testid="nav-assistant-session-menu-group-chat"
             >
-              <Users size={13} aria-hidden="true" />
               <span className="bitfun-nav-panel__assistant-session-menu-name">{createGroupChatLabel}</span>
-            </button>
+            </MenuItem>
           ) : null}
-        </div>,
+        </Menu>,
         getAppearanceOverlayHost(),
       ) : null}
     </div>

@@ -4,24 +4,8 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  type LucideIcon,
-  Image,
-  Plane,
-  Presentation,
-  ListTodo,
-  CalendarDays,
-  ClipboardList,
-  Mail,
-  FileSpreadsheet,
-  HandCoins,
-  TrendingUp,
-  FileText,
-  X,
-  RotateCcw,
-  Plus,
-} from 'lucide-react';
-import { Card, IconButton, Tooltip } from '@/component-library';
+import { Plane, Presentation, ListTodo, CalendarDays, ClipboardList, Mail, FileSpreadsheet, HandCoins, TrendingUp, FileText, RotateCcw } from 'lucide-react';
+import { ActionCard, IconButton, Tooltip, Icon } from '@bitfun/ui';
 import './CoworkExampleCards.scss';
 
 type ExampleId =
@@ -39,21 +23,21 @@ type ExampleId =
 
 interface ExampleItem {
   id: ExampleId;
-  icon: LucideIcon;
+  icon: React.ReactNode;
 }
 
 const EXAMPLES: ExampleItem[] = [
-  { id: 'desktop_cleanup', icon: Image },
-  { id: 'vacation_plan', icon: Plane },
-  { id: 'make_ppt', icon: Presentation },
-  { id: 'todo_breakdown', icon: ListTodo },
-  { id: 'optimize_week', icon: TrendingUp },
-  { id: 'weekly_plan', icon: CalendarDays },
-  { id: 'meeting_minutes', icon: ClipboardList },
-  { id: 'reply_email', icon: Mail },
-  { id: 'make_docx', icon: FileText },
-  { id: 'make_spreadsheet', icon: FileSpreadsheet },
-  { id: 'budget_plan', icon: HandCoins },
+  { id: 'desktop_cleanup', icon: <Icon name="image" size="lg" style={{ width: 18, height: 18 }} /> },
+  { id: 'vacation_plan', icon: <Plane size={18} /> },
+  { id: 'make_ppt', icon: <Presentation size={18} /> },
+  { id: 'todo_breakdown', icon: <ListTodo size={18} /> },
+  { id: 'optimize_week', icon: <TrendingUp size={18} /> },
+  { id: 'weekly_plan', icon: <CalendarDays size={18} /> },
+  { id: 'meeting_minutes', icon: <ClipboardList size={18} /> },
+  { id: 'reply_email', icon: <Mail size={18} /> },
+  { id: 'make_docx', icon: <FileText size={18} /> },
+  { id: 'make_spreadsheet', icon: <FileSpreadsheet size={18} /> },
+  { id: 'budget_plan', icon: <HandCoins size={18} /> },
 ];
 
 function pickRandomUnique<T>(items: readonly T[], count: number): T[] {
@@ -94,37 +78,22 @@ export const CoworkExampleCards: React.FC<CoworkExampleCardsProps> = ({
 
   const cards = useMemo(() => {
     return selected.map((example) => {
-      const Icon = example.icon;
       const title = t(`coworkExamples.items.${example.id}.title`);
       const description = t(`coworkExamples.items.${example.id}.description`);
       const prompt = t(`coworkExamples.items.${example.id}.prompt`);
       const handleSelect = () => onSelectPrompt(prompt);
 
       return (
-        <Card
+        <ActionCard
           key={example.id}
-          data-bf-component="cowork-example-cards"
-          data-bf-part="card"
           className="bitfun-cowork-example-cards__card"
-          variant="subtle"
-          interactive
-          role="button"
-          tabIndex={0}
+          description={description}
+          leading={example.icon}
+          size="md"
           onClick={handleSelect}
-          onKeyDown={(event) => {
-            if (event.key !== 'Enter' && event.key !== ' ') return;
-            event.preventDefault();
-            handleSelect();
-          }}
         >
-          <div data-bf-component="cowork-example-cards" data-bf-part="cardHeader" className="bitfun-cowork-example-cards__card-header">
-            <div data-bf-component="cowork-example-cards" data-bf-part="cardIcon" className="bitfun-cowork-example-cards__card-icon">
-              <Icon size={18} />
-            </div>
-            <div data-bf-component="cowork-example-cards" data-bf-part="cardTitle" className="bitfun-cowork-example-cards__card-title">{title}</div>
-          </div>
-          <div data-bf-component="cowork-example-cards" data-bf-part="cardDescription" className="bitfun-cowork-example-cards__card-desc">{description}</div>
-        </Card>
+          {title}
+        </ActionCard>
       );
     });
   }, [onSelectPrompt, selected, t]);
@@ -137,35 +106,29 @@ export const CoworkExampleCards: React.FC<CoworkExampleCardsProps> = ({
           {onAddPlugin && (
             <Tooltip content={t('coworkExamples.addPlugin')}>
               <IconButton
-                variant="ghost"
-                size="xs"
+                size="sm"
                 onClick={onAddPlugin}
                 aria-label={t('coworkExamples.addPlugin')}
-              >
-                <Plus size={14} />
-              </IconButton>
+                icon={<Icon name="plus" size="sm" />}
+              />
             </Tooltip>
           )}
           <Tooltip content={t('coworkExamples.refresh')}>
             <IconButton
-              variant="ghost"
-              size="xs"
+              size="sm"
               onClick={handleRefresh}
               aria-label={t('coworkExamples.refresh')}
-            >
-              <RotateCcw size={14} />
-            </IconButton>
+              icon={<RotateCcw size={14} />}
+            />
           </Tooltip>
           {onClose && (
             <Tooltip content={t('coworkExamples.close')}>
               <IconButton
-                variant="ghost"
-                size="xs"
+                size="sm"
                 onClick={onClose}
                 aria-label={t('coworkExamples.close')}
-              >
-                <X size={14} />
-              </IconButton>
+                icon={<Icon name="xmark" size="sm" />}
+              />
             </Tooltip>
           )}
         </div>

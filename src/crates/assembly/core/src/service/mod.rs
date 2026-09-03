@@ -22,8 +22,6 @@ pub mod git; // Git service
 pub mod i18n; // I18n service
 #[cfg(feature = "agent-runtime")]
 pub(crate) mod instruction_context; // Workspace instruction file prompt helpers
-#[cfg(feature = "lsp")]
-pub mod lsp; // LSP (Language Server Protocol) system
 #[cfg(feature = "mcp-runtime")]
 pub mod mcp; // MCP (Model Context Protocol) system
 #[cfg(feature = "remote-connect")]
@@ -49,6 +47,8 @@ pub mod session_usage; // Session runtime usage reports
 pub mod snapshot; // Snapshot-based change tracking
 #[cfg(feature = "agent-runtime")]
 pub mod token_usage; // Token usage tracking
+#[cfg(feature = "web-tools")]
+pub mod web_search; // Provider-neutral WebSearch runtime and local credentials
 #[cfg(feature = "workspace-runtime")]
 pub mod workspace; // Workspace management // Diff calculation and merge service
 #[cfg(feature = "workspace-runtime")]
@@ -98,8 +98,6 @@ pub use git::GitService;
 #[cfg(feature = "i18n-runtime")]
 pub use i18n::{get_global_i18n_service, I18nService};
 pub use i18n::{I18nConfig, LocaleId, LocaleMetadata};
-#[cfg(feature = "lsp")]
-pub use lsp::LspManager;
 #[cfg(feature = "mcp-runtime")]
 pub use mcp::MCPService;
 #[cfg(feature = "review-platform")]

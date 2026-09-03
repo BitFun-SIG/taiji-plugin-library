@@ -36,16 +36,6 @@ pub(crate) fn apply_headers(client: &AIClient, builder: RequestBuilder) -> Reque
             builder = builder.header("X-Verification-Code", "from_bitfun");
         }
 
-        // CodeBuddy's Tencent gateway accepts `X-API-Key` as a fingerprint
-        // header whose value equals the configured api_key (same value as the
-        // Authorization Bearer token). It is only emitted for the codebuddy
-        // domain so other OpenAI-compatible providers stay untouched. The
-        // value always comes from the runtime config (`client.config.api_key`
-        // loaded from app.json) — never hard-coded.
-        if is_codebuddy_url(&client.config.base_url) {
-            builder = builder.header("X-API-Key", client.config.api_key.clone());
-        }
-
         builder
     })
 }
@@ -234,45 +224,6 @@ pub(crate) async fn list_models(client: &AIClient) -> Result<Vec<RemoteModelInfo
     ))
 }
 
-#[derive(Debug, Deserialize)]
-struct CodexBackendModelsResponse {
-    #[serde(default)]
-    models: Vec<CodexBackendModelEntry>,
-}
-
-#[derive(Debug, Deserialize)]
-struct CodexBackendModelEntry {
-    slug: String,
-    /// Returned by the backend but unused — see comment in the mapping below
-    /// (display_name is dropped to avoid duplicate-looking entries).
-    #[allow(dead_code)]
-    #[serde(default)]
-    display_name: Option<String>,
-    /// Codex backend marks deprecated/internal slugs with `visibility = "hide"`.
-    /// We only surface entries the CLI itself shows (`list`).
-    #[serde(default)]
-    visibility: Option<String>,
-    #[serde(default)]
-    supported_in_api: Option<bool>,
-    #[serde(default)]
-    priority: Option<i64>,
-}
-
-const DEFAULT_CODEX_MODELS: &[&str] = &[
-    "gpt-5.5",
-    "gpt-5.4-mini",
-    "gpt-5.4",
-    "gpt-5.3-codex",
-    "gpt-5.2-codex",
-    "gpt-5.1-codex-max",
-    "gpt-5.1-codex-mini",
-];
-
-pub(crate) fn is_known_codex_reasoning_model(model_id: &str) -> bool {
-    let model_id = model_id.trim().to_ascii_lowercase();
-    model_id == "gpt-5-codex" || DEFAULT_CODEX_MODELS.contains(&model_id.as_str())
-}
-
 /// CodeBuddy backend model catalog (mirrors the official client's model list).
 /// The Tencent gateway accepts these real model ids only; arbitrary ids are
 /// rejected, so the discovery surface must not invent names.
@@ -335,12 +286,60 @@ fn static_qoder_models() -> Vec<RemoteModelInfo> {
         .collect()
 }
 
-const FORWARD_COMPAT_CODEX_MODELS: &[(&str, &[&str])] = &[
-    ("gpt-5.5", &["gpt-5.4", "gpt-5.4-mini", "gpt-5.3-codex"]),
-    ("gpt-5.4-mini", &["gpt-5.3-codex", "gpt-5.2-codex"]),
-    ("gpt-5.4", &["gpt-5.3-codex", "gpt-5.2-codex"]),
-    ("gpt-5.3-codex", &["gpt-5.2-codex"]),
-];
+#[derive(Debug, Deserialize)]
+struct CodexBackendModelsResponse {
+    #[serde(default)]
+    models: Vec<CodexBackendModelEntry>,
+}
+
+#[derive(Debug, Deserialize)]
+struct CodexBackendModelEntry {
+    slug: String,
+    /// Returned by the backend but unused — see comment in the mapping below
+    /// (display_name is dropped to avoid duplicate-looking entries).
+    #[allow(dead_code)]
+    #[serde(default)]
+    display_name: Option<String>,
+    /// Codex backend marks deprecated/internal slugs with `visibility = "hide"`.
+    /// We only surface entries the CLI itself shows (`list`).
+    #[serde(default)]
+    visibility: Option<String>,
+    #[serde(default)]
+    supported_in_api: Option<bool>,
+    #[serde(default)]
+    priority: Option<i64>,
+}
+
+const DEFAULT_CODEX_MODELS: &[&str] =
+    &["gpt-5.5", "gpt-5.3-codex-spark", "gpt-5.4", "gpt-5.4-mini"];
+
+fn parsed_gpt_version(model_id: &str) -> Option<(u32, u32)> {
+    let version = model_id.strip_prefix("gpt-")?.split('-').next()?;
+    let (major, minor) = version.split_once('.')?;
+    if minor.contains('.') {
+        return None;
+    }
+    Some((major.parse().ok()?, minor.parse().ok()?))
+}
+
+/// Mirrors OpenCode's ChatGPT subscription allowlist while keeping future
+/// versioned variants visible. Exact `gpt-5.6` and the Pro entitlement remain
+/// excluded because the subscription endpoint does not offer those products.
+fn codex_subscription_model_allowed(model_id: &str) -> bool {
+    let model_id = model_id.trim().to_ascii_lowercase();
+    if DEFAULT_CODEX_MODELS.contains(&model_id.as_str()) {
+        return true;
+    }
+    if matches!(model_id.as_str(), "gpt-5.5-pro" | "gpt-5.6") {
+        return false;
+    }
+    parsed_gpt_version(&model_id).is_some_and(|version| version > (5, 4))
+}
+
+pub(crate) fn is_known_codex_reasoning_model(model_id: &str) -> bool {
+    let model_id = model_id.trim().to_ascii_lowercase();
+    model_id == "gpt-5-codex" || codex_subscription_model_allowed(&model_id)
+}
 
 fn codex_home_dir() -> PathBuf {
     std::env::var("CODEX_HOME")
@@ -355,20 +354,6 @@ fn codex_home_dir() -> PathBuf {
 fn add_unique_model_id(ordered: &mut Vec<String>, id: String) {
     if !id.trim().is_empty() && !ordered.iter().any(|existing| existing == &id) {
         ordered.push(id);
-    }
-}
-
-fn add_forward_compat_codex_models(ordered: &mut Vec<String>) {
-    for (synthetic, templates) in FORWARD_COMPAT_CODEX_MODELS {
-        if ordered.iter().any(|model| model == synthetic) {
-            continue;
-        }
-        if templates
-            .iter()
-            .any(|template| ordered.iter().any(|model| model == template))
-        {
-            ordered.push((*synthetic).to_string());
-        }
     }
 }
 
@@ -447,6 +432,9 @@ fn codex_models_from_entries(entries: Vec<CodexBackendModelEntry>) -> Vec<String
         {
             continue;
         }
+        if !codex_subscription_model_allowed(&model.slug) {
+            continue;
+        }
         sortable.push((model.priority.unwrap_or(10_000), model.slug));
     }
     sortable.sort_by(|a, b| a.0.cmp(&b.0).then_with(|| a.1.cmp(&b.1)));
@@ -462,7 +450,9 @@ fn codex_fallback_model_ids() -> Vec<String> {
     let codex_home = codex_home_dir();
     let mut ordered = Vec::new();
     if let Some(model) = read_codex_config_model(&codex_home) {
-        add_unique_model_id(&mut ordered, model);
+        if codex_subscription_model_allowed(&model) {
+            add_unique_model_id(&mut ordered, model);
+        }
     }
     for model in read_codex_cached_models(&codex_home) {
         add_unique_model_id(&mut ordered, model);
@@ -470,7 +460,6 @@ fn codex_fallback_model_ids() -> Vec<String> {
     for model in DEFAULT_CODEX_MODELS {
         add_unique_model_id(&mut ordered, (*model).to_string());
     }
-    add_forward_compat_codex_models(&mut ordered);
     ordered
 }
 
@@ -518,7 +507,7 @@ async fn list_codex_chatgpt_models(
     }
     .await;
 
-    let mut model_ids = match live_models {
+    let model_ids = match live_models {
         Ok(models) if !models.is_empty() => models,
         Ok(_) => {
             log::warn!(
@@ -535,7 +524,6 @@ async fn list_codex_chatgpt_models(
         }
     };
 
-    add_forward_compat_codex_models(&mut model_ids);
     Ok(codex_model_infos(model_ids))
 }
 
@@ -600,7 +588,7 @@ pub(crate) fn convert_tools_flat(
 
 #[cfg(test)]
 mod tests {
-    use super::{attach_tools, is_known_codex_reasoning_model};
+    use super::{attach_tools, codex_subscription_model_allowed, is_known_codex_reasoning_model};
     use serde_json::json;
 
     #[test]
@@ -619,11 +607,25 @@ mod tests {
     }
 
     #[test]
-    fn codex_reasoning_model_table_is_exact_and_case_insensitive() {
+    fn codex_subscription_models_match_opencode_and_allow_future_variants() {
+        for model in [
+            "gpt-5.5",
+            "gpt-5.3-codex-spark",
+            "gpt-5.4",
+            "gpt-5.4-mini",
+            "gpt-5.6-sol",
+            "gpt-6.0-codex",
+        ] {
+            assert!(codex_subscription_model_allowed(model), "{model}");
+        }
+        for model in ["gpt-5.5-pro", "gpt-5.6", "gpt-5.4-pro", "o3"] {
+            assert!(!codex_subscription_model_allowed(model), "{model}");
+        }
+
         assert!(is_known_codex_reasoning_model("GPT-5.5"));
         assert!(is_known_codex_reasoning_model("gpt-5-codex"));
-        assert!(!is_known_codex_reasoning_model("gpt-9-unknown"));
-        assert!(!is_known_codex_reasoning_model("gpt-5.5-proxy"));
+        assert!(is_known_codex_reasoning_model("gpt-5.5-proxy"));
+        assert!(!is_known_codex_reasoning_model("gpt-5.5-pro"));
     }
 
     #[test]

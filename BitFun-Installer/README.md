@@ -7,7 +7,7 @@ A fully custom, branded installer for BitFun — built with **Tauri 2 + React** 
 Instead of relying on the generic NSIS wizard UI from Tauri's built-in bundler, this project provides:
 
 - **100% custom UI** — React-based, with smooth animations, dark theme, and brand consistency
-- **Modern experience** — Similar to Discord, Figma, and VS Code installers
+- **Modern experience** — Similar to Discord and VS Code installers
 - **Full control** — Custom installation logic, right-click context menu, PATH integration
 - **Cross-platform potential** — Same codebase can target Windows, macOS, and Linux
 
@@ -43,7 +43,14 @@ Use this as the release entrypoint. `pnpm run tauri:build` does not prepare vali
 pnpm run installer:build:only
 ```
 
-`installer:build:only` requires an existing valid desktop executable in the expected target output path.
+`installer:build:only` requires an existing `target/release/bitfun-desktop.exe`
+and its adjacent runtime directories. It never falls back to `release-fast` or
+`debug`. For an explicit Cargo target, pass the exact executable:
+
+```powershell
+$env:BITFUN_INSTALLER_APP_EXE = "target/x86_64-pc-windows-msvc/release/bitfun-desktop.exe"
+pnpm run installer:build:only
+```
 
 ## Architecture
 
@@ -77,9 +84,9 @@ BitFun-Installer/
 │   ├── hooks/
 │   │   └── useInstaller.ts    # Core installer state machine
 │   ├── styles/
-│   │   ├── global.css         # Base styles
-│   │   ├── variables.css      # Design tokens
+│   │   ├── global.css         # Base styles consuming canonical tokens
 │   │   └── animations.css     # Keyframe animations
+│   ├── theme/                 # Canonical theme projection + installer presets
 │   ├── types/
 │   │   └── installer.ts       # TypeScript types
 │   ├── App.tsx
@@ -176,7 +183,9 @@ pnpm run installer:build:fast
 pnpm run installer:build:only
 ```
 
-If payload validation fails, the build exits with an error.
+If any required desktop runtime file is missing, or payload validation fails,
+the build exits with an error. The installer verifies every manifest file's
+size and SHA-256 after extraction before registering the installation.
 
 ### Installer-only fast build
 
@@ -202,7 +211,9 @@ src-tauri/target/release-fast/bitfun-installer.exe
 
 ### Changing the UI Theme
 
-Edit [variables.css](src/styles/variables.css). Colors, spacing, and animations are controlled by CSS custom properties.
+Shared light/dark values come from `@bitfun/theme-bitfun`. Installer-only named presets live in
+[installerThemesData.ts](src/theme/installerThemesData.ts), and components consume only canonical
+`--bf-*` variables projected by [installerThemeRuntime.ts](src/theme/installerThemeRuntime.ts).
 
 ### Adding Install Steps
 

@@ -308,7 +308,23 @@ export async function loadBtwSessionHistory(params: LoadBtwSessionHistoryParams)
   }
 }
 
-export function ensureBtwSessionAvailable(params: EnsureBtwSessionAvailableParams): void {
+interface EnsureBtwSessionAvailableResult {
+  historyLoadRequested: boolean;
+}
+
+const isSessionHistoryComplete = (session: Session | undefined): boolean =>
+  Boolean(
+    session &&
+    session.historyState === 'ready' &&
+    session.isPartial !== true &&
+    typeof session.loadedTurnCount === 'number' &&
+    typeof session.totalTurnCount === 'number' &&
+    session.loadedTurnCount >= session.totalTurnCount
+  );
+
+function ensureBtwSessionAvailableInternal(
+  params: EnsureBtwSessionAvailableParams,
+): EnsureBtwSessionAvailableResult {
   // A session whose deletion was confirmed must not be re-created as a
   // placeholder shell (nor hydrated) when its panel is requested again; the
   // panel already renders the deleted-thread placeholder title.
@@ -316,7 +332,7 @@ export function ensureBtwSessionAvailable(params: EnsureBtwSessionAvailableParam
     log.warn('ensureBtwSessionAvailable: ignoring confirmed deleted session', {
       childSessionId: params.childSessionId,
     });
-    return;
+    return { historyLoadRequested: false };
   }
 
   const existingSession = flowChatStore.getState().sessions.get(params.childSessionId);
@@ -383,7 +399,7 @@ export function ensureBtwSessionAvailable(params: EnsureBtwSessionAvailableParam
 
   const workspacePath = resolvedWorkspacePath || sessionToHydrate?.workspacePath;
   if (!shouldHydrate || !workspacePath) {
-    return;
+    return { historyLoadRequested: false };
   }
 
   void loadBtwSessionHistory({
@@ -403,6 +419,11 @@ export function ensureBtwSessionAvailable(params: EnsureBtwSessionAvailableParam
       error,
     });
   });
+  return { historyLoadRequested: true };
+}
+
+export function ensureBtwSessionAvailable(params: EnsureBtwSessionAvailableParams): void {
+  ensureBtwSessionAvailableInternal(params);
 }
 
 export function openBtwSessionInAuxPane(params: {
@@ -420,9 +441,36 @@ export function openBtwSessionInAuxPane(params: {
   includeInternal?: boolean;
   viewKind?: BtwSessionViewKind;
 }): void {
-  // Resolve the panel title before ensureBtwSessionAvailable may create an
-  // on-demand shell, so a missing (deleted) child session gets the deleted
-  // placeholder instead of the generic thread label.
+  const ensureResult = ensureBtwSessionAvailableInternal(params);
+  const childSession = flowChatStore.getState().sessions.get(params.childSessionId);
+  const isSubagentSession =
+    params.sessionKind === 'subagent' || childSession?.sessionKind === 'subagent';
+  if (
+    isSubagentSession &&
+    !ensureResult.historyLoadRequested &&
+    !isSessionHistoryComplete(childSession)
+  ) {
+    const parentSession = flowChatStore.getState().sessions.get(params.parentSessionId);
+    const workspacePath =
+      params.workspacePath || childSession?.workspacePath || parentSession?.workspacePath;
+    if (workspacePath) {
+      void loadBtwSessionHistory({
+        childSessionId: params.childSessionId,
+        ...(!childSession?.workspacePath
+          ? {
+              workspacePath,
+              remoteConnectionId:
+                params.remoteConnectionId ||
+                childSession?.remoteConnectionId ||
+                parentSession?.remoteConnectionId,
+              remoteSshHost:
+                params.remoteSshHost || childSession?.remoteSshHost || parentSession?.remoteSshHost,
+            }
+          : {}),
+      }).catch(() => undefined);
+    }
+  }
+
   const content = buildBtwSessionPanelContent(
     params.childSessionId,
     params.parentSessionId,

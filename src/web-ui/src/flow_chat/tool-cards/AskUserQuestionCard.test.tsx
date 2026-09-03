@@ -9,6 +9,7 @@ import {
   LOCAL_SURFACE_ID,
   activateSurface,
 } from '@/infrastructure/peer-device/deviceSurface';
+import { PeerDeviceContext } from '@/infrastructure/peer-device/peerDeviceContextState';
 import { askUserQuestionDraftStore } from '../store/askUserQuestionDraftStore';
 
 vi.mock('react-i18next', () => ({
@@ -17,17 +18,6 @@ vi.mock('react-i18next', () => ({
       options?.count === undefined ? key : `${key}:${String(options.count)}`
     ),
   }),
-}));
-
-vi.mock('@/component-library', () => ({
-  Button: ({
-    children,
-    isLoading: _isLoading,
-    ...props
-  }: React.ButtonHTMLAttributes<HTMLButtonElement> & { isLoading?: boolean }) => (
-    <button type="button" {...props}>{children}</button>
-  ),
-  Tooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
 vi.mock('@/infrastructure/api/service-api/ToolAPI', () => ({
@@ -126,8 +116,8 @@ describe('AskUserQuestionCard', () => {
         />,
       );
     });
-    expect(container.querySelector('.questions-container')).not.toBeNull();
-    expect(container.querySelector('.completed-summary')).toBeNull();
+    expect(container.querySelector('[data-bf-component="ask-user"] [data-bf-part="body"]')).not.toBeNull();
+    expect(container.querySelector('button[data-bf-part="summary"]')).toBeNull();
 
     act(() => {
       root.render(
@@ -138,8 +128,8 @@ describe('AskUserQuestionCard', () => {
         />,
       );
     });
-    expect(container.querySelector('.questions-container')).not.toBeNull();
-    expect(container.querySelector('.completed-summary')).toBeNull();
+    expect(container.querySelector('[data-bf-component="ask-user"] [data-bf-part="body"]')).not.toBeNull();
+    expect(container.querySelector('button[data-bf-part="summary"]')).toBeNull();
 
     act(() => {
       root.render(
@@ -150,7 +140,7 @@ describe('AskUserQuestionCard', () => {
         />,
       );
     });
-    expect(container.querySelector('.completed-summary')).not.toBeNull();
+    expect(container.querySelector('button[data-bf-part="summary"]')).not.toBeNull();
   });
 
   it('restores an unsubmitted answer after the session card is remounted', () => {
@@ -201,6 +191,71 @@ describe('AskUserQuestionCard', () => {
     ).toBe(true);
   });
 
+  it('switches to the draft owned by the newly activated device surface', () => {
+    act(() => {
+      root.render(
+        <AskUserQuestionCard
+          toolItem={questionTool('pending_confirmation')}
+          config={config}
+          sessionId="session-a"
+          isLastItem
+        />,
+      );
+    });
+
+    const localRadio = container.querySelector<HTMLInputElement>('input[value="PostgreSQL"]');
+    act(() => localRadio?.click());
+    expect(localRadio?.checked).toBe(true);
+
+    act(() => {
+      activateSurface('peer-device-b');
+    });
+
+    expect(
+      container.querySelector<HTMLInputElement>('input[value="PostgreSQL"]')?.checked,
+    ).toBe(false);
+  });
+
+  it('explains why an older CLI peer cannot answer instead of exposing a dead form', () => {
+    activateSurface('peer-cli');
+    act(() => {
+      root.render(
+        <PeerDeviceContext.Provider value={{
+          peerMode: { active: true, deviceId: 'peer-cli', deviceName: 'CLI' },
+          attachments: [],
+          currentPeerCapabilities: {
+            idempotentDialogSubmit: true,
+            targetedSessionRollback: true,
+            tokenUsageStatistics: true,
+            miniAppAgentContextFilesV1: false,
+            cancelTool: false,
+            toolCatalog: false,
+            userQuestionResponse: null,
+            hostKind: 'cli',
+          },
+          switchToDevice: vi.fn(),
+          switchToLocal: vi.fn(),
+          disconnectDevice: vi.fn(),
+          disconnectAllDevices: vi.fn(),
+        }}>
+          <AskUserQuestionCard
+            toolItem={questionTool('pending_confirmation')}
+            config={config}
+            sessionId="session-a"
+            isLastItem
+          />
+        </PeerDeviceContext.Provider>,
+      );
+    });
+
+    expect(container.querySelector('[data-bf-component="ask-user"]')?.getAttribute('data-bf-state'))
+      .toBe('error');
+    expect(container.querySelector('[data-bf-part="status-label"]')?.textContent)
+      .toBe('toolCards.askUser.unsupportedOnPeer');
+    expect(container.querySelector<HTMLInputElement>('input[value="PostgreSQL"]')?.disabled)
+      .toBe(true);
+  });
+
   it('restores an unsubmitted custom input after the card is remounted', () => {
     const renderCard = () => {
       root.render(
@@ -218,7 +273,7 @@ describe('AskUserQuestionCard', () => {
     expect(otherRadio).not.toBeNull();
     act(() => otherRadio?.click());
 
-    const customInput = container.querySelector<HTMLInputElement>('.other-input-inline');
+    const customInput = container.querySelector<HTMLInputElement>('[data-bf-part="custom-input"] input');
     expect(customInput).not.toBeNull();
     act(() => {
       if (customInput) {
@@ -231,7 +286,51 @@ describe('AskUserQuestionCard', () => {
     act(renderCard);
 
     expect(container.querySelector<HTMLInputElement>('input[value="Other"]')?.checked).toBe(true);
-    expect(container.querySelector<HTMLInputElement>('.other-input-inline')?.value).toBe('CockroachDB');
+    expect(container.querySelector<HTMLInputElement>('[data-bf-part="custom-input"] input')?.value).toBe('CockroachDB');
+  });
+
+  it('keeps the custom input mounted and focused during Chinese IME composition', () => {
+    act(() => {
+      root.render(
+        <AskUserQuestionCard
+          toolItem={questionTool('pending_confirmation')}
+          config={config}
+          sessionId="session-a"
+          isLastItem
+        />,
+      );
+    });
+
+    const otherRadio = container.querySelector<HTMLInputElement>('input[value="Other"]');
+    act(() => otherRadio?.click());
+
+    const customInput = container.querySelector<HTMLInputElement>('[data-bf-part="custom-input"] input');
+    expect(customInput).not.toBeNull();
+    act(() => {
+      customInput?.focus();
+      customInput?.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }));
+      if (customInput) {
+        setInputValue(customInput, 'n');
+        setInputValue(customInput, '');
+      }
+    });
+
+    expect(container.querySelector('[data-bf-part="custom-input"] input')).toBe(customInput);
+    expect(document.activeElement).toBe(customInput);
+    expect(container.querySelector<HTMLInputElement>('input[value="Other"]')?.checked).toBe(true);
+
+    act(() => {
+      if (customInput) {
+        setInputValue(customInput, '你');
+        customInput.dispatchEvent(new CompositionEvent('compositionend', {
+          bubbles: true,
+          data: '你',
+        }));
+      }
+    });
+
+    expect(container.querySelector<HTMLInputElement>('[data-bf-part="custom-input"] input')?.value).toBe('你');
+    expect(document.activeElement).toBe(customInput);
   });
 
   it('deselects a blank multi-select Other answer and omits it from submission', async () => {
@@ -253,7 +352,7 @@ describe('AskUserQuestionCard', () => {
       otherCheckbox?.click();
     });
 
-    const customInput = container.querySelector<HTMLInputElement>('.other-input-inline');
+    const customInput = container.querySelector<HTMLInputElement>('[data-bf-part="custom-input"] input');
     expect(customInput).not.toBeNull();
     act(() => {
       if (customInput) {
@@ -265,13 +364,40 @@ describe('AskUserQuestionCard', () => {
     expect(container.querySelector<HTMLInputElement>('input[value="Other"]')?.checked).toBe(false);
     expect(container.querySelector<HTMLInputElement>('input[value="PostgreSQL"]')?.checked).toBe(true);
 
-    const submitButton = container.querySelector<HTMLButtonElement>('.submit-button');
+    const submitButton = container.querySelector<HTMLButtonElement>('[data-bf-part="submit"] button');
     expect(submitButton?.disabled).toBe(false);
     await act(async () => submitButton?.click());
 
     expect(toolAPI.submitUserAnswers).toHaveBeenCalledWith(
       'question-tool-1',
       { 0: ['PostgreSQL'] },
+      'session-a',
     );
+  });
+
+  it('keeps the form retryable and reports a failed response submission', async () => {
+    vi.mocked(toolAPI.submitUserAnswers).mockRejectedValueOnce(new Error('peer unavailable'));
+    act(() => {
+      root.render(
+        <AskUserQuestionCard
+          toolItem={questionTool('pending_confirmation')}
+          config={config}
+          sessionId="session-a"
+          isLastItem
+        />,
+      );
+    });
+
+    act(() => {
+      container.querySelector<HTMLInputElement>('input[value="PostgreSQL"]')?.click();
+    });
+    const submitButton = container.querySelector<HTMLButtonElement>(
+      '[data-bf-part="submit"] button',
+    );
+    await act(async () => submitButton?.click());
+
+    expect(container.querySelector('[data-bf-part="status-label"]')?.textContent)
+      .toBe('toolCards.askUser.submitFailed');
+    expect(submitButton?.disabled).toBe(false);
   });
 });

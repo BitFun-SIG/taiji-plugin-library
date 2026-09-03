@@ -590,6 +590,8 @@ const SessionScene: React.FC<SessionSceneProps> = ({
                 isDragging={false}
                 workspacePath={workspacePath}
                 showChatInput
+                isRightPanelOpen={!state.layout.rightPanelCollapsed}
+                onToggleRightPanel={toggleRightPanel}
               />
             )}
           </div>

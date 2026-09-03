@@ -10,6 +10,8 @@ import { useAgentsStore } from './agentsStore';
 import { isLocallyManageableSubagent } from './agentVisibility';
 
 const useAgentsListMock = vi.hoisted(() => vi.fn());
+const notificationInfoMock = vi.hoisted(() => vi.fn());
+const notificationSuccessMock = vi.hoisted(() => vi.fn());
 
 vi.mock('react-i18next', () => ({
   initReactI18next: {
@@ -18,6 +20,12 @@ vi.mock('react-i18next', () => ({
   },
   useTranslation: () => ({
     t: (_key: string, options?: { defaultValue?: string }) => options?.defaultValue ?? _key,
+  }),
+}));
+
+vi.mock('@/infrastructure/i18n/hooks/useI18n', () => ({
+  useI18n: () => ({
+    t: (key: string) => key,
   }),
 }));
 
@@ -83,23 +91,21 @@ vi.mock('./components/ToolGroupPicker', () => ({
   ),
 }));
 
-vi.mock('@/component-library', () => ({
-  Badge: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
-  Button: ({ children, onClick, disabled, variant, 'data-testid': testId }: {
-    children: React.ReactNode;
-    onClick?: () => void;
-    disabled?: boolean;
-    variant?: string;
-    'data-testid'?: string;
-  }) => (
-    <button type="button" onClick={onClick} disabled={disabled} data-testid={testId} data-bf-variant={variant}>{children}</button>
+vi.mock('@bitfun/ui', async importOriginal => ({
+  ...await importOriginal<typeof import('@bitfun/ui')>(),
+  Button: ({ children, onClick }: { children: React.ReactNode; onClick?: () => void }) => (
+    <button type="button" onClick={onClick}>{children}</button>
   ),
   IconButton: ({ children, onClick, 'data-testid': testId, 'aria-label': ariaLabel }: { children: React.ReactNode; onClick?: () => void; 'data-testid'?: string; 'aria-label'?: string }) => (
     <button type="button" onClick={onClick} data-testid={testId} aria-label={ariaLabel}>{children}</button>
   ),
-  Search: () => <input readOnly />,
   Select: () => <div />,
   Switch: () => <input type="checkbox" readOnly />,
+  Tooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+}));
+
+vi.mock('@/infrastructure/confirm-dialog', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@/infrastructure/confirm-dialog')>(),
   confirmDanger: vi.fn(async () => false),
 }));
 
@@ -133,6 +139,7 @@ function mockAgentsList(overrides: Record<string, unknown> = {}) {
     filteredAgents: [],
     loading: false,
     availableTools: [],
+    toolCatalogStatus: 'available',
     getModeProfile: () => null,
     getAgentSkills: () => [],
     getModeManageableSubagents: () => [],
@@ -166,10 +173,10 @@ vi.mock('@/infrastructure/config/services/ConfigManager', () => ({
 
 vi.mock('@/shared/notification-system', () => ({
   useNotification: () => ({
-    success: vi.fn(),
+    success: notificationSuccessMock,
     error: vi.fn(),
     warning: vi.fn(),
-    info: vi.fn(),
+    info: notificationInfoMock,
   }),
 }));
 
@@ -239,6 +246,8 @@ describeWithJsdom('AgentsScene', () => {
     });
 
     useAgentsStore.getState().openHome();
+    notificationInfoMock.mockReset();
+    notificationSuccessMock.mockReset();
     mockAgentsList();
   });
 
@@ -274,7 +283,7 @@ describeWithJsdom('AgentsScene', () => {
     expect(stylesheet).toContain('min-width: 0;');
   });
 
-  it('uses the shared responsive gallery grid and lets agent cards fill each track', () => {
+  it('uses one compact responsive catalog without overview category navigation', () => {
     const sceneSource = readFileSync(
       fileURLToPath(import.meta.url).replace(/AgentsScene\.test\.tsx$/, 'AgentsScene.tsx'),
       'utf8',
@@ -287,15 +296,95 @@ describeWithJsdom('AgentsScene', () => {
       fileURLToPath(import.meta.url).replace(/AgentsScene\.test\.tsx$/, 'components/_AgentSurfaceCard.scss'),
       'utf8',
     );
+    const coreCardStyles = readFileSync(
+      fileURLToPath(new URL('./components/CoreAgentCard.scss', import.meta.url)),
+      'utf8',
+    );
+    const agentCardSource = readFileSync(
+      fileURLToPath(new URL('./components/AgentCard.tsx', import.meta.url)),
+      'utf8',
+    );
+    const coreCardSource = readFileSync(
+      fileURLToPath(new URL('./components/CoreAgentCard.tsx', import.meta.url)),
+      'utf8',
+    );
 
-    // Two minCardWidth=360 grids in the base scene (core agents + agents) plus
-    // the legion gallery grid added by the LegionCard wiring (d7-P2-1/L1-P1-1)
-    // plus the agent team gallery grid recovered by R-WF-13.
-    expect(sceneSource.match(/<GalleryGrid\b[^>]*\bminCardWidth=\{360\}[^>]*>/g)).toHaveLength(4);
+    // One minCardWidth=360 grid remains (the custom agent teams gallery from
+    // R-WF-13); the catalog grids moved to minCardWidth=300 in 1.0.0.
+    expect(sceneSource.match(/<GalleryGrid\b[^>]*\bminCardWidth=\{360\}[^>]*>/g)).toHaveLength(1);
+    expect(sceneSource.match(/<GalleryGrid\b[^>]*\bminCardWidth=\{300\}[^>]*>/g)).toHaveLength(1);
+    expect(sceneSource).toContain('catalogAgents.map');
+    expect(sceneSource).not.toContain('gallery-anchor-bar');
     expect(agentCardStyles).toMatch(/\.agent-card \{\s+width: 100%;\s+min-width: 0;/);
     expect(coreCardSurfaceStyles).toMatch(/width: 100%;\s+min-width: 0;/);
+    expect(agentCardStyles).toContain('height: 148px;');
+    expect(coreCardSurfaceStyles).toContain('height: 148px;');
+    expect(agentCardStyles).toContain('border-radius: var(--bf-radius-lg);');
+    expect(coreCardSurfaceStyles).toContain('border-radius: var(--bf-radius-lg);');
+    expect(agentCardStyles).toContain('background: var(--bf-color-surface-raised);');
+    expect(coreCardSurfaceStyles).toContain('background: var(--bf-color-surface-raised);');
+    expect(agentCardStyles).toContain('box-shadow: var(--bf-shadow-xs);');
+    expect(coreCardSurfaceStyles).toContain('box-shadow: var(--bf-shadow-xs);');
+    expect(agentCardStyles).toContain('grid-template-columns: 56px minmax(0, 1fr);');
+    expect(coreCardStyles).toContain('grid-template-columns: 56px minmax(0, 1fr);');
+    expect(agentCardStyles).toContain('inset-block: 12px;');
+    expect(coreCardStyles).toContain('inset-block: 12px;');
+    expect(agentCardStyles).toContain('@container agent-card (max-width: 330px)');
+    expect(coreCardStyles).toContain('@container core-agent-card (max-width: 330px)');
+    expect(agentCardSource).toContain('agent-card__icon-area');
+    expect(agentCardSource).toContain('agent-card__dot-field');
+    expect(agentCardSource).toContain("t('agentCard.metrics.collaboration')");
+    expect(coreCardSource).toContain("t('agentCard.status.connected')");
+    expect(coreCardSource).toContain('core-agent-card__status');
+    expect(coreCardSource).toContain('core-agent-card__dot-field');
+    expect(agentCardSource).not.toContain('CAPABILITY_ACCENT');
+    expect(agentCardSource).not.toContain('--agent-card-gradient');
+    expect(coreCardSource).not.toContain('getAlphaColor');
+    expect(coreCardSource).not.toContain('--core-card-gradient');
+    expect(coreCardStyles).toMatch(/&__status \{[\s\S]*?color: var\(--bf-color-content-primary\);[\s\S]*?\.core-agent-card__status-icon \{[\s\S]*?color: var\(--bf-color-status-success-content\);/);
+    expect(coreCardSurfaceStyles).not.toContain('$gradient');
+    expect(coreCardSurfaceStyles).toContain('@mixin agent-icon-dot-field()');
+    expect(coreCardSurfaceStyles).toContain('background-size: 7px 7px;');
+    expect(coreCardSurfaceStyles).toContain('mask-image: linear-gradient(to bottom, currentColor 0%, transparent 100%);');
     expect(agentCardStyles).not.toContain('width: 360px;');
     expect(coreCardSurfaceStyles).not.toContain('width: 360px;');
+  });
+
+  it('shows Harness as a three-stop rail with a separate creative direction', async () => {
+    const { default: AgentsScene } = await import('./AgentsScene');
+
+    await act(async () => {
+      root.render(<AgentsScene />);
+    });
+
+    const minimal = container.querySelector<HTMLElement>('[data-testid="agents-harness-minimal"]');
+    const balanced = container.querySelector<HTMLElement>('[data-testid="agents-harness-balanced"]');
+    const ultimate = container.querySelector<HTMLElement>('[data-testid="agents-harness-ultimate"]');
+    const creative = container.querySelector<HTMLElement>('[data-testid="agents-harness-creative"]');
+    expect(container.querySelectorAll('.bitfun-agents-scene__harness-profile')).toHaveLength(3);
+    expect(container.querySelectorAll('.bitfun-agents-scene__harness-rail-node')).toHaveLength(3);
+    expect(container.querySelectorAll('.bitfun-agents-scene__harness-rail-node.is-default')).toHaveLength(1);
+    expect(container.querySelector('.bitfun-agents-scene__harness-presentation')).toBeTruthy();
+    expect(container.querySelector('.bitfun-agents-scene__harness-track')).toBeTruthy();
+    expect(container.querySelector('.bitfun-agents-scene__harness-creative')).toBe(creative);
+    expect(container.querySelector('.bitfun-agents-scene__harness-step')).toBeNull();
+    expect(container.querySelector('.bitfun-agents-scene__harness-card')).toBeNull();
+    expect(minimal).toBeTruthy();
+    expect(minimal?.tagName).toBe('DIV');
+    expect(container.querySelector('.bitfun-agents-scene__harness-step-status')).toBeNull();
+    expect(minimal?.dataset.bfState).toBeUndefined();
+    expect(ultimate?.dataset.bfState).toBeUndefined();
+    expect(minimal?.dataset.harnessGear).toBe('1');
+    expect(balanced?.dataset.harnessGear).toBe('2');
+    expect(ultimate?.dataset.harnessGear).toBe('3');
+    expect(creative?.dataset.harnessGear).toBe('creative');
+    expect(minimal?.textContent).toContain('harnessZone.profiles.minimal.purpose');
+    expect(minimal?.textContent).not.toContain('harnessZone.connected');
+    expect(ultimate?.textContent).not.toContain('harnessZone.comingSoon');
+    expect(creative?.querySelector('[data-bf-name="creative"]')).toBeTruthy();
+
+    expect(notificationInfoMock).not.toHaveBeenCalled();
+    expect(notificationSuccessMock).not.toHaveBeenCalled();
   });
 
   it('shows skill grouping and editing for a custom subagent with the Skill tool', async () => {
@@ -333,8 +422,11 @@ describeWithJsdom('AgentsScene', () => {
         ?.click();
     });
 
-    const skillsTab = Array.from(container.querySelectorAll<HTMLButtonElement>('[role="tab"]'))
-      .find((tab) => tab.textContent?.includes('agentsOverview.skills'));
+    expect(container.querySelector('[data-testid="agent-detail-configuration"]')).toBeTruthy();
+    expect(container.querySelector('[data-testid="agent-detail-overview"]')).toBeNull();
+    expect(container.querySelector('.agent-card__detail-view-tabs')).toBeNull();
+
+    const skillsTab = container.querySelector<HTMLButtonElement>('[data-detail-section="skills"]');
     expect(skillsTab).toBeTruthy();
 
     await act(async () => {
@@ -581,6 +673,10 @@ describeWithJsdom('AgentsScene', () => {
       card?.click();
     });
 
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[data-detail-section="tools"]')?.click();
+    });
+
     const summary = container.querySelector('[data-testid="agent-detail-tool-summary"]');
     expect(summary?.textContent).toBe('Read');
     expect(summary?.textContent).not.toContain('mcp__github__list_issues');
@@ -626,146 +722,14 @@ describeWithJsdom('AgentsScene', () => {
         .find((button) => button.textContent === mode.name)
         ?.click();
     });
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[data-detail-section="tools"]')
+        ?.click();
+    });
 
     const status = container.querySelector('[data-testid="agent-detail-tools-catalog-status"]');
     expect(status?.textContent).toContain('agentsOverview.toolsUnsupported');
     // The tool summary picker must not render — the catalog is not available.
     expect(container.querySelector('[data-testid="agent-detail-tool-summary"]')).toBeNull();
-  });
-
-  // ── Batch B: AgentsScene zone/action layout (P1-1/P1-2/P1-3/P1-4/P1-7) ──
-
-  it('orders agents-zone tools with the primary create-agent action first', async () => {
-    const { default: AgentsScene } = await import('./AgentsScene');
-    await act(async () => {
-      root.render(<AgentsScene />);
-    });
-
-    const zone = container.querySelector('[data-testid="agents-custom-zone"]');
-    expect(zone).toBeTruthy();
-    const toolIds = Array.from(zone?.querySelectorAll<HTMLElement>('[data-testid]') ?? [])
-      .map((el) => el.getAttribute('data-testid'));
-    const createIdx = toolIds.indexOf('agents-create-agent-btn');
-    const legionIdx = toolIds.indexOf('agents-create-legion-btn');
-    const reviewIdx = toolIds.indexOf('agents-open-review-team-btn');
-    expect(createIdx).toBeGreaterThanOrEqual(0);
-    expect(legionIdx).toBeGreaterThan(createIdx);
-    expect(reviewIdx).toBeGreaterThan(legionIdx);
-    // The create-agent button carries the primary highlight.
-    const createBtn = zone?.querySelector('[data-testid="agents-create-agent-btn"]');
-    expect(createBtn?.className).toContain('gallery-action-btn--primary');
-    // A visual separator sits between the primary action and secondary ones.
-    const seps = Array.from(zone?.querySelectorAll('.gallery-action-sep') ?? []);
-    expect(seps.length).toBeGreaterThanOrEqual(1);
-  });
-
-  it('keeps top-level zones flat and adds all four anchors', async () => {
-    const { default: AgentsScene } = await import('./AgentsScene');
-    const { LegionPresetAPI } = await import('@/infrastructure/api/service-api/LegionPresetAPI');
-    const listPresets = LegionPresetAPI.listPresets as ReturnType<typeof vi.fn>;
-    listPresets.mockResolvedValue([
-      {
-        id: 'sparc-dev',
-        name: 'SPARC Development',
-        description: '5-stage pipeline',
-        nodes: [],
-        edges: [],
-      },
-    ]);
-
-    await act(async () => {
-      root.render(<AgentsScene />);
-    });
-    await act(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
-    });
-
-    const zones = Array.from(container.querySelectorAll<HTMLElement>('section[id]'))
-      .map((s) => s.getAttribute('id'));
-    expect(zones).toContain('core-agents-zone');
-    expect(zones).toContain('agents-zone');
-    expect(zones).toContain('legions-zone');
-    expect(zones).toContain('agent-teams-zone');
-
-    // The teams zone is no longer nested inside agents-zone.
-    const agentsZone = container.querySelector('[data-testid="agents-custom-zone"]');
-    const teamsZone = container.querySelector('[data-testid="agents-teams-zone"]');
-    expect(agentsZone?.contains(teamsZone ?? null)).toBe(false);
-
-    // Anchor bar exposes all four zones.
-    for (const testId of [
-      'agents-anchor-core',
-      'agents-anchor-custom',
-      'agents-anchor-legions',
-      'agents-anchor-teams',
-    ]) {
-      expect(container.querySelector(`[data-testid="${testId}"]`)).toBeTruthy();
-    }
-  });
-
-  it('marks the delete button as danger and keeps it separated from edit', async () => {
-    const subagent = {
-      key: 'user::delete-me',
-      id: 'delete-me',
-      name: 'Delete me',
-      description: 'Custom subagent.',
-      isReadonly: false,
-      isReview: false,
-      toolCount: 0,
-      defaultTools: [],
-      defaultEnabled: true,
-      effectiveEnabled: true,
-      source: 'user',
-      agentKind: 'subagent' as const,
-      capabilities: [],
-    };
-    mockAgentsList({
-      allAgents: [subagent],
-      filteredAgents: [subagent],
-    });
-    const { default: AgentsScene } = await import('./AgentsScene');
-
-    await act(async () => {
-      root.render(<AgentsScene />);
-    });
-    await act(async () => {
-      Array.from(container.querySelectorAll<HTMLButtonElement>('button'))
-        .find((button) => button.textContent === subagent.name)
-        ?.click();
-    });
-
-    const deleteBtn = Array.from(container.querySelectorAll<HTMLButtonElement>('button'))
-      .find((button) => button.textContent === 'agentsOverview.deleteAgent');
-    expect(deleteBtn).toBeTruthy();
-    expect(deleteBtn?.getAttribute('data-bf-variant')).toBe('danger');
-    const actionsRow = deleteBtn?.parentElement;
-    expect(actionsRow?.getAttribute('style')).toMatch(/gap:\s*16/);
-    const editBtn = Array.from(container.querySelectorAll<HTMLButtonElement>('button'))
-      .find((button) => button.textContent === 'agentsOverview.editAgent');
-    expect(editBtn).toBeTruthy();
-  });
-
-  it('opens the team editor from the details modal with the save-chained action', async () => {
-    const { default: AgentsScene } = await import('./AgentsScene');
-    await act(async () => {
-      root.render(<AgentsScene />);
-    });
-
-    const teamName = useAgentsStore.getState().agentTeams[0]?.name ?? '';
-    const card = Array.from(container.querySelectorAll<HTMLElement>('.agent-team-card'))
-      .find((el) => el.getAttribute('aria-label') === teamName);
-    expect(card).toBeTruthy();
-    await act(async () => {
-      card?.click();
-    });
-
-    const editAction = Array.from(container.querySelectorAll<HTMLButtonElement>('button'))
-      .find((button) => button.textContent === 'composer.saveTeam');
-    expect(editAction).toBeTruthy();
-    await act(async () => {
-      editAction?.click();
-    });
-    expect(container.querySelector('.bitfun-agents-scene--page')).toBeTruthy();
   });
 });

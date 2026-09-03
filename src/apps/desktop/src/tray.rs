@@ -64,7 +64,7 @@ fn tray_strings(locale: &LocaleId) -> &'static TrayStrings {
 }
 
 fn desktop_pet_should_show(exp: &AIExperienceConfig) -> bool {
-    exp.enable_agent_companion && exp.agent_companion_display_mode == "desktop"
+    exp.enable_agent_companion
 }
 
 async fn load_ai_experience(app: &AppHandle) -> Option<AIExperienceConfig> {
@@ -138,26 +138,19 @@ async fn tray_toggle_desktop_pet(app: &AppHandle) -> Result<(), String> {
         .ok_or_else(|| "AppState not available".to_string())?;
     let config_service = &app_state.config_service;
 
-    let mut exp: AIExperienceConfig = config_service
-        .get_config(Some("app.ai_experience"))
+    let show = config_service
+        .update_config("app.ai_experience", |exp: &mut AIExperienceConfig| {
+            if desktop_pet_should_show(exp) {
+                exp.enable_agent_companion = false;
+            } else {
+                exp.enable_agent_companion = true;
+            }
+            Ok(desktop_pet_should_show(exp))
+        })
         .await
         .map_err(|e| e.to_string())?;
+    crate::api::remote_connect_api::notify_settings_changed();
 
-    let desktop_on = desktop_pet_should_show(&exp);
-
-    if desktop_on {
-        exp.enable_agent_companion = false;
-    } else {
-        exp.enable_agent_companion = true;
-        exp.agent_companion_display_mode = "desktop".to_string();
-    }
-
-    config_service
-        .set_config("app.ai_experience", &exp)
-        .await
-        .map_err(|e| e.to_string())?;
-
-    let show = desktop_pet_should_show(&exp);
     if show {
         crate::appearance::show_agent_companion_desktop_pet(app.clone()).await?;
     } else {

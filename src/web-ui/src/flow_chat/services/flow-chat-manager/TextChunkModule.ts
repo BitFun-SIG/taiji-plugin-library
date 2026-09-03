@@ -213,6 +213,7 @@ export function processThinkingChunkInternal(
   isThinkingEnd = false,
   attemptId?: string,
   attemptIndex?: number,
+  reasoningKind?: 'reasoning' | 'summary',
 ): void {
   clearRuntimeStatus(context, sessionId, turnId, { roundId });
 
@@ -228,7 +229,7 @@ export function processThinkingChunkInternal(
   const streamKey = resolveAttemptStreamKey(roundId, attemptId, attemptIndex);
 
   // Store thinking content under a separate key.
-  const thinkingKey = `thinking_${streamKey}`;
+  const thinkingKey = `thinking_${reasoningKind ?? 'none'}_${streamKey}`;
   const round = findRound(context, sessionId, turnId, roundId);
 
   let thinkingItemId = sessionActiveTextItems.get(thinkingKey);
@@ -240,6 +241,7 @@ export function processThinkingChunkInternal(
         item.type === 'thinking' &&
         item.attemptId === attemptId &&
         item.attemptIndex === attemptIndex &&
+        item.reasoningKind === reasoningKind &&
         (item.isStreaming || isRoundClosed(round))
       );
 
@@ -264,6 +266,7 @@ export function processThinkingChunkInternal(
       id: thinkingItemId,
       type: 'thinking',
       content: cleanedContent,
+      reasoningKind,
       isStreaming: !isThinkingEnd,
       isCollapsed: isThinkingEnd,
       timestamp: Date.now(),
@@ -283,6 +286,7 @@ export function processThinkingChunkInternal(
       if (isThinkingEnd) {
         context.flowChatStore.updateModelRoundItemSilent(sessionId, turnId, thinkingItemId, {
           content: cleanedContent,
+          reasoningKind,
           isStreaming: false,
         isCollapsed: true,
         status: 'completed',
@@ -296,6 +300,7 @@ export function processThinkingChunkInternal(
       } else {
         context.flowChatStore.updateModelRoundItemSilent(sessionId, turnId, thinkingItemId, {
           content: cleanedContent,
+          reasoningKind,
           isStreaming: true,
           isCollapsed: false,
           status: 'streaming',

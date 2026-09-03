@@ -1451,6 +1451,7 @@ Related tools:
                                 None
                             },
                             model_id: None,
+                            agent_route_key: None,
                             metadata,
                         })
                         .await

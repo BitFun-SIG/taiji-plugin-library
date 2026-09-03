@@ -40,7 +40,8 @@ vi.mock('react-i18next', async () => {
   };
 });
 
-vi.mock('@/component-library', () => ({
+vi.mock('@bitfun/ui', () => ({
+  Icon: ({ name }: { name: string }) => <span data-bf-component="icon" data-bf-name={name} />,
   Button: ({
     children,
     disabled,
@@ -121,6 +122,7 @@ vi.mock('@/infrastructure/api/service-api/AgentAPI', () => ({
 
 vi.mock('@/infrastructure/runtime', () => ({
   isTauriRuntime: () => true,
+  isOpenHarmonyRuntime: () => false,
 }));
 
 vi.mock('@/infrastructure/event-bus', () => ({
@@ -129,7 +131,7 @@ vi.mock('@/infrastructure/event-bus', () => ({
   },
 }));
 
-vi.mock('@/component-library/components/ConfirmDialog/confirmService', () => ({
+vi.mock('@/infrastructure/confirm-dialog', () => ({
   confirmWarning: confirmWarningMock,
 }));
 
@@ -567,7 +569,8 @@ describeWithJsdom('DeepReviewActionBar', () => {
     });
 
     const { useSettingsStore } = await import('@/app/scenes/settings/settingsStore');
-    expect(useSettingsStore.getState().activeTab).toBe('review');
+    expect(useSettingsStore.getState().activePageId).toBe('tools.execution');
+    expect(useSettingsStore.getState().activeViewId).toBe('advanced');
   });
 
   it('sends backend queue control actions for event-driven capacity waits', async () => {

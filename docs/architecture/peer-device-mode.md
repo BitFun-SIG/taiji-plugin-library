@@ -32,8 +32,8 @@ lists this machine plus every online peer.
 Two rules follow, and both are load-bearing:
 
 - **A surface switch never mutates the device being left.** Everything in
-  `resetProductSurface()` is frontend-only. Sending `terminal_shutdown_all` or
-  `lsp_close_workspace` during a switch lands on the *previous* transport and
+  `resetProductSurface()` is frontend-only. Sending `terminal_shutdown_all`
+  during a switch lands on the *previous* transport and
   kills work an agent there still depends on.
 - **Product events are routed by their source device.** The controller re-emits
   peer DeviceEvents under their original event name, so with peers attached in
@@ -136,6 +136,16 @@ ordering, so an old response cannot erase a newer request or revive one that was
 already answered. Reattachment only repairs presentation state: it never
 restarts, cancels, or moves the Session, Dialog Turn, or Tool future.
 
+Rendering a mailbox entry and answering it are separate compatibility
+contracts. A Peer Host that accepts `submit_user_answers` advertises
+`peer_mode_ping.capabilities.user_question_response`. Older Desktop hosts are
+compatible because they already exposed the command; older CLI hosts are not,
+so controllers must leave the card visible but disabled with an explicit
+upgrade/unsupported state instead of sending a mutation that cannot complete.
+Current controllers include the owning Session id, and the host rejects an
+answer when that Session no longer owns the pending Tool id. New hosts retain
+the legacy process-wide Tool-id form for older controllers that omit Session id.
+
 This is the contract for any new blocking interaction: its execution owner must
 retain replayable request state and expose it through an attach/snapshot path.
 A one-shot frontend event plus an unresolved channel is not a complete
@@ -161,6 +171,44 @@ applying or uploading settings, a host fans out `account://settings-applied`
 to attached controllers; the controller re-emits it locally so the frontend
 config cache and model selectors refresh without reconnecting.
 
+The sync engine subscribes to successful local mutations at `ConfigService`,
+in addition to legacy host notifications. This covers model, Skill, Agent
+profile, and individual preference mutations through Desktop and CLI. Failed
+writes, runtime-only credentials, reloads, and cloud imports do not emit this
+local-change signal. Pending local edits take priority over the periodic pull;
+a fetched blob is applied only if the local document still matches its
+pre-fetch snapshot. The comparison and import share the config write lock.
+
+Older settings snapshots may omit fixed fields introduced by a newer build.
+Imports preserve those local fields instead of replacing them with defaults.
+Supplied arrays and dynamic maps remain authoritative, so deleted models,
+profiles and list entries are not resurrected. Optional/default-elided fields
+retain their existing reset semantics; an explicit raw backup restore also
+honors omitted default memory and AI preferences. Legacy renamed fields still
+pass through their migrations before values at the new names are preserved.
+
+Realtime voice credentials live in `app.voice_call` in the same persisted
+configuration and export/backup format as model settings. Account settings
+apply preserves the controller's existing voice fields when an older payload
+omits them, and an empty voice API key from an unconfigured host does not erase
+a configured local key. Non-empty synced keys still replace the local key.
+Explicit file imports can restore or clear a supplied key; local voice saves
+and resets can also clear it. A valid whole-config import creates a raw
+`app_pre-import_*.json` backup before replacement, under the existing backup
+retention policy. Config reload and model-reference reconciliation serialize
+their reads and writes with local saves so stale snapshots cannot undo a
+completed credential save. These rules do not change speech command routing:
+capture, configuration and realtime connections remain on the controller.
+
+Config mutations publish in-memory values and change notifications only after
+atomic persistence succeeds. Model CRUD and Agent/Skill map edits use a shared
+read/modify/write operation; startup profile canonicalization updates only its
+map. User backups have unique names even within the same second. Web UI reads
+resolve legacy model metadata without writing it back, model edits read fresh
+host data inside the client mutation queue, and AI-experience controls save
+only edited fields. An explicit empty quick-action list stays empty across
+reloads; defaults are supplied only when absent or when explicitly reset.
+
 SSH `WorkspaceKind.Remote` remains a separate path (local session mirror + remote
 FS) and must not be mixed with Peer Device Mode.
 
@@ -172,11 +220,22 @@ FS) and must not be mixed with Peer Device Mode.
   any other.
 - Selecting this machine only changes what is rendered; peers stay attached and
   keep working. `Disconnect` in the switcher is the separate, explicit action
-  that ends a peer's control link and cancels the work it runs for us.
+  that ends a peer's control link and discards that peer's cached Surface state
+  on the controller. It does not cancel a Turn the peer has already accepted;
+  reconnecting later reattaches to the Host-owned Runtime projection. Pending
+  controller-only interactions still follow their owner's mailbox or fail-closed
+  policy.
 - Local-only commands (window chrome, updater, account login/logout, peer
-  control plane) never execute on the peer on behalf of a controller.
+  control plane) never execute on the peer on behalf of a controller. Which
+  commands those are is declared once, per command, in the Product Operation
+  Registry (`bitfun_product_domains::remote_surface`); the desktop host, the
+  CLI host, and the Web UI transport adapter derive their tables from it. See
+  [remote-surface-contract.md](remote-surface-contract.md).
 - Unsupported or denied commands fail loudly; they must not fall back to the
-  local host (that would leak local content).
+  local host (that would leak local content). The CLI host distinguishes
+  "controller-owned", "unsupported on a CLI host (reason)", "retired", and
+  "unknown to this host version" so a controller can tell a policy refusal
+  from a version mismatch.
 
 ## Transport
 
@@ -184,11 +243,11 @@ FS) and must not be mixed with Peer Device Mode.
   `RemoteCommand::HostInvoke` over `account_device_rpc`.
 - HostInvoke on the controller is **priority-queued** with four requests in
   flight. Session restore / session-list / dialog / workspace-startup commands
-  outrank background `git_*` / `ssh_*` / `lsp_*` / `search_*` / FS / canvas /
+  outrank background `git_*` / `ssh_*` / `search_*` / FS / canvas /
   editor RPCs so hydrate is not starved into relay HTTP 504s. Terminal commands
   are always interactive priority, and one slot is kept free from normal and
   low-priority work so input cannot be trapped behind slow polling requests.
-- Idempotent read HostInvokes use a 10s per-attempt deadline and at most two
+- Idempotent read HostInvokes use a 10s per-attempt deadline and at most four
   exponential-backoff retries. Mutating commands use a 30s deadline and are
   not replayed unless both ends share an explicit idempotency contract.
   `start_dialog_turn` and `start_acp_dialog_turn` use their stable
@@ -248,17 +307,21 @@ FS) and must not be mixed with Peer Device Mode.
   the exact observed tool and turn. Confirmable Peer tools always wait for the
   controller even when the host's global policy skips confirmation, so an Agent
   pauses until the controller responds; exact background-result follow-ups
-  retain this Peer-only confirmation requirement. The host cancels tracked turns when the
-  last controller detaches/goes offline or the agent-event subscription
-  lags/closes; continuity loss also projects the existing dialog-turn-failed
-  terminal event. Terminal ownership remains tracked until the event reaches the
-  delivery attempt, and a closed local delivery queue uses the same direct
-  DeviceEvent path. Delivery targets are captured when an event is queued and
-  rechecked against the currently attached set before each send. A per-target
-  delivery lease serializes detach or offline removal with the local Relay
-  enqueue attempt. An explicit disconnect still restores the local controller
-  UI, but reports a warning when host cancellation was not confirmed. This
-  boundary does not change the Relay envelope or add ACK or replay.
+  retain this Peer-only confirmation requirement. The host keeps tracked Turns
+  running when the last controller detaches or goes offline and continues
+  materializing their Runtime projection for a later attach. Actual agent-event
+  subscription lag or closure remains a continuity failure: it cancels tracked
+  Turns and projects the existing dialog-turn-failed terminal event. Terminal
+  ownership remains tracked until the event reaches the delivery attempt, and a
+  closed local delivery queue uses the same direct DeviceEvent path. Delivery
+  targets are captured when an event is queued and rechecked against the
+  currently attached set before each send. A per-target delivery lease serializes
+  detach or offline removal with the local Relay enqueue attempt. An explicit
+  disconnect still restores the local controller UI and reports a warning when
+  the host does not confirm attachment teardown; that uncertainty concerns the
+  control link and controller-scoped interaction cleanup, not cancellation of
+  Host-accepted work. This boundary does not change the Relay envelope or add
+  ACK or replay.
 - Relay `POST /api/devices/:id/rpc` still permits up to **120s** for generic
   callers. Peer controllers normally cancel earlier through their per-command
   10s/30s deadlines; reverse proxies must still accommodate any other caller
@@ -293,6 +356,8 @@ and may represent a different operating system.
 
 ## Ownership
 
+- Command policy and peer capabilities (all surfaces):
+  `src/crates/contracts/product-domains/src/remote_surface/`
 - Desktop host invoke / fan-out: `src/apps/desktop/src/api/peer_host_invoke.rs`,
   `remote_connect_api.rs`
 - CLI host invoke / fan-out: `src/apps/cli/src/peer_host/` (Core registry; no

@@ -16,6 +16,7 @@
  */
 
 import { PeerDeviceTransportAdapter } from '@/infrastructure/api/adapters/peer-device-adapter';
+import type { PeerHostCapabilityId } from '@/infrastructure/api/generated/remoteSurface';
 import { remoteConnectAPI } from '@/infrastructure/api/service-api/RemoteConnectAPI';
 import { createLogger } from '@/shared/utils/logger';
 import type { DeviceSurfaceId } from './deviceSurface';
@@ -45,11 +46,27 @@ export interface PeerHostCapabilities {
   readonly idempotentDialogSubmit: boolean;
   readonly targetedSessionRollback: boolean;
   readonly tokenUsageStatistics: boolean;
+  /** MiniApp Agent runs accept immutable virtual context-file snapshots. */
+  readonly miniAppAgentContextFilesV1: boolean;
+  /** Typed ProductControl HostInvoke, including shared config read-back. */
+  readonly productControlV1?: boolean;
   /**
-   * Host implements `cancel_tool` (per-tool interrupt). Gates the Terminal
-   * Interrupt button. `null` = the host's `peer_mode_ping` did not advertise
-   * the field (older host): resolve via `hostKind` — an older Desktop always
-   * implemented cancel_tool (keep the button), an older CLI never did (hide it).
+   * ProductControl definitions that need a host-native provider or a live
+   * presentation surface. The controller does not pre-check these: the peer
+   * host executes the same owner handler and returns a typed unsupported
+   * result when the definition needs a surface it lacks (peer-device README,
+   * invariant 16). They are kept here so a future pre-send gate reads the
+   * negotiated value instead of guessing by host kind.
+   */
+  readonly productControlNativeV1?: boolean;
+  readonly productControlPresentationV1?: boolean;
+  /**
+   * Host implements `cancel_tool` (per-tool interrupt). `null` = the host's
+   * `peer_mode_ping` did not advertise the field (older host): resolve via
+   * `hostKind` — an older Desktop always implemented cancel_tool, an older CLI
+   * never did. The controller currently has no consumer (the Terminal
+   * Interrupt button left with the legacy TerminalControl tool); hosts keep
+   * advertising it for older controllers that still render that button.
    */
   readonly cancelTool: boolean | null;
   /**
@@ -58,6 +75,12 @@ export interface PeerHostCapabilities {
    * (older host); resolve via `hostKind` the same way as `cancelTool`.
    */
   readonly toolCatalog: boolean | null;
+  /**
+   * Host implements `submit_user_answers` for Runtime-owned
+   * AskUserQuestion interactions. Older Desktop hosts already implemented the
+   * command; older CLI hosts did not.
+   */
+  readonly userQuestionResponse: boolean | null;
   /**
    * Which kind of host answered `peer_mode_ping` (`"desktop"` | `"cli"`).
    * `null` = the host did not advertise `host_type` (even older host, or the
@@ -125,23 +148,30 @@ interface HostInvokeEnvelope {
 
 interface PeerModePingResult {
   host_type?: string;
-  capabilities?: {
-    idempotent_dialog_submit?: boolean;
-    targeted_session_rollback?: boolean;
-    token_usage_statistics?: boolean;
-    cancel_tool?: boolean;
-    tool_catalog?: boolean;
-  };
+  /**
+   * Only advertised keys are present, each `true`; a missing key means the
+   * host predates that capability and is resolved through `host_type`. The
+   * key set is the registry's (`PEER_HOST_CAPABILITY_IDS`), shared with both
+   * peer hosts, so a probe cannot ask for a key no host will ever send.
+   */
+  capabilities?: Partial<Record<PeerHostCapabilityId, boolean>>;
+  /** Additive: digest of the registry the host was built from. */
+  surface_registry_digest?: string;
 }
 
 const NO_CAPABILITIES: PeerHostCapabilities = {
   idempotentDialogSubmit: false,
   targetedSessionRollback: false,
   tokenUsageStatistics: false,
+  miniAppAgentContextFilesV1: false,
+  productControlV1: false,
+  productControlNativeV1: false,
+  productControlPresentationV1: false,
   // Unknown (not yet probed) — not the same as `false` (probed, unsupported).
   // Consumers treat `null` optimistically so an unprobed host is not gated off.
   cancelTool: null,
   toolCatalog: null,
+  userQuestionResponse: null,
   // Host kind is unknown until the first `peer_mode_ping` resolves. Consumers
   // treat `null` optimistically. See PR #2428 round 5 #1.
   hostKind: null,
@@ -257,9 +287,11 @@ export class PeerConnectionManager {
    * End a control link for good: stop its timers, settle everything still
    * waiting on its transport, then tell the peer.
    *
-   * The detach RPC is last and its failure is re-thrown, because a peer that
-   * did not confirm may still be running our work — the caller decides whether
-   * that is worth surfacing. Local teardown has already completed either way.
+   * The detach RPC is last and its failure is re-thrown because the controller
+   * cannot otherwise confirm that the Host removed its delivery subscription
+   * and finalized controller-scoped interactions. Host-accepted work remains
+   * Host-owned and keeps running either way. Local teardown has already
+   * completed before the RPC settles.
    */
   async dispose(deviceId: string, options: PeerDisposeOptions = {}): Promise<void> {
     const entry = this.entries.get(deviceId);
@@ -389,6 +421,8 @@ export class PeerConnectionManager {
       supportsIdempotentDialogSubmit: entry.capabilities.idempotentDialogSubmit,
       supportsTargetedSessionRollback: entry.capabilities.targetedSessionRollback,
       supportsTokenUsageStatistics: entry.capabilities.tokenUsageStatistics,
+      supportsMiniAppAgentContextFilesV1: entry.capabilities.miniAppAgentContextFilesV1,
+      supportsProductControlV1: entry.capabilities.productControlV1,
     });
     entry.health = 'ready';
     this.scheduleKeepalive(entry);
@@ -414,18 +448,23 @@ export class PeerConnectionManager {
     const caps = result?.capabilities;
     let cancelTool = caps?.cancel_tool === undefined ? null : caps.cancel_tool === true;
     let toolCatalog = caps?.tool_catalog === undefined ? null : caps.tool_catalog === true;
+    let userQuestionResponse = caps?.user_question_response === undefined
+      ? null
+      : caps.user_question_response === true;
     let hostKind = parseHostKind(result?.host_type);
 
     if (hostKind !== null) {
       this.legacyHostKinds.set(deviceId, hostKind);
       cancelTool ??= hostKind === 'desktop';
       toolCatalog ??= hostKind === 'desktop';
+      userQuestionResponse ??= hostKind === 'desktop';
     } else {
       const cachedHostKind = this.legacyHostKinds.get(deviceId);
       if (cachedHostKind !== undefined) {
         hostKind = cachedHostKind;
         cancelTool ??= cachedHostKind === 'desktop';
         toolCatalog ??= cachedHostKind === 'desktop';
+        userQuestionResponse ??= cachedHostKind === 'desktop';
       }
     }
 
@@ -438,6 +477,7 @@ export class PeerConnectionManager {
           hostKind = 'desktop';
           cancelTool = true;
           toolCatalog = true;
+          userQuestionResponse = true;
           this.legacyHostKinds.set(deviceId, hostKind);
         }
       } catch (error) {
@@ -449,6 +489,7 @@ export class PeerConnectionManager {
           hostKind = 'cli';
           cancelTool = false;
           toolCatalog = false;
+          userQuestionResponse = false;
           this.legacyHostKinds.set(deviceId, hostKind);
         } else {
           log.warn('Could not classify legacy peer host', { deviceId, error });
@@ -460,8 +501,14 @@ export class PeerConnectionManager {
       idempotentDialogSubmit: caps?.idempotent_dialog_submit === true,
       targetedSessionRollback: caps?.targeted_session_rollback === true,
       tokenUsageStatistics: caps?.token_usage_statistics === true,
+      miniAppAgentContextFilesV1: caps?.miniapp_agent_context_files_v1 === true,
+      productControlV1: caps?.product_control_v1 === true,
+      productControlNativeV1: caps?.product_control_native_v1 === true,
+      productControlPresentationV1:
+        caps?.product_control_presentation_v1 === true,
       cancelTool,
       toolCatalog,
+      userQuestionResponse,
       hostKind,
     };
   }
@@ -521,6 +568,8 @@ export class PeerConnectionManager {
         supportsIdempotentDialogSubmit: capabilities.idempotentDialogSubmit,
         supportsTargetedSessionRollback: capabilities.targetedSessionRollback,
         supportsTokenUsageStatistics: capabilities.tokenUsageStatistics,
+        supportsMiniAppAgentContextFilesV1: capabilities.miniAppAgentContextFilesV1,
+        supportsProductControlV1: capabilities.productControlV1,
       });
       entry.consecutiveFailures = 0;
       const recovered = entry.health !== 'ready';
@@ -691,8 +740,10 @@ function capabilitiesEqual(
   return a.idempotentDialogSubmit === b.idempotentDialogSubmit &&
     a.targetedSessionRollback === b.targetedSessionRollback &&
     a.tokenUsageStatistics === b.tokenUsageStatistics &&
+    a.miniAppAgentContextFilesV1 === b.miniAppAgentContextFilesV1 &&
     a.cancelTool === b.cancelTool &&
     a.toolCatalog === b.toolCatalog &&
+    a.userQuestionResponse === b.userQuestionResponse &&
     a.hostKind === b.hostKind;
 }
 

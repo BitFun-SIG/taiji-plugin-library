@@ -309,6 +309,7 @@ pub(crate) async fn begin_login(
     };
 
     Ok(StartedLogin {
+        method: super::SubscriptionLoginMethod::Browser,
         authorization_url,
         user_code: None,
         instructions: "Open the authorization link in your browser, then return to BitFun."

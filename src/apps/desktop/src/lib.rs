@@ -22,9 +22,12 @@
 
 pub mod api;
 pub mod appearance;
+mod bitfun_control_host;
+mod builtin_browser_host;
 pub mod computer_use;
 pub mod crash_diagnostics;
 mod embedded_relay_host;
+pub mod frontend_workbench;
 pub mod logging;
 pub mod macos_menubar;
 pub mod runtime;
@@ -99,11 +102,11 @@ use bitfun_core::service::search::get_global_workspace_search_service;
 use bitfun_core::service::session_projection_store::{
     runtime_event_log_dir, FileSessionProjectionStore,
 };
-use bitfun_core::service::workspace::get_global_workspace_service;
 use bitfun_core::util::{elapsed_ms, TimingCollector};
 use bitfun_events::AgenticEvent;
 use bitfun_transport::{TauriTransportAdapter, TransportAdapter};
 use serde::Deserialize;
+use std::path::PathBuf;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc, OnceLock,
@@ -132,8 +135,6 @@ use api::external_sources_api::*;
 use api::git_agent_api::*;
 use api::git_api::*;
 use api::i18n_api::*;
-use api::lsp_api::*;
-use api::lsp_workspace_api::*;
 use api::mcp_api::*;
 use api::review_platform_api::*;
 use api::runtime_api::*;
@@ -142,14 +143,17 @@ use api::session_api::*;
 use api::skill_api::*;
 use api::snapshot_service::*;
 use api::speech_api::*;
-use api::storage_commands::*;
 use api::subagent_api::*;
 use api::system_api::*;
 use api::tool_api::*;
 use startup_trace::{DesktopStartupTrace, DesktopStartupTraceSnapshot};
 
 pub(crate) const PLUGIN_HOST_LAUNCH_POLICY: bitfun_core::plugin_host::PluginHostLaunchPolicy =
-    bitfun_core::plugin_host::PluginHostLaunchPolicy::Disabled;
+    bitfun_core::plugin_host::PluginHostLaunchPolicy::Enabled;
+
+pub(crate) fn ensure_rustls_crypto_provider() {
+    bitfun_core::service::remote_connect::ensure_rustls_crypto_provider();
+}
 
 /// Agentic Coordinator state
 #[derive(Clone)]
@@ -649,7 +653,7 @@ pub async fn run() {
     // Install the rustls ring CryptoProvider as the process-level default early,
     // so that all subsequent TLS operations (relay_client, reqwest, tokio-tungstenite)
     // reuse the same provider instead of each attempting their own install_default().
-    bitfun_core::service::remote_connect::ensure_rustls_crypto_provider();
+    ensure_rustls_crypto_provider();
 
     eprintln!("=== BitFun Desktop Starting ===");
 
@@ -728,6 +732,12 @@ pub async fn run() {
         Ok(status) => log::info!("Plugin host initialization completed: {:?}", status),
         Err(error) => {
             log::error!("Failed to initialize configured plugin host: {}", error);
+            bitfun_core::plugin_host::report_configured_plugin_activation_failure(
+                "Desktop startup",
+                None,
+                error,
+            )
+            .await;
         }
     }
     startup_timings.record_elapsed("initialize_plugin_host", step_started);
@@ -918,22 +928,33 @@ pub async fn run() {
     let terminal_state = api::terminal_api::TerminalState::new();
 
     let path_manager = get_path_manager_arc();
+    let frontend_workbench = Arc::new(frontend_workbench::FrontendWorkbenchManager::new(
+        &path_manager.user_data_dir(),
+    ));
 
     let mut builder = tauri::Builder::default();
-
-    let is_e2e_webdriver =
-        e2e_storage_guard_enabled() && std::env::var_os("BITFUN_WEBDRIVER_PORT").is_some();
+    let frontend_protocol_manager = Arc::clone(&frontend_workbench);
+    builder = builder.register_uri_scheme_protocol(
+        frontend_workbench::FRONTEND_PROTOCOL_SCHEME,
+        move |_context, request| frontend_protocol_manager.protocol_response(request),
+    );
 
     #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
-    if !is_e2e_webdriver {
-        builder = builder.plugin(tauri_plugin_single_instance::init(|app, args, cwd| {
-            log::info!(
-                "Existing BitFun Desktop instance received launch request: args_count={}, cwd={}",
-                args.len(),
-                cwd
-            );
-            handle_secondary_launch(app);
-        }));
+    {
+        // The isolated embedded-WebDriver app must be able to run alongside a
+        // developer's normal BitFun instance. Its storage root and automation
+        // port are already test-scoped, so joining the product single-instance
+        // group would make the E2E child exit before WebDriver can attach.
+        if !logging::is_embedded_webdriver_mode() {
+            builder = builder.plugin(tauri_plugin_single_instance::init(|app, args, cwd| {
+                log::info!(
+                    "Existing BitFun Desktop instance received launch request: args_count={}, cwd={}",
+                    args.len(),
+                    cwd
+                );
+                handle_secondary_launch(app);
+            }));
+        }
     }
 
     let app = builder
@@ -969,6 +990,7 @@ pub async fn run() {
         .manage(coordinator)
         .manage(scheduler)
         .manage(terminal_state)
+        .manage(Arc::clone(&frontend_workbench))
         .manage(startup_trace.clone())
         .on_page_load(|webview, payload| {
             let label = webview.label();
@@ -979,13 +1001,20 @@ pub async fn run() {
                     tauri::webview::PageLoadEvent::Started => "started",
                     tauri::webview::PageLoadEvent::Finished => "finished",
                 };
+                let url = payload.url().to_string();
+                api::browser_api::update_browser_target_url(label, &url);
+                bitfun_core::agentic::tools::browser_control::builtin_browser::publish_builtin_browser_page_load(
+                    label,
+                    event,
+                    &url,
+                );
                 let _ = webview.emit_to(
                     "main",
                     BROWSER_WEBVIEW_PAGE_LOAD_EVENT,
                     serde_json::json!({
                         "label": label,
                         "event": event,
-                        "url": payload.url(),
+                        "url": url,
                     }),
                 );
             }
@@ -1017,6 +1046,36 @@ pub async fn run() {
                 step_started,
             );
             startup_trace.record_logging_ready_and_stop_persistence();
+
+            let bundled_frontend = if cfg!(debug_assertions) {
+                let development_dist = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                    .join("../../..")
+                    .join("dist");
+                development_dist
+                    .join("index.html")
+                    .is_file()
+                    .then_some(development_dist)
+            } else {
+                app.path()
+                    .resolve("frontend/dist", tauri::path::BaseDirectory::Resource)
+                    .ok()
+                    .filter(|path| path.join("index.html").is_file())
+            };
+            if let Some(bundled_frontend) = bundled_frontend {
+                if let Err(error) =
+                    frontend_workbench.initialize(app.handle(), &bundled_frontend)
+                {
+                    log::error!(
+                        "Failed to initialize the external frontend workbench: path={}, error={}",
+                        bundled_frontend.display(),
+                        error
+                    );
+                }
+            } else {
+                log::warn!(
+                    "External frontend bundle is unavailable; Creative frontend editing will remain disabled"
+                );
+            }
 
             // Ensure the Tauri NSIS registry install-location key points to the
             // actual install directory, so that auto-updates respect the custom
@@ -1231,6 +1290,7 @@ pub async fn run() {
                 &startup_trace_id,
                 &startup_trace,
                 workspace_startup_bootstrap_snapshot,
+                Arc::clone(&frontend_workbench),
             );
             let window_duration_ms = elapsed_ms(window_started);
             startup_trace.record_step(
@@ -1245,6 +1305,8 @@ pub async fn run() {
             );
             let webdriver_started = Instant::now();
             bitfun_webdriver::maybe_start(app_handle.clone());
+            builtin_browser_host::install(app_handle.clone());
+            bitfun_control_host::install(app_handle.clone());
             startup_trace.record_elapsed_step(
                 "native_setup",
                 "maybe_start_webdriver",
@@ -1452,6 +1514,10 @@ pub async fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             appearance::show_main_window,
+            frontend_workbench::frontend_update_candidate_ready,
+            frontend_workbench::get_frontend_update_status,
+            frontend_workbench::confirm_frontend_update,
+            frontend_workbench::rollback_frontend_update,
             hide_main_window_after_close_request,
             api::agentic_api::create_session,
             api::agentic_api::update_session_mode,
@@ -1553,6 +1619,10 @@ pub async fn run() {
             initialize_workspace_startup_state,
             get_available_tools,
             report_ide_control_result,
+            bitfun_control_host::mark_bitfun_control_surface_ready,
+            bitfun_control_host::mark_bitfun_control_surface_unready,
+            bitfun_control_host::product_control_invoke,
+            bitfun_control_host::report_bitfun_control_result,
             get_health_status,
             get_statistics,
             test_ai_connection,
@@ -1619,12 +1689,14 @@ pub async fn run() {
             computer_use_open_system_settings,
             set_config,
             save_cloud_speech_config,
+            get_web_search_credential_status,
+            save_web_search_credential,
+            clear_web_search_credential,
             reset_config,
             export_config,
             import_config,
             validate_config,
             reload_config,
-            sync_config_to_global,
             get_global_config_health,
             get_runtime_logging_info,
             export_diagnostics_bundle,
@@ -1639,6 +1711,15 @@ pub async fn run() {
             speech_append_audio_chunk,
             speech_finish_input_session,
             speech_cancel_input_session,
+            speech_start_realtime_session,
+            speech_append_realtime_audio,
+            speech_commit_realtime_audio,
+            speech_send_realtime_tool_result,
+            speech_speak_realtime_text,
+            speech_cancel_realtime_response,
+            speech_close_realtime_session,
+            speech_get_realtime_config,
+            speech_save_realtime_config,
             get_agent_profile_configs,
             get_agent_profile_config,
             set_agent_profile_config,
@@ -1729,8 +1810,6 @@ pub async fn run() {
             compute_diff,
             apply_patch,
             save_merged_diff_content,
-            initialize_snapshot,
-            record_file_change,
             rollback_session,
             rollback_session_to_turn,
             accept_session,
@@ -1753,14 +1832,9 @@ pub async fn run() {
             get_file_change_history,
             get_all_modified_files,
             get_baseline_snapshot_diff,
-            get_storage_paths,
-            get_project_storage_paths,
-            cleanup_storage,
-            cleanup_storage_with_policy,
-            get_storage_statistics,
-            initialize_project_storage,
             // Session persistence API
             list_persisted_sessions,
+            search_session_content,
             search_referenceable_sessions,
             list_persisted_sessions_page,
             list_deleted_session_ids,
@@ -1818,52 +1892,7 @@ pub async fn run() {
             get_acp_session_commands,
             set_acp_session_model,
             set_acp_session_config_option,
-            lsp_initialize,
-            lsp_start_server_for_file,
-            lsp_stop_server,
-            lsp_stop_all_servers,
-            lsp_did_open,
-            lsp_did_change,
-            lsp_did_save,
-            lsp_did_close,
-            lsp_get_completions,
-            lsp_get_hover,
-            lsp_goto_definition,
-            lsp_find_references,
-            lsp_format_document,
-            lsp_install_plugin,
-            lsp_uninstall_plugin,
-            lsp_list_plugins,
-            lsp_get_plugin,
-            lsp_get_server_capabilities,
-            lsp_get_supported_extensions,
-            lsp_open_workspace,
-            lsp_close_workspace,
-            lsp_open_document,
-            lsp_change_document,
-            lsp_save_document,
-            lsp_close_document,
-            lsp_get_completions_workspace,
-            lsp_get_hover_workspace,
-            lsp_goto_definition_workspace,
-            lsp_find_references_workspace,
-            lsp_get_code_actions_workspace,
-            lsp_format_document_workspace,
-            lsp_get_inlay_hints_workspace,
-            lsp_rename_workspace,
-            lsp_get_document_highlight_workspace,
-            lsp_get_document_symbols_workspace,
-            lsp_get_semantic_tokens_workspace,
-            lsp_get_semantic_tokens_range_workspace,
-            lsp_get_server_state,
-            lsp_get_all_server_states,
-            lsp_stop_server_workspace,
-            lsp_list_workspaces,
-            lsp_detect_project,
-            lsp_prestart_server,
-            reload_global_config,
             get_global_config_status,
-            subscribe_config_updates,
             get_model_configs,
             get_ai_model_catalog,
             project_ai_model_reasoning_catalog,
@@ -2073,6 +2102,7 @@ pub async fn run() {
             api::browser_api::browser_webview_navigate,
             api::browser_api::browser_webview_reload,
             api::browser_api::browser_webview_set_bounds,
+            api::browser_api::browser_webview_set_agent_target_state,
             api::browser_api::browser_get_url,
             // Browser Control API (CDP-based user browser control)
             api::browser_control_api::browser_control_list_browsers,
@@ -2080,6 +2110,7 @@ pub async fn run() {
             api::browser_control_api::browser_control_launch,
             api::browser_control_api::browser_control_enable_default_cdp,
             api::browser_control_api::browser_control_restart_with_cdp,
+            api::browser_control_api::browser_control_disconnect,
             // Insights API
             api::insights_api::generate_insights,
             api::insights_api::get_latest_insights,
@@ -2118,6 +2149,11 @@ pub async fn run() {
             api::ssh_api::remote_close_workspace,
             api::ssh_api::remote_remove_workspace,
             api::ssh_api::remote_get_workspace_info,
+            // Remote port forwarding (local `-L` mappings, user-driven)
+            api::ssh_api::ssh_start_port_forward,
+            api::ssh_api::ssh_stop_port_forward,
+            api::ssh_api::ssh_list_port_forwards,
+            api::ssh_api::ssh_list_remote_listening_ports,
             // Detached task dispatch (controller-side SSH transport)
             api::dispatch_api::dispatch_list_targets,
             api::dispatch_api::dispatch_probe_target,
@@ -2783,7 +2819,6 @@ fn start_event_loop_with_transport(
 fn init_services(app_handle: tauri::AppHandle, default_log_level: log::LevelFilter) {
     use bitfun_core::{infrastructure, service};
 
-    spawn_ingest_server_with_config_listener();
     spawn_runtime_log_level_listener(default_log_level);
     spawn_workspace_search_feature_listener(app_handle.clone());
 
@@ -2807,10 +2842,6 @@ fn init_services(app_handle: tauri::AppHandle, default_log_level: log::LevelFilt
                 "Failed to initialize workspace identity watch service: {}",
                 e
             );
-        }
-
-        if let Err(e) = service::lsp::initialize_global_lsp_manager().await {
-            log::error!("Failed to initialize LSP manager: {}", e);
         }
 
         let event_system = infrastructure::events::get_global_event_system();
@@ -2899,7 +2930,8 @@ fn create_event_emitter(
     use bitfun_transport::TransportEmitter;
     let inner: Arc<dyn bitfun_core::infrastructure::events::EventEmitter> =
         Arc::new(TransportEmitter::new(transport));
-    api::remote_connect_api::wrap_peer_aware_emitter(inner)
+    let inner = api::remote_connect_api::wrap_peer_aware_emitter(inner);
+    api::miniapp_agent_api::wrap_miniapp_agent_context_cleanup_emitter(inner)
 }
 
 fn spawn_workspace_search_feature_listener(app_handle: tauri::AppHandle) {
@@ -2987,123 +3019,6 @@ fn spawn_workspace_search_feature_listener(app_handle: tauri::AppHandle) {
                 }
                 Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
                     log::warn!("Workspace search feature listener lagged by {} messages", n);
-                }
-            }
-        }
-    });
-}
-
-fn spawn_ingest_server_with_config_listener() {
-    use bitfun_core::infrastructure::debug_log::IngestServerManager;
-    use bitfun_core::service::config::{
-        get_global_config_service, subscribe_config_updates, ConfigUpdateEvent,
-    };
-
-    tokio::spawn(async move {
-        let initial_config = if let Ok(config_service) = get_global_config_service().await {
-            if let Ok(config) = config_service
-                .get_config::<bitfun_core::service::config::GlobalConfig>(None)
-                .await
-            {
-                let debug_config = &config.ai.debug_mode_config;
-                let workspace_path = get_global_workspace_service()
-                    .and_then(|service| service.try_get_current_workspace_path())
-                    .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
-
-                Some(bitfun_core::infrastructure::debug_log::IngestServerConfig::from_debug_mode_config(
-                    debug_config.ingest_port,
-                    workspace_path.join(&debug_config.log_path),
-                ))
-            } else {
-                None
-            }
-        } else {
-            None
-        };
-
-        let configured_port = if let Ok(config_service) = get_global_config_service().await {
-            if let Ok(config) = config_service
-                .get_config::<bitfun_core::service::config::GlobalConfig>(None)
-                .await
-            {
-                Some(config.ai.debug_mode_config.ingest_port)
-            } else {
-                None
-            }
-        } else {
-            None
-        };
-
-        let manager = IngestServerManager::global();
-        if let Err(e) = manager.start(initial_config).await {
-            log::error!("Failed to start Debug Log Ingest Server: {}", e);
-        }
-
-        let actual_port = manager.get_actual_port().await;
-        if let Some(cfg_port) = configured_port {
-            if actual_port != cfg_port {
-                if let Ok(config_service) = get_global_config_service().await {
-                    if let Err(e) = config_service
-                        .set_config("ai.debug_mode_config.ingest_port", actual_port)
-                        .await
-                    {
-                        log::error!("Failed to sync actual port to config: {}", e);
-                    } else {
-                        log::info!(
-                            "Ingest Server port synced: actual_port={}, config_port={}",
-                            actual_port,
-                            cfg_port
-                        );
-                    }
-                }
-            }
-        }
-
-        if let Some(mut receiver) = subscribe_config_updates() {
-            loop {
-                match receiver.recv().await {
-                    Ok(ConfigUpdateEvent::DebugModeConfigUpdated {
-                        new_port,
-                        new_log_path,
-                    }) => {
-                        let workspace_path = get_global_workspace_service()
-                            .and_then(|service| service.try_get_current_workspace_path())
-                            .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
-                        let full_log_path = workspace_path.join(&new_log_path);
-
-                        if let Err(e) = manager.update_port(new_port, full_log_path).await {
-                            log::error!("Failed to update Ingest Server config: port={}, log_path={}, error={}", new_port, new_log_path, e);
-                        }
-                    }
-                    Ok(ConfigUpdateEvent::ConfigReloaded) => {
-                        if let Ok(config_service) = get_global_config_service().await {
-                            if let Ok(config) = config_service
-                                .get_config::<bitfun_core::service::config::GlobalConfig>(None)
-                                .await
-                            {
-                                let debug_config = &config.ai.debug_mode_config;
-                                let workspace_path = get_global_workspace_service()
-                                    .and_then(|service| service.try_get_current_workspace_path())
-                                    .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
-                                let full_log_path = workspace_path.join(&debug_config.log_path);
-
-                                if let Err(e) = manager
-                                    .update_port(debug_config.ingest_port, full_log_path)
-                                    .await
-                                {
-                                    log::error!("Failed to update Ingest Server after config reload: port={}, error={}", debug_config.ingest_port, e);
-                                }
-                            }
-                        }
-                    }
-                    Ok(_) => {}
-                    Err(tokio::sync::broadcast::error::RecvError::Closed) => {
-                        log::warn!("Config update channel closed, stopping listener");
-                        break;
-                    }
-                    Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
-                        log::warn!("Config update listener lagged by {} messages", n);
-                    }
                 }
             }
         }

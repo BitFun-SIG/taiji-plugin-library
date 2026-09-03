@@ -159,14 +159,16 @@ Output is only what was produced during this tool call's wait window."#
         true
     }
 
-    async fn validate_non_relaxable_input(
+    async fn validate_input_rewrite_invariants(
         &self,
         input: &Value,
         context: Option<&ToolUseContext>,
-    ) -> Option<ValidationResult> {
-        let context = context?;
-        let chars = input.get("chars").and_then(Value::as_str)?;
+    ) -> ValidationResult {
+        let Some((context, chars)) = context.zip(input.get("chars").and_then(Value::as_str)) else {
+            return ValidationResult::default();
+        };
         crate::agentic::execution::edit_constraint_guard::check_bash_command(context, chars)
+            .unwrap_or_default()
     }
 
     async fn validate_input(

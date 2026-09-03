@@ -13,10 +13,11 @@ use crate::agentic::WorkspaceBinding;
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
 pub use bitfun_agent_runtime::agents::{
-    mode_config_profile_label, mode_config_profile_member_mode_ids, mode_presentation_rank,
-    resolve_mode_config_profile_id, shared_coding_mode_user_context_policy,
-    SHARED_CODING_MODE_CONFIG_PROFILE_ID, SHARED_CODING_MODE_CONFIG_PROFILE_LABEL,
-    SHARED_CODING_MODE_IDS, SHARED_CODING_MODE_PROMPT_TEMPLATE,
+    is_swarm_delegate_agent_type, is_swarm_planner_agent_type, mode_config_profile_label,
+    mode_config_profile_member_mode_ids, mode_presentation_rank, resolve_mode_config_profile_id,
+    shared_coding_mode_user_context_policy, SHARED_CODING_MODE_CONFIG_PROFILE_ID,
+    SHARED_CODING_MODE_CONFIG_PROFILE_LABEL, SHARED_CODING_MODE_IDS,
+    SHARED_CODING_MODE_PROMPT_TEMPLATE, SWARM_DELEGATE_AGENT_TYPES, SWARM_PLANNER_AGENT_TYPES,
 };
 pub use bitfun_agent_runtime::custom_agent::{
     custom_agent_model_or_default, custom_agent_review_writable_tools, default_custom_agent_tools,
@@ -28,14 +29,14 @@ pub use definitions::custom::{CustomMode, CustomSubagent, CustomSubagentKind};
 pub(crate) use definitions::external::ExternalProvidedAgent;
 pub use definitions::hidden::{CodeReviewAgent, DeepReviewAgent, GenerateDocAgent};
 pub use definitions::modes::{
-    AgenticMode, ClawMode, CoworkMode, DebugMode, DeepResearchMode, GroupMode, LegionMode,
-    MinimalMode, MultitaskMode, PlanMode, TeamMode,
+    AgenticMode, ClawMode, CoworkMode, CreativeMode, DeepResearchMode, GroupMode, LegionMode,
+    MinimalMode, UltraMode,
 };
 pub use definitions::review::{ReviewFixerAgent, ReviewJudgeAgent, ReviewWorkerAgent};
 pub use definitions::shared::ReadonlySubagent;
 pub use definitions::subagents::{
-    AcpAgent, ComputerUseMode, ExploreAgent, FileFinderAgent, GeneralPurposeAgent,
-    ResearchSpecialistAgent,
+    AcpAgent, ComputerUseMode, ExploreAgent, GeneralPurposeAgent, ResearchSpecialistAgent,
+    SwarmPlannerAgent, SwarmReviewerAgent, SwarmWorkerAgent,
 };
 use indexmap::IndexMap;
 pub use prompt_builder::{
@@ -138,6 +139,11 @@ pub fn shared_coding_mode_tools() -> Vec<String> {
         "ExecCommand".to_string(),
         "WriteStdin".to_string(),
         "ExecControl".to_string(),
+        // The companion to ExecCommand for remote work: a server started on
+        // an SSH host is unreachable from the user's machine until a forward
+        // exists, and an Agent that cannot see this tool reinvents it with
+        // hand-written `ssh -L` instructions the user has to run themselves.
+        "PortForward".to_string(),
         "Grep".to_string(),
         "Glob".to_string(),
         "WebSearch".to_string(),
@@ -160,9 +166,6 @@ pub fn shared_coding_mode_tools() -> Vec<String> {
         // further out than an hour, to Cron rather than holding the turn open
         // for the interval.
         "Cron".to_string(),
-        "InitMiniApp".to_string(),
-        "FinalizeMiniApp".to_string(),
-        "PublishMiniApp".to_string(),
         "PublishAppearance".to_string(),
         "PageDeploy".to_string(),
         "PagePublish".to_string(),
@@ -339,6 +342,13 @@ pub trait Agent: Send + Sync + 'static {
         &EMPTY_PERMISSION_CONSTRAINTS
     }
 
+    /// Optional model sampling temperature supplied by an external Agent
+    /// definition. The execution owner applies this to a per-turn client
+    /// clone; built-in Agents inherit the configured model temperature.
+    fn model_temperature_override(&self) -> Option<f64> {
+        None
+    }
+
     /// Whether this agent is read-only (prevents file modifications)
     fn is_readonly(&self) -> bool {
         false
@@ -349,8 +359,7 @@ pub trait Agent: Send + Sync + 'static {
 mod tests {
     use super::{
         get_embedded_prompt, shared_coding_mode_tool_exposure_overrides, shared_coding_mode_tools,
-        shared_coding_mode_user_context_policy, Agent, AgenticMode, DebugMode, MultitaskMode,
-        PlanMode, EMBEDDED_PROMPTS,
+        shared_coding_mode_user_context_policy, Agent, AgenticMode, MinimalMode, EMBEDDED_PROMPTS,
     };
 
     #[test]
@@ -362,40 +371,15 @@ mod tests {
     }
 
     #[test]
-    fn shared_template_modes_share_system_prompt_cache_identity() {
-        let agentic = AgenticMode::new();
-        let multitask = MultitaskMode::new();
-        let plan = PlanMode::new();
-        let debug = DebugMode::new();
-
-        assert_eq!(
-            agentic.system_prompt_cache_identity(None),
-            multitask.system_prompt_cache_identity(None)
-        );
-        assert_eq!(
-            agentic.system_prompt_cache_identity(None),
-            plan.system_prompt_cache_identity(None)
-        );
-        assert_eq!(
-            agentic.system_prompt_cache_identity(None),
-            debug.system_prompt_cache_identity(None)
-        );
-        assert_eq!(
-            agentic.user_context_cache_identity(),
-            multitask.user_context_cache_identity()
-        );
-        assert_eq!(
-            agentic.user_context_cache_identity(),
-            plan.user_context_cache_identity()
-        );
-        assert_eq!(
-            agentic.user_context_cache_identity(),
-            debug.user_context_cache_identity()
+    fn minimal_agent_prompt_resolves_to_embedded_prompt() {
+        assert!(
+            get_embedded_prompt(MinimalMode::new().prompt_template_name(None)).is_some(),
+            "minimal Agent prompt must resolve through the embedded prompt catalog"
         );
     }
 
     #[test]
-    fn shared_coding_mode_tools_include_plan_and_debug_specific_tools() {
+    fn shared_coding_mode_tools_exclude_create_plan_and_include_goal_tools() {
         let tools = shared_coding_mode_tools();
 
         assert!(tools.contains(&"ListModels".to_string()));
@@ -445,33 +429,21 @@ mod tests {
         let shared_tools = shared_coding_mode_tools();
 
         assert_eq!(AgenticMode::new().default_tools(), shared_tools);
-        assert_eq!(MultitaskMode::new().default_tools(), shared_tools);
-        assert_eq!(PlanMode::new().default_tools(), shared_tools);
-        assert_eq!(DebugMode::new().default_tools(), shared_tools);
     }
 
     #[test]
-    fn shared_coding_mode_user_context_policy_matches_all_shared_modes() {
+    fn agentic_mode_uses_shared_coding_user_context_policy() {
         let shared_policy = shared_coding_mode_user_context_policy();
 
         assert_eq!(AgenticMode::new().user_context_policy(), shared_policy);
-        assert_eq!(MultitaskMode::new().user_context_policy(), shared_policy);
-        assert_eq!(PlanMode::new().user_context_policy(), shared_policy);
-        assert_eq!(DebugMode::new().user_context_policy(), shared_policy);
     }
 
     #[test]
-    fn shared_coding_mode_tool_exposure_overrides_match_all_shared_modes() {
+    fn agentic_mode_uses_shared_coding_tool_exposure_overrides() {
         let shared_overrides = shared_coding_mode_tool_exposure_overrides();
         let agentic = AgenticMode::new();
-        let multitask = MultitaskMode::new();
-        let plan = PlanMode::new();
-        let debug = DebugMode::new();
 
         assert_eq!(agentic.tool_exposure_overrides(), &shared_overrides);
-        assert_eq!(multitask.tool_exposure_overrides(), &shared_overrides);
-        assert_eq!(plan.tool_exposure_overrides(), &shared_overrides);
-        assert_eq!(debug.tool_exposure_overrides(), &shared_overrides);
     }
 
     #[test]

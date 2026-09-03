@@ -1,8 +1,9 @@
  
 
+import { Button, ConfirmDialog, NumberInput, Select, Switch } from '@bitfun/ui';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { NumberInput, Select, Button, Switch, ConfigPageLoading, ConfigPageMessage } from '@/component-library';
+import { ConfigLoadingState, ConfigMessage, ConfigRetryState } from '@/infrastructure/config/components/common';
 import { configManager } from '../services/ConfigManager';
 import { globalEventBus } from '@/infrastructure/event-bus';
 import { DEFAULT_EDITOR_CONFIG, type EditorConfig as EditorConfigType, type EditorConfigPartial } from '@/tools/editor/config';
@@ -211,13 +212,19 @@ const EditorConfig: React.FC<EditorConfigProps> = () => {
   
   const [config, setConfig] = useState<EditorConfigType>({ ...DEFAULT_EDITOR_CONFIG });
   const [isLoading, setIsLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error' | 'warning'; text: string } | null>(null);
   
   
   const isInitialLoadRef = useRef(true);
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const configRef = useRef<EditorConfigType>(config);
+  const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const pendingSaveCountRef = useRef(0);
+  const latestSaveRevisionRef = useRef(0);
+  const skipNextAutoSaveRef = useRef(false);
   
   
   useEffect(() => {
@@ -228,6 +235,7 @@ const EditorConfig: React.FC<EditorConfigProps> = () => {
   const loadConfig = useCallback(async () => {
     try {
       setIsLoading(true);
+      setLoadFailed(false);
       isInitialLoadRef.current = true;
       const backendConfig = await configManager.getConfig<Record<string, any>>('editor');
       if (backendConfig) {
@@ -240,54 +248,65 @@ const EditorConfig: React.FC<EditorConfigProps> = () => {
       }, 100);
     } catch (error) {
       log.error('Failed to load config', error);
-      setStatusMessage({ 
-        type: 'error', 
-        text: t('messages.loadFailed') 
-      });
+      setLoadFailed(true);
     } finally {
       setIsLoading(false);
     }
-  }, [t]);
+  }, []);
 
   useEffect(() => {
     loadConfig();
   }, [loadConfig]);
 
   
-  const doSave = useCallback(async (configToSave: EditorConfigType) => {
-    try {
-      setIsSaving(true);
-      setStatusMessage(null);
+  const doSave = useCallback((
+    configToSave: EditorConfigType,
+    successMessage = t('messages.saveSuccess'),
+  ): Promise<boolean> => {
+    const revision = ++latestSaveRevisionRef.current;
+    pendingSaveCountRef.current += 1;
+    setIsSaving(true);
+    setStatusMessage(null);
 
-      
-      const snakeCaseConfig = convertToSnakeCase(configToSave);
-      await configManager.setConfig('editor', snakeCaseConfig);
-
-      
-      globalEventBus.emit('editor:config:changed', snakeCaseConfig);
-
-      setStatusMessage({ 
-        type: 'success', 
-        text: t('messages.saveSuccess') 
-      });
-
-      
-      setTimeout(() => setStatusMessage(null), 3000);
-    } catch (error) {
-      log.error('Failed to save config', error);
-      setStatusMessage({ 
-        type: 'error', 
-        text: `${t('messages.saveFailed')}: ` + (error instanceof Error ? error.message : String(error))
-      });
-    } finally {
-      setIsSaving(false);
-    }
+    const operation = saveQueueRef.current.then(async () => {
+      try {
+        const snakeCaseConfig = convertToSnakeCase(configToSave);
+        await configManager.setConfig('editor', snakeCaseConfig);
+        globalEventBus.emit('editor:config:changed', snakeCaseConfig);
+        if (revision === latestSaveRevisionRef.current) {
+          setStatusMessage({ type: 'success', text: successMessage });
+          setTimeout(() => setStatusMessage(current => (
+            current?.type === 'success' ? null : current
+          )), 3000);
+        }
+        return true;
+      } catch (error) {
+        log.error('Failed to save config', error);
+        if (revision === latestSaveRevisionRef.current) {
+          setStatusMessage({
+            type: 'error',
+            text: `${t('messages.saveFailed')}: ` + (error instanceof Error ? error.message : String(error)),
+          });
+        }
+        return false;
+      } finally {
+        pendingSaveCountRef.current -= 1;
+        if (pendingSaveCountRef.current === 0) setIsSaving(false);
+      }
+    });
+    saveQueueRef.current = operation.then(() => undefined, () => undefined);
+    return operation;
   }, [t]);
 
   
   useEffect(() => {
     
     if (isInitialLoadRef.current || isLoading) {
+      return;
+    }
+
+    if (skipNextAutoSaveRef.current) {
+      skipNextAutoSaveRef.current = false;
       return;
     }
 
@@ -310,14 +329,13 @@ const EditorConfig: React.FC<EditorConfigProps> = () => {
   }, [config, isLoading, doSave]);
 
   const resetConfig = useCallback(async () => {
-    if (await window.confirm(t('messages.confirmReset'))) {
-      setConfig({ ...DEFAULT_EDITOR_CONFIG });
-      setStatusMessage({ 
-        type: 'warning', 
-        text: t('messages.resetDone') 
-      });
-    }
-  }, [t]);
+    setResetConfirmOpen(false);
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    const defaults = { ...DEFAULT_EDITOR_CONFIG };
+    skipNextAutoSaveRef.current = true;
+    setConfig(defaults);
+    await doSave(defaults, t('messages.resetDone'));
+  }, [doSave, t]);
 
   const updateConfig = useCallback(<K extends keyof EditorConfigType>(
     key: K,
@@ -339,7 +357,7 @@ const EditorConfig: React.FC<EditorConfigProps> = () => {
     }));
   }, []);
 
-  if (isLoading) {
+  if (isLoading || loadFailed) {
     return (
       <ConfigPageLayout className="bitfun-editor-config" data-bf-component="editor-config" data-bf-part="root" data-bf-state="loading">
         <ConfigPageHeader
@@ -347,7 +365,15 @@ const EditorConfig: React.FC<EditorConfigProps> = () => {
           subtitle={t('subtitle')}
         />
         <ConfigPageContent>
-          <ConfigPageLoading text={t('messages.loading')} />
+          {isLoading ? (
+            <ConfigLoadingState label={t('messages.loading')} />
+          ) : (
+            <ConfigRetryState
+              message={t('messages.loadFailedLocked')}
+              retryLabel={t('messages.retry')}
+              onRetry={() => void loadConfig()}
+            />
+          )}
         </ConfigPageContent>
       </ConfigPageLayout>
     );
@@ -358,6 +384,19 @@ const EditorConfig: React.FC<EditorConfigProps> = () => {
       <ConfigPageHeader
         title={t('title')}
         subtitle={t('subtitle')}
+        extra={(
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setResetConfirmOpen(true)}
+            loading={isSaving}
+            disabled={isSaving}
+            data-bf-component="editor-config"
+            data-bf-part="actions"
+          >
+            {t('actions.reset')}
+          </Button>
+        )}
       />
 
       <ConfigPageContent className="bitfun-editor-config__content" data-bf-component="editor-config" data-bf-part="content">
@@ -369,56 +408,56 @@ const EditorConfig: React.FC<EditorConfigProps> = () => {
             <Select
               options={fontFamilyOptions}
               value={getPrimaryFont(config.fontFamily)}
-              onChange={(v) => updateConfig('fontFamily', buildFontFamily(v as string))}
+              onValueChange={(v) => updateConfig('fontFamily', buildFontFamily(v as string))}
               placeholder={t('appearance.font')}
-              size="small"
+              size="sm"
             />
           </ConfigPageRow>
           <ConfigPageRow label={t('appearance.fontWeight')} align="center">
             <Select
               options={fontWeightOptionsTranslated}
               value={config.fontWeight}
-              onChange={(v) => updateConfig('fontWeight', v as typeof config.fontWeight)}
+              onValueChange={(v) => updateConfig('fontWeight', v as typeof config.fontWeight)}
               placeholder={t('appearance.fontWeight')}
-              size="small"
+              size="sm"
             />
           </ConfigPageRow>
           <ConfigPageRow label={t('appearance.fontSize')} align="center">
             <NumberInput
               value={config.fontSize}
-              onChange={(v) => updateConfig('fontSize', v)}
+              onValueChange={(v) => updateConfig('fontSize', v)}
               min={10}
               max={32}
               step={1}
               unit="px"
-              size="small"
+              size="sm"
             />
           </ConfigPageRow>
           <ConfigPageRow label={t('appearance.lineHeight')} align="center">
             <NumberInput
               value={config.lineHeight}
-              onChange={(v) => updateConfig('lineHeight', v)}
+              onValueChange={(v) => updateConfig('lineHeight', v)}
               min={1.0}
               max={3.0}
               step={0.1}
               precision={1}
-              size="small"
+              size="sm"
             />
           </ConfigPageRow>
           <ConfigPageRow label={t('appearance.cursorStyle')} align="center">
             <Select
               options={cursorStyleOptionsTranslated}
               value={config.cursorStyle}
-              onChange={(v) => updateConfig('cursorStyle', v as typeof config.cursorStyle)}
-              size="small"
+              onValueChange={(v) => updateConfig('cursorStyle', v as typeof config.cursorStyle)}
+              size="sm"
             />
           </ConfigPageRow>
           <ConfigPageRow label={t('appearance.cursorBlinking')} align="center">
             <Select
               options={cursorBlinkingOptionsTranslated}
               value={config.cursorBlinking}
-              onChange={(v) => updateConfig('cursorBlinking', v as typeof config.cursorBlinking)}
-              size="small"
+              onValueChange={(v) => updateConfig('cursorBlinking', v as typeof config.cursorBlinking)}
+              size="sm"
             />
           </ConfigPageRow>
         </ConfigPageSection>
@@ -430,47 +469,44 @@ const EditorConfig: React.FC<EditorConfigProps> = () => {
           <ConfigPageRow label={t('behavior.tabSize')} align="center">
             <NumberInput
               value={config.tabSize}
-              onChange={(v) => updateConfig('tabSize', v)}
+              onValueChange={(v) => updateConfig('tabSize', v)}
               min={1}
               max={8}
-              size="small"
+              size="sm"
             />
           </ConfigPageRow>
           <ConfigPageRow label={t('behavior.insertSpaces')} description={t('behavior.insertSpacesDesc')} align="center">
             <Switch
               checked={config.insertSpaces}
               onChange={(e) => updateConfig('insertSpaces', e.target.checked)}
-              size="small"
             />
           </ConfigPageRow>
           <ConfigPageRow label={t('behavior.wordWrap')} align="center">
             <Select
               options={wordWrapOptionsTranslated}
               value={config.wordWrap}
-              onChange={(v) => updateConfig('wordWrap', v as typeof config.wordWrap)}
-              size="small"
+              onValueChange={(v) => updateConfig('wordWrap', v as typeof config.wordWrap)}
+              size="sm"
             />
           </ConfigPageRow>
           <ConfigPageRow label={t('behavior.lineNumbers')} align="center">
             <Select
               options={lineNumbersOptionsTranslated}
               value={config.lineNumbers}
-              onChange={(v) => updateConfig('lineNumbers', v as typeof config.lineNumbers)}
-              size="small"
+              onValueChange={(v) => updateConfig('lineNumbers', v as typeof config.lineNumbers)}
+              size="sm"
             />
           </ConfigPageRow>
           <ConfigPageRow label={t('behavior.smoothScrolling')} description={t('behavior.smoothScrollingDesc')} align="center">
             <Switch
               checked={config.smoothScrolling}
               onChange={(e) => updateConfig('smoothScrolling', e.target.checked)}
-              size="small"
             />
           </ConfigPageRow>
           <ConfigPageRow label={t('behavior.scrollBeyondLastLine')} description={t('behavior.scrollBeyondLastLineDesc')} align="center">
             <Switch
               checked={config.scrollBeyondLastLine}
               onChange={(e) => updateConfig('scrollBeyondLastLine', e.target.checked)}
-              size="small"
             />
           </ConfigPageRow>
         </ConfigPageSection>
@@ -483,7 +519,6 @@ const EditorConfig: React.FC<EditorConfigProps> = () => {
             <Switch
               checked={config.minimap.enabled}
               onChange={(e) => updateMinimapConfig('enabled', e.target.checked)}
-              size="small"
             />
           </ConfigPageRow>
           {config.minimap.enabled && (
@@ -492,16 +527,16 @@ const EditorConfig: React.FC<EditorConfigProps> = () => {
                 <Select
                   options={minimapSideOptionsTranslated}
                   value={config.minimap.side}
-                  onChange={(v) => updateMinimapConfig('side', v as string)}
-                  size="small"
+                  onValueChange={(v) => updateMinimapConfig('side', v as string)}
+                  size="sm"
                 />
               </ConfigPageRow>
               <ConfigPageRow label={t('display.minimapSize')} align="center">
                 <Select
                   options={minimapSizeOptionsTranslated}
                   value={config.minimap.size}
-                  onChange={(v) => updateMinimapConfig('size', v as string)}
-                  size="small"
+                  onValueChange={(v) => updateMinimapConfig('size', v as string)}
+                  size="sm"
                 />
               </ConfigPageRow>
             </>
@@ -510,16 +545,16 @@ const EditorConfig: React.FC<EditorConfigProps> = () => {
             <Select
               options={renderWhitespaceOptionsTranslated}
               value={config.renderWhitespace}
-              onChange={(v) => updateConfig('renderWhitespace', v as typeof config.renderWhitespace)}
-              size="small"
+              onValueChange={(v) => updateConfig('renderWhitespace', v as typeof config.renderWhitespace)}
+              size="sm"
             />
           </ConfigPageRow>
           <ConfigPageRow label={t('display.lineHighlight')} align="center">
             <Select
               options={renderLineHighlightOptionsTranslated}
               value={config.renderLineHighlight}
-              onChange={(v) => updateConfig('renderLineHighlight', v as typeof config.renderLineHighlight)}
-              size="small"
+              onValueChange={(v) => updateConfig('renderLineHighlight', v as typeof config.renderLineHighlight)}
+              size="sm"
             />
           </ConfigPageRow>
         </ConfigPageSection>
@@ -532,62 +567,45 @@ const EditorConfig: React.FC<EditorConfigProps> = () => {
             <Switch
               checked={config.semanticHighlighting}
               onChange={(e) => updateConfig('semanticHighlighting', e.target.checked)}
-              size="small"
             />
           </ConfigPageRow>
           <ConfigPageRow label={t('advanced.bracketPairColorization')} description={t('advanced.bracketPairColorizationDesc')} align="center">
             <Switch
               checked={config.bracketPairColorization}
               onChange={(e) => updateConfig('bracketPairColorization', e.target.checked)}
-              size="small"
             />
           </ConfigPageRow>
           <ConfigPageRow label={t('advanced.formatOnSave')} description={t('advanced.formatOnSaveDesc')} align="center">
             <Switch
               checked={config.formatOnSave}
               onChange={(e) => updateConfig('formatOnSave', e.target.checked)}
-              size="small"
             />
           </ConfigPageRow>
           <ConfigPageRow label={t('advanced.formatOnPaste')} description={t('advanced.formatOnPasteDesc')} align="center">
             <Switch
               checked={config.formatOnPaste}
               onChange={(e) => updateConfig('formatOnPaste', e.target.checked)}
-              size="small"
             />
           </ConfigPageRow>
           <ConfigPageRow label={t('advanced.trimAutoWhitespace')} description={t('advanced.trimAutoWhitespaceDesc')} align="center">
             <Switch
               checked={config.trimAutoWhitespace}
               onChange={(e) => updateConfig('trimAutoWhitespace', e.target.checked)}
-              size="small"
             />
           </ConfigPageRow>
         </ConfigPageSection>
 
-        <ConfigPageSection
-          title={t('actions.save')}
-          description={t('actions.saveDesc')}
-        >
-          <ConfigPageRow label={t('actions.reset')} description={t('messages.confirmReset')} align="center">
-            <div className="bitfun-editor-config__actions" data-bf-component="editor-config" data-bf-part="actions">
-              <Button
-                variant="secondary"
-                size="small"
-                onClick={resetConfig}
-                disabled={isSaving}
-              >
-                {t('actions.reset')}
-              </Button>
-              {isSaving && (
-                <span className="bitfun-editor-config__saving" data-bf-component="editor-config" data-bf-part="saving" data-bf-state="saving">{t('messages.saving')}</span>
-              )}
-            </div>
-          </ConfigPageRow>
-        </ConfigPageSection>
-
-        <ConfigPageMessage message={statusMessage} />
+        <ConfigMessage message={statusMessage} />
       </ConfigPageContent>
+      <ConfirmDialog
+        open={resetConfirmOpen}
+        onOpenChange={(open) => { if (!open && !isSaving) setResetConfirmOpen(false); }}
+        onConfirm={() => void resetConfig()}
+        title={t('messages.resetTitle')}
+        message={t('messages.confirmReset')}
+        confirmText={t('messages.resetAction')}
+        type="warning"
+      />
     </ConfigPageLayout>
   );
 };

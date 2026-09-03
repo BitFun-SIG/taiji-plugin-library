@@ -274,6 +274,15 @@ fn macos_process_state_allows_escalation(stat: &str) -> bool {
         && !stat.chars().skip(1).any(|modifier| modifier == 'E')
 }
 
+#[cfg(any(test, target_os = "macos"))]
+fn macos_process_state_allows_escalation(stat: &str) -> bool {
+    let Some(stat) = stat.split_whitespace().next() else {
+        return false;
+    };
+    matches!(stat.chars().next(), Some('I' | 'R' | 'S' | 'T' | 'U'))
+        && !stat.chars().skip(1).any(|modifier| modifier == 'E')
+}
+
 #[cfg(unix)]
 pub(crate) fn process_alive(pid: u32) -> bool {
     let Ok(pid) = i32::try_from(pid) else {
@@ -534,11 +543,13 @@ mod tests {
         let mut command = Command::new("/bin/sh");
         command
             .arg("-c")
+            // Keep the leader in the shell's `wait` builtin so TERM runs its
+            // trap immediately; an external `sleep` can defer trap handling.
             .arg(
                 "trap 'exit 0' TERM; trap '' HUP; \
                  sh -c 'trap \"\" TERM HUP; printf ready > \"$BITFUN_DISPATCH_TERM_TEST_READY\"; \
                  while :; do sleep 30; done' & \
-                 while :; do sleep 30; done",
+                 wait",
             )
             // These trailing arguments make the real process identity match
             // the hidden worker contract without launching BitFun Runtime.
@@ -551,7 +562,6 @@ mod tests {
         let mut leader = command.spawn().expect("spawn process-group leader");
         let process_group = i32::try_from(leader.id()).expect("safe pid");
         let _guard = ProcessGroupGuard(process_group);
-        assert!(worker_process_alive(process_group as u32, job_id));
         for _ in 0..100 {
             if ready_path.is_file() {
                 break;
@@ -562,6 +572,7 @@ mod tests {
             ready_path.is_file(),
             "TERM-resistant child must be ready before cancellation"
         );
+        assert!(worker_process_alive(process_group as u32, job_id));
         let reaper = std::thread::spawn(move || leader.wait());
 
         let error = terminate_worker(process_group as u32, job_id)

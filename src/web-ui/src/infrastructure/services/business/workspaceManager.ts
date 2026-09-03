@@ -82,7 +82,7 @@ export interface WorkspaceState {
   error: string | null;
 }
 
-export type WorkspaceSection = 'assistants' | 'projects';
+export type WorkspaceSection = 'all' | 'assistants' | 'projects';
 export type WorkspaceReorderPosition = 'before' | 'after';
 
 /**
@@ -303,6 +303,9 @@ class WorkspaceManager {
   }
 
   private isWorkspaceInSection(workspace: WorkspaceInfo, section: WorkspaceSection): boolean {
+    if (section === 'all') {
+      return true;
+    }
     return section === 'assistants'
       ? workspace.workspaceKind === 'assistant'
       : workspace.workspaceKind !== 'assistant';

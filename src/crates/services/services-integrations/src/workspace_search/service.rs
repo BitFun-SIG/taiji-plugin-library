@@ -422,14 +422,12 @@ impl WorkspaceSearchService {
                 (result, search_completed_at, converted_at)
             }
             ContentSearchOutputMode::Count | ContentSearchOutputMode::FilesWithMatches => {
-                // 本地定制：SESSION_SEARCH_TIMEOUT 防卡死 + scan_fallback 兜底。
-                // 上游重构后 search 调用分派到各分支，此处保留 timeout 包装。
+                // 本地定制：SESSION_SEARCH_TIMEOUT 防卡死。
+                // 上游重构后 search 调用分派到各分支，此处保留 timeout 包装；
+                // scan_fallback 已随 1.0.0 daemon 协议移除（SearchRequest 无该字段）。
                 let search = tokio::time::timeout(
                     SESSION_SEARCH_TIMEOUT,
-                    FlashgrepRepoSession::search(
-                        session.as_ref(),
-                        search_request.with_scan_fallback(true),
-                    ),
+                    FlashgrepRepoSession::search(session.as_ref(), search_request),
                 )
                 .await
                 .map_err(|_| {
@@ -593,11 +591,20 @@ impl WorkspaceSearchService {
         let delay = self.session_idle_grace;
         let service = Arc::downgrade(self);
         tokio::spawn(async move {
-            tokio::time::sleep(delay).await;
-            let Some(service) = service.upgrade() else {
+            let Some(current_service) = service.upgrade() else {
                 return;
             };
-            service.release_repo_if_idle(repo_root).await;
+            let Some(expected_epoch) = current_service
+                .sessions
+                .read()
+                .await
+                .get(&repo_root)
+                .map(|entry| entry.activity_epoch.load(Ordering::Relaxed))
+            else {
+                return;
+            };
+            drop(current_service);
+            release_repo_after_delay(service, repo_root, expected_epoch, delay).await;
         });
     }
 
@@ -928,7 +935,31 @@ impl WorkspaceSearchService {
                     error
                 ),
             }
-            self.auto_index_queue.complete(&repo_root).await;
+            // Snapshot the session generation before removing the queue entry. A focused request
+            // that races with completion either promotes the in-flight entry or increments the
+            // generation after this snapshot, so the delayed background release cannot close it.
+            let release_epoch = self
+                .sessions
+                .read()
+                .await
+                .get(&repo_root)
+                .map(|entry| entry.activity_epoch.load(Ordering::Relaxed));
+            let final_priority = self.auto_index_queue.complete(&repo_root).await;
+            if final_priority == Some(WorkspaceSearchAutoIndexPriority::Background) {
+                // Restored workspaces are indexed serially in the background. Keeping every
+                // completed repository open makes the single flashgrep daemon retain all of
+                // their watchers, segment readers, and helper processes indefinitely.
+                if let Some(expected_epoch) = release_epoch {
+                    let service = Arc::downgrade(&self);
+                    let delay = self.session_idle_grace;
+                    tokio::spawn(release_repo_after_delay(
+                        service,
+                        repo_root.clone(),
+                        expected_epoch,
+                        delay,
+                    ));
+                }
+            }
         }
 
         // Enforce only after the queue drains: the roots still queued would be
@@ -1071,17 +1102,7 @@ impl WorkspaceSearchService {
         })
     }
 
-    async fn release_repo_if_idle(self: &Arc<Self>, repo_root: PathBuf) {
-        let Some(expected_epoch) = self
-            .sessions
-            .read()
-            .await
-            .get(&repo_root)
-            .map(|entry| entry.activity_epoch.load(Ordering::Relaxed))
-        else {
-            return;
-        };
-
+    async fn release_repo_if_idle(self: &Arc<Self>, repo_root: PathBuf, expected_epoch: u64) {
         let active_session = self
             .sessions
             .read()
@@ -1128,6 +1149,21 @@ impl WorkspaceSearchService {
             self.open_guards.lock().await.remove(&repo_root);
         }
     }
+}
+
+async fn release_repo_after_delay(
+    service: std::sync::Weak<WorkspaceSearchService>,
+    repo_root: PathBuf,
+    expected_epoch: u64,
+    delay: Duration,
+) {
+    tokio::time::sleep(delay).await;
+    let Some(service) = service.upgrade() else {
+        return;
+    };
+    service
+        .release_repo_if_idle(repo_root, expected_epoch)
+        .await;
 }
 
 /// The pattern and flags needed to recompute match highlighting locally.

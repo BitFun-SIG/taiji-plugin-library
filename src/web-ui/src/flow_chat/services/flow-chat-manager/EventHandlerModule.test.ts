@@ -25,7 +25,12 @@ import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
 import { configManager } from '@/infrastructure/config/services/ConfigManager';
 import { i18nService } from '@/infrastructure/i18n';
 
-const { handleCompressionCompleted, handleTokenUsageUpdate, notifySubagentTurnCompleted } = __test_only__;
+const {
+  buildBuiltInBrowserTabOptions,
+  handleCompressionCompleted,
+  handleTokenUsageUpdate,
+  notifySubagentTurnCompleted,
+} = __test_only__;
 
 vi.mock('../../../shared/notification-system/services/NotificationService', () => ({
   notificationService: {
@@ -64,6 +69,38 @@ vi.mock('../../services/btwSessionPane', () => ({
 describe('isAppWindowFocused', () => {
   it('returns true when no document is available', () => {
     expect(isAppWindowFocused()).toBe(true);
+  });
+});
+
+describe('built-in browser open request projection', () => {
+  it('correlates replacement and new-tab requests with distinct stable keys', () => {
+    expect(buildBuiltInBrowserTabOptions({
+      url: ' https://openbitfun.com/ ',
+      title: ' Docs ',
+      requestId: ' request-1 ',
+      replaceExisting: true,
+    })).toMatchObject({
+      title: 'Docs',
+      data: {
+        url: 'https://openbitfun.com/',
+        openRequestId: 'request-1',
+      },
+      duplicateCheckKey: 'browser-panel',
+      replaceExisting: true,
+    });
+
+    expect(buildBuiltInBrowserTabOptions({
+      url: 'https://openbitfun.com/',
+      requestId: 'request-2',
+      replaceExisting: false,
+    })).toMatchObject({
+      duplicateCheckKey: 'browser-panel:request-2',
+      replaceExisting: false,
+    });
+  });
+
+  it('rejects a request that cannot create a browser target', () => {
+    expect(buildBuiltInBrowserTabOptions({ url: '   ' })).toBeNull();
   });
 });
 

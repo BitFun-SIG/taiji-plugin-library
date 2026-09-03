@@ -1422,16 +1422,16 @@ describe('FlowChatStore session model selection', () => {
     resetStore();
   });
 
-  it('stores an explicit auto selector on a legacy session without a model', () => {
+  it('stores the primary selector on a legacy session without a model', () => {
     const session = createSession({ config: { agentType: 'agentic' } });
     flowChatStore.setState(() => ({
       sessions: new Map([[session.sessionId, session]]),
       activeSessionId: session.sessionId,
     }));
 
-    flowChatStore.updateSessionModelName(session.sessionId, 'auto');
+    flowChatStore.updateSessionModelName(session.sessionId, 'primary');
 
-    expect(flowChatStore.getState().sessions.get(session.sessionId)?.config.modelName).toBe('auto');
+    expect(flowChatStore.getState().sessions.get(session.sessionId)?.config.modelName).toBe('primary');
   });
 
   it('sets and clears the session reasoning preset independently of the model', () => {
@@ -1454,7 +1454,7 @@ describe('FlowChatStore session model selection', () => {
       .toBeUndefined();
   });
 
-  it('applies an auto-migration notice that matches the stored model', () => {
+  it('applies a model fallback notice that matches the stored model', () => {
     const session = createSession({
       config: { agentType: 'agentic', modelName: 'removed-model' },
     });
@@ -1463,35 +1463,35 @@ describe('FlowChatStore session model selection', () => {
       activeSessionId: session.sessionId,
     }));
 
-    const applied = flowChatStore.applySessionModelAutoMigration(
+    const applied = flowChatStore.applySessionModelFallback(
       session.sessionId,
       'removed-model',
-      'auto',
+      'primary',
     );
 
     expect(applied).toBe(true);
-    expect(flowChatStore.getState().sessions.get(session.sessionId)?.config.modelName).toBe('auto');
+    expect(flowChatStore.getState().sessions.get(session.sessionId)?.config.modelName).toBe('primary');
   });
 
-  it('applies an auto-migration notice when the session has no stored model yet', () => {
+  it('applies a model fallback notice when the session has no stored model yet', () => {
     const session = createSession({ config: { agentType: 'agentic' } });
     flowChatStore.setState(() => ({
       sessions: new Map([[session.sessionId, session]]),
       activeSessionId: session.sessionId,
     }));
 
-    const applied = flowChatStore.applySessionModelAutoMigration(
+    const applied = flowChatStore.applySessionModelFallback(
       session.sessionId,
       'removed-model',
-      'auto',
+      'primary',
     );
 
     expect(applied).toBe(true);
-    expect(flowChatStore.getState().sessions.get(session.sessionId)?.config.modelName).toBe('auto');
+    expect(flowChatStore.getState().sessions.get(session.sessionId)?.config.modelName).toBe('primary');
   });
 
-  it('ignores a stale auto-migration notice that would revert a newer selection', () => {
-    // Restore-time migration races the explicit update that triggered the
+  it('ignores a stale model fallback notice that would revert a newer selection', () => {
+    // Restore-time fallback races the explicit update that triggered the
     // restore: the composer already stored the picked model when the notice
     // for the old one lands.
     const session = createSession({
@@ -1503,10 +1503,10 @@ describe('FlowChatStore session model selection', () => {
     }));
 
     flowChatStore.updateSessionModelName(session.sessionId, 'deepseek-v4-flash');
-    const applied = flowChatStore.applySessionModelAutoMigration(
+    const applied = flowChatStore.applySessionModelFallback(
       session.sessionId,
       'removed-model',
-      'auto',
+      'primary',
     );
 
     expect(applied).toBe(false);
@@ -1515,9 +1515,9 @@ describe('FlowChatStore session model selection', () => {
     );
   });
 
-  it('ignores an auto-migration notice for an unknown session', () => {
+  it('ignores a model fallback notice for an unknown session', () => {
     expect(
-      flowChatStore.applySessionModelAutoMigration('missing-session', 'removed-model', 'auto'),
+      flowChatStore.applySessionModelFallback('missing-session', 'removed-model', 'primary'),
     ).toBe(false);
   });
 
@@ -1595,7 +1595,7 @@ describe('FlowChatStore historical session hydration state', () => {
         sessionId: 'history-1',
         title: 'Saved session',
         agentType: 'agentic',
-        modelName: 'auto',
+        modelName: 'primary',
         createdAt: 10,
         lastActiveAt: 20,
       },
@@ -2184,11 +2184,15 @@ describe('FlowChatStore historical session hydration state', () => {
       activeSessionId: 'history-1',
     }));
 
-    await flowChatStore.refreshPeerSessionSnapshot(
+    const firstRefresh = await flowChatStore.refreshPeerSessionSnapshot(
       'history-1',
       '/Users/host/project',
       { replaceRunningSnapshot: false },
     );
+    expect(firstRefresh.pendingUserQuestions).toEqual({
+      revision: 7,
+      questions: [pendingQuestion],
+    });
 
     const recoveredTurn = flowChatStore
       .getState()
@@ -2325,6 +2329,69 @@ describe('FlowChatStore historical session hydration state', () => {
       questions: [],
     })).toBe(true);
     expect(askUserQuestionDraftStore.getState().drafts[draftKey]).toBeUndefined();
+  });
+
+  it('re-enables a same-revision mailbox card changed back to parameter streaming', () => {
+    flowChatStore.setState(() => ({
+      sessions: new Map([[
+        'history-1',
+        createSession({
+          sessionId: 'history-1',
+          dialogTurns: [{
+            id: 'turn-live',
+            sessionId: 'history-1',
+            userMessage: { id: 'user-live', content: 'ask me', timestamp: 1 },
+            modelRounds: [],
+            status: 'processing',
+            startTime: 1,
+          }],
+        }),
+      ]]),
+      activeSessionId: 'history-1',
+    }));
+    const snapshot = {
+      revision: 4,
+      questions: [{
+        toolId: 'ask-tool-1',
+        sessionId: 'history-1',
+        dialogTurnId: 'turn-live',
+        modelRoundId: 'round-question',
+        questions: {
+          questions: [{
+            question: 'Continue?',
+            header: 'Choice',
+            options: [{ label: 'Yes', description: 'Continue.' }],
+          }],
+        },
+        registeredAtMs: 3,
+      }],
+    };
+
+    expect(flowChatStore.reconcilePendingUserQuestions('history-1', snapshot)).toBe(true);
+    flowChatStore.setState(prev => {
+      const session = prev.sessions.get('history-1')!;
+      const dialogTurns = [...session.dialogTurns];
+      const modelRounds = [...dialogTurns[0].modelRounds];
+      const items = [...modelRounds[0].items];
+      items[0] = {
+        ...items[0],
+        isParamsStreaming: true,
+      } as any;
+      modelRounds[0] = { ...modelRounds[0], items };
+      dialogTurns[0] = { ...dialogTurns[0], modelRounds };
+      const sessions = new Map(prev.sessions);
+      sessions.set('history-1', { ...session, dialogTurns });
+      return { ...prev, sessions };
+    });
+
+    expect(flowChatStore.reconcilePendingUserQuestions('history-1', snapshot)).toBe(true);
+    expect(
+      flowChatStore.getState().sessions.get('history-1')
+        ?.dialogTurns[0].modelRounds[0].items[0],
+    ).toMatchObject({
+      status: 'waiting',
+      isParamsStreaming: false,
+    });
   });
 
   it('acquires an empty current-Turn base for Runtime event replay before applying interactions', async () => {
@@ -3383,7 +3450,7 @@ describe('FlowChatStore historical session hydration state', () => {
           sessionId: 'history-1',
           title: 'Saved session',
           agentType: 'agentic',
-          modelName: 'auto',
+          modelName: 'primary',
           createdAt: 10,
           lastActiveAt: 20,
           workspaceHostname: 'localhost',
@@ -3966,7 +4033,7 @@ describe('FlowChatStore historical session hydration state', () => {
           toolItems: [
             {
               id: 'tool-1',
-              toolName: 'Bash',
+              toolName: 'ExecCommand',
               toolCall: { id: 'call-1', input: { command: 'printf output' } },
               toolResult: {
                 result: {
@@ -6900,7 +6967,7 @@ describe('FlowChatStore historical session hydration state', () => {
         sessionId: 'history-1',
         title: 'Saved session',
         agentType: 'agentic',
-        modelName: 'auto',
+        modelName: 'primary',
         createdAt: 10,
         lastActiveAt: 20,
         currentContextUsage: {
@@ -6931,7 +6998,7 @@ describe('FlowChatStore historical session hydration state', () => {
         sessionId: 'history-1',
         title: 'Saved ACP session',
         agentType: 'acp:test',
-        modelName: 'auto',
+        modelName: 'primary',
         createdAt: 10,
         lastActiveAt: 20,
         currentContextUsage: {
@@ -6956,7 +7023,7 @@ describe('FlowChatStore historical session hydration state', () => {
         sessionId: 'history-1',
         title: 'Saved session',
         agentType: 'agentic',
-        modelName: 'auto',
+        modelName: 'primary',
         createdAt: 10,
         lastActiveAt: 20,
         currentContextUsage: {
@@ -6981,7 +7048,7 @@ describe('FlowChatStore historical session hydration state', () => {
         sessionId: 'history-1',
         title: 'Saved session',
         agentType: 'agentic',
-        modelName: 'auto',
+        modelName: 'primary',
         createdAt: 10,
         lastActiveAt: 20,
         currentContextUsage: {

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { ChevronRight, FolderOpen, FileText, Loader2 } from 'lucide-react';
-import { Input } from '../../../component-library/components/Input';
+import { FolderOpen, FileText, Loader2 } from 'lucide-react';
+import { Icon, Input } from '@bitfun/ui';
 import { dragManager } from '../../../shared/services/DragManager';
 import { fileTreeDragSource } from '../../../shared/context-system/drag-drop/FileTreeDragSource';
 import { useI18n } from '@/infrastructure/i18n';
@@ -75,14 +75,14 @@ const RenameInput: React.FC<RenameInputProps> = ({ node, onRename, onCancel }) =
   return (
     <div className="bitfun-file-explorer__rename-input-wrapper" onClick={(event) => event.stopPropagation()}>
       <Input
+        className="bitfun-file-explorer__rename-input"
         type="text"
-        variant="filled"
-        inputSize="small"
+        size="sm"
         value={value}
         onChange={(event) => setValue(event.target.value)}
         onKeyDown={handleKeyDown}
         onBlur={handleBlur}
-        prefix={node.isDirectory ? <FolderOpen size={14} /> : <FileText size={14} />}
+        leading={node.isDirectory ? <FolderOpen size={14} /> : <FileText size={14} />}
         autoFocus
       />
     </div>
@@ -158,8 +158,8 @@ export const FileTreeItem: React.FC<FileTreeItemProps> = ({
     dragImage.style.position = 'absolute';
     dragImage.style.top = '-1000px';
     dragImage.style.padding = '8px';
-    dragImage.style.background = 'var(--bf-appearance-token-color-overlay-black-80)';
-    dragImage.style.color = 'var(--bf-appearance-token-color-static-white)';
+    dragImage.style.background = 'color-mix(in srgb, var(--bf-color-content-on-light) 80%, transparent)';
+    dragImage.style.color = 'var(--bf-color-content-on-dark)';
     dragImage.style.borderRadius = '4px';
     document.body.appendChild(dragImage);
     dragImageRef.current = dragImage;
@@ -203,7 +203,7 @@ export const FileTreeItem: React.FC<FileTreeItemProps> = ({
           {isLoading ? (
             <Loader2 size={16} className="bitfun-file-explorer__loading-icon" />
           ) : (
-            <ChevronRight size={16} />
+            <Icon name="chevron-right" size="md" />
           )}
         </span>
       ) : (

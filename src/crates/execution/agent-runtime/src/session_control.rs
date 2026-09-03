@@ -34,8 +34,9 @@ impl SessionControlAction {
 }
 
 /// Re-export of the shared agent type enum from runtime-ports.
-/// Covers official agent types (agentic / Plan / Cowork / DeepResearch)
-/// plus any custom / external agent type strings (incl. `acp__` sessions).
+/// Covers official agent types (agentic / Plan / Cowork / DeepResearch / group)
+/// plus any custom / external agent type strings (incl. `acp__` sessions) via
+/// the `Other(String)` catch-all.
 pub use bitfun_runtime_ports::AgentType as SessionControlAgentType;
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
@@ -205,12 +206,12 @@ fn validate_mutating_action_target(
     if input.agent_type.is_some() {
         return invalid("agent_type is only allowed for create");
     }
-    // Rename 例外：session_name 是 rename 的新标题（必填），其余 action 仍只允许
-    // create 携带 session_name。
+    // `rename` carries the new session title via session_name; every other
+    // mutating action rejects it (only `create` otherwise accepts session_name).
     if input.session_name.is_some() && !matches!(action, SessionControlAction::Rename) {
         return invalid("session_name is only allowed for create");
     }
-    // `rename` requires a non-empty new title (upstream 4c68f1c2b rename action).
+    // `rename` requires a non-empty new title.
     if matches!(action, SessionControlAction::Rename) {
         let Some(session_name) = input.session_name.as_deref() else {
             return invalid("session_name is required for rename");

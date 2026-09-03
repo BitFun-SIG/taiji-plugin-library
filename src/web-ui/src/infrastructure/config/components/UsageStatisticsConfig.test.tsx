@@ -26,60 +26,66 @@ vi.mock('@/infrastructure/i18n', () => ({
   useI18n: () => ({
     t: translateMock,
     formatDate: (date: Date | number) => new Date(date).toISOString(),
+    formatNumber: (value: number, options?: Intl.NumberFormatOptions) => (
+      new Intl.NumberFormat('en-US', options).format(value)
+    ),
     resolvedTimeZone: 'UTC',
   }),
 }));
 
-vi.mock('@/component-library', () => ({
-  ConfigPageLoading: ({ text }: { text?: string }) => <div data-testid="usage-loading">{text}</div>,
-  ConfigPageMessage: ({
-    message,
-  }: {
-    message: { type: string; text: string } | null;
-  }) => message ? (
-    <div data-testid="usage-message" data-message-type={message.type}>{message.text}</div>
-  ) : null,
-  ConfigPageRefreshButton: () => <button type="button" data-testid="usage-refresh" />,
+vi.mock('@bitfun/ui', async importOriginal => ({
+  ...await importOriginal<typeof import('@bitfun/ui')>(),
+  ScrollArea: ({ children, ...props }: React.HTMLAttributes<HTMLDivElement>) => <div {...props}>{children}</div>,
+  FormSection: ({
+    children,
+    title,
+    ...props
+  }: React.HTMLAttributes<HTMLElement> & { title?: React.ReactNode }) => (
+    <section {...props}>{title}{children}</section>
+  ),
+  FieldGroup: ({ children, ...props }: React.HTMLAttributes<HTMLDivElement>) => <div {...props}>{children}</div>,
+  Icon: ({ name, ...props }: { name: string } & React.HTMLAttributes<HTMLSpanElement>) => <span data-icon={name} {...props} />,
+  Tooltip: ({ children }: React.PropsWithChildren) => <>{children}</>,
   IconButton: ({
     children,
+    icon,
     tooltip: _tooltip,
     size: _size,
     variant: _variant,
     ...props
   }: React.ButtonHTMLAttributes<HTMLButtonElement> & {
+    icon?: React.ReactNode;
     tooltip?: React.ReactNode;
     size?: string;
     variant?: string;
-  }) => <button {...props}>{children}</button>,
+  }) => <button {...props}>{icon ?? children}</button>,
   Input: ({
-    prefix,
-    suffix,
-    inputSize: _inputSize,
+    leading,
+    trailing,
     ...props
   }: React.InputHTMLAttributes<HTMLInputElement> & {
-    prefix?: React.ReactNode;
-    suffix?: React.ReactNode;
-    inputSize?: string;
+    leading?: React.ReactNode;
+    trailing?: React.ReactNode;
   }) => (
     <div>
-      {prefix}
+      {leading}
       <input {...props} />
-      {suffix}
+      {trailing}
     </div>
   ),
   Select: ({
     value,
     options,
-    onChange,
+    onValueChange,
   }: {
     value: string | number;
     options: { value: string | number; label: string }[];
-    onChange?: (value: string | number) => void;
+    onValueChange?: (value: string) => void;
   }) => (
     <select
       data-testid="usage-select"
       value={String(value)}
-      onChange={(event) => onChange?.(event.target.value)}
+      onChange={(event) => onValueChange?.(event.target.value)}
     >
       {options.map((option) => (
         <option key={String(option.value)} value={String(option.value)}>
@@ -90,12 +96,26 @@ vi.mock('@/component-library', () => ({
   ),
 }));
 
+vi.mock('./common', async importOriginal => ({
+  ...await importOriginal<typeof import('./common')>(),
+  ConfigLoadingState: ({ label }: { label?: string }) => <div data-testid="usage-loading">{label}</div>,
+  ConfigMessage: ({
+    message,
+  }: {
+    message: { type: string; text: string } | null;
+  }) => message ? (
+    <div data-testid="usage-message" data-message-type={message.type}>{message.text}</div>
+  ) : null,
+  ConfigRefreshButton: () => <button type="button" data-testid="usage-refresh" />,
+}));
+
 const SAMPLE_STATS: UsageStatistics = {
   totalRequests: 47,
   totalTokens: 4_800_000,
   totalInputTokens: 4_400_000,
   totalOutputTokens: 400_000,
   totalCachedTokens: 4_200_000,
+  totalCacheWriteTokens: 0,
   totalCacheReportedInputTokens: 4_400_000,
   byModel: [
     {
@@ -136,7 +156,6 @@ const SAMPLE_STATS: UsageStatistics = {
       inputTokens: 1_000_000,
       outputTokens: 100_000,
       cacheReadTokens: 900_000,
-      // Backend cache-write telemetry retained (adopted-from #2534; cf. #2548).
       cacheWriteTokens: 50_000,
       cacheHitRate: 0.9,
     },
@@ -145,6 +164,7 @@ const SAMPLE_STATS: UsageStatistics = {
       inputTokens: 2_000_000,
       outputTokens: 200_000,
       cacheReadTokens: 1_900_000,
+      cacheWriteTokens: 0,
       cacheHitRate: 0.95,
     },
   ],
@@ -190,6 +210,9 @@ describe('UsageStatisticsConfig', () => {
       timeZone: 'UTC',
     });
 
+    const pageHeader = container.querySelector('[data-bf-component="page-header"]');
+    expect(pageHeader?.querySelector('h2')?.textContent).toBe('title');
+    expect(pageHeader?.textContent).toContain('subtitle');
     expect(container.querySelector('[data-bf-part="summary"]')).not.toBeNull();
     expect(container.querySelector('[data-bf-part="distributions"]')).not.toBeNull();
     expect(container.querySelector('[data-bf-part="modelHitRate"]')).not.toBeNull();
@@ -197,11 +220,16 @@ describe('UsageStatisticsConfig', () => {
     expect(container.querySelectorAll('.bitfun-usage-stats__donut').length).toBe(3);
     expect(container.querySelectorAll('[data-bf-part="trendPanel"] svg').length).toBe(1);
     expect(container.textContent).not.toContain('trend.legend.cacheCreation');
+    expect(container.querySelectorAll('.bitfun-config-page-section')).toHaveLength(4);
+    expect(container.querySelectorAll('[data-bf-part="distributions"] table')).toHaveLength(3);
+    expect(container.querySelectorAll('[data-bf-part="distributions"] th[scope="row"]')).toHaveLength(3);
+    expect(container.querySelector('[data-bf-part="trendPanel"] svg[role="img"]')).not.toBeNull();
+    expect(container.querySelector('[data-bf-part="trendPanel"] table.bitfun-sr-only')).not.toBeNull();
     // Hit rate is truncated to two decimals, never rounded up.
     expect(container.textContent).toContain('95.00%');
   });
 
-  it('keeps idle hit-rate points continuous and plots active telemetry gaps at zero', async () => {
+  it('keeps idle hit-rate points continuous but splits active telemetry gaps', async () => {
     const idlePoint = {
       ...SAMPLE_STATS.trend[0],
       bucket: '2026-08-16T12:00:00.000Z',
@@ -229,16 +257,8 @@ describe('UsageStatisticsConfig', () => {
 
     await render();
 
-    // Continuous-line semantics (adopted-from #2534, cf. 3adf7be0b): one
-    // dashed hit-rate polyline spanning every bucket, no per-segment markers.
-    // Note: #2534's original commit (ab8a543a4) asserted
-    // data-cache-hit-rate-segment attributes that its own chart never rendered;
-    // the adopted baseline renders a single continuous polyline instead.
-    expect(container.querySelectorAll('.bitfun-usage-stats__trend-svg > polyline')).toHaveLength(4);
-    const hitRateLine = container.querySelector(
-      '.bitfun-usage-stats__trend-svg > polyline[stroke-dasharray="4 4"]',
-    );
-    expect(hitRateLine).not.toBeNull();
+    expect(container.querySelectorAll('[data-cache-hit-rate-segment="line"]')).toHaveLength(1);
+    expect(container.querySelectorAll('[data-cache-hit-rate-segment="point"]')).toHaveLength(1);
 
     const hoverCapture = container.querySelector(
       '.bitfun-usage-stats__trend-svg > rect[fill="transparent"]',
@@ -249,20 +269,16 @@ describe('UsageStatisticsConfig', () => {
     } as DOMRect);
 
     await act(async () => {
-      hoverCapture.dispatchEvent(new MouseEvent('mousemove', {
+      hoverCapture.dispatchEvent(new MouseEvent('pointermove', {
         bubbles: true,
         clientX: 300,
       }));
     });
-    // Adopted contract (#2534 continuous-line semantics, cf. 3adf7be0b):
-    // the tooltip mirrors the rendered line, so a hover over an active
-    // telemetry gap resolves to 0% rather than the pre-adoption '–'
-    // placeholder (same stale superset as the removed segment assertions).
     let tooltipRows = container.querySelectorAll('.bitfun-usage-stats__trend-tooltip-row');
-    expect(tooltipRows[tooltipRows.length - 1]?.textContent).toContain('0.00%');
+    expect(tooltipRows[tooltipRows.length - 1]?.textContent).toContain('–');
 
     await act(async () => {
-      hoverCapture.dispatchEvent(new MouseEvent('mousemove', {
+      hoverCapture.dispatchEvent(new MouseEvent('pointermove', {
         bubbles: true,
         clientX: 100,
       }));

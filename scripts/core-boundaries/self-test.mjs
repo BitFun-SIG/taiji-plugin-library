@@ -377,13 +377,11 @@ export function runManifestParserSelfTest({
     'diff',
     'announcement',
     'canvas-runtime',
-    'debug-log',
     'dispatch-store',
     'file-watch',
     'filesystem',
     'git',
     'i18n-runtime',
-    'lsp',
     'local-storage',
     'process-runtime',
     'external-sources',
@@ -498,20 +496,6 @@ export function runManifestParserSelfTest({
     ],
     [
       servicesCoreManifest,
-      'lsp',
-      [
-        'dep:anyhow',
-        'dep:bitfun-core-types',
-        'dep:notify',
-        'dep:zip',
-        'process-runtime',
-        'tokio/fs',
-        'tokio/io-util',
-        'tokio/sync',
-      ],
-    ],
-    [
-      servicesCoreManifest,
       'workspace-runtime',
       [
         'dep:anyhow',
@@ -520,6 +504,8 @@ export function runManifestParserSelfTest({
         'bitfun-runtime-ports/runtime-event-port',
         'bitfun-runtime-ports/workspace-ports',
         'dep:dunce',
+        // WorkspaceFS metadata restoration is implemented by the local provider.
+        'dep:filetime',
         'process-runtime',
         'tokio/fs',
         'tokio/io-util',
@@ -545,7 +531,6 @@ export function runManifestParserSelfTest({
       ['dep:bitfun-agent-tools', 'bitfun-services-core/local-storage'],
     ],
     [coreManifest, 'process-runtime', ['bitfun-services-core/process-runtime']],
-    [coreManifest, 'lsp', ['dep:notify', 'bitfun-services-core/lsp', 'tokio/macros']],
     [coreManifest, 'terminal', ['dep:terminal-core']],
     [
       coreManifest,
@@ -642,7 +627,6 @@ export function runManifestParserSelfTest({
         'bitfun-core/agent-runtime',
         'bitfun-core/document-read',
         'bitfun-core/subscription-auth',
-        'bitfun-core/lsp',
         'bitfun-core/external-sources',
         'bitfun-core/tools-basic',
         'bitfun-core/tools-git',
@@ -771,6 +755,10 @@ export function runManifestParserSelfTest({
   }
 
   const cliBoundaryDeps = ['bitfun-cli', 'ratatui', 'crossterm', 'arboard', 'syntect-tui'];
+  const lightweightBoundaryCrateNames = lightweightBoundaryRules.map((rule) => rule.crateName);
+  if (new Set(lightweightBoundaryCrateNames).size !== lightweightBoundaryCrateNames.length) {
+    throw new Error('lightweight boundary rules must not duplicate crate names');
+  }
   for (const rule of lightweightBoundaryRules) {
     for (const dep of cliBoundaryDeps) {
       if (!rule.forbiddenDeps.includes(dep)) {
@@ -1049,7 +1037,8 @@ export function runManifestParserSelfTest({
     throw new Error('core workspace manager boundary rule must forbid contract: RelatedPath');
   }
   const coreSubagentRuntimeOwnerPathRule = forbiddenContentUnderRules.find(
-    (rule) => rule.path === 'src/crates/assembly/core/src',
+    (rule) => rule.path === 'src/crates/assembly/core/src'
+      && rule.reason.includes('owner path for portable subagent contracts'),
   );
   if (!coreSubagentRuntimeOwnerPathRule) {
     throw new Error('missing core subagent runtime owner-path boundary rule');
@@ -1160,7 +1149,7 @@ export function runManifestParserSelfTest({
   }
   const expectedServicesCoreOwners = new Map([
     ['base64', ['filesystem']],
-    ['bitfun-core-types', ['local-storage', 'lsp']],
+    ['bitfun-core-types', ['local-storage']],
     ['bitfun-events', ['local-storage']],
     ['chrono', ['filesystem', 'local-storage']],
     ['chrono-tz', ['token-usage-statistics']],
@@ -1169,7 +1158,6 @@ export function runManifestParserSelfTest({
     ['globset', ['workspace-instructions']],
     ['ignore', ['filesystem']],
     ['libc', ['local-storage', 'process-runtime']],
-    ['notify', ['lsp']],
     [
       'regex',
       ['diagnostics', 'filesystem', 'local-storage', 'markdown', 'workspace-instructions'],
@@ -1190,7 +1178,6 @@ export function runManifestParserSelfTest({
     ['which', ['process-runtime']],
     ['win32job', ['process-runtime']],
     ['windows', ['json-io', 'local-storage', 'process-runtime']],
-    ['zip', ['lsp']],
     [
       'tokio',
       [
@@ -1198,7 +1185,6 @@ export function runManifestParserSelfTest({
         'filesystem',
         'json-io',
         'local-storage',
-        'lsp',
         'permission',
         'process-runtime',
         'workspace-instructions',
@@ -1450,6 +1436,22 @@ export function runManifestParserSelfTest({
       throw new Error(`plugin runtime boundary rule must forbid: ${forbiddenContract}`);
     }
   }
+  const pluginCapabilityPublicationRuleText = forbiddenRuleTextForPath(
+    'src/crates/assembly/core/src/plugin_capability_publication.rs',
+  );
+  for (const forbiddenDependency of [
+    'OpenCode',
+    'DeepSeek',
+    'HookFunction',
+    'serde_json',
+    'bitfun_[a-z0-9_]+_adapter',
+  ]) {
+    if (!pluginCapabilityPublicationRuleText.includes(forbiddenDependency)) {
+      throw new Error(
+        `plugin capability publication boundary must forbid: ${forbiddenDependency}`,
+      );
+    }
+  }
   const pluginPublicApiRule = publicApiAllowlistRules.find(
     (rule) => rule.path === 'src/crates/contracts/runtime-ports/src/plugin.rs',
   );
@@ -1476,6 +1478,9 @@ export function runManifestParserSelfTest({
   );
   const externalSubagentPublicApiRule = publicApiAllowlistRules.find(
     (rule) => rule.path === 'src/crates/contracts/product-domains/src/external_subagents.rs',
+  );
+  const pluginCapabilityProjectionPublicApiRule = publicApiAllowlistRules.find(
+    (rule) => rule.path === 'src/crates/contracts/product-domains/src/plugin_capabilities.rs',
   );
   const externalHookPublicApiRule = publicApiAllowlistRules.find(
     (rule) => rule.path === 'src/crates/contracts/product-domains/src/external_hook_contributions.rs',
@@ -1624,10 +1629,24 @@ export function runManifestParserSelfTest({
   ).map((entry) => entry.symbol);
   if (
     opencodeAdapterPublicApiSymbols.join(',') !==
-    'load_opencode_package_adapter,OpenCodeCommandProvider,OpenCodeCommandProviderOptions,OpenCodeConfiguredSkillRoot,OpenCodeSkillRootProvider,OpenCodeSkillRootProviderOptions,OpenCodeToolProvider,OpenCodeToolProviderOptions,OpenCodeSubagentProvider,OpenCodeSubagentProviderOptions,OpenCodeMcpProvider,OpenCodeMcpProviderOptions,OpenCodeHookProvider,OpenCodeHookProviderOptions,OpenCodeWorkspaceReferenceProvider,OpenCodeWorkspaceReferenceProviderOptions,load_opencode_user_instructions,OpenCodeInstructionSourceOptions'
+    'load_opencode_package_adapter,load_opencode_config_snapshot,OpenCodeConfigSnapshot,OpenCodeConfigSnapshotError,project_plugin_config,project_plugin_tool_ref,OpenCodePluginConfigProjectionError,OpenCodeCommandProvider,OpenCodeCommandProviderOptions,OpenCodeConfiguredSkillRoot,OpenCodeSkillRootProvider,OpenCodeSkillRootProviderOptions,OpenCodeToolProvider,OpenCodeToolProviderOptions,OpenCodeSubagentProvider,OpenCodeSubagentProviderOptions,OpenCodeMcpProvider,OpenCodeMcpProviderOptions,OpenCodeHookProvider,OpenCodeHookProviderOptions,OpenCodeWorkspaceReferenceProvider,OpenCodeWorkspaceReferenceProviderOptions,load_opencode_user_instructions,OpenCodeInstructionSourceOptions'
   ) {
     throw new Error(
-      'OpenCode adapter public API budget must stay limited to the reviewed package factory and capability-specific command, configured Skill root, tool, subagent, MCP, static Hook, workspace Reference, and user Instruction providers',
+      'OpenCode adapter public API budget must stay limited to the reviewed package factory, managed Plugin Host Config projection, and capability-specific command, configured Skill root, tool, subagent, MCP, static Hook, workspace Reference, and user Instruction providers',
+    );
+  }
+  if (!pluginCapabilityProjectionPublicApiRule) {
+    throw new Error('plugin capability projection must have a public API budget rule');
+  }
+  const pluginCapabilityProjectionSymbols = (
+    pluginCapabilityProjectionPublicApiRule.allowedSymbolEntries || []
+  ).map((entry) => entry.symbol);
+  if (
+    pluginCapabilityProjectionSymbols.join(',') !==
+    'PluginContributorIdentity,PluginToolRef,PluginAgentProjection,PluginSkillRootContribution,PluginCapabilityProjection'
+  ) {
+    throw new Error(
+      'plugin capability projection public API must stay limited to the reviewed provider-neutral contribution DTOs',
     );
   }
   const opencodeInstructionSymbols = new Set([
@@ -2011,6 +2030,46 @@ export function runManifestParserSelfTest({
   ) {
     throw new Error('OpenCode adapter source guard must allow only the reviewed core composition file');
   }
+  const opencodeHostWireRule = forbiddenContentUnderRules.find((rule) =>
+    rule.reason.includes('OpenCode backend wire parsing'),
+  );
+  if (opencodeHostWireRule?.path !== 'src/crates/assembly/core/src') {
+    throw new Error('OpenCode Host wire guard must scan the complete core source tree');
+  }
+  const opencodeHostWireRegexes = opencodeHostWireRule.patterns.map((pattern) => pattern.regex);
+  for (const sample of [
+    'let request: BackendHttpRequest = decode(params)?;',
+    'let params: StreamCancelParams = decode(params)?;',
+    'let error = RpcHandlerError::new(-32602, message);',
+    'client.register_handler("backend.http.request", handler);',
+    'const METHOD: &str = "backend.stream.read";',
+    'const METHOD: &str = "backend.stream.cancel";',
+    'const METHOD: &str = "backend.diagnostic.publish";',
+  ]) {
+    if (!opencodeHostWireRegexes.some((regex) => regex.test(sample))) {
+      throw new Error(`OpenCode Host wire guard missed fixture: ${sample}`);
+    }
+  }
+  if (
+    [
+      'impl OpenCodeBackendHandler for CoreOpenCodeBackend {}',
+      'let request: BackendRouteRequest = request;',
+      'let event: BackendDiagnosticEvent = event;',
+    ].some((sample) => opencodeHostWireRegexes.some((regex) => regex.test(sample)))
+  ) {
+    throw new Error('OpenCode Host wire guard must allow the typed adapter callback');
+  }
+  const rawHandlerVisibilityRule = forbiddenContentUnderRules.find((rule) =>
+    rule.reason.includes('raw OpenCode RPC handler registration'),
+  );
+  const rawHandlerVisibilityRegex = rawHandlerVisibilityRule?.patterns?.[0]?.regex;
+  if (
+    rawHandlerVisibilityRule?.path !== 'src/crates/adapters/opencode-plugin-host/src' ||
+    !rawHandlerVisibilityRegex?.test('pub async fn register_handler() {}') ||
+    rawHandlerVisibilityRegex.test('pub(crate) async fn register_handler() {}')
+  ) {
+    throw new Error('OpenCode raw handler visibility guard must keep registration crate-private');
+  }
   const runtimeServicesRule = lightweightBoundaryRules.find(
     (rule) => rule.crateName === 'runtime-services',
   );
@@ -2277,12 +2336,6 @@ export function runManifestParserSelfTest({
     if (!cronToolRuleText.includes(contract)) {
       throw new Error(`CronTool boundary rule must forbid direct coordinator ${contract}`);
     }
-  }
-  const bashToolRuleText = forbiddenRuleTextForPath(
-    'src/crates/assembly/core/src/agentic/tools/implementations/bash_tool.rs',
-  );
-  if (!bashToolRuleText.includes('scheduler') || !bashToolRuleText.includes('deliver_background_result')) {
-    throw new Error('Bash boundary rule must forbid direct scheduler background delivery');
   }
   const coordinatorRuleText = forbiddenRuleTextForPath(
     'src/crates/assembly/core/src/agentic/coordination/coordinator.rs',
@@ -2839,24 +2892,24 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/execution/agent-runtime/src/post_call_hooks.rs',
+      path: 'src/crates/execution/agent-runtime/src/native_hooks/kind.rs',
+      contracts: ['RuntimeHookKind', 'SuccessfulToolPostCall'],
+    },
+    {
+      path: 'src/crates/execution/agent-runtime/src/native_hooks/registry.rs',
       contracts: [
-        'RuntimeHookKind',
         'RuntimeHookErrorPolicy',
         'RuntimeHookPlan',
         'RuntimeHookRegistry',
         'EmptyHookId',
         'InvalidTimeoutMillis',
-        'successful_tool_post_call_hooks',
-        'SuccessfulToolPostCallHookExecutor',
-        'run_successful_tool_post_call_hooks',
       ],
     },
     {
       path: 'src/crates/execution/agent-runtime/tests/agent_interaction_contracts/post_call_hook_contracts.rs',
       contracts: [
-        'successful_tool_call_routes_to_shared_context_measurement_hook',
-        'runtime_hook_registry_preserves_order_timeout_and_error_policy',
+        'successful_tool_call_uses_stable_builtin_registration_id',
+        'runtime_hook_registry_preserves_source_order_timeout_and_error_policy',
         'runtime_hook_registry_rejects_duplicate_ids',
         'runtime_hook_registry_rejects_unstable_ids_and_zero_timeouts',
       ],
@@ -4226,10 +4279,6 @@ export function runManifestParserSelfTest({
       contracts: ['SubagentQueryContext', 'SubagentListScope', 'default_enabled', 'effective_enabled', 'SubagentStateReason'],
     },
     {
-      path: 'src/crates/assembly/core/src/agentic/agents/definitions/modes/mod.rs',
-      contracts: ['mod multitask', 'MultitaskMode'],
-    },
-    {
       path: 'src/crates/assembly/core/src/agentic/agents/definitions/subagents/mod.rs',
       contracts: ['mod general_purpose', 'GeneralPurposeAgent'],
     },
@@ -4248,7 +4297,7 @@ export function runManifestParserSelfTest({
     {
       path: 'src/crates/assembly/core/src/agentic/tools/implementations/task/execution.rs',
       contracts: [
-        'delegation_policy\\(\\)\\.spawn_child\\(\\)',
+        'child_delegation_policy',
         'start_background_subagent',
         'bg_task_id',
       ],
@@ -4485,8 +4534,6 @@ export function runManifestParserSelfTest({
         'feature = "ai-adapter-runtime"',
         'pub mod ai',
         'pub mod subscription_auth',
-        'feature = "debug-log"',
-        'pub mod debug_log',
       ],
     },
     {
@@ -4557,7 +4604,14 @@ export function runManifestParserSelfTest({
     },
     {
       path: 'src/web-ui/src/flow_chat/tool-cards/FileOperationToolCard.tsx',
-      contracts: ['openLocalDiff', 'snapshotAPI\\.getOperationDiff', 'Snapshot diff unavailable', 'localDiffContent'],
+      contracts: [
+        'InlineDiffPreview',
+        "previewVariant === 'completed-diff'",
+        'originalContent=\\{oldStringContent\\}',
+        'modifiedContent=\\{newStringContent\\}',
+        'originalContent=""',
+        'modifiedContent=\\{contentPreview\\}',
+      ],
     },
     {
       path: 'src/web-ui/src/main.tsx',
@@ -4585,7 +4639,7 @@ export function runManifestParserSelfTest({
     },
     {
       path: 'src/web-ui/src/tools/initializeTools.ts',
-      contracts: ['initializeAllTools', 'initializeLsp', 'initializeGit', 'does not import every tool'],
+      contracts: ['initializeAllTools', 'initializeGit', 'does not import every tool'],
     },
     {
       path: 'src/web-ui/src/tools/editor/services/MonacoStartupWarmup.ts',

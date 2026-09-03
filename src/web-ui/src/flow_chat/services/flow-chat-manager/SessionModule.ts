@@ -37,6 +37,8 @@ import {
 } from '../../utils/sessionTitle';
 import { buildCreateSessionRelationship } from '../../utils/sessionMetadata';
 import {
+  clearHistorySessionOpenTransition,
+  clearRecentHistorySessionOpenIntent,
   consumeRecentHistorySessionOpenIntent,
   hasRenderableSessionContent,
 } from '../sessionOpenIntent';
@@ -858,6 +860,13 @@ export async function deleteChatSession(
       stateBeforeDelete.activeSessionId
       && removedSessionIdSet.has(stateBeforeDelete.activeSessionId)
     );
+    // Deletion cancels any speculative pointer-down transition before awaiting
+    // the backend. Otherwise a target that is never activated can leave the
+    // history-open shield visible until its safety timeout.
+    removedSessionIds.forEach(removedSessionId => {
+      clearRecentHistorySessionOpenIntent(removedSessionId);
+      clearHistorySessionOpenTransition(removedSessionId);
+    });
     const session = stateBeforeDelete.sessions.get(sessionId);
     await driverForSession(sessionId, session).deleteSession(context, sessionId, {
       removedSessionIds,
@@ -1202,7 +1211,7 @@ export async function ensureBackendSession(
       deepReviewRunManifest: latestSession.deepReviewRunManifest,
       reviewTargetEvidence: latestSession.reviewTargetEvidence,
       config: {
-        modelName: latestSession.config.modelName || 'auto',
+        modelName: latestSession.config.modelName || 'primary',
         enableTools: true,
         safeMode: true,
         remoteConnectionId: effectiveConnectionId,
@@ -1254,7 +1263,7 @@ export async function retryCreateBackendSession(
     deepReviewRunManifest: session.deepReviewRunManifest,
     reviewTargetEvidence: session.reviewTargetEvidence,
     config: {
-      modelName: session.config.modelName || 'auto',
+      modelName: session.config.modelName || 'primary',
       enableTools: true,
       safeMode: true,
       remoteConnectionId: session.remoteConnectionId,

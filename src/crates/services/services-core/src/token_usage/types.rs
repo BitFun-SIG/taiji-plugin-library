@@ -20,6 +20,10 @@ pub struct TokenUsageRecord {
     /// Whether cached token count was explicitly reported by the provider/event.
     #[serde(default)]
     pub cached_tokens_available: bool,
+    /// Tokens written into the provider prompt cache (cache WRITE telemetry).
+    /// Providers that do not report cache writes keep this at zero.
+    #[serde(default)]
+    pub cache_write_tokens: u32,
     pub total_tokens: u32,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub token_details: Option<serde_json::Value>,

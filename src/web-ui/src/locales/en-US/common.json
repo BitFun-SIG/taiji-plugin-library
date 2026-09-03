@@ -59,8 +59,8 @@
     "hideAgentic": "Hide Agentic",
     "activateAgentic": "Activate Agentic",
     "switchWorkspace": "Switch Workspace",
-    "recentWorkspaces": "Recent Workspaces",
-    "noRecentWorkspaces": "No Recent Workspaces",
+    "recentWorkspaces": "Recent Projects",
+    "noRecentWorkspaces": "No Recent Projects",
     "noWorkspaceOpen": "Select Workspace",
     "remoteConnectRequiresWorkspace": "Open a workspace before using remote control."
   },
@@ -75,10 +75,10 @@
     "forwardShortcut": "Forward (Alt+→)",
     "items": {
       "sessions": "Sessions",
-      "project": "Directory",
-      "persona": "Assistant",
+      "project": "Project",
+      "persona": "Smart Members",
       "workflowClaw": "Workflow Claw",
-      "todos": "Todos",
+      "todos": "Task Board",
       "agents": "Agents",
       "skills": "Skills",
       "tools": "Tools",
@@ -86,20 +86,27 @@
       "terminal": "Shell",
       "git": "Git",
       "miniApps": "Mini App",
-      "insights": "Insights"
+      "insights": "Insights",
+      "assistant": "AI Assistant",
+      "longTermTracking": "Long-term Tracking",
+      "ecosystemCompatibility": "Ecosystem Compatibility"
     },
     "tooltips": {
-      "persona": "Assistant — create and manage all assistant instances",
+      "persona": "Smart Members — expand role- and memory-based member sessions",
       "workflowClaw": "Workflow Claw — independent list of workflow-member assistants",
-      "todos": "Todos — every scheduled task, by list and calendar",
+      "todos": "Task Board — manage all tasks",
       "agents": "Which agents it can call",
       "skills": "What it knows — specialized knowledge files",
       "tools": "What it can use — built-in tools & MCP services",
       "workflow": "Workflows — orchestrate multiple agents for complex tasks",
-      "addWorkspace": "Add workspace"
+      "addWorkspace": "Add workspace",
+      "longTermTracking": "Long-term Tracking — ongoing tasks and conversations",
+      "ecosystemCompatibility": "Ecosystem Compatibility — manage compatible capabilities and extensions from other AI apps",
+      "ecosystemCompatibilityUnseen": "Ecosystem Compatibility — new compatible applications were found",
+      "addSessionGroup": "Add a project or personal assistant"
     },
     "sections": {
-      "extensions": "Customize",
+      "extensions": "Extensions & Compatibility",
       "shell": "Shell",
       "assistantSessions": "Assistant Sessions",
       "groupChats": "Group Chats"
@@ -144,15 +151,89 @@
       "membersSearch": "Search members..."
     },
     "search": {
-      "triggerPlaceholder": "Search",
+      "triggerPlaceholder": "Search everything",
       "triggerTooltip": "Search (Ctrl+K, Alt+F)",
-      "inputPlaceholder": "Search workspaces, assistants, sessions...",
-      "groupWorkspaces": "Open Workspaces",
+      "inputPlaceholder": "Search anything, or type > for commands",
+      "groupWorkspaces": "Projects",
       "groupAssistants": "Assistants",
       "groupSessions": "All Sessions",
       "empty": "No results found",
-      "sessionSearchHintDefault": "Type a keyword to search sessions in open workspaces",
-      "sessionWorkspaceHint": "in {{workspace}}"
+      "sessionSearchHintDefault": "Type a keyword to search all sessions",
+      "sessionWorkspaceHint": "in {{workspace}}",
+      "dialogLabel": "Global search",
+      "inputLabel": "Search BitFun",
+      "resultsLabel": "Search results",
+      "clear": "Clear search",
+      "searching": "Searching...",
+      "partialUnavailable": "Some search sources are unavailable",
+      "typeMoreForContent": "Type at least two characters to search files and content",
+      "resultCount": "{{count}} items",
+      "back": "Back",
+      "backToOverview": "Back to search overview",
+      "openGroup": "View all {{count}} {{group}}",
+      "scopes": {
+        "all": "All",
+        "actions": "Commands",
+        "content": "Content"
+      },
+      "groups": {
+        "actions": "Commands",
+        "frequentActions": "Common commands",
+        "messages": "Messages",
+        "sessions": "Sessions",
+        "files": "Files",
+        "workspaces": "Projects",
+        "assistants": "Assistants",
+        "capabilities": "Features",
+        "settings": "$t(shared:features.settings)"
+      },
+      "actions": {
+        "newSession": "New session",
+        "openBrowser": "Open browser",
+        "openTerminal": "Open terminal",
+        "openProject": "Open project",
+        "newProject": "New project",
+        "openFiles": "Open files",
+        "openAgents": "Open agents",
+        "openSkills": "Open skills",
+        "openMiniApps": "Open Mini Apps",
+        "openTodos": "Open todos",
+        "openInsights": "Open insights",
+        "openSettings": "Open settings",
+        "openKeyboardShortcuts": "Open keyboard shortcuts",
+        "openIntegrations": "Open ecosystem compatibility"
+      },
+      "actionDescriptions": {
+        "newSession": "Start a conversation using the canonical session flow",
+        "openBrowser": "Open the browser in the current working context",
+        "openTerminal": "Create a terminal in the active project",
+        "openProject": "Choose and open a local or peer-hosted project",
+        "newProject": "Create a project from a template or empty workspace",
+        "openFiles": "Browse and edit files in the active project",
+        "openAgents": "Manage installed and custom agents",
+        "openSkills": "Browse and manage reusable skills",
+        "openMiniApps": "Open the Mini App gallery",
+        "openTodos": "Review tasks and follow-up work",
+        "openInsights": "Review activity and usage insights",
+        "openSettings": "Configure BitFun",
+        "openKeyboardShortcuts": "Review and customize keyboard shortcuts",
+        "openIntegrations": "Manage compatible capabilities and runtimes from external AI apps"
+      },
+      "badges": {
+        "userMessage": "You",
+        "assistantMessage": "Assistant"
+      },
+      "footer": {
+        "navigate": "Navigate",
+        "open": "Open",
+        "back": "Back",
+        "close": "Close"
+      },
+      "errors": {
+        "activationFailed": "Could not open that result",
+        "remoteFileSearchUnavailable": "File search is unavailable for remote project {{workspace}}",
+        "sessionUnavailable": "This session is no longer available"
+      }
     },
     "githubStar": {
       "label": "Star",
@@ -272,7 +353,7 @@
       "ariaInputResolvedRemaining": "Session '{{name}}' received input. {{count}} still waiting.",
       "badgeBackgroundSubagents": "BG {{count}}",
       "backgroundSubagentsRunning": "Background subagents running: {{count}}",
-      "needProjectWorkspaceForSession": "Open or add a project workspace first. Code and Cowork sessions cannot be created in the assistant area.",
+      "needProjectWorkspaceForSession": "Open or add a project workspace before creating a project session.",
       "manage": "Manage Sessions",
       "batchManageDescription": "Select sessions in this workspace, then archive or delete them in bulk.",
       "batchSelectionSummary": "{{count}} selected · {{total}} sessions",
@@ -300,10 +381,10 @@
       "bulkDeleteConfirmTitle": "Delete Selected Sessions",
       "bulkDeleteConfirmMessage": "Are you sure you want to permanently delete {{count}} selected sessions? This action cannot be undone.",
       "deleteArchivedConfirmTitle": "Delete Archived Session",
-      "deleteArchivedConfirmMessage": "Are you sure you want to permanently delete this archived session? This action cannot be undone.",
+      "deleteArchivedConfirmMessage": "Permanently delete “{{name}}” from {{workspace}}? This action cannot be undone.",
       "deleteAllArchived": "Delete All Archived",
       "deleteAllArchivedConfirmTitle": "Delete All Archived Sessions",
-      "deleteAllArchivedConfirmMessage": "Are you sure you want to permanently delete all archived sessions? This action cannot be undone.",
+      "deleteAllArchivedConfirmMessage": "Permanently delete {{count}} archived sessions across {{workspaceCount}} workspaces? This action cannot be undone.",
       "archivedSessions": "Archived Sessions",
       "noArchivedSessions": "No archived sessions",
       "archivedSessionsDescription": "View, restore, or permanently delete archived sessions.",
@@ -315,7 +396,79 @@
       "deleteAllArchivedFailed": "Failed to delete all archived sessions",
       "archiveAllFailed": "Failed to archive sessions",
       "bulkArchiveFailed": "Failed to archive selected sessions",
-      "bulkDeleteFailed": "Failed to delete selected sessions"
+      "bulkDeleteFailed": "Failed to delete selected sessions",
+      "acpSessions": "ACP sessions",
+      "noSessions": "No sessions",
+      "viewToggle": {
+        "label": "Session display",
+        "all": "All",
+        "grouped": "Grouped",
+        "allTooltip": "Show every session in one list",
+        "groupedTooltip": "Organize sessions by project and assistant"
+      },
+      "viewMenu": {
+        "title": "Session view",
+        "tooltip": "Organize and filter sessions",
+        "grouping": {
+          "label": "Grouping",
+          "grouped": "Projects and assistants",
+          "all": "All sessions"
+        },
+        "ordering": {
+          "label": "Ordering",
+          "updated": "Recently updated",
+          "status": "Status",
+          "created": "Recently created",
+          "name": "Name"
+        },
+        "show": {
+          "label": "Show",
+          "all": "All sessions",
+          "unread": "Unread sessions",
+          "attention": "Needs attention"
+        },
+        "filters": {
+          "label": "Filters",
+          "reset": "Reset"
+        },
+        "status": {
+          "label": "Status",
+          "running": "$t(shared:statuses.running)",
+          "attention": "Needs attention",
+          "error": "Error",
+          "completed": "$t(shared:statuses.done)",
+          "idle": "Idle"
+        },
+        "worktree": {
+          "label": "Worktree",
+          "main": "Main workspace",
+          "worktree": "Worktree sessions"
+        },
+        "environment": {
+          "label": "Environment",
+          "local": "Local",
+          "remote": "Remote workspace",
+          "detached": "Detached execution"
+        },
+        "source": {
+          "label": "Source",
+          "bitfun": "$t(shared:product.name)",
+          "external": "External Agent"
+        },
+        "archived": "Archived",
+        "collapseAll": "Collapse All",
+        "markAllRead": "Mark All as Read",
+        "noMatches": "No sessions match the current filters"
+      },
+      "partialLoadFailedRetry": "Some workspace sessions couldn't be loaded — retry",
+      "showMoreLabel": "Show more",
+      "showAllLabel": "Show all",
+      "deleteArchivedSucceeded": "Permanently deleted “{{name}}” from {{workspace}}.",
+      "deleteAllArchivedSucceeded": "Permanently deleted {{count}} archived sessions.",
+      "deleteAllArchivedPartial": "Deleted {{deletedCount}} sessions; deletion failed in {{failedWorkspaceCount}} workspaces. Try again.",
+      "loadArchivedFailedForWorkspace": "Could not load archived sessions for {{workspace}} ({{path}}). Try again.",
+      "restoreSucceeded": "Restored “{{name}}” in {{workspace}}.",
+      "restoreRefreshFailed": "The session was restored, but the session list could not refresh. Refresh the workspace manually."
     },
     "scheduledJobs": {
       "title": "Scheduled Jobs",
@@ -422,7 +575,7 @@
     },
     "workspaces": {
       "empty": "No opened workspaces yet",
-      "emptyProjects": "No project workspaces",
+      "emptyProjects": "No projects yet",
       "emptyAssistants": "No personal assistants",
       "primaryAssistant": "Primary",
       "closeFailed": "Failed to close workspace",
@@ -431,7 +584,7 @@
       "assistantDeleted": "Personal assistant deleted",
       "resetWorkspaceFailed": "Failed to reset workspace",
       "workspaceReset": "Workspace reset",
-      "reorderFailed": "Failed to reorder workspaces",
+      "reorderFailed": "Failed to reorder session groups",
       "dropBefore": "Release to insert before",
       "dropAfter": "Release to insert after",
       "revealFailed": "Failed to reveal workspace folder",
@@ -447,10 +600,10 @@
       "collapseSessions": "Collapse sessions",
       "groups": {
         "projects": "Projects",
-        "assistants": "Personal Assistants"
+        "assistants": "Assistants"
       },
       "remote": {
-        "tooltip": "Remote workspace · {{connection}} ({{host}})\nConnection: {{status}}",
+        "tooltip": "Remote project · {{connection}} ({{host}})\nConnection: {{status}}",
         "ariaLabel": "Remote connection {{connection}}, {{status}}",
         "status": {
           "connected": "Connected",
@@ -472,7 +625,7 @@
         "rename": "Rename project",
         "copyPath": "Copy path",
         "reveal": "Reveal in explorer",
-        "close": "Close workspace"
+        "close": "Close project"
       },
       "renameDialog": {
         "title": "Rename project",
@@ -524,7 +677,8 @@
         "title": "Reset {{name}}?",
         "message": "This will clear everything inside the workspace directory and restore the default persona files without deleting the workspace directory itself.",
         "pathLabel": "Workspace path"
-      }
+      },
+      "emptySessionGroups": "No projects or assistants yet"
     },
     "agents": {
       "allAgents": "All Agents",
@@ -545,7 +699,18 @@
     },
     "moreOptions": "More options",
     "multimodalTools": "Multimodal Tools",
-    "notifications": "Notifications"
+    "notifications": "Notifications",
+    "messages": {
+      "longTermTrackingComingSoon": "Long-term Tracking is in development"
+    },
+    "settingsMenu": {
+      "floatingWindow": "Floating window",
+      "theme": "Theme",
+      "themeConfiguration": "Theme configuration",
+      "appearanceSwitchFailed": "Could not switch the theme. Try again.",
+      "openSettings": "Open settings",
+      "about": "About"
+    }
   },
   "window": {
     "minimize": "Minimize",
@@ -675,7 +840,7 @@
       "switched": "Now showing {{name}}",
       "switchedLocal": "Now showing this device",
       "disconnected": "Disconnected from {{name}}",
-      "disconnectHint": "Stop controlling this device and cancel work it is running for you"
+      "disconnectHint": "Stop controlling this device; work already started there will continue"
     },
     "peerAutoExitOffline": "Remote device \"{{name}}\" went offline — disconnected",
     "peerAutoExitRpc": "Lost connection to remote device \"{{name}}\" — disconnected",
@@ -874,7 +1039,32 @@
     "disclaimerStatusAgreed": "Agreed",
     "disclaimerStatusPending": "Not agreed",
     "disclaimerDecline": "Decline",
-    "disclaimerAgree": "Agree and Continue"
+    "disclaimerAgree": "Agree and Continue",
+    "centerTitle": "Devices & Connections",
+    "overviewIntro": "Manage your BitFun devices, or let another device connect to the current workspace.",
+    "myDevicesTitle": "My devices",
+    "accountDevicesTitle": "BitFun account & devices",
+    "myDevicesDescription": "Sign in to sync settings and sessions and switch between your devices.",
+    "accountSignedIn": "Signed in",
+    "accountSignedOut": "Signed out",
+    "connectThisDeviceTitle": "Connect to this device",
+    "connectThisDeviceDescription": "No BitFun account required",
+    "mobileBrowserTitle": "Phone or browser",
+    "mobileBrowserDescription": "Open this workspace from a phone or another browser over your network or a relay.",
+    "chatAppsTitle": "Chat apps",
+    "chatAppsDescription": "Send messages to this workspace through Telegram, Feishu, or WeChat.",
+    "requiresWorkspace": "Open a workspace first",
+    "notConnected": "Not connected",
+    "backToOverview": "Back to Devices & Connections",
+    "cancelAndBack": "Cancel connection and go back",
+    "methodSameNetwork": "Same network",
+    "methodBitFunRelay": "BitFun Relay",
+    "methodNgrok": "ngrok",
+    "methodSelfHosted": "Self-hosted",
+    "showConnectionCode": "Show connection code",
+    "getPairingCode": "Get pairing code",
+    "workspaceAddress": "Current workspace address",
+    "botConnectedDescription": "This workspace can now send and receive messages through this chat app."
   },
   "about": {
     "close": "Close",
@@ -885,7 +1075,22 @@
     "branch": "Branch",
     "copyright": "© 2025 BitFun. All rights reserved.",
     "updateSectionTitle": "App updates",
-    "updateSectionHint": "Keep BitFun up to date for the latest fixes and features."
+    "updateSectionHint": "Keep BitFun up to date for the latest fixes and features.",
+    "copyCommit": "Copy commit hash",
+    "dialogTitle": "About BitFun",
+    "tagline": "Agent Runtime · Built for intelligent agents",
+    "details": "Version and build information",
+    "versionLabel": "Version",
+    "license": "License",
+    "notAvailable": "—",
+    "developmentBuild": "Development",
+    "stableBuild": "Stable",
+    "betaBuild": "Beta",
+    "nightlyBuild": "Nightly",
+    "allRightsReserved": "All rights reserved.",
+    "githubStarTitle": "Finding BitFun useful? Give it a Star on GitHub",
+    "githubStarDescription": "Your support helps more people discover BitFun and keeps us improving it.",
+    "githubStarAction": "Star on GitHub"
   },
   "update": {
     "checkForUpdates": "Check for updates",
@@ -1252,7 +1457,7 @@
     "insights": "Insights",
     "assistant": "Assistant",
     "workflowClaw": "Workflow Claw",
-    "todos": "Todos",
+    "todos": "Task Board",
     "shell": "Shell",
     "panelView": "Panel View"
   },
@@ -1318,6 +1523,12 @@
       "openProjectDesc": "Select an existing project directory to start your AI-powered coding journey.",
       "newProject": "New Project",
       "newProjectDesc": "Create a brand new project from scratch."
+    },
+    "greeting": {
+      "morning": "Good morning, coding partner",
+      "afternoon": "Good afternoon, coding partner",
+      "evening": "Good evening, coding partner",
+      "subtitle": "Let’s create something together."
     }
   },
   "insights": {
@@ -1409,7 +1620,9 @@
     "timeEvening": "Evening (18-24)",
     "timeNight": "Night (0-6)",
     "lines": "Lines",
-    "files": "Files"
+    "files": "Files",
+    "modelPrimary": "Primary model",
+    "modelPrimaryDescription": "Use the configured primary model"
   },
   "ssh": {
     "remote": {
@@ -1522,7 +1735,38 @@
       "downloadDialogTitle": "Save file as",
       "transferFailed": "Transfer failed",
       "transferNeedsDesktop": "Upload and download require the desktop app.",
-      "transferring": "Transferring..."
+      "transferring": "Transferring...",
+      "showPassword": "Show password",
+      "hidePassword": "Hide password"
+    },
+    "portForward": {
+      "menuEntry": "Forward a Port",
+      "title": "Port Forwarding",
+      "intro": "Reach a port listening on the remote host from this machine. Nothing is forwarded automatically — only the mappings you add here.",
+      "detectedTitle": "Listening on the remote",
+      "detecting": "Detecting remote ports…",
+      "detect": "Detect again",
+      "detectedEmpty": "No listening ports found on the remote host. Add one manually below.",
+      "detectedUse": "Forward to this machine",
+      "detectedAlreadyForwarded": "This port is already forwarded",
+      "activeTitle": "Forwarded",
+      "empty": "No port mappings yet. Pick a detected port above, or add one manually below.",
+      "portMoved": "Local {{requested}} was in use; bound {{bound}} instead",
+      "exposedOnLanBadge": "Reachable on the LAN",
+      "statusActive": "{{active}} connection(s)",
+      "statusWarning": "Error",
+      "openInBrowser": "Open in browser",
+      "copyAddress": "Copy local address",
+      "stop": "Stop forwarding",
+      "manualTitle": "Add manually",
+      "remotePortLabel": "Remote port",
+      "localPortLabel": "Local port",
+      "localPortPlaceholder": "Auto",
+      "labelLabel": "Label",
+      "labelPlaceholder": "Optional, e.g. web preview",
+      "add": "Add mapping",
+      "exposeOnLan": "Allow access from the local network",
+      "exposeOnLanHint": "Binds every local interface, so other devices on your network can reach this remote service too. Loopback only by default."
     }
   },
   "notify": {
@@ -1544,7 +1788,11 @@
     "minimizeToTray": "Minimize to Tray"
   },
   "sceneBar": {
-    "sceneTabs": "Scene tabs"
+    "sceneTabs": "Scene tabs",
+    "tabsLabel": "Scene tabs",
+    "scrollPrevious": "Scroll tabs left",
+    "scrollNext": "Scroll tabs right",
+    "closeTab": "Close {{label}}"
   },
   "reviewTeamErrorTitle": "Code Review Team",
   "mcpInteraction": {
@@ -1768,5 +2016,53 @@
     "nextMonth": "Next month",
     "now": "Now",
     "close": "Close"
+  },
+  "deviceOverview": {
+    "title": "Device status",
+    "thisDevice": "This device",
+    "thisWindows": "This Windows PC",
+    "thisMac": "This Mac",
+    "thisLinux": "This Linux device",
+    "footerLocal": "Working here",
+    "footerPeer": "Used from {{device}} · {{count}} controllers",
+    "footerControllers": "{{count}} controllers",
+    "footerTasks": "{{count}} background tasks",
+    "footerWorkDevices": "{{count}} work devices",
+    "footerLocalSimple": "On this device",
+    "footerControlledFromHere": "Controlled from this device",
+    "footerControlledBy": "{{device}} is controlling",
+    "footerDistributedExecution": "{{count}} devices executing",
+    "current": "Current",
+    "currentUse": "In use",
+    "controlling": "Controlling",
+    "executingTasks": "{{count}} tasks",
+    "connectedDevices": "Connected devices",
+    "connectionService": "Connection service",
+    "accountService": "Account service",
+    "controllers": "Controllers",
+    "workDevices": "Work devices",
+    "connections": "Connections",
+    "currentOperation": "This device",
+    "connected": "Connected",
+    "sessionData": "Session data",
+    "projectExecution": "Project & execution",
+    "backgroundTasks": "{{count}} background tasks",
+    "localConnection": "On this device",
+    "sameNetwork": "Same network",
+    "officialService": "BitFun official service",
+    "selfHostedService": "Self-hosted service",
+    "publicConnection": "Public connection",
+    "deviceService": "Device connection service",
+    "connectControlDevices": "Connects control devices",
+    "connectedTo": "Connected to {{target}}",
+    "mobileDevice": "Mobile device",
+    "backupSyncing": "Encrypted backup · Syncing",
+    "backupSynced": "Encrypted backup · Synced",
+    "backupFailed": "Encrypted backup · Sync needs attention",
+    "statusUnavailable": "Other-device status is unavailable; local work is unaffected",
+    "connectOtherDevices": "Connect another device",
+    "backToThisDevice": "Return to this device",
+    "returningToThisDevice": "Returning to this device…",
+    "returnedToThisDevice": "Returned to this device"
   }
 }

@@ -1313,7 +1313,6 @@ Arguments:
 - "detail": Only used by list. When true, the full session tree with full session names is returned instead of the compact output. Defaults to false.
 - "agent_type": Only used by create. Defaults to "agentic". Allowed values are dynamically resolved from the available agent registry (common values include "agentic", "Plan", "Cowork", "DeepResearch", and any custom/external subagent types). Use "acp__<client_id>" to create a real external ACP agent session: the external client process is started immediately (same shape as the frontend create_acp_flow_session path).
   - "agentic": Coding-focused agent for implementation, debugging, and code changes.
-  - "Plan": Planning agent for clarifying requirements and producing an implementation plan before coding.
   - "Cowork": Collaborative agent for office-style work such as research, documentation, presentations, etc.
   - "DeepResearch": Research agent for systematic investigation and evidence-driven reports.
 - "session_id": Required for cancel, delete, and rename."#
@@ -1654,6 +1653,7 @@ Arguments:
                     .create_session(AgentSessionCreateRequest {
                         session_name,
                         agent_type,
+                        agent_route_key: None,
                         workspace_path: Some(
                             created_worktree
                                 .as_ref()
@@ -2128,6 +2128,68 @@ Arguments:
                         &workspace.display_workspace,
                         session_name,
                     )),
+                    image_attachments: None,
+                }])
+            }
+            SessionControlAction::Rename => {
+                let session_id = params.session_id.as_deref().ok_or_else(|| {
+                    BitFunError::tool("session_id is required for rename".to_string())
+                })?;
+                validate_session_id(session_id).map_err(BitFunError::tool)?;
+                let session_name = params
+                    .session_name
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty())
+                    .ok_or_else(|| {
+                        BitFunError::tool(
+                            "session_name is required and must not be empty for rename".to_string(),
+                        )
+                    })?;
+                let workspace = self
+                    .resolve_effective_workspace(
+                        SessionControlAction::Rename,
+                        Some(session_id),
+                        None,
+                        context,
+                        &runtime,
+                    )
+                    .await?;
+                if self.current_workspace_session(context, &workspace.display_workspace)
+                    == Some(session_id)
+                {
+                    return Err(BitFunError::tool(
+                        "cannot rename the current session from SessionControl".to_string(),
+                    ));
+                }
+
+                // Reuse the same rename channel as the frontend
+                // renameChatSessionTitle (AgentSessionManagementPort::rename_session)
+                // so the persisted title stays consistent with the desktop/frontend.
+                runtime
+                    .rename_session(Self::rename_request(&workspace, session_id, session_name))
+                    .await
+                    .map_err(|error| {
+                        BitFunError::tool(format!(
+                            "cannot rename session '{session_id}': {}",
+                            CoreServiceAgentRuntime::runtime_error_message(error)
+                        ))
+                    })?;
+
+                let result_for_assistant = session_control_renamed_result_message(
+                    session_id,
+                    &workspace.display_workspace,
+                    session_name,
+                );
+                Ok(vec![ToolResult::Result {
+                    data: json!({
+                        "success": true,
+                        "action": "rename",
+                        "workspace": workspace.display_workspace.clone(),
+                        "session_id": session_id,
+                        "session_name": session_name,
+                    }),
+                    result_for_assistant: Some(result_for_assistant),
                     image_attachments: None,
                 }])
             }

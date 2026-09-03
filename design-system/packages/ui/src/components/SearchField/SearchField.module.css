@@ -1,0 +1,43 @@
+@layer bf.components {
+  .root {
+    display: inline-flex;
+    min-inline-size: 0;
+  }
+
+  .field {
+    inline-size: 100%;
+    border-radius: var(--bf-radius-pill);
+  }
+
+  .root .field:not([data-invalid="true"]):focus-within {
+    border-color: var(--bf-color-content-primary);
+    box-shadow: none;
+  }
+
+  .icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .shortcut {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-inline-size: 0;
+    color: var(--bf-color-content-muted);
+    font-family: var(--bf-type-meta-font-family);
+    font-size: var(--bf-type-meta-font-size);
+    font-weight: var(--bf-type-meta-font-weight);
+    line-height: var(--bf-type-meta-line-height);
+    letter-spacing: var(--bf-type-meta-letter-spacing);
+    white-space: nowrap;
+  }
+
+  @media (forced-colors: active) {
+    .root .field:not([data-invalid="true"]):focus-within {
+      border-color: Highlight;
+      box-shadow: none;
+    }
+  }
+}

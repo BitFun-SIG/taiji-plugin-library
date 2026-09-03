@@ -39,16 +39,26 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
             height: '100%',
             padding: '32px',
             textAlign: 'center',
-            background: 'var(--color-bg-primary)',
-            color: 'var(--color-text-primary)',
-            fontFamily: 'system-ui, sans-serif',
+            background: 'var(--bf-color-surface-canvas)',
+            color: 'var(--bf-color-content-primary)',
+            fontFamily: 'var(--bf-type-body-md-font-family)',
           }}
         >
+          {/* typography-audit: allow -- warning glyph geometry, not product text */}
           <div style={{ fontSize: '48px', marginBottom: '16px' }}>⚠</div>
-          <h2 style={{ fontSize: '18px', fontWeight: 600, margin: '0 0 8px' }}>
+          <h2 style={{
+            fontSize: 'var(--bf-type-flow-section-title-font-size)',
+            fontWeight: 'var(--bf-type-flow-section-title-font-weight)',
+            margin: '0 0 8px',
+          }}>
             Something went wrong
           </h2>
-          <p style={{ fontSize: '13px', color: 'var(--color-text-muted)', margin: '0 0 24px', maxWidth: '280px' }}>
+          <p style={{
+            fontSize: 'var(--bf-type-body-sm-font-size)',
+            color: 'var(--bf-color-content-muted)',
+            margin: '0 0 24px',
+            maxWidth: '280px',
+          }}>
             {this.state.error?.message || 'An unexpected error occurred.'}
           </p>
           <button
@@ -57,10 +67,10 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
               padding: '12px 32px',
               border: 'none',
               borderRadius: '14px',
-              background: 'var(--color-accent-500)',
-              color: 'var(--btn-primary-color)',
-              fontSize: '15px',
-              fontWeight: 600,
+              background: 'var(--bf-color-accent-default)',
+              color: 'var(--bf-color-action-primary-content)',
+              fontSize: 'var(--bf-type-body-lg-font-size)',
+              fontWeight: 'var(--bf-type-label-selected-font-weight)',
               cursor: 'pointer',
             }}
           >

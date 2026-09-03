@@ -1,11 +1,12 @@
+import { Menu, MenuItem, ScrollArea } from '@bitfun/ui';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { emit, listen } from '@tauri-apps/api/event';
 import { cursorPosition, getCurrentWindow } from '@tauri-apps/api/window';
 import { aiExperienceConfigService, type AgentCompanionPetSelection, type AIExperienceSettings } from '@/infrastructure/config/services/AIExperienceConfigService';
 import { api } from '@/infrastructure/api/service-api/ApiClient';
-import { ChatInputPixelPet, type ChatInputPixelPetMood } from '@/flow_chat/components/ChatInputPixelPet';
-import type { ChatInputPetMood } from '@/flow_chat/utils/chatInputPetMood';
+import { AgentCompanionPet, type AgentCompanionPetMood } from '@/flow_chat/components/AgentCompanionPet';
+import type { AgentCompanionMood } from '@/flow_chat/utils/agentCompanionMood';
 import type {
   AgentCompanionActivityPayload,
   AgentCompanionTaskState,
@@ -13,6 +14,7 @@ import type {
 } from '@/flow_chat/utils/agentCompanionActivity';
 import type { AgentCompanionPetCommand } from '@/app/services/agentCompanionPetCommands';
 import { createLogger } from '@/shared/utils/logger';
+import { isImeOwnedKeyboardEvent } from '@/shared/utils/ime';
 import './AgentCompanionDesktopPet.scss';
 
 const log = createLogger('AgentCompanionDesktopPet');
@@ -117,7 +119,7 @@ export const AgentCompanionDesktopPet: React.FC = () => {
   const [pet, setPet] = useState<AgentCompanionPetSelection | null>(
     () => aiExperienceConfigService.getSettings().agent_companion_pet ?? null,
   );
-  const [mood, setMood] = useState<ChatInputPetMood>('rest');
+  const [mood, setMood] = useState<AgentCompanionMood>('rest');
   const [tasks, setTasks] = useState<AgentCompanionTaskStatus[]>([]);
   const [typedOutputBySessionId, setTypedOutputBySessionId] = useState<Record<string, TypewriterOutputState>>({});
   const [isHoveringPet, setIsHoveringPet] = useState(false);
@@ -134,6 +136,7 @@ export const AgentCompanionDesktopPet: React.FC = () => {
   const bubblesRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const composerInputRef = useRef<HTMLInputElement>(null);
+  const composerCompositionActiveRef = useRef(false);
   const outputRefs = useRef<Map<string, HTMLSpanElement>>(new Map());
   const lastActivitySequenceRef = useRef(0);
   const lastActivityEmittedAtRef = useRef(0);
@@ -168,7 +171,7 @@ export const AgentCompanionDesktopPet: React.FC = () => {
     const applySettings = (settings: AIExperienceSettings) => {
       setPet(settings.agent_companion_pet ?? null);
       setPetFrameSize(null);
-      if (!settings.enable_agent_companion || settings.agent_companion_display_mode !== 'desktop') {
+      if (!settings.enable_agent_companion) {
         hidePetWindowForInactiveSettings();
       }
     };
@@ -679,6 +682,13 @@ export const AgentCompanionDesktopPet: React.FC = () => {
   }, [composerValue, isSendingComposer, overlay, sendPetCommand]);
 
   const onComposerKeyDown = useCallback((event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (
+      (event.key === 'Enter' || event.key === 'Escape')
+      && isImeOwnedKeyboardEvent(event, composerCompositionActiveRef.current)
+    ) {
+      event.stopPropagation();
+      return;
+    }
     if (event.key === 'Escape') {
       event.preventDefault();
       cancelBubbleComposer();
@@ -815,7 +825,7 @@ export const AgentCompanionDesktopPet: React.FC = () => {
     clearPetPointerSession(event.currentTarget, event.pointerId);
   };
 
-  const displayMood: ChatInputPixelPetMood = isDraggingPet
+  const displayMood: AgentCompanionPetMood = isDraggingPet
     ? 'dragging'
     : isHoveringPet
       ? 'hover'
@@ -874,7 +884,7 @@ export const AgentCompanionDesktopPet: React.FC = () => {
         />
       )}
       {menuItems.length > 0 && (
-        <div
+        <Menu
           ref={menuRef}
           className="bitfun-agent-companion-window__overlay bitfun-agent-companion-window__overlay--anchored"
           style={{
@@ -882,21 +892,18 @@ export const AgentCompanionDesktopPet: React.FC = () => {
             bottom: `${menuPosition?.bottom ?? MENU_EDGE_MARGIN}px`,
             visibility: menuPosition ? 'visible' : 'hidden',
           }}
+          autoFocusFirstItem
         >
-          <div className="bitfun-agent-companion-window__menu" role="menu">
-            {menuItems.map(menuItem => (
-              <button
-                key={menuItem.key}
-                type="button"
-                role="menuitem"
-                className="bitfun-agent-companion-window__menu-item"
-                onClick={menuItem.onClick}
-              >
-                {menuItem.label}
-              </button>
-            ))}
-          </div>
-        </div>
+          {menuItems.map(menuItem => (
+            <MenuItem
+              key={menuItem.key}
+              tone={menuItem.key === 'close-pet' ? 'danger' : 'neutral'}
+              onClick={menuItem.onClick}
+            >
+              {menuItem.label}
+            </MenuItem>
+          ))}
+        </Menu>
       )}
       <div className="bitfun-agent-companion-window__stack" style={dockVars}>
         <div
@@ -904,7 +911,7 @@ export const AgentCompanionDesktopPet: React.FC = () => {
           className="bitfun-agent-companion-window__dock"
          data-bf-component="agent-companion-desktop-pet" data-bf-part="dock">
           {visibleTasks.length > 0 && (
-            <div
+            <ScrollArea
               ref={bubblesRef}
               className={`bitfun-agent-companion-window__bubbles${isSingleTask ? ' bitfun-agent-companion-window__bubbles--single' : ''}`}
               aria-live="polite"
@@ -964,13 +971,18 @@ export const AgentCompanionDesktopPet: React.FC = () => {
                           <input
                             ref={composerInputRef}
                             type="text"
-                            data-mouse-glow-ignore
                             className="bitfun-agent-companion-window__bubble-composer-input"
                             value={composerValue}
                             placeholder={t('agentCompanion.composer.placeholder')}
                             aria-label={t('agentCompanion.composer.ariaLabel')}
                             onChange={event => setComposerValue(event.target.value)}
                             onKeyDown={onComposerKeyDown}
+                            onCompositionStart={() => {
+                              composerCompositionActiveRef.current = true;
+                            }}
+                            onCompositionEnd={() => {
+                              composerCompositionActiveRef.current = false;
+                            }}
                           />
                           <button
                             type="button"
@@ -1044,7 +1056,7 @@ export const AgentCompanionDesktopPet: React.FC = () => {
                   </div>
                 );
               })}
-            </div>
+            </ScrollArea>
           )}
           <div
             className={`bitfun-agent-companion-window__pet-hitbox${hasAttentionTask ? ' bitfun-agent-companion-window__pet-hitbox--needs-attention' : ''}`}
@@ -1056,7 +1068,7 @@ export const AgentCompanionDesktopPet: React.FC = () => {
             onPointerCancel={onPetPointerCancel}
             onContextMenu={onPetContextMenu}
            data-bf-component="agent-companion-desktop-pet" data-bf-part="hitbox" data-bf-state={hasAttentionTask ? 'attention' : undefined}>
-            <ChatInputPixelPet
+            <AgentCompanionPet
               mood={displayMood}
               pet={pet}
               nativePetdexSize

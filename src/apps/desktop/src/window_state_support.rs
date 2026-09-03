@@ -55,10 +55,8 @@ mod native {
     };
 
     pub(super) fn query(hwnd_inner: isize) -> Option<NativePlacementReport> {
-        let mut placement = WINDOWPLACEMENT {
-            length: std::mem::size_of::<WINDOWPLACEMENT>() as u32,
-            ..Default::default()
-        };
+        let mut placement = WINDOWPLACEMENT::default();
+        placement.length = std::mem::size_of::<WINDOWPLACEMENT>() as u32;
         // SAFETY: the handle belongs to the live main window and the output
         // buffer outlives the single call.
         unsafe { GetWindowPlacement(HWND(hwnd_inner as *mut _), &mut placement) }.ok()?;

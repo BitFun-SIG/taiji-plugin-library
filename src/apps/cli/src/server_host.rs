@@ -86,6 +86,7 @@ const ALLOWED_METHODS: &[&str] = &[
     "session/lineage",
     "session/inspectLineage",
     "session/cancelLineage",
+    "search/sessionContent",
     "agent/listModes",
     "agent/respondPermission",
     "agent/respondPermissionBatch",
@@ -299,8 +300,10 @@ pub(crate) async fn serve() -> Result<()> {
     let context = crate::runtime::AppServerRuntimeContext::build(agentic_system, &workspace_root)?;
     let (agent_runtime, event_source, compatibility) = context.parts();
     let disconnect_runtime = agent_runtime.clone();
+    let compatibility = std::sync::Arc::new(compatibility);
     let app_runtime = BitfunAppRuntime::new(agent_runtime, event_source)
-        .with_context_reload(std::sync::Arc::new(compatibility));
+        .with_context_reload(compatibility.clone())
+        .with_product_search(compatibility);
     let management = std::sync::Arc::new(
         AppManagementService::load()
             .await
@@ -361,7 +364,7 @@ async fn cancel_active_turns(
         workspace_path: workspace_root.to_string_lossy().into_owned(),
         remote_connection_id: None,
         remote_ssh_host: None,
-        include_hidden: false,
+        include_hidden: true,
     };
     let sessions = match runtime.list_sessions(request).await {
         Ok(sessions) => sessions,

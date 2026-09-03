@@ -68,25 +68,16 @@ vi.mock('react-i18next', () => {
   };
 });
 
-vi.mock('../../component-library', () => ({
-  Button: ({
-    children,
-    disabled,
-    onClick,
-  }: {
-    children: React.ReactNode;
-    disabled?: boolean;
-    onClick?: () => void;
-  }) => (
-    <button type="button" disabled={disabled} onClick={onClick}>
-      {children}
-    </button>
-  ),
-  CubeLoading: () => <span data-testid="cube-loading" />,
-}));
+vi.mock('@bitfun/ui', async () => {
+  const actual = await vi.importActual<typeof import('@bitfun/ui')>('@bitfun/ui');
+  return {
+    ...actual,
+    Spinner: () => <span data-testid="spinner" />,
+  };
+});
 
-vi.mock('@/component-library/components/Markdown/Markdown', () => ({
-  Markdown: ({ content }: { content: string }) => <div>{content}</div>,
+vi.mock('@/infrastructure/markdown', () => ({
+  MarkdownRenderer: ({ content }: { content: string }) => <div>{content}</div>,
 }));
 
 vi.mock('@/shared/services/reviewTeamService', () => ({
@@ -155,6 +146,10 @@ vi.mock('../store/FlowChatStore', () => ({
         }],
         ['subagent-session-1', {
           sessionId: 'subagent-session-1',
+          sessionKind: 'subagent',
+          parentSessionId: 'parent-session',
+          createdAt: 1000,
+          status: 'completed',
           mode: 'Explore',
           config: { agentType: 'Explore', modelName: 'fast' },
           dialogTurns: [],
@@ -397,7 +392,9 @@ describeWithJsdom('TaskToolDisplay', () => {
 
     expect(taskCollapseStateManager.isCollapsed('task-tool-1')).toBe(false);
 
-    const card = container.querySelector<HTMLElement>('.base-tool-card');
+    const card = container.querySelector<HTMLElement>(
+      '[data-bf-component="flow-chat-tool-card"][data-bf-part="surface"][data-bf-attention="prominent"]',
+    );
     expect(card).toBeTruthy();
 
     await act(async () => {
@@ -771,7 +768,7 @@ describeWithJsdom('TaskToolDisplay', () => {
       );
     });
 
-    expect(container.querySelector('[data-testid="cube-loading"]')).toBeTruthy();
+    expect(container.querySelector('[data-testid="spinner"]')).toBeTruthy();
     expect(container.querySelector('.task-subagent-stop-button')).toBeTruthy();
     expect(container.querySelector('.task-review-outcome')).toBeNull();
     expect(container.querySelector('.task-failed-badge')).toBeNull();
@@ -806,7 +803,7 @@ describeWithJsdom('TaskToolDisplay', () => {
       );
     });
 
-    expect(container.querySelector('[data-testid="cube-loading"]')).toBeNull();
+    expect(container.querySelector('[data-testid="spinner"]')).toBeNull();
     expect(container.querySelector('.task-subagent-stop-button')).toBeNull();
     expect(container.querySelector('[data-testid="tool-timeout-indicator"]')
       ?.getAttribute('data-is-running')).toBe('false');
@@ -820,8 +817,8 @@ describeWithJsdom('TaskToolDisplay', () => {
         id: 'task-call-1',
         input: {
           action: 'spawn',
-          description: 'Review CLI app layer diff',
-          prompt: 'Review the CLI app layer',
+          agent_id: 'cli-review',
+          prompt: 'Review CLI app layer diff',
           run_in_background: true,
           subagent_type: 'CodeReview',
         },
@@ -847,7 +844,7 @@ describeWithJsdom('TaskToolDisplay', () => {
       );
     });
 
-    expect(container.querySelector('[data-testid="cube-loading"]')).toBeTruthy();
+    expect(container.querySelector('[data-testid="spinner"]')).toBeTruthy();
     expect(container.textContent).toContain('Review CLI app layer diff');
   });
 
@@ -859,8 +856,8 @@ describeWithJsdom('TaskToolDisplay', () => {
         id: 'task-call-error',
         input: {
           action: 'spawn',
-          description: 'Review failed area',
-          prompt: 'Review the area',
+          agent_id: 'failed-area-review',
+          prompt: 'Review failed area',
           run_in_background: true,
           subagent_type: 'CodeReview',
         },
@@ -891,8 +888,8 @@ describeWithJsdom('TaskToolDisplay', () => {
         id: 'task-call-cancelled',
         input: {
           action: 'spawn',
-          description: 'Review cancelled area',
-          prompt: 'Review the area',
+          agent_id: 'cancelled-area-review',
+          prompt: 'Review cancelled area',
           run_in_background: true,
           subagent_type: 'CodeReview',
         },
@@ -923,8 +920,8 @@ describeWithJsdom('TaskToolDisplay', () => {
         id: 'task-call-dynamic-error',
         input: {
           action: 'spawn',
-          description: 'Review dynamic area',
-          prompt: 'Review the area',
+          agent_id: 'dynamic-area-review',
+          prompt: 'Review dynamic area',
           run_in_background: true,
           subagent_type: 'CodeReview',
         },
@@ -941,7 +938,7 @@ describeWithJsdom('TaskToolDisplay', () => {
         <TaskToolDisplay toolItem={toolItem} config={config} sessionId="parent-session" />,
       );
     });
-    expect(container.querySelector('[data-testid="cube-loading"]')).toBeTruthy();
+    expect(container.querySelector('[data-testid="spinner"]')).toBeTruthy();
 
     await act(async () => {
       mocks.dynamicReviewTurn.status = 'error';
@@ -950,7 +947,7 @@ describeWithJsdom('TaskToolDisplay', () => {
       mocks.flowChatListeners.forEach((listener) => listener());
     });
 
-    expect(container.querySelector('[data-testid="cube-loading"]')).toBeFalsy();
+    expect(container.querySelector('[data-testid="spinner"]')).toBeFalsy();
     expect(container.textContent).toContain('toolCards.taskTool.failed');
     expect(container.querySelector('[data-completed-status="error"]')).toBeTruthy();
   });
@@ -963,8 +960,8 @@ describeWithJsdom('TaskToolDisplay', () => {
         id: 'task-call-dynamic-cancelled',
         input: {
           action: 'spawn',
-          description: 'Review dynamic area',
-          prompt: 'Review the area',
+          agent_id: 'dynamic-area-review',
+          prompt: 'Review dynamic area',
           run_in_background: true,
           subagent_type: 'CodeReview',
         },
@@ -981,7 +978,7 @@ describeWithJsdom('TaskToolDisplay', () => {
         <TaskToolDisplay toolItem={toolItem} config={config} sessionId="parent-session" />,
       );
     });
-    expect(container.querySelector('[data-testid="cube-loading"]')).toBeTruthy();
+    expect(container.querySelector('[data-testid="spinner"]')).toBeTruthy();
 
     await act(async () => {
       mocks.dynamicReviewTurn.status = 'cancelled';
@@ -989,7 +986,7 @@ describeWithJsdom('TaskToolDisplay', () => {
       mocks.flowChatListeners.forEach((listener) => listener());
     });
 
-    expect(container.querySelector('[data-testid="cube-loading"]')).toBeFalsy();
+    expect(container.querySelector('[data-testid="spinner"]')).toBeFalsy();
     expect(container.querySelector('[data-completed-status="cancelled"]')).toBeTruthy();
   });
 
@@ -1032,6 +1029,10 @@ describeWithJsdom('TaskToolDisplay', () => {
     const toolItem: FlowToolItem = {
       ...reviewTaskItem('completed', 'Explore', 'Investigate task card behavior'),
       subagentSessionId: 'subagent-session-1',
+      toolResult: {
+        success: true,
+        result: { duration: 1000, agent_id: 'repo-investigator' },
+      },
     };
 
     await act(async () => {
@@ -1046,6 +1047,10 @@ describeWithJsdom('TaskToolDisplay', () => {
 
     const openButton = container.querySelector<HTMLButtonElement>('.task-header-rail__hit');
     expect(openButton).toBeTruthy();
+    expect(container.querySelector('[data-bf-component="subagent-avatar"][data-bf-avatar-id]'))
+      .toBeTruthy();
+    expect(container.textContent).not.toContain('repo-investigator');
+    expect(container.querySelector('[data-bf-part="subagentName"]')).toBeNull();
 
     await act(async () => {
       openButton!.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
@@ -1064,6 +1069,34 @@ describeWithJsdom('TaskToolDisplay', () => {
       remoteSshHost: 'host-1',
       includeInternal: true,
     });
+  });
+
+  it('does not show the caller-selected agent id before the spawn result arrives', async () => {
+    const toolItem: FlowToolItem = {
+      id: 'task-tool-pending-spawn',
+      type: 'tool',
+      toolName: 'Task',
+      timestamp: Date.now(),
+      status: 'running',
+      toolCall: {
+        id: 'task-call-pending-spawn',
+        input: {
+          action: 'spawn',
+          agent_id: 'repo-investigator',
+          prompt: 'Investigate the failing repository path.',
+          subagent_type: 'Explore',
+        },
+      },
+    };
+
+    await act(async () => {
+      root.render(
+        <TaskToolDisplay toolItem={toolItem} config={config} sessionId="parent-session" />,
+      );
+    });
+
+    expect(container.textContent).not.toContain('repo-investigator');
+    expect(container.querySelector('[data-bf-part="subagentName"]')).toBeNull();
   });
 
   it('opens an ordinary CodeReview subagent instead of treating it as Deep Review coverage', async () => {
@@ -1210,9 +1243,9 @@ describeWithJsdom('TaskToolDisplay', () => {
         id: 'task-call-spawn',
         input: {
           action: 'spawn',
+          agent_id: 'isolated-context',
           fork_context: true,
-          description: 'Explore isolated context',
-          prompt: 'Investigate the isolated path',
+          prompt: 'Explore isolated context by investigating the isolated path',
         },
       },
       toolResult: {
@@ -1247,13 +1280,13 @@ describeWithJsdom('TaskToolDisplay', () => {
       toolName: 'Task',
       timestamp: Date.now(),
       status: 'running',
+      subagentSessionId: 'subagent-session-1',
       toolCall: {
         id: 'task-call-send-input',
         input: {
           action: 'send_input',
-          session_id: 'subagent-session-1',
-          description: 'Continue investigation',
-          prompt: 'Keep checking the failing path',
+          agent_id: 'repo-investigator',
+          prompt: 'Continue investigation by checking the failing path',
         },
       },
     };
@@ -1316,7 +1349,7 @@ describeWithJsdom('TaskToolDisplay', () => {
         );
       });
 
-      expect(container.querySelector('[data-testid="cube-loading"]')).toBeTruthy();
+      expect(container.querySelector('[data-testid="spinner"]')).toBeTruthy();
       expect(container.querySelector('.task-subagent-stop-button')).toBeTruthy();
       expect(container.querySelector('[data-testid="tool-timeout-indicator"]')
         ?.getAttribute('data-is-running')).toBe('true');
@@ -1490,7 +1523,8 @@ describeWithJsdom('TaskToolDisplay', () => {
       toolCall: {
         id: 'task-call-1',
         input: {
-          description: 'Investigate background behavior',
+          action: 'spawn',
+          agent_id: 'background-investigation',
           prompt: 'Keep checking the background path',
           subagent_type: 'Explore',
           run_in_background: true,
@@ -1534,7 +1568,9 @@ describeWithJsdom('TaskToolDisplay', () => {
     });
 
     expect(container.querySelector('.task-failed-badge')).toBeNull();
-    expect(container.querySelector('.status-cancelled')).toBeTruthy();
+    expect(container.querySelector(
+      '[data-bf-component="flow-chat-tool-card"][data-bf-part="surface"][data-bf-status="cancelled"]',
+    )).toBeTruthy();
     expect(container.textContent).not.toContain('Failed');
   });
 
@@ -1550,8 +1586,7 @@ describeWithJsdom('TaskToolDisplay', () => {
         id: 'task-call-cancel',
         input: {
           action: 'cancel',
-          session_id: 'subagent-session-1',
-          description: 'Cancel investigation',
+          agent_id: 'repo-investigator',
         },
       },
       toolResult: {
@@ -1576,9 +1611,9 @@ describeWithJsdom('TaskToolDisplay', () => {
     });
 
     expect(container.querySelector('.task-header-rail__hit')).toBeNull();
-    expect(container.querySelector('.compact-tool-card')).toBeTruthy();
+    expect(container.querySelector('[data-bf-part="surface"][data-bf-attention="ambient"]')).toBeTruthy();
     expect(container.textContent).toContain('Cancel session: subagent-session-1');
-    expect(container.querySelector('.base-tool-card.expanded')).toBeNull();
+    expect(container.querySelector('[data-bf-part="surface"][data-bf-attention="prominent"][data-bf-state~="expanded"]')).toBeNull();
     expect(taskCollapseStateManager.isCollapsed('task-tool-cancel')).toBe(true);
   });
 

@@ -13,6 +13,7 @@ export * from './service-api/PermissionAPI';
 export * from './service-api/PageAPI';
 export * from './service-api/SpeechAPI';
 export * from './service-api/WorktreeAPI';
+export * from './service-api/ProductControlAPI';
 
 // Import API modules
 import { workspaceAPI } from './service-api/WorkspaceAPI';
@@ -39,9 +40,10 @@ import { insightsApi } from './insightsApi';
 import { tokenUsageStatisticsApi } from './tokenUsageStatisticsApi';
 import { speechAPI } from './service-api/SpeechAPI';
 import { worktreeAPI } from './service-api/WorktreeAPI';
+import { productControlAPI } from './service-api/ProductControlAPI';
 
 // Export API modules
-export { workspaceAPI, configAPI, aiApi, toolAPI, agentAPI, systemAPI, diffAPI, snapshotAPI, globalAPI, contextAPI, cronAPI, permissionAPI, pageAPI, gitAPI, gitAgentAPI, sessionAPI, i18nAPI, btwAPI, editorAiAPI, reviewPlatformAPI, insightsApi, tokenUsageStatisticsApi, speechAPI, worktreeAPI };
+export { workspaceAPI, configAPI, aiApi, toolAPI, agentAPI, systemAPI, productControlAPI, diffAPI, snapshotAPI, globalAPI, contextAPI, cronAPI, permissionAPI, pageAPI, gitAPI, gitAgentAPI, sessionAPI, i18nAPI, btwAPI, editorAiAPI, reviewPlatformAPI, insightsApi, tokenUsageStatisticsApi, speechAPI, worktreeAPI };
 export { TokenUsageStatisticsUnavailableError } from './tokenUsageStatisticsApi';
 export * from './service-api/ReviewPlatformAPI';
 export type {

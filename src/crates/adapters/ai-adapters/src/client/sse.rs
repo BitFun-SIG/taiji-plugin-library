@@ -1,9 +1,11 @@
+use crate::client::request_capacity::{RequestCapacity, RequestCompletion};
 use crate::client::utils::elapsed_ms_u64;
 use crate::client::StreamResponse;
 use crate::stream::UnifiedResponse;
 use crate::trace::{ModelExchangeRequestAttempt, ModelExchangeTraceConfig};
 use anyhow::{anyhow, Result};
-use bitfun_core_types::errors::AiProviderError;
+use bitfun_agent_stream::ToolCallCompletion;
+use bitfun_core_types::errors::{AiProviderError, ErrorCategory};
 use chrono::{DateTime, Utc};
 use futures::Stream;
 use log::{debug, error, warn};
@@ -127,13 +129,39 @@ fn http_provider_error(
     error_kind: &str,
     retry_after_ms: Option<u64>,
 ) -> AiProviderError {
-    AiProviderError::from_parts(
+    let mut error = AiProviderError::from_parts(
         format!("{} {} {}: {}", label, error_kind, status, error_text),
         Some(label.to_string()),
         provider_error_code(error_text),
         Some(status.as_u16()),
     )
-    .with_retry_after_ms(retry_after_ms)
+    .with_retry_after_ms(retry_after_ms);
+    // Kimi Coding reports exhausted concurrent-request capacity as 403 with
+    // access_terminated_error. Preserve those raw facts, but do not tell the
+    // user to replace valid credentials or use permission-error backoff.
+    if is_provider_concurrency_limit(status, error_text) {
+        error.category = ErrorCategory::RateLimit;
+    }
+    error
+}
+
+fn is_provider_concurrency_limit(status: StatusCode, body: &str) -> bool {
+    let Ok(value) = serde_json::from_str::<serde_json::Value>(body) else {
+        return false;
+    };
+    let error = value.get("error").unwrap_or(&value);
+    let message = error
+        .get("message")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    let explicit_capacity_message = message.contains("concurrent request limit")
+        || message.contains("concurrency limit")
+        || message.contains("concurrency exceeded");
+    explicit_capacity_message
+        && (status == StatusCode::TOO_MANY_REQUESTS
+            || (status == StatusCode::FORBIDDEN
+                && provider_error_code(body).as_deref() == Some("access_terminated_error")))
 }
 
 fn exponential_retry_delay_ms(attempt: usize) -> u64 {
@@ -200,6 +228,8 @@ struct ManagedResponseStream {
     inner: UnboundedReceiverStream<Result<UnifiedResponse>>,
     handler_cancel: CancellationToken,
     handler_task: Option<JoinHandle<()>>,
+    completion: Option<RequestCompletion>,
+    normal_completion: bool,
 }
 
 impl ManagedResponseStream {
@@ -207,11 +237,14 @@ impl ManagedResponseStream {
         rx: mpsc::UnboundedReceiver<Result<UnifiedResponse>>,
         handler_cancel: CancellationToken,
         handler_task: JoinHandle<()>,
+        completion: Option<RequestCompletion>,
     ) -> Self {
         Self {
             inner: UnboundedReceiverStream::new(rx),
             handler_cancel,
             handler_task: Some(handler_task),
+            completion,
+            normal_completion: false,
         }
     }
 }
@@ -220,7 +253,46 @@ impl Stream for ManagedResponseStream {
     type Item = Result<UnifiedResponse>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        Pin::new(&mut self.inner).poll_next(cx)
+        let next = Pin::new(&mut self.inner).poll_next(cx);
+        match &next {
+            Poll::Ready(Some(Ok(chunk))) => {
+                if let Some(completion) = chunk.tool_call_completion {
+                    if matches!(
+                        completion,
+                        ToolCallCompletion::NormalToolUse | ToolCallCompletion::NormalNoToolUse
+                    ) {
+                        self.normal_completion = true;
+                    } else {
+                        // Truncated/failed/unknown terminal output is not
+                        // evidence that the request completed successfully.
+                        self.completion.take();
+                    }
+                }
+            }
+            Poll::Ready(Some(Err(_))) => {
+                self.completion.take();
+            }
+            Poll::Ready(None) => {
+                let handler_succeeded = match self.handler_task.as_mut() {
+                    Some(task) => match Pin::new(task).poll(cx) {
+                        Poll::Pending => return Poll::Pending,
+                        Poll::Ready(result) => result.is_ok(),
+                    },
+                    None => false,
+                };
+                self.handler_task.take();
+                if let Some(completion) = self.completion.take() {
+                    if self.normal_completion
+                        && handler_succeeded
+                        && !self.handler_cancel.is_cancelled()
+                    {
+                        completion.succeeded();
+                    }
+                }
+            }
+            Poll::Pending => {}
+        }
+        next
     }
 }
 
@@ -293,6 +365,19 @@ where
 {
     let mut last_error = None;
     for attempt in 0..max_tries {
+        let request = build_request();
+        let capacity = RequestCapacity::for_request(&request)?;
+        // Queuing is cancellable by dropping this future and must not consume
+        // the first-output timeout or another transport attempt.
+        let queue_started_at = std::time::Instant::now();
+        let mut request_permit = capacity.acquire().await;
+        let queue_wait_ms = elapsed_ms_u64(queue_started_at);
+        if queue_wait_ms > 0 {
+            debug!(
+                "{} provider capacity queue released: queue_wait_ms={}",
+                label, queue_wait_ms
+            );
+        }
         let trace_handle = if let Some(trace) = trace.as_ref() {
             trace
                 .sink
@@ -329,22 +414,61 @@ where
                     );
                     resp
                 } else {
-                    let error_text = resp
-                        .text()
-                        .await
-                        .unwrap_or_else(|e| format!("Failed to read error response: {}", e));
+                    let read_error_body = async {
+                        resp.text()
+                            .await
+                            .unwrap_or_else(|e| format!("Failed to read error response: {}", e))
+                    };
+                    // Headers are not effective output. A stalled error body
+                    // must not outlive TTFT and pin a credential's only slot.
+                    let (error_text, error_body_timed_out) =
+                        match remaining_ttft_timeout(request_start_time, ttft_timeout) {
+                            Some(timeout) => {
+                                match tokio::time::timeout(timeout, read_error_body).await {
+                                    Ok(body) => (body, false),
+                                    Err(_) => (
+                                        format!(
+                                            "{}; timed out reading error response body",
+                                            format_ttft_timeout_error(label, ttft_timeout)
+                                        ),
+                                        true,
+                                    ),
+                                }
+                            }
+                            None => (read_error_body.await, false),
+                        };
                     let error_kind = if status.is_client_error() {
                         "client error"
                     } else {
                         "error"
                     };
-                    let provider_error = http_provider_error(
+                    let concurrency_limited = is_provider_concurrency_limit(status, &error_text);
+                    let retry_status = if concurrency_limited {
+                        StatusCode::TOO_MANY_REQUESTS
+                    } else {
+                        status
+                    };
+                    if concurrency_limited {
+                        request_permit.concurrency_rejected(Duration::from_millis(retry_delay_ms(
+                            attempt,
+                            &headers,
+                            retry_status,
+                        )));
+                        warn!("{} provider concurrency limit reached; subsequent requests will wait for stream capacity", label);
+                    }
+                    drop(request_permit);
+                    let mut provider_error = http_provider_error(
                         label,
                         status,
                         &error_text,
                         error_kind,
                         retry_after_delay_ms(&headers),
                     );
+                    if error_body_timed_out {
+                        // Keep the HTTP status, but do not report a partially
+                        // received 403 as a confirmed credential failure.
+                        provider_error.category = ErrorCategory::Timeout;
+                    }
                     let error = anyhow!(provider_error);
                     warn!(
                         "{} request failed: {}ms, transport_attempt {}/{}, error: {}",
@@ -369,7 +493,7 @@ where
                     }
 
                     if attempt < max_tries - 1 {
-                        let delay_ms = retry_delay_ms(attempt, &headers, status);
+                        let delay_ms = retry_delay_ms(attempt, &headers, retry_status);
                         debug!(
                             "Retrying {} after {}ms (transport_attempt {}, status {})",
                             label,
@@ -383,6 +507,7 @@ where
                 }
             }
             StreamSendOutcome::Transport(e) => {
+                drop(request_permit);
                 let connect_time = request_start_time.elapsed().as_millis();
                 let error_msg = format_transport_error(label, &e);
                 let error = anyhow!("{}", error_msg);
@@ -415,6 +540,7 @@ where
                 continue;
             }
             StreamSendOutcome::TtftTimeout => {
+                drop(request_permit);
                 let connect_time = request_start_time.elapsed().as_millis();
                 let error_msg = format_ttft_timeout_error(label, ttft_timeout);
                 let error = anyhow!("{}", error_msg);
@@ -453,8 +579,12 @@ where
         let remaining_ttft_timeout = remaining_ttft_timeout(request_start_time, ttft_timeout);
         let handler_cancel = CancellationToken::new();
         let handler_cancel_for_task = handler_cancel.clone();
+        let completion = request_permit.take_completion();
         let handler_future = build_handler(response, tx, Some(tx_raw), remaining_ttft_timeout);
         let handler_task = tokio::spawn(async move {
+            // Release as soon as the response handler ends or is cancelled,
+            // not after the Agent finishes its tools or the UI drains chunks.
+            let _request_permit = request_permit;
             tokio::select! {
                 _ = handler_cancel_for_task.cancelled() => {}
                 _ = handler_future => {}
@@ -462,13 +592,23 @@ where
         });
 
         return Ok(StreamResponse {
-            stream: Box::pin(ManagedResponseStream::new(rx, handler_cancel, handler_task)),
+            stream: Box::pin(ManagedResponseStream::new(
+                rx,
+                handler_cancel,
+                handler_task,
+                Some(completion),
+            )),
             raw_sse_rx: Some(rx_raw),
             trace_handle,
         });
     }
 
     let last_error = last_error.unwrap_or_else(|| anyhow!("Unknown error"));
+    if max_tries == 1 {
+        // The runtime owns the retry budget. A redundant "after 1 attempts"
+        // context hides the actual timeout/connection error from Display.
+        return Err(last_error);
+    }
     let error_context = format!("{} failed after {} attempts", label, max_tries);
     error!("{}: {}", error_context, last_error);
     Err(last_error.context(error_context))
@@ -482,11 +622,192 @@ mod tests {
     use axum::routing::post;
     use axum::{Json, Router};
     use bitfun_core_types::errors::ErrorCategory;
+    use futures::StreamExt;
     use reqwest::header::HeaderValue;
     use std::sync::{
         atomic::{AtomicBool, AtomicUsize, Ordering},
         Arc,
     };
+
+    const CONCURRENCY_ERROR: &str = r#"{"error":{"message":"You've reached your concurrent request limit. Please wait for your ongoing requests to finish and try again.","type":"access_terminated_error"}}"#;
+
+    async fn limited_scope(name: &str) -> Arc<RequestCapacity> {
+        let client = crate::client::http::create_http_client(None, false);
+        let scope = RequestCapacity::for_request(
+            &client
+                .post("https://stream-recovery.example/v1")
+                .bearer_auth(name),
+        )
+        .unwrap();
+        let request = scope.acquire().await;
+        request.concurrency_rejected(Duration::ZERO);
+        drop(request);
+        scope
+    }
+
+    fn normal_terminal() -> Result<UnifiedResponse> {
+        Ok(UnifiedResponse {
+            finish_reason: Some("tool_calls".to_string()),
+            tool_call_completion: Some(ToolCallCompletion::NormalToolUse),
+            ..Default::default()
+        })
+    }
+
+    async fn response_fixture(
+        scope: &Arc<RequestCapacity>,
+        chunks: Vec<Result<UnifiedResponse>>,
+        handler_panics: bool,
+    ) -> ManagedResponseStream {
+        let mut request = scope.acquire().await;
+        let completion = request.take_completion();
+        let (tx, rx) = mpsc::unbounded_channel();
+        let handler = tokio::spawn(async move {
+            let _request = request;
+            for chunk in chunks {
+                tx.send(chunk).unwrap();
+            }
+            assert!(!handler_panics, "fixture handler panic");
+        });
+        ManagedResponseStream::new(rx, CancellationToken::new(), handler, Some(completion))
+    }
+
+    async fn assert_single_slot(scope: &Arc<RequestCapacity>, case: &str) {
+        let _first = tokio::time::timeout(Duration::from_millis(100), scope.acquire())
+            .await
+            .unwrap();
+        assert!(
+            tokio::time::timeout(Duration::from_millis(20), scope.acquire())
+                .await
+                .is_err(),
+            "{case} must not promote the concurrency window"
+        );
+    }
+
+    #[tokio::test]
+    async fn incomplete_failed_and_unconsumed_streams_do_not_promote_capacity() {
+        for case in [
+            "empty",
+            "partial",
+            "late-error",
+            "output-limit",
+            "unknown",
+            "panic",
+            "unconsumed",
+        ] {
+            let scope = limited_scope(case).await;
+            // A failure must reset the first success, not just avoid counting
+            // itself; the next success alone must not promote the window.
+            let first = response_fixture(&scope, vec![normal_terminal()], false).await;
+            first.collect::<Vec<_>>().await;
+            let chunks = match case {
+                "empty" => vec![],
+                "partial" => vec![Ok(UnifiedResponse {
+                    text: Some("partial".to_string()),
+                    ..Default::default()
+                })],
+                "late-error" => vec![normal_terminal(), Err(anyhow!("fixture stream timeout"))],
+                "output-limit" | "unknown" => vec![Ok(UnifiedResponse {
+                    finish_reason: Some(case.to_string()),
+                    tool_call_completion: Some(if case == "output-limit" {
+                        ToolCallCompletion::OutputLimit
+                    } else {
+                        ToolCallCompletion::Unknown
+                    }),
+                    ..Default::default()
+                })],
+                _ => vec![normal_terminal()],
+            };
+            let mut stream = response_fixture(&scope, chunks, case == "panic").await;
+            if case == "unconsumed" {
+                stream.handler_task.as_mut().unwrap().await.unwrap();
+                // An unread response must not hold transport capacity hostage.
+                let slot = tokio::time::timeout(Duration::from_millis(100), scope.acquire())
+                    .await
+                    .unwrap();
+                drop(slot);
+                drop(stream);
+            } else {
+                stream.collect::<Vec<_>>().await;
+            }
+            let next = response_fixture(&scope, vec![normal_terminal()], false).await;
+            next.collect::<Vec<_>>().await;
+            assert_single_slot(&scope, case).await;
+        }
+    }
+
+    #[tokio::test]
+    async fn cancellation_after_a_terminal_chunk_is_not_a_successful_sample() {
+        let scope = limited_scope("cancel-after-terminal").await;
+        for _ in 0..2 {
+            let mut request = scope.acquire().await;
+            let completion = request.take_completion();
+            let (tx, rx) = mpsc::unbounded_channel();
+            let cancelled = CancellationToken::new();
+            let handler_cancelled = cancelled.clone();
+            let handler = tokio::spawn(async move {
+                let _request = request;
+                tx.send(normal_terminal()).unwrap();
+                handler_cancelled.cancelled().await;
+            });
+            let mut stream =
+                ManagedResponseStream::new(rx, cancelled.clone(), handler, Some(completion));
+            assert!(stream.next().await.unwrap().is_ok());
+            cancelled.cancel();
+            assert!(stream.next().await.is_none());
+        }
+        assert_single_slot(&scope, "cancelled stream").await;
+    }
+
+    #[tokio::test]
+    async fn normal_tool_completion_is_counted_once_even_when_eof_is_polled_again() {
+        let scope = limited_scope("repeated-eof").await;
+        let mut first = response_fixture(&scope, vec![normal_terminal()], false).await;
+        assert!(first.next().await.unwrap().is_ok());
+        for _ in 0..4 {
+            assert!(first.next().await.is_none());
+        }
+        // A single completion has not filled two successful windows yet.
+        let mut held = scope.acquire().await;
+        assert!(
+            tokio::time::timeout(Duration::from_millis(20), scope.acquire())
+                .await
+                .is_err()
+        );
+        held.take_completion().succeeded();
+        let _second = tokio::time::timeout(Duration::from_millis(100), scope.acquire())
+            .await
+            .unwrap();
+    }
+
+    #[test]
+    fn provider_concurrency_403_is_rate_limit_not_permission() {
+        let error = http_provider_error(
+            "OpenAI Streaming API",
+            StatusCode::FORBIDDEN,
+            CONCURRENCY_ERROR,
+            "client error",
+            None,
+        );
+        assert_eq!(error.category, ErrorCategory::RateLimit);
+        assert_eq!(error.http_status, Some(403));
+        assert_eq!(
+            error.provider_code.as_deref(),
+            Some("access_terminated_error")
+        );
+        assert_eq!(error.detail().retryable, Some(true));
+    }
+
+    #[test]
+    fn other_access_terminated_errors_remain_permission_errors() {
+        let error = http_provider_error(
+            "OpenAI Streaming API",
+            StatusCode::FORBIDDEN,
+            r#"{"error":{"message":"Access to this model has been terminated","type":"access_terminated_error"}}"#,
+            "client error",
+            None,
+        );
+        assert_eq!(error.category, ErrorCategory::Permission);
+    }
 
     #[derive(Clone)]
     struct RetryFixtureState {
@@ -538,6 +859,252 @@ mod tests {
                 }
             })),
         )
+    }
+
+    async fn concurrency_rejection_then_success(
+        State(state): State<RetryFixtureState>,
+    ) -> impl IntoResponse {
+        if state.attempts.fetch_add(1, Ordering::SeqCst) == 0 {
+            (StatusCode::FORBIDDEN, CONCURRENCY_ERROR).into_response()
+        } else {
+            (
+                [("content-type", "text/event-stream")],
+                "data: {\"id\":\"fixture\",\"object\":\"chat.completion.chunk\",\"model\":\"fixture\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"ok\"},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n",
+            )
+                .into_response()
+        }
+    }
+
+    #[tokio::test]
+    async fn completed_streams_recover_parallel_capacity_without_an_idle_period() {
+        use futures::StreamExt;
+
+        let app = Router::new()
+            .route(
+                "/chat/completions",
+                post(concurrency_rejection_then_success),
+            )
+            .with_state(RetryFixtureState {
+                attempts: Arc::new(AtomicUsize::new(0)),
+            });
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}/chat/completions", listener.local_addr().unwrap());
+        let server = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+        let client = crate::client::http::create_http_client(None, false);
+        let body = serde_json::json!({"model": "fixture"});
+        let open = || {
+            execute_sse_request(
+                "OpenAI Streaming API",
+                &url,
+                &body,
+                1,
+                Some(Duration::from_secs(1)),
+                None,
+                || client.post(&url).bearer_auth("recovery-fixture-key"),
+                |response, tx, raw, ttft| {
+                    crate::stream::handle_openai_stream(response, tx, raw, false, ttft, None)
+                },
+            )
+        };
+        assert!(
+            open().await.is_err(),
+            "first request hits the provider limit"
+        );
+        for _ in 0..2 {
+            let mut response = open().await.unwrap();
+            let mut normal_completion = false;
+            while let Some(chunk) = response.stream.next().await {
+                normal_completion |= chunk.unwrap().tool_call_completion
+                    == Some(ToolCallCompletion::NormalNoToolUse);
+            }
+            assert!(
+                normal_completion,
+                "fixture must produce a complete normalized response"
+            );
+        }
+
+        let scope =
+            RequestCapacity::for_request(&client.post(&url).bearer_auth("recovery-fixture-key"))
+                .unwrap();
+        let _first = scope.acquire().await;
+        let second = tokio::time::timeout(Duration::from_millis(100), scope.acquire()).await;
+        server.abort();
+        assert!(
+            second.is_ok(),
+            "successful streams must restore a second slot without waiting five minutes"
+        );
+    }
+
+    #[tokio::test]
+    async fn concurrency_queue_lives_through_stream_and_does_not_consume_ttft_budget() {
+        let attempts = Arc::new(AtomicUsize::new(0));
+        let app = Router::new()
+            .route(
+                "/chat/completions",
+                post(concurrency_rejection_then_success),
+            )
+            .with_state(RetryFixtureState {
+                attempts: Arc::clone(&attempts),
+            });
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}/chat/completions", listener.local_addr().unwrap());
+        let server = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+        let client = crate::client::http::create_http_client(None, false);
+        let body = serde_json::json!({"model": "fixture"});
+
+        let error = execute_sse_request(
+            "OpenAI Streaming API",
+            &url,
+            &body,
+            1,
+            Some(Duration::from_millis(100)),
+            None,
+            || client.post(&url).bearer_auth("fixture-key"),
+            |_response, _tx, _, _| async {},
+        )
+        .await
+        .err()
+        .expect("first request must hit provider concurrency limit");
+        assert_eq!(
+            error.downcast_ref::<AiProviderError>().unwrap().category,
+            ErrorCategory::RateLimit
+        );
+        assert!(!error.to_string().contains("after 1 attempts"));
+
+        // The provider cooldown is longer than TTFT. It must be spent before
+        // the request timer starts, not turn a queued request into a timeout.
+        let held = execute_sse_request(
+            "OpenAI Streaming API",
+            &url,
+            &body,
+            1,
+            Some(Duration::from_millis(100)),
+            None,
+            || client.post(&url).bearer_auth("fixture-key"),
+            |_response, _tx, _, _| async { std::future::pending::<()>().await },
+        )
+        .await
+        .expect("queued request must get its own TTFT budget");
+        let mut next = Box::pin(execute_sse_request(
+            "OpenAI Streaming API",
+            &url,
+            &body,
+            1,
+            Some(Duration::from_millis(100)),
+            None,
+            || client.post(&url).bearer_auth("fixture-key"),
+            |_response, _tx, _, _| async {},
+        ));
+        assert!(tokio::time::timeout(Duration::from_millis(150), &mut next)
+            .await
+            .is_err());
+        assert_eq!(
+            attempts.load(Ordering::SeqCst),
+            2,
+            "queued requests must not reach provider"
+        );
+        drop(held); // Dropping the stream cancels its handler and releases capacity.
+        let result = tokio::time::timeout(Duration::from_secs(1), next)
+            .await
+            .unwrap();
+        assert!(
+            result.is_ok(),
+            "queue must resume after stream cancellation"
+        );
+        assert_eq!(attempts.load(Ordering::SeqCst), 3);
+        server.abort();
+    }
+
+    #[tokio::test]
+    async fn single_attempt_timeout_keeps_the_actual_cause_visible() {
+        let app = Router::new().route(
+            "/chat/completions",
+            post(|| async {
+                tokio::time::sleep(Duration::from_secs(1)).await;
+                StatusCode::OK
+            }),
+        );
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}/chat/completions", listener.local_addr().unwrap());
+        let server = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+        let client = crate::client::http::create_http_client(None, false);
+        let error = execute_sse_request(
+            "OpenAI Streaming API",
+            &url,
+            &serde_json::json!({}),
+            1,
+            Some(Duration::from_millis(20)),
+            None,
+            || client.post(&url),
+            |_response, _tx, _, _| async {},
+        )
+        .await
+        .err()
+        .expect("request should time out");
+        assert!(error.to_string().contains("TTFT timeout"));
+        assert!(!error.to_string().contains("after 1 attempts"));
+        server.abort();
+    }
+
+    #[tokio::test]
+    async fn stalled_error_body_times_out_and_releases_limited_capacity() {
+        let attempts = Arc::new(AtomicUsize::new(0));
+        let fixture_attempts = Arc::clone(&attempts);
+        let app = Router::new().route(
+            "/chat/completions",
+            post(move || {
+                let attempts = Arc::clone(&fixture_attempts);
+                async move {
+                    match attempts.fetch_add(1, Ordering::SeqCst) {
+                        0 => (StatusCode::FORBIDDEN, CONCURRENCY_ERROR).into_response(),
+                        1 => (
+                            StatusCode::FORBIDDEN,
+                            axum::body::Body::from_stream(futures::stream::pending::<
+                                std::result::Result<axum::body::Bytes, std::convert::Infallible>,
+                            >()),
+                        )
+                            .into_response(),
+                        _ => StatusCode::OK.into_response(),
+                    }
+                }
+            }),
+        );
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}/chat/completions", listener.local_addr().unwrap());
+        let server = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+        let client = crate::client::http::create_http_client(None, false);
+        let body = serde_json::json!({});
+        let open = || {
+            execute_sse_request(
+                "OpenAI Streaming API",
+                &url,
+                &body,
+                1,
+                Some(Duration::from_millis(100)),
+                None,
+                || client.post(&url).bearer_auth("stalled-error-fixture"),
+                |_response, _tx, _, _| async {},
+            )
+        };
+        assert!(open().await.is_err());
+        // Includes the two-second provider cooldown before the next request's
+        // TTFT budget begins. Headers alone must not disable that deadline.
+        let result = tokio::time::timeout(Duration::from_secs(3), open()).await;
+        if result.is_err() {
+            server.abort();
+        }
+        let error = result
+            .expect("an unfinished error body must not hold capacity indefinitely")
+            .err()
+            .expect("the error body must time out");
+        let provider = error.downcast_ref::<AiProviderError>().unwrap();
+        assert_eq!(provider.category, ErrorCategory::Timeout);
+        assert_eq!(provider.http_status, Some(403));
+        assert!(provider.message.contains("reading error response body"));
+        let next = tokio::time::timeout(Duration::from_secs(1), open()).await;
+        server.abort();
+        assert!(next.unwrap().is_ok(), "timeout must release the only slot");
+        assert_eq!(attempts.load(Ordering::SeqCst), 3);
     }
 
     #[test]
@@ -608,7 +1175,7 @@ mod tests {
             }
         });
 
-        let stream = ManagedResponseStream::new(rx, handler_cancel, handler_task);
+        let stream = ManagedResponseStream::new(rx, handler_cancel, handler_task, None);
         drop(stream);
 
         tokio::time::sleep(Duration::from_millis(20)).await;
@@ -633,7 +1200,7 @@ mod tests {
                 .expect("retry fixture should run");
         });
         let url = format!("http://{address}/chat/completions");
-        let client = reqwest::Client::new();
+        let client = crate::client::http::create_http_client(None, false);
         let request_body = serde_json::json!({"model": "configured-model"});
 
         let result = execute_sse_request(
@@ -671,7 +1238,7 @@ mod tests {
                 .expect("retry-after fixture should run");
         });
         let url = format!("http://{address}/chat/completions");
-        let client = reqwest::Client::new();
+        let client = crate::client::http::create_http_client(None, false);
         let request_body = serde_json::json!({"model": "configured-model"});
 
         let result = execute_sse_request(

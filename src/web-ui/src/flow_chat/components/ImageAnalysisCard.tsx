@@ -3,18 +3,10 @@
  * Displays analysis progress and results.
  */
 
+import { Button, Icon } from '@bitfun/ui';
 import React, { useState } from 'react';
-import {
-  Loader, 
-  CheckCircle, 
-  AlertCircle, 
-  ChevronDown, 
-  ChevronUp,
-  Eye,
-  Sparkles
-} from 'lucide-react';
+import { Loader, AlertCircle } from 'lucide-react';
 import type { FlowImageAnalysisItem } from '../types/flow-chat';
-import { Button } from '@/component-library';
 import './ImageAnalysisCard.scss';
 
 export interface ImageAnalysisCardProps {
@@ -45,7 +37,7 @@ export const ImageAnalysisCard: React.FC<ImageAnalysisCardProps> = ({
             />
           ) : (
             <div data-bf-component="image-analysis-card" data-bf-part="placeholder" className="image-analysis-card__thumbnail-placeholder">
-              <Eye size={24} />
+              <Icon name="eye" size="lg" />
             </div>
           )}
         </div>
@@ -64,7 +56,7 @@ export const ImageAnalysisCard: React.FC<ImageAnalysisCardProps> = ({
           
           {status === 'completed' && result && (
             <div data-bf-component="image-analysis-card" data-bf-part="status" className="image-analysis-card__status completed">
-              <CheckCircle className="icon" size={14} />
+              <Icon name="check-circle" size="sm" className="icon" />
               <span>Analysis complete</span>
               {duration && (
                 <span className="time">{duration}</span>
@@ -77,7 +69,12 @@ export const ImageAnalysisCard: React.FC<ImageAnalysisCardProps> = ({
               <AlertCircle className="icon" size={14} />
               <span>Analysis failed</span>
               {onRetry && (
-                <Button variant="secondary" size="small" className="retry-btn" onClick={onRetry}>
+                <Button
+                  className="image-analysis-card__retry"
+                  variant="outline"
+                  size="sm"
+                  onClick={onRetry}
+                >
                   Retry
                 </Button>
               )}
@@ -89,27 +86,18 @@ export const ImageAnalysisCard: React.FC<ImageAnalysisCardProps> = ({
       {status === 'completed' && result && (
         <div data-bf-component="image-analysis-card" data-bf-part="content" className="image-analysis-card__content">
           <div data-bf-component="image-analysis-card" data-bf-part="summary" className="image-analysis-card__summary">
-            <Sparkles size={14} className="summary-icon" />
+            <Icon name="spark" size="sm" className="summary-icon" />
             <span>{result.summary}</span>
           </div>
           
-          <Button 
-            data-bf-component="image-analysis-card"
-            data-bf-part="expand"
-            variant="ghost"
-            size="small"
-            className="image-analysis-card__expand-btn"
+          <Button
+            className="image-analysis-card__toggle"
+            variant="outline"
+            size="sm"
+            leadingIcon={expanded ? <Icon name="chevron-up" size="sm" /> : <Icon name="chevron-down" size="sm" />}
             onClick={() => setExpanded(!expanded)}
           >
-            {expanded ? (
-              <>
-                <ChevronUp size={14} /> Collapse details
-              </>
-            ) : (
-              <>
-                <ChevronDown size={14} /> View detailed analysis
-              </>
-            )}
+            {expanded ? 'Collapse details' : 'View detailed analysis'}
           </Button>
           
           {expanded && (

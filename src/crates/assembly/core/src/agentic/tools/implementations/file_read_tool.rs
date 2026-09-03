@@ -1,13 +1,17 @@
 use crate::agentic::tools::file_permissions::file_permission_intents;
 use crate::agentic::tools::file_read_state_runtime::{
-    get_review_read_coverage, local_file_modification_time_ms, local_file_revision,
-    record_file_read_state, record_review_read_receipt, reset_review_read_spin_counters,
-    review_read_receipts_enabled,
+    file_modification_time_ms, file_revision, get_review_read_coverage, record_file_read_state,
+    record_review_read_receipt, reset_review_read_spin_counters, review_read_receipts_enabled,
 };
 use crate::agentic::tools::framework::{
     PermissionIntent, Tool, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
+#[cfg(feature = "tools-miniapp")]
+use crate::agentic::tools::miniapp_context_runtime::{
+    is_virtual_context_path, requires_virtual_context_path, virtual_context_file,
+};
 use crate::agentic::tools::workspace_paths::is_bitfun_tool_uri;
+use crate::agentic::tools::ToolPathOperation;
 use crate::util::errors::{BitFunError, BitFunResult};
 use crate::util::timing::elapsed_ms_u64;
 use async_trait::async_trait;
@@ -26,11 +30,11 @@ use tool_runtime::fs::document::{
 };
 use tool_runtime::fs::read_file::{
     build_read_file_presentation, build_remote_read_command, build_remote_tail_read_command,
-    parse_remote_read_output, parse_remote_tail_read_output, read_file, read_file_tail,
-    ReadFileResult,
+    parse_remote_read_output, parse_remote_tail_read_output, read_file, read_file_from_reader,
+    read_file_tail, read_file_tail_from_reader, ReadFileResult,
 };
-#[cfg(feature = "document-read")]
-use tool_runtime::fs::read_file::{read_file_bytes_bounded, read_text, read_text_tail};
+#[cfg(any(feature = "document-read", feature = "tools-miniapp"))]
+use tool_runtime::fs::read_file::{read_text, read_text_tail};
 
 pub struct FileReadTool {
     default_max_lines_to_read: usize,
@@ -326,34 +330,26 @@ impl FileReadTool {
         start_line: usize,
         limit: usize,
         tail: bool,
-        uses_remote_workspace_backend: bool,
+        filesystem: &dyn crate::agentic::workspace::WorkspaceFileSystem,
         context: &ToolUseContext,
         max_total_chars: usize,
     ) -> BitFunResult<(ReadFileResult, DocumentReadMetadata)> {
-        let bytes = if uses_remote_workspace_backend {
-            let ws_fs = context.ws_fs().ok_or_else(|| {
-                BitFunError::tool("Remote workspace file system is unavailable".to_string())
+        let bytes = filesystem
+            .read_file_bounded(resolved_path, MAX_DOCUMENT_INPUT_BYTES)
+            .await
+            .map_err(|error| {
+                BitFunError::tool(format!(
+                    "Failed to read document {}: {:#}",
+                    logical_path, error
+                ))
+            })?
+            .ok_or_else(|| {
+                BitFunError::tool(format!(
+                    "Document {} is larger than the {} MiB Read limit",
+                    logical_path,
+                    MAX_DOCUMENT_INPUT_BYTES / (1024 * 1024)
+                ))
             })?;
-            ws_fs
-                .read_file_bounded(resolved_path, MAX_DOCUMENT_INPUT_BYTES)
-                .await
-                .map_err(|error| {
-                    BitFunError::tool(format!(
-                        "Failed to read document {}: {}",
-                        logical_path, error
-                    ))
-                })?
-        } else {
-            read_file_bytes_bounded(resolved_path, MAX_DOCUMENT_INPUT_BYTES)
-                .map_err(BitFunError::tool)?
-        }
-        .ok_or_else(|| {
-            BitFunError::tool(format!(
-                "Document {} is larger than the {} MiB Read limit",
-                logical_path,
-                MAX_DOCUMENT_INPUT_BYTES / (1024 * 1024)
-            ))
-        })?;
 
         let source_size_bytes = bytes.len();
         let conversion_started_at = Instant::now();
@@ -665,17 +661,64 @@ Usage:
             }
         };
 
-        if !resolved.uses_remote_workspace_backend() {
-            let path = Path::new(&resolved.resolved_path);
-            if !path.exists() {
+        #[cfg(feature = "tools-miniapp")]
+        if let Some(context) = context.filter(|context| is_virtual_context_path(context, &resolved))
+        {
+            return if virtual_context_file(context, &resolved).is_some() {
+                ValidationResult::default()
+            } else {
+                ValidationResult {
+                    result: false,
+                    message: Some(format!(
+                        "MiniApp context file is unavailable: {}",
+                        resolved.logical_path
+                    )),
+                    error_code: Some(404),
+                    meta: None,
+                }
+            };
+        }
+        #[cfg(feature = "tools-miniapp")]
+        if context.is_some_and(requires_virtual_context_path) {
+            return ValidationResult {
+                result: false,
+                message: Some(format!(
+                    "MiniApp context file is unavailable: {}",
+                    resolved.logical_path
+                )),
+                error_code: Some(404),
+                meta: None,
+            };
+        }
+
+        if let Some(context) = context {
+            let metadata = match context.file_system_for_path(&resolved) {
+                Ok(filesystem) => filesystem.metadata(&resolved.resolved_path, true).await,
+                Err(error) => Err(anyhow::anyhow!(error.to_string())),
+            };
+            let metadata = match metadata {
+                Ok(metadata) => metadata,
+                Err(error) => {
+                    return ValidationResult {
+                        result: false,
+                        message: Some(format!(
+                            "Failed to inspect file {}: {:#}",
+                            resolved.logical_path, error
+                        )),
+                        error_code: Some(400),
+                        meta: None,
+                    }
+                }
+            };
+            let Some(metadata) = metadata else {
                 return ValidationResult {
                     result: false,
                     message: Some(format!("File does not exist: {}", resolved.logical_path)),
                     error_code: Some(404),
                     meta: None,
                 };
-            }
-            if !path.is_file() {
+            };
+            if metadata.kind != bitfun_runtime_ports::WorkspacePathKind::File {
                 return ValidationResult {
                     result: false,
                     message: Some(format!("Path is not a file: {}", resolved.logical_path)),
@@ -724,10 +767,58 @@ Usage:
             .unwrap_or(self.default_max_lines_to_read as u64) as usize;
 
         let resolved = context.resolve_tool_path(file_path)?;
+        context.enforce_path_operation(ToolPathOperation::Read, &resolved)?;
+        #[cfg(feature = "tools-miniapp")]
+        if is_virtual_context_path(context, &resolved) {
+            let content = virtual_context_file(context, &resolved).ok_or_else(|| {
+                BitFunError::tool(format!(
+                    "MiniApp context file is unavailable: {}",
+                    resolved.logical_path
+                ))
+            })?;
+            let read_file_result = if tail {
+                read_text_tail(&content, limit, self.max_line_chars, self.max_total_chars)
+            } else {
+                read_text(
+                    &content,
+                    start_line,
+                    limit,
+                    self.max_line_chars,
+                    self.max_total_chars,
+                )
+            }
+            .map_err(BitFunError::tool)?;
+            let presentation =
+                build_read_file_presentation(&resolved.logical_path, &read_file_result);
+            return Ok(vec![ToolResult::Result {
+                data: json!({
+                    "file_path": resolved.logical_path,
+                    "content": read_file_result.content,
+                    "total_lines": read_file_result.total_lines,
+                    "lines_read": presentation.lines_read,
+                    "offset": read_file_result.start_line,
+                    "tail": tail,
+                    "start_line": read_file_result.start_line,
+                    "size": read_file_result.content.len(),
+                    "hit_total_char_limit": read_file_result.hit_total_char_limit,
+                    "representation": "miniapp_context"
+                }),
+                result_for_assistant: Some(presentation.result_for_assistant),
+                image_attachments: None,
+            }]);
+        }
+        #[cfg(feature = "tools-miniapp")]
+        if requires_virtual_context_path(context) {
+            return Err(BitFunError::tool(format!(
+                "MiniApp context file is unavailable: {}",
+                resolved.logical_path
+            )));
+        }
         crate::agentic::deep_review::scope::ensure_focused_review_resolved_path_allowed(
             context,
             &resolved.resolved_path,
         )?;
+        let filesystem = context.file_system_for_path(&resolved)?;
         let supported_document_path = is_supported_document_path(&resolved.logical_path)
             || is_supported_document_path(&resolved.resolved_path);
         let csv_path = Self::path_has_csv_extension(&resolved.logical_path)
@@ -751,7 +842,7 @@ Usage:
         {
             None
         } else {
-            local_file_revision(Path::new(&resolved.resolved_path))
+            file_revision(context, &resolved).await
         };
         // 强制放行标记：已读回执拦截 >= 3 次（精确范围或文件级）后本次真正
         // 读取内容，需在结果前置「疑似空转」警告（用户可见信号 + 模型侧指引）。
@@ -799,7 +890,7 @@ Usage:
                     start_line,
                     limit,
                     tail,
-                    resolved.uses_remote_workspace_backend(),
+                    filesystem.as_ref(),
                     context,
                     max_total_chars,
                 )
@@ -839,50 +930,68 @@ Usage:
                     None,
                 )
             }
-        } else if tail {
-            (
-                read_file_tail(
-                    &resolved.resolved_path,
+        } else {
+            let read_started_at = Instant::now();
+            let reader = filesystem
+                .open_read(&resolved.resolved_path)
+                .await
+                .map_err(|error| {
+                    BitFunError::tool(format!(
+                        "Failed to open file {}: {:#}",
+                        resolved.logical_path, error
+                    ))
+                })?;
+            let result = if tail {
+                read_file_tail_from_reader(
+                    reader,
+                    &resolved.logical_path,
                     limit,
                     self.max_line_chars,
                     max_total_chars,
                 )
-                .map_err(BitFunError::tool)?,
-                None,
-            )
-        } else {
-            (
-                read_file(
-                    &resolved.resolved_path,
+                .await
+            } else {
+                read_file_from_reader(
+                    reader,
+                    &resolved.logical_path,
                     start_line,
                     limit,
                     self.max_line_chars,
                     max_total_chars,
                 )
-                .map_err(BitFunError::tool)?,
-                None,
-            )
+                .await
+            }
+            .map_err(|error| {
+                warn!(
+                    "Workspace file stream read failed: path={} duration_ms={} error={}",
+                    resolved.logical_path,
+                    elapsed_ms_u64(read_started_at),
+                    error
+                );
+                BitFunError::tool(error)
+            })?;
+            debug!("Workspace file stream read completed: path={} start_line={} end_line={} total_lines={} hit_total_char_limit={} duration_ms={}",
+                resolved.logical_path, result.start_line, result.end_line, result.total_lines,
+                result.hit_total_char_limit, elapsed_ms_u64(read_started_at));
+            (result, None)
         };
 
         if document_metadata.is_none() {
-            let timestamp_ms = if resolved.uses_remote_workspace_backend() {
-                std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .map(|duration| duration.as_millis() as u64)
-                    .unwrap_or(0)
-            } else {
-                local_file_modification_time_ms(Path::new(&resolved.resolved_path))
-            };
+            let timestamp_ms = file_modification_time_ms(context, &resolved)
+                .await
+                .unwrap_or(0);
             record_file_read_state(context, &resolved, &read_file_result, timestamp_ms);
         }
-        if let (Some(revision_before), Some(revision_after)) = (
-            revision_before_read,
-            (!resolved.uses_remote_workspace_backend() && !tail)
-                .then(|| local_file_revision(Path::new(&resolved.resolved_path)))
-                .flatten(),
-        ) {
-            if revision_before == revision_after {
-                record_review_read_receipt(context, &resolved, revision_after, &read_file_result);
+        if let Some(revision_before) = revision_before_read {
+            if let Some(revision_after) = file_revision(context, &resolved).await {
+                if revision_before == revision_after {
+                    record_review_read_receipt(
+                        context,
+                        &resolved,
+                        revision_after,
+                        &read_file_result,
+                    );
+                }
             }
         }
 
@@ -922,7 +1031,8 @@ Usage:
             "tail": tail,
             "start_line": read_file_result.start_line,
             "size": read_file_result.content.len(),
-            "hit_total_char_limit": read_file_result.hit_total_char_limit
+            "hit_total_char_limit": read_file_result.hit_total_char_limit,
+            "content_truncated": read_file_result.content_truncated
         });
         if let Some(metadata) = document_metadata {
             data["representation"] = json!("extracted_markdown");
@@ -952,12 +1062,14 @@ mod tests {
     use super::MAX_DOCUMENT_INPUT_BYTES;
     use super::{FileReadTool, ReadRenderMode};
     use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext};
-    use crate::agentic::tools::ToolRuntimeRestrictions;
+    use crate::agentic::tools::{ToolPathPolicy, ToolRuntimeRestrictions};
     use crate::agentic::WorkspaceBinding;
-    #[cfg(feature = "document-read")]
+    #[cfg(feature = "tools-miniapp")]
+    use crate::miniapp::agent_context::{
+        publish_agent_context_snapshot, remove_agent_context_snapshot, MiniAppAgentContextInput,
+    };
     use async_trait::async_trait;
     use bitfun_runtime_ports::ToolRuntimeHandles;
-    #[cfg(feature = "document-read")]
     use bitfun_runtime_ports::{
         WorkspaceCommandOptions, WorkspaceCommandResult, WorkspaceDirEntry, WorkspaceFileSystem,
         WorkspaceServices, WorkspaceShell,
@@ -966,9 +1078,7 @@ mod tests {
     use std::collections::HashMap;
     use std::fs;
     use std::path::PathBuf;
-    #[cfg(feature = "document-read")]
     use std::sync::atomic::{AtomicUsize, Ordering};
-    #[cfg(feature = "document-read")]
     use std::sync::Arc;
 
     fn local_context(root: PathBuf) -> ToolUseContext {
@@ -990,15 +1100,33 @@ mod tests {
         }
     }
 
-    #[cfg(feature = "document-read")]
     struct FakeRemoteFs {
         bytes: Vec<u8>,
         bounded_limit: Arc<AtomicUsize>,
     }
 
-    #[cfg(feature = "document-read")]
     #[async_trait]
     impl WorkspaceFileSystem for FakeRemoteFs {
+        async fn open_read(
+            &self,
+            _path: &str,
+        ) -> anyhow::Result<bitfun_runtime_ports::WorkspaceReader> {
+            Ok(Box::new(std::io::Cursor::new(self.bytes.clone())))
+        }
+
+        async fn metadata(
+            &self,
+            _path: &str,
+            _follow_symlinks: bool,
+        ) -> anyhow::Result<Option<bitfun_runtime_ports::WorkspaceMetadata>> {
+            Ok(Some(bitfun_runtime_ports::WorkspaceMetadata {
+                kind: bitfun_runtime_ports::WorkspacePathKind::File,
+                size: Some(self.bytes.len() as u64),
+                modified: None,
+                permissions: None,
+            }))
+        }
+
         async fn read_file(&self, _path: &str) -> anyhow::Result<Vec<u8>> {
             Ok(self.bytes.clone())
         }
@@ -1037,10 +1165,8 @@ mod tests {
         }
     }
 
-    #[cfg(feature = "document-read")]
     struct PanicRemoteShell;
 
-    #[cfg(feature = "document-read")]
     #[async_trait]
     impl WorkspaceShell for PanicRemoteShell {
         async fn exec_with_options(
@@ -1048,11 +1174,10 @@ mod tests {
             _command: &str,
             _options: WorkspaceCommandOptions,
         ) -> anyhow::Result<WorkspaceCommandResult> {
-            panic!("document reads must not require a remote shell or remote anydoc install")
+            panic!("file reads must not require a remote shell or remote anydoc install")
         }
     }
 
-    #[cfg(feature = "document-read")]
     fn remote_context(bytes: Vec<u8>, bounded_limit: Arc<AtomicUsize>) -> ToolUseContext {
         let root = "/remote/workspace";
         let session_identity =
@@ -1083,6 +1208,87 @@ mod tests {
         context
     }
 
+    #[tokio::test]
+    async fn remote_text_read_uses_the_shared_stream_parser_without_shell() {
+        let bytes = "first\r\n中😀文\r\nlast".as_bytes().to_vec();
+        let context = remote_context(bytes, Arc::new(AtomicUsize::new(0)));
+        let tool = FileReadTool::new();
+        let results = tool
+            .call(
+                &json!({"file_path":"source.txt", "offset":2, "limit":1}),
+                &context,
+            )
+            .await
+            .unwrap();
+        let ToolResult::Result { data, .. } = &results[0] else {
+            panic!("result");
+        };
+        assert_eq!(data["content"], "     2\t中😀文");
+        assert_eq!(data["total_lines"], 3);
+        let results = tool
+            .call(
+                &json!({"file_path":"source.txt", "tail":true, "limit":2}),
+                &context,
+            )
+            .await
+            .unwrap();
+        let ToolResult::Result { data, .. } = &results[0] else {
+            panic!("result");
+        };
+        assert_eq!(data["content"], "     2\t中😀文\n     3\tlast");
+        assert_eq!(data["offset"], 2);
+    }
+
+    #[tokio::test]
+    async fn remote_text_read_rejects_invalid_utf8_and_missing_provider() {
+        let mut context = remote_context(
+            b"valid\n\xffinvalid".to_vec(),
+            Arc::new(AtomicUsize::new(0)),
+        );
+        let tool = FileReadTool::new();
+        let input = json!({"file_path":"source.txt", "limit":1});
+        let error = tool.call(&input, &context).await.unwrap_err();
+        assert!(error.to_string().contains("Failed to read"), "{error}");
+        context.runtime_handles = ToolRuntimeHandles::default();
+        let error = tool.call(&input, &context).await.unwrap_err();
+        assert!(error.to_string().contains("unavailable"), "{error}");
+    }
+
+    #[tokio::test]
+    async fn long_line_read_is_explicit_but_cannot_claim_full_content_freshness() {
+        use bitfun_agent_runtime::file_read_state::{
+            assert_file_not_unexpectedly_modified, validate_prior_read_state, FileMutationKind,
+            FileReadState,
+        };
+        use tool_runtime::util::read_line_prefix::read_tool_output_to_file_content;
+        let content = format!("{}\n", "a".repeat(3_000));
+        let context = remote_context(content.as_bytes().to_vec(), Arc::new(AtomicUsize::new(0)));
+        let results = FileReadTool::new()
+            .call(&json!({"file_path":"long.txt"}), &context)
+            .await
+            .unwrap();
+        let ToolResult::Result { data, .. } = &results[0] else {
+            panic!("result");
+        };
+        assert_eq!(data["total_lines"], 1);
+        assert_eq!(data["content_truncated"], true);
+        let state = FileReadState::from_read_tool_content_with_truncation(
+            read_tool_output_to_file_content(data["content"].as_str().unwrap()),
+            100,
+            data["start_line"].as_u64().unwrap() as usize,
+            data["lines_read"].as_u64().unwrap() as usize,
+            data["total_lines"].as_u64().unwrap() as usize,
+            data["content_truncated"].as_bool().unwrap(),
+        );
+        assert!(!state.is_full_file_read());
+        assert!(!state.is_partial_view);
+        assert!(
+            validate_prior_read_state("long.txt", Some(&state), FileMutationKind::Edit).is_none()
+        );
+        assert!(assert_file_not_unexpectedly_modified(Some(&state), &content, Some(100)).is_ok());
+        assert!(assert_file_not_unexpectedly_modified(Some(&state), &content, Some(200)).is_err());
+    }
+
     #[test]
     fn read_tool_schema_prefers_offset() {
         let schema = FileReadTool::new().input_schema();
@@ -1098,6 +1304,126 @@ mod tests {
             properties["render"]["enum"],
             json!(["auto", "source", "markdown"])
         );
+    }
+
+    #[tokio::test]
+    async fn read_tool_enforces_runtime_read_roots() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let scope = "0123456789abcdef0123456789abcdef";
+        let allowed_root = dir.path().join(".miniapp-context").join(scope);
+        fs::create_dir_all(&allowed_root).expect("create context root");
+        fs::write(allowed_root.join("stocks.ndjson"), "allowed").expect("write allowed file");
+        fs::write(dir.path().join("storage.json"), "blocked").expect("write blocked file");
+
+        let mut context = local_context(dir.path().to_path_buf());
+        context.runtime_tool_restrictions.path_policy = ToolPathPolicy {
+            read_roots: vec![format!(".miniapp-context/{scope}")],
+            ..Default::default()
+        };
+        let tool = FileReadTool::new();
+
+        tool.call_impl(
+            &json!({ "file_path": format!(".miniapp-context/{scope}/stocks.ndjson") }),
+            &context,
+        )
+        .await
+        .expect("reserved context file should be readable");
+        let error = tool
+            .call_impl(&json!({ "file_path": "storage.json" }), &context)
+            .await
+            .expect_err("app storage outside reserved context must stay blocked");
+        assert!(error.to_string().contains("is not allowed for read"));
+    }
+
+    #[cfg(feature = "tools-miniapp")]
+    #[tokio::test]
+    async fn read_tool_uses_virtual_context_without_filesystem_fallback() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let snapshot = publish_agent_context_snapshot(
+            "read-virtual-app",
+            "read-virtual-session",
+            "read-virtual-turn",
+            vec![MiniAppAgentContextInput {
+                name: "stocks.ndjson".to_string(),
+                content: "host-owned row".to_string(),
+            }],
+        )
+        .unwrap()
+        .unwrap();
+        let physical_root = dir.path().join(&snapshot.relative_root);
+        fs::create_dir_all(&physical_root).unwrap();
+        fs::write(physical_root.join("stocks.ndjson"), "attacker row").unwrap();
+        fs::create_dir_all(physical_root.join("nested")).unwrap();
+        fs::write(
+            physical_root.join("nested/stocks.ndjson"),
+            "nested attacker row",
+        )
+        .unwrap();
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(&physical_root, dir.path().join("context-alias")).unwrap();
+
+        let mut context = local_context(dir.path().to_path_buf());
+        context.runtime_tool_restrictions = ToolRuntimeRestrictions {
+            path_policy: ToolPathPolicy {
+                read_roots: vec![snapshot.relative_root.clone()],
+                ..Default::default()
+            },
+            miniapp_context_scope: Some(snapshot.scope.clone()),
+            ..Default::default()
+        };
+        let input = json!({
+            "file_path": format!("{}/stocks.ndjson", snapshot.relative_root)
+        });
+        let results = FileReadTool::new()
+            .call_impl(&input, &context)
+            .await
+            .unwrap();
+        let ToolResult::Result { data, .. } = &results[0] else {
+            panic!("Read should return a normal result");
+        };
+        assert!(data["content"]
+            .as_str()
+            .is_some_and(|content| content.contains("host-owned row")));
+        assert!(!data["content"]
+            .as_str()
+            .is_some_and(|content| content.contains("attacker row")));
+
+        let nested_error = FileReadTool::new()
+            .call_impl(
+                &json!({
+                    "file_path": format!("{}/nested/stocks.ndjson", snapshot.relative_root)
+                }),
+                &context,
+            )
+            .await
+            .expect_err("the entire virtual scope must reject nested physical paths");
+        assert!(nested_error
+            .to_string()
+            .contains("context file is unavailable"));
+
+        #[cfg(unix)]
+        {
+            let alias_error = FileReadTool::new()
+                .call_impl(
+                    &json!({ "file_path": "context-alias/stocks.ndjson" }),
+                    &context,
+                )
+                .await
+                .expect_err("a physical alias into the virtual root must fail closed");
+            assert!(alias_error
+                .to_string()
+                .contains("context file is unavailable"));
+        }
+
+        assert!(remove_agent_context_snapshot(
+            "read-virtual-session",
+            "read-virtual-turn"
+        ));
+        let error = FileReadTool::new()
+            .call_impl(&input, &context)
+            .await
+            .expect_err("expired virtual context must not fall back to the physical file");
+        assert!(error.to_string().contains("context file is unavailable"));
     }
 
     #[cfg(not(feature = "document-read"))]

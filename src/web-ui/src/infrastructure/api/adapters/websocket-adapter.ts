@@ -26,6 +26,8 @@ import type {
   ResetAgentProfileConfigMessage,
   ResetAgentProfileConfigResponse,
   RunResponse,
+  SearchSessionContentMessage,
+  SearchSessionContentResponse,
   SetAgentProfileConfigMessage,
   SetAgentProfileConfigResponse,
   SubmitDialogTurnBody,
@@ -100,6 +102,11 @@ export const AGENT_COMMAND_SCHEMA = {
   cancel_dialog_turn: {
     method: 'agent/cancelTurn',
     response: null as unknown as RunResponse,
+  },
+  search_session_content: {
+    method: 'search/sessionContent',
+    request: null as unknown as SearchSessionContentMessage,
+    response: null as unknown as SearchSessionContentResponse,
   },
   // Permission surface: the reply/list/grants operations map to the app-server
   // permission methods. `subscribe_permission_requests` has no direct
@@ -192,6 +199,9 @@ export const AGENT_COMMAND_SCHEMA = {
   },
   set_config: { method: 'config/setConfig' },
   save_cloud_speech_config: { method: 'config/saveCloudSpeechConfig' },
+  get_web_search_credential_status: { method: 'config/getWebSearchCredentialStatus' },
+  save_web_search_credential: { method: 'config/saveWebSearchCredential' },
+  clear_web_search_credential: { method: 'config/clearWebSearchCredential' },
   validate_config: { method: 'config/validateConfig' },
   i18n_get_current_language: { method: 'i18n/getCurrentLanguage' },
   i18n_set_language: { method: 'i18n/setLanguage' },

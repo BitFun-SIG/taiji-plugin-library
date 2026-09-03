@@ -147,6 +147,23 @@ impl TokenUsageService {
         let total_tokens = input_tokens + output_tokens;
         let cached_tokens_available = cached_tokens.is_some();
         let cached_tokens = cached_tokens.unwrap_or(0);
+        // Cache-write telemetry is persisted inside `token_details` (e.g. the
+        // `cacheCreationTokenCount` key emitted by the round executor and the
+        // image analysis tool). Extract it here so trend buckets keep the
+        // Anthropic/Responses cache-write split without widening every
+        // `record_usage` call site.
+        let cache_write_tokens = token_details
+            .as_ref()
+            .and_then(|details| {
+                details
+                    .get("cacheCreationTokenCount")
+                    .or_else(|| details.get("cache_creation_token_count"))
+                    .or_else(|| details.get("cacheWriteTokens"))
+                    .or_else(|| details.get("cache_write_tokens"))
+            })
+            .and_then(|value| value.as_u64())
+            .map(|value| u32::try_from(value).unwrap_or(u32::MAX))
+            .unwrap_or(0);
 
         let record = TokenUsageRecord {
             model_config_id: model_config_id.clone(),
@@ -158,6 +175,7 @@ impl TokenUsageService {
             output_tokens,
             cached_tokens,
             cached_tokens_available,
+            cache_write_tokens,
             total_tokens,
             token_details,
             is_subagent,
@@ -902,6 +920,7 @@ mod tests {
             output_tokens: 1,
             cached_tokens: 0,
             cached_tokens_available: false,
+            cache_write_tokens: 0,
             total_tokens: 2,
             token_details: None,
             is_subagent: false,

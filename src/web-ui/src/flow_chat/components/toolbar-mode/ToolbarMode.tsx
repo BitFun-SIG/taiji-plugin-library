@@ -13,16 +13,9 @@
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
+import { Menu, MenuItem } from '@bitfun/ui';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import {
-  Square,
-  Check,
-  X,
-  Maximize2,
-  MoreVertical,
-  PanelTopOpen,
-  PanelTopClose
-} from 'lucide-react';
+import { Square, Maximize2, MoreVertical, PanelTopOpen, PanelTopClose } from 'lucide-react';
 import { useToolbarModeContext } from './ToolbarModeContext';
 import { type FlowToolItem } from '../../types/flow-chat';
 import { projectEffectiveToolItem } from '../../utils/toolInvocationIdentity';
@@ -35,7 +28,7 @@ import { SessionMenu, useFlowChatSessions } from '../session-menu';
 
 const log = createLogger('ToolbarMode');
 import ChatPane from '@/app/scenes/session/ChatPane';
-import { Tooltip } from '@/component-library';
+import { Tooltip, Icon } from '@bitfun/ui';
 import './ToolbarMode.scss';
 
 export const ToolbarMode: React.FC = () => {
@@ -265,14 +258,13 @@ export const ToolbarMode: React.FC = () => {
                   </button>
                 </Tooltip>
                 {showHeaderOverflowMenu && createPortal(
-                  <div
+                  <Menu
                     ref={headerOverflowRef}
                     className="bitfun-toolbar-mode__overflow-menu"
                     data-bf-component="toolbar-mode"
                     data-bf-part="overflowMenu"
                     data-bf-state="open"
                     data-bf-placement={headerOverflowLayout?.placement ?? 'bottom'}
-                    role="menu"
                     style={{
                       top: `${headerOverflowLayout?.top ?? 0}px`,
                       left: `${headerOverflowLayout?.left ?? 0}px`,
@@ -280,35 +272,31 @@ export const ToolbarMode: React.FC = () => {
                     }}
                     onMouseDown={(e) => e.stopPropagation()}
                   >
-                    <button
+                    <MenuItem
                       type="button"
-                      className="bitfun-toolbar-mode__overflow-menu-item"
+                      leading={<PanelTopClose size={14} />}
                       data-bf-component="toolbar-mode"
                       data-bf-part="overflowItem"
-                      role="menuitem"
                       onClick={() => {
                         void toggleExpanded();
                         setShowHeaderOverflowMenu(false);
                       }}
                     >
-                      <PanelTopClose size={14} />
                       <span>{t('toolCards.toolbar.collapseChat')}</span>
-                    </button>
-                    <button
+                    </MenuItem>
+                    <MenuItem
                       type="button"
-                      className="bitfun-toolbar-mode__overflow-menu-item"
+                      leading={<Maximize2 size={14} />}
                       data-bf-component="toolbar-mode"
                       data-bf-part="overflowItem"
-                      role="menuitem"
                       onClick={() => {
                         void handleExpand();
                         setShowHeaderOverflowMenu(false);
                       }}
                     >
-                      <Maximize2 size={14} />
                       <span>{t('session.restoreMain')}</span>
-                    </button>
-                  </div>,
+                    </MenuItem>
+                  </Menu>,
                   getAppearanceOverlayHost(),
                 )}
               </>
@@ -381,12 +369,12 @@ export const ToolbarMode: React.FC = () => {
               <>
                 <Tooltip content={t('toolCards.common.confirm')}>
                   <button className="toolbar-btn toolbar-btn--confirm" onClick={handleConfirm}>
-                    <Check size={16} />
+                    <Icon name="check-line" size="md" />
                   </button>
                 </Tooltip>
                 <Tooltip content={t('toolCards.common.cancel')}>
                   <button className="toolbar-btn toolbar-btn--reject" onClick={handleReject}>
-                    <X size={16} />
+                    <Icon name="xmark" size="md" />
                   </button>
                 </Tooltip>
               </>

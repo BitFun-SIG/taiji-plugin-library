@@ -16,6 +16,7 @@ pub enum ToolPackFeatureGroup {
     ComputerUse,
     ImageAnalysis,
     MiniApp,
+    Creation,
     Canvas,
     AgentControl,
 }
@@ -30,6 +31,7 @@ impl ToolPackFeatureGroup {
             Self::ComputerUse => "computer-use",
             Self::ImageAnalysis => "image-analysis",
             Self::MiniApp => "miniapp",
+            Self::Creation => "creation",
             Self::Canvas => "canvas",
             Self::AgentControl => "agent-control",
         }
@@ -44,6 +46,7 @@ pub const ALL_FEATURE_GROUPS: &[ToolPackFeatureGroup] = &[
     ToolPackFeatureGroup::ComputerUse,
     ToolPackFeatureGroup::ImageAnalysis,
     ToolPackFeatureGroup::MiniApp,
+    ToolPackFeatureGroup::Creation,
     ToolPackFeatureGroup::Canvas,
     ToolPackFeatureGroup::AgentControl,
 ];
@@ -70,6 +73,7 @@ pub fn enabled_feature_groups() -> Vec<ToolPackFeatureGroup> {
             ToolPackFeatureGroup::ImageAnalysis,
         ),
         (cfg!(feature = "miniapp"), ToolPackFeatureGroup::MiniApp),
+        (cfg!(feature = "creation"), ToolPackFeatureGroup::Creation),
         (cfg!(feature = "canvas"), ToolPackFeatureGroup::Canvas),
         (
             cfg!(feature = "agent-control"),
@@ -83,21 +87,10 @@ pub fn enabled_feature_groups() -> Vec<ToolPackFeatureGroup> {
 
 pub fn tool_feature_group(tool_name: &str) -> Option<ToolPackFeatureGroup> {
     match tool_name {
-        "LS"
-        | "Read"
-        | "Glob"
-        | "Grep"
-        | "Write"
-        | "Edit"
-        | "Delete"
-        | "ExecCommand"
-        | "WriteStdin"
-        | "ExecControl"
-        | "GetTime"
-        | "ListModels"
-        | "WorkspaceScan"
+        "LS" | "Read" | "Glob" | "Grep" | "Write" | "Edit" | "Delete" | "ExecCommand"
+        | "WriteStdin" | "ExecControl" | "GetTime" | "ListModels" | "WorkspaceScan"
         | "KnowledgeBaseSearch" => Some(ToolPackFeatureGroup::Basic),
-        "Git" | "Worktree" | "ReviewPlatform" | "GetFileDiff" => Some(ToolPackFeatureGroup::Git),
+        "Worktree" | "ReviewPlatform" | "GetFileDiff" => Some(ToolPackFeatureGroup::Git),
         "ListMCPResources" | "ReadMCPResource" | "ListMCPPrompts" | "GetMCPPrompt" => {
             Some(ToolPackFeatureGroup::Mcp)
         }
@@ -108,44 +101,22 @@ pub fn tool_feature_group(tool_name: &str) -> Option<ToolPackFeatureGroup> {
         | "PublishAppearance" | "PageDeploy" | "PagePublish" | "Playbook" => {
             Some(ToolPackFeatureGroup::MiniApp)
         }
+        "FrontendWorkbench" => Some(ToolPackFeatureGroup::Creation),
         "CreateCanvas" | "ReadCanvas" | "UpdateCanvas" | "PatchCanvas" => {
             Some(ToolPackFeatureGroup::Canvas)
         }
-        "Task"
-        | "AgentWait"
-        | "LaunchReviewAgent"
-        | "Skill"
-        | "AskUserQuestion"
-        | "TodoWrite"
-        | "get_goal"
-        | "create_goal"
-        | "update_goal"
-        | "CreatePlan"
-        | "PlanList"
-        | "PlanRead"
-        | "PlanUpdate"
-        | "LegionControl"
-        | "acp_control"
-        | "acp_message"
-        | "acp_history"
-        | "submit_code_review"
-        | "GetToolSpec"
-        | "CallDeferredTool"
-        | "SessionControl"
-        | "SessionMessage"
-        | "SessionHistory"
-        | "Cron"
-        | "create_group_chat"
-        | "invite_group_member"
-        | "remove_group_member"
-        | "send_group_message"
-        | "get_group_history"
-        | "list_group_chats"
-        | "fork_group_chat"
-        | "group_member_status"
-        | "delete_group_chat"
-        | "update_group_member_tools"
-        | "update_group_wiring" => Some(ToolPackFeatureGroup::AgentControl),
+        "Task" | "AgentSpawn" | "AgentSendInput" | "AgentInterrupt" | "AgentList"
+        | "AgentDelete" | "AgentWait" | "LaunchReviewAgent" | "Skill" | "AskUserQuestion"
+        | "TodoWrite" | "get_goal" | "create_goal" | "update_goal" | "CreatePlan"
+        | "PlanList" | "PlanRead" | "PlanUpdate" | "LegionControl" | "acp_control"
+        | "acp_message" | "acp_history" | "submit_code_review" | "GetToolSpec"
+        | "CallDeferredTool" | "SessionControl" | "SessionMessage" | "SessionHistory" | "Cron"
+        | "create_group_chat" | "invite_group_member" | "remove_group_member"
+        | "send_group_message" | "get_group_history" | "list_group_chats" | "fork_group_chat"
+        | "group_member_status" | "delete_group_chat" | "update_group_member_tools"
+        | "update_group_wiring" | "PortForward" | "BitFunControl" => {
+            Some(ToolPackFeatureGroup::AgentControl)
+        }
         _ => None,
     }
 }
@@ -196,6 +167,7 @@ const CORE_MCP_FEATURE_GROUPS: &[ToolPackFeatureGroup] = &[ToolPackFeatureGroup:
 const CORE_COMPUTER_USE_FEATURE_GROUPS: &[ToolPackFeatureGroup] =
     &[ToolPackFeatureGroup::ComputerUse];
 const CORE_MINIAPP_FEATURE_GROUPS: &[ToolPackFeatureGroup] = &[ToolPackFeatureGroup::MiniApp];
+const CORE_CREATION_FEATURE_GROUPS: &[ToolPackFeatureGroup] = &[ToolPackFeatureGroup::Creation];
 
 const PRODUCT_TOOL_PROVIDER_GROUP_PLAN: &[ToolProviderGroupPlan] = &[
     ToolProviderGroupPlan {
@@ -225,6 +197,11 @@ const PRODUCT_TOOL_PROVIDER_GROUP_PLAN: &[ToolProviderGroupPlan] = &[
         feature_groups: CORE_AGENT_FEATURE_GROUPS,
         tool_names: &[
             "Task",
+            "AgentSpawn",
+            "AgentSendInput",
+            "AgentInterrupt",
+            "AgentList",
+            "AgentDelete",
             "AgentWait",
             "Skill",
             "AskUserQuestion",
@@ -238,6 +215,7 @@ const PRODUCT_TOOL_PROVIDER_GROUP_PLAN: &[ToolProviderGroupPlan] = &[
             "PlanUpdate",
             "GetToolSpec",
             "CallDeferredTool",
+            "BitFunControl",
         ],
     },
     ToolProviderGroupPlan {
@@ -263,12 +241,13 @@ const PRODUCT_TOOL_PROVIDER_GROUP_PLAN: &[ToolProviderGroupPlan] = &[
             "delete_group_chat",
             "update_group_member_tools",
             "update_group_wiring",
+            "PortForward",
         ],
     },
     ToolProviderGroupPlan {
         provider_id: "core.git",
         feature_groups: CORE_GIT_FEATURE_GROUPS,
-        tool_names: &["GetFileDiff", "Git", "Worktree", "ReviewPlatform"],
+        tool_names: &["GetFileDiff", "Worktree", "ReviewPlatform"],
     },
     ToolProviderGroupPlan {
         provider_id: "core.web",
@@ -308,6 +287,11 @@ const PRODUCT_TOOL_PROVIDER_GROUP_PLAN: &[ToolProviderGroupPlan] = &[
             "PagePublish",
             "Playbook",
         ],
+    },
+    ToolProviderGroupPlan {
+        provider_id: "core.creation",
+        feature_groups: CORE_CREATION_FEATURE_GROUPS,
+        tool_names: &["FrontendWorkbench"],
     },
     ToolProviderGroupPlan {
         provider_id: "core.canvas",
@@ -389,6 +373,7 @@ mod tests {
                 "computer-use",
                 "image-analysis",
                 "miniapp",
+                "creation",
                 "canvas",
                 "agent-control"
             ]
@@ -426,6 +411,10 @@ mod tests {
         assert_eq!(
             groups.contains(&ToolPackFeatureGroup::MiniApp),
             cfg!(feature = "miniapp")
+        );
+        assert_eq!(
+            groups.contains(&ToolPackFeatureGroup::Creation),
+            cfg!(feature = "creation")
         );
         assert_eq!(
             groups.contains(&ToolPackFeatureGroup::Canvas),
@@ -505,6 +494,7 @@ mod tests {
         assert_eq!(ToolPackFeatureGroup::ComputerUse.id(), "computer-use");
         assert_eq!(ToolPackFeatureGroup::ImageAnalysis.id(), "image-analysis");
         assert_eq!(ToolPackFeatureGroup::MiniApp.id(), "miniapp");
+        assert_eq!(ToolPackFeatureGroup::Creation.id(), "creation");
         assert_eq!(ToolPackFeatureGroup::Canvas.id(), "canvas");
         assert_eq!(ToolPackFeatureGroup::AgentControl.id(), "agent-control");
     }
@@ -528,6 +518,7 @@ mod tests {
                 "core.computer-use",
                 "core.review",
                 "core.miniapp",
+                "core.creation",
                 "core.canvas",
             ]
         );
@@ -560,6 +551,11 @@ mod tests {
                 "GetTime",
                 "ListModels",
                 "Task",
+                "AgentSpawn",
+                "AgentSendInput",
+                "AgentInterrupt",
+                "AgentList",
+                "AgentDelete",
                 "AgentWait",
                 "Skill",
                 "AskUserQuestion",
@@ -573,6 +569,7 @@ mod tests {
                 "PlanUpdate",
                 "GetToolSpec",
                 "CallDeferredTool",
+                "BitFunControl",
                 "SessionControl",
                 "LegionControl",
                 "SessionMessage",
@@ -592,8 +589,8 @@ mod tests {
                 "delete_group_chat",
                 "update_group_member_tools",
                 "update_group_wiring",
+                "PortForward",
                 "GetFileDiff",
-                "Git",
                 "Worktree",
                 "ReviewPlatform",
                 "WebSearch",
@@ -614,6 +611,7 @@ mod tests {
                 "PageDeploy",
                 "PagePublish",
                 "Playbook",
+                "FrontendWorkbench",
                 "CreateCanvas",
                 "ReadCanvas",
                 "UpdateCanvas",
@@ -650,6 +648,7 @@ mod tests {
                 ("core.computer-use", vec!["computer-use"]),
                 ("core.review", vec!["agent-control"]),
                 ("core.miniapp", vec!["miniapp"]),
+                ("core.creation", vec!["creation"]),
                 ("core.canvas", vec!["canvas"]),
             ]
         );

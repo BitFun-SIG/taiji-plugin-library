@@ -674,6 +674,7 @@ fn create_operation(workspace: &Path, name: &str) -> RuntimeIpcOperation {
         request: AgentSessionCreateRequest {
             session_name: name.to_string(),
             agent_type: "agentic".to_string(),
+            agent_route_key: None,
             workspace_path: Some(workspace.to_string_lossy().to_string()),
             project_workspace_path: None,
             execution_target: None,
@@ -757,6 +758,7 @@ fn update_mode_operation(session_id: &str, mode_id: &str) -> RuntimeIpcOperation
         request: AgentSessionModeUpdateRequest {
             session_id: session_id.to_string(),
             mode_id: mode_id.to_string(),
+            agent_route_key: None,
         },
     }
 }

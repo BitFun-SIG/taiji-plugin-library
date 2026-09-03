@@ -33,6 +33,9 @@ target2/
 # The deployable Rust services use the workspace lockfile for reproducible
 # container builds.
 !Cargo.lock
+# The standalone Installer resolves against the shared source tree and owns a
+# generated lockfile that must not be committed.
+/BitFun-Installer/src-tauri/Cargo.lock
 
 # Work artifacts that must never enter the repo (S-37/S-56 hygiene):
 # recon/fix/verify/report/sediment intermediates, sync records, ws-check data.
@@ -133,3 +136,20 @@ external/
 .pnpm-store/
 __pycache__/
 *.pyc
+
+# KMP shared mobile core and the platform apps that include it (Gradle).
+# Written per-directory rather than as a bare `local.properties` so the pattern
+# cannot accidentally hide a checked-in file elsewhere in the repo. local.properties
+# holds the machine's SDK path, which is exactly the kind of thing
+# src/apps/mobile/AGENTS.md says stays out of the repository.
+src/apps/mobile/shared/.gradle/
+src/apps/mobile/shared/build/
+src/apps/mobile/shared/*/build/
+src/apps/mobile/shared/local.properties
+src/apps/mobile/shared/.kotlin/
+src/apps/mobile/android/.gradle/
+src/apps/mobile/android/build/
+src/apps/mobile/android/*/build/
+src/apps/mobile/android/local.properties
+src/apps/mobile/android/.kotlin/
+/src/apps/mobile/ios/build/

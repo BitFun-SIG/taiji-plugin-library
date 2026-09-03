@@ -125,7 +125,7 @@ function getMobileWebBuildMarkerPath(mobileWebDir) {
  * clean/install/build cycle can be skipped. Escape hatches:
  *   --force flag / BITFUN_MOBILE_WEB_FORCE_BUILD=1 env.
  */
-function getMobileWebRebuildPlan(mobileWebDir, force = false) {
+function getMobileWebRebuildPlan(mobileWebDir, force = false, rootDir = ROOT_DIR) {
   const fs = require('fs');
 
   if (force) {
@@ -145,6 +145,17 @@ function getMobileWebRebuildPlan(mobileWebDir, force = false) {
     path.join(mobileWebDir, 'index.html'),
     path.join(mobileWebDir, 'package.json'),
     path.join(mobileWebDir, 'tsconfig.json'),
+    path.join(rootDir, 'pnpm-lock.yaml'),
+    path.join(rootDir, 'pnpm-workspace.yaml'),
+    path.join(rootDir, 'design-system', 'package.json'),
+    path.join(rootDir, 'design-system', 'packages', 'design-tokens', 'package.json'),
+    path.join(rootDir, 'design-system', 'packages', 'design-tokens', 'scripts'),
+    path.join(rootDir, 'design-system', 'packages', 'design-tokens', 'src'),
+    path.join(rootDir, 'design-system', 'packages', 'theme-bitfun', 'package.json'),
+    path.join(rootDir, 'design-system', 'packages', 'theme-bitfun', 'scripts'),
+    path.join(rootDir, 'design-system', 'packages', 'theme-bitfun', 'src'),
+    path.join(rootDir, 'design-system', 'tooling', 'token-engine', 'package.json'),
+    path.join(rootDir, 'design-system', 'tooling', 'token-engine', 'src'),
   ];
   for (const entry of fs.readdirSync(mobileWebDir)) {
     if (entry.startsWith('vite.config.')) {
@@ -163,7 +174,7 @@ function getMobileWebRebuildPlan(mobileWebDir, force = false) {
   if (newestInput && newestInput.mtimeMs > markerMtimeMs) {
     return {
       shouldBuild: true,
-      reason: `mobile-web inputs changed since the last build (${path.relative(ROOT_DIR, newestInput.path)})`,
+      reason: `mobile-web inputs changed since the last build (${path.relative(rootDir, newestInput.path)})`,
     };
   }
 
@@ -180,17 +191,29 @@ function writeMobileWebBuildMarker(mobileWebDir) {
   fs.writeFileSync(markerPath, `${new Date().toISOString()}\n`);
 }
 
-function cleanStaleMobileWebResources(logInfo = printInfo) {
+function cleanStaleMobileWebResources(logInfo = printInfo, rootDir = ROOT_DIR) {
   const fs = require('fs');
-  const targetDir = path.join(ROOT_DIR, 'target');
+  const targetDir = path.join(rootDir, 'target');
   if (!fs.existsSync(targetDir)) return 0;
 
   let cleaned = 0;
-  for (const profile of fs.readdirSync(targetDir)) {
-    const mobileWebDir = path.join(targetDir, profile, 'mobile-web');
-    if (fs.existsSync(mobileWebDir) && fs.statSync(mobileWebDir).isDirectory()) {
-      fs.rmSync(mobileWebDir, { recursive: true, force: true });
-      cleaned++;
+  const cleanIfPresent = (candidate) => {
+    if (fs.existsSync(candidate) && fs.statSync(candidate).isDirectory()) {
+      fs.rmSync(candidate, { recursive: true, force: true });
+      cleaned += 1;
+    }
+  };
+
+  for (const firstLevelEntry of fs.readdirSync(targetDir, { withFileTypes: true })) {
+    if (!firstLevelEntry.isDirectory()) continue;
+    const firstLevelDir = path.join(targetDir, firstLevelEntry.name);
+    cleanIfPresent(path.join(firstLevelDir, 'mobile-web'));
+
+    // Explicit Cargo targets stage resources under
+    // target/<target-triple>/<profile>/mobile-web.
+    for (const secondLevelEntry of fs.readdirSync(firstLevelDir, { withFileTypes: true })) {
+      if (!secondLevelEntry.isDirectory()) continue;
+      cleanIfPresent(path.join(firstLevelDir, secondLevelEntry.name, 'mobile-web'));
     }
   }
 
@@ -262,4 +285,5 @@ if (require.main === module) {
 module.exports = {
   buildMobileWeb,
   cleanStaleMobileWebResources,
+  getMobileWebRebuildPlan,
 };

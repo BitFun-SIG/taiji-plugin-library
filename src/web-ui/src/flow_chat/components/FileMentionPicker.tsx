@@ -5,16 +5,9 @@
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import { IconButton, KeyHint, Listbox, ListboxEmpty, ListboxOption, Tooltip, Icon } from '@bitfun/ui';
 import { useTranslation } from 'react-i18next';
-import {
-  File,
-  Folder,
-  Loader2,
-  MessageCircle,
-  Search,
-  ChevronRight,
-  ChevronLeft,
-} from 'lucide-react';
+import { File, Loader2, MessageCircle } from 'lucide-react';
 import { sessionAPI, workspaceAPI } from '@/infrastructure/api';
 import {
   externalSourcesAPI,
@@ -30,7 +23,6 @@ import type {
   FileContext,
   SessionReferenceContext,
 } from '@/shared/types/context';
-import { Tooltip } from '@/component-library';
 import { createLogger } from '@/shared/utils/logger';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { useAnchoredPopoverPosition } from '@/shared/utils/useAnchoredPopoverPosition';
@@ -568,7 +560,10 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
     <div
       data-bf-component="file-mention-picker"
       data-bf-part="root"
-      data-bf-state={isLoading ? 'loading' : undefined}
+      data-bf-state={[
+        isLoading && 'loading',
+        fileLoadError && 'error',
+      ].filter(Boolean).join(' ') || undefined}
       data-bf-placement={isOverlay ? overlayLayout?.placement ?? 'top' : undefined}
       ref={containerRef}
       className={`file-mention-picker${isOverlay ? ' file-mention-picker--overlay' : ''}`}
@@ -578,10 +573,16 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
       <div data-bf-component="file-mention-picker" data-bf-part="header" className="file-mention-picker__header">
         {!isSearchMode && pathHistory.length > 0 && (
           <Tooltip content={t('fileMention.goBack')}>
-            <button data-bf-component="file-mention-picker" data-bf-part="back" className="file-mention-picker__back-btn" onClick={goBack}><ChevronLeft size={12} /></button>
+            <IconButton
+              aria-label={t('fileMention.goBack')}
+              icon={<Icon name="chevron-left" size="lg" aria-hidden="true" />}
+              onClick={goBack}
+              size="xs"
+              variant="quiet"
+            />
           </Tooltip>
         )}
-        {isSearchMode ? <><Search size={11} /><span>{t('fileMention.searchResults')}</span></> : (
+        {isSearchMode ? <><Icon name="search" size="lg" style={{ width: 11, height: 11 }} /><span>{t('fileMention.searchResults')}</span></> : (
           <div className="file-mention-picker__directory-label" title={currentDirectoryDisplay.fullPath}>
             <span
               data-bf-component="file-mention-picker"
@@ -603,18 +604,25 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
         )}
       </div>
       <div data-bf-component="file-mention-picker" data-bf-part="content" className="file-mention-picker__content">
-        {displayItems.length === 0 && fileLoadError ? (
-          <div data-bf-component="file-mention-picker" data-bf-part="empty" data-bf-state="error" className="file-mention-picker__empty">
+        <Listbox
+          aria-label={isSearchMode
+            ? t('fileMention.searchResults')
+            : currentDirectoryDisplay.fullPath}
+          className="file-mention-picker__list"
+          focusMode="virtual"
+        >
+          {displayItems.length === 0 && fileLoadError ? (
+          <ListboxEmpty data-bf-state="error" className="file-mention-picker__empty">
             <span>{t(fileLoadError === 'search'
               ? 'fileMention.searchUnavailable'
               : 'fileMention.browseUnavailable')}</span>
-          </div>
+          </ListboxEmpty>
         ) : displayItems.length === 0 && isLoading ? (
-          <div data-bf-component="file-mention-picker" data-bf-part="loading" className="file-mention-picker__loading"><Loader2 size={14} className="file-mention-picker__spinner" /><span>{t('fileMention.loading')}</span></div>
+          <ListboxEmpty className="file-mention-picker__loading"><Loader2 size={14} className="file-mention-picker__spinner" /><span>{t('fileMention.loading')}</span></ListboxEmpty>
         ) : displayItems.length === 0 ? (
-          <div data-bf-component="file-mention-picker" data-bf-part="empty" className="file-mention-picker__empty"><span>{isSearchMode ? t('fileMention.noMatchingFiles') : t('fileMention.emptyDirectory')}</span></div>
+          <ListboxEmpty className="file-mention-picker__empty"><span>{isSearchMode ? t('fileMention.noMatchingFiles') : t('fileMention.emptyDirectory')}</span></ListboxEmpty>
         ) : (
-          <div data-bf-component="file-mention-picker" data-bf-part="list" className="file-mention-picker__list">
+          <>
             {displayItems.map((mention, index) => {
               const isSession = mention.kind === 'session';
               const file = mention.kind === 'file' ? mention.item : null;
@@ -623,57 +631,55 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
                 ? `session-${session?.sessionId}-${session?.workspacePath}`
                 : `file-${file?.referenceStableKey || file?.path}`;
               return (
-                <div data-bf-component="file-mention-picker" data-bf-part="item"
-                  data-bf-state={index === selectedIndex ? 'selected' : undefined}
+                <ListboxOption
+                  active={index === selectedIndex}
                   key={key}
                   data-index={index}
-                  className={`file-mention-picker__item ${index === selectedIndex ? 'file-mention-picker__item--selected' : ''}`}
+                  indicator={file?.isDirectory && !isSearchMode
+                    ? <Icon name="chevron-right" size="lg" aria-hidden="true" />
+                    : undefined}
+                  leading={isSession
+                    ? <MessageCircle aria-hidden="true" />
+                    : file?.isDirectory
+                      ? <Icon name="folder" size="lg" aria-hidden="true" />
+                      : <File aria-hidden="true" />}
+                  metadata={session?.workspaceLabel
+                    ?? (file?.referenceStableKey
+                      ? file.referenceDescription || file.path
+                      : undefined)}
                   onClick={() => handleItemClick(mention)}
                   onContextMenu={(event) => {
                     event.preventDefault();
                     if (file?.isDirectory) enterDirectory(file);
                   }}
-                  onMouseEnter={() => setSelectedIndex(index)}
+                  value={key}
                 >
-                  {isSession ? <MessageCircle size={13} className="file-mention-picker__icon file-mention-picker__icon--session" /> : file?.isDirectory ? <Folder size={13} className="file-mention-picker__icon file-mention-picker__icon--folder" /> : <File size={13} className="file-mention-picker__icon file-mention-picker__icon--file" />}
-                  <span
-                    data-bf-component="file-mention-picker"
-                    data-bf-part="itemName"
-                    className="file-mention-picker__item-name"
-                  >
-                    {session?.sessionName ?? file?.name}
-                  </span>
-                  {session && <span data-bf-component="file-mention-picker" data-bf-part="itemDetail" className="file-mention-picker__item-detail">{session.workspaceLabel}</span>}
-                  {file?.referenceStableKey && (
-                    <span data-bf-component="file-mention-picker" data-bf-part="itemDetail" className="file-mention-picker__item-detail">
-                      {file.referenceDescription || file.path}
-                    </span>
-                  )}
-                  {file?.isDirectory && !isSearchMode && <ChevronRight size={12} className="file-mention-picker__expand-icon" />}
-                </div>
+                  {session?.sessionName ?? file?.name}
+                </ListboxOption>
               );
             })}
             {isLoading && (
-              <div data-bf-component="file-mention-picker" data-bf-part="loading" className="file-mention-picker__loading">
+              <ListboxEmpty className="file-mention-picker__loading">
                 <Loader2 size={14} className="file-mention-picker__spinner" />
                 <span>{t('fileMention.loading')}</span>
-              </div>
+              </ListboxEmpty>
             )}
             {fileLoadError && (
-              <div data-bf-component="file-mention-picker" data-bf-part="empty" data-bf-state="error" className="file-mention-picker__empty">
+              <ListboxEmpty data-bf-state="error" className="file-mention-picker__empty">
                 <span>{t(fileLoadError === 'search'
                   ? 'fileMention.searchUnavailable'
                   : 'fileMention.browseUnavailable')}</span>
-              </div>
+              </ListboxEmpty>
             )}
-          </div>
+          </>
         )}
+        </Listbox>
       </div>
       <div data-bf-component="file-mention-picker" data-bf-part="footer" className="file-mention-picker__footer">
-        <span><kbd>↑</kbd><kbd>↓</kbd> {t('fileMention.navHint')}</span>
-        <span><kbd>→</kbd> {t('fileMention.enterHint')}</span>
-        <span><kbd>←</kbd> {t('fileMention.backHint')}</span>
-        <span><kbd>Enter</kbd> {t('fileMention.selectHint')}</span>
+        <span><KeyHint>↑</KeyHint><KeyHint>↓</KeyHint> {t('fileMention.navHint')}</span>
+        <span><KeyHint>→</KeyHint> {t('fileMention.enterHint')}</span>
+        <span><KeyHint>←</KeyHint> {t('fileMention.backHint')}</span>
+        <span><KeyHint>Enter</KeyHint> {t('fileMention.selectHint')}</span>
       </div>
     </div>
   );

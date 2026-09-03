@@ -95,7 +95,7 @@ DevTools；`Cmd/Ctrl + Shift + I` 切换 BitFun 元素检查器，`Cmd/Ctrl + Sh
    > 欢迎产品经理、UI 设计师通过 PI 快速提交创意，我们会帮助完善开发
 2. 优化 Agent 系统和效果
 3. 对提升系统稳定性和完善基础能力
-4. 扩展生态（Skills、MCP、LSP 插件，或者对某些垂域开发场景的更好支持）
+4. 扩展生态（Skills、MCP，或者对某些垂域开发场景的更好支持）
 
 ## 贡献流程与 PR 约定
 
@@ -108,7 +108,7 @@ DevTools；`Cmd/Ctrl + Shift + I` 切换 BitFun 元素检查器，`Cmd/Ctrl + Sh
 | Prompts | `src/crates/assembly/core/src/agentic/agents/prompts/` | 新增或优化提示词，并按需更新相关逻辑 |
 | Tools | `src/crates/assembly/core/src/agentic/tools/implementations/`、`src/crates/assembly/core/src/agentic/tools/registry.rs` | 新增工具实现，并在工具注册表中注册 |
 | Subagents | `src/crates/assembly/core/src/agentic/agents/custom_subagents/`、`src/crates/assembly/core/src/agentic/agents/registry.rs` | 新增子代理实现，并在子代理注册表中注册 |
-| 模式贡献 | `src/crates/assembly/core/src/agentic/agents/*_mode.rs`、`src/crates/assembly/core/src/agentic/agents/prompts/*_mode.md`、`src/web-ui/src/locales/*/settings/modes.json` | 新增/优化 Agent 模式（例如 Plan/Debug/Agentic 或自定义模式）的逻辑与提示词，并同步前端模式文案 |
+| 模式贡献 | `src/crates/assembly/core/src/agentic/agents/*_mode.rs`、`src/crates/assembly/core/src/agentic/agents/prompts/*_mode.md`、`src/web-ui/src/locales/*/settings/modes.json` | 新增/优化 Agentic 或自定义 Agent 模式的逻辑与提示词，并同步前端模式文案 |
 | Code Agent 与 AIIde 场景指南 | `website/src/docs/` | 补充流程、playbook 与真实场景说明（或从 `README.md` 链接） |
 
 ### 开始前
@@ -152,13 +152,16 @@ UI 改动请附前后对比截图或短录屏，方便快速评审。
 | 改动类型 | 常用验证 |
 | --- | --- |
 | 仓库元信息或 GitHub 配置 | `pnpm run check:repo-hygiene && pnpm run check:github-config && git diff --check` |
-| 前端运行时或 UI | `pnpm run type-check:web`；行为变化时再加最近的 focused test |
+| 前端运行时或 UI | `pnpm run check:web`；行为变化时再加最近的 focused test |
 | Mobile web | `pnpm --dir src/mobile-web run type-check` |
 | Rust 共享 runtime 或 services | `cargo check --workspace`；行为变化时再加 focused `cargo test` |
 | Desktop/Tauri 集成 | `cargo check -p bitfun-desktop` |
 | i18n 资源或契约 | 使用 `AGENTS.md` 中匹配的 i18n 验证行 |
 
 UI 改动在有帮助时附截图或短录屏。无法运行相关检查时，在 PR 中说明原因，并提供风险更低的手动验证路径。
+
+`pnpm run check:web` 会组合执行 Web UI 类型检查，以及 CI 针对前端改动运行的 Appearance contract、
+主题颜色和主题视觉治理门禁。
 
 ## 安全与合规
 

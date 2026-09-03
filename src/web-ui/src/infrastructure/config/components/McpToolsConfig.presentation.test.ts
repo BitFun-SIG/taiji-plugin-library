@@ -16,6 +16,18 @@ describe('MCP settings presentation', () => {
     const editorEnd = stylesheet.indexOf('&__json-editor-header', editorStart);
 
     expect(stylesheet).not.toContain('.bitfun-config-page-row {');
-    expect(stylesheet.slice(editorStart, editorEnd)).toContain('padding: $size-gap-4;');
+    expect(stylesheet.slice(editorStart, editorEnd)).toContain('padding: var(--bf-space-4);');
+  });
+
+  it('presents JSON as an advanced text-labelled mode without the extensions overview', () => {
+    const source = readFileSync(
+      fileURLToPath(new URL('./McpToolsConfig.tsx', import.meta.url)),
+      'utf8',
+    );
+
+    expect(source).toContain("title={showJsonEditor ? tMcp('jsonEditor.title') : tMcp('section.serverList.title')}");
+    expect(source).toContain("{showJsonEditor ? tMcp('actions.backToList') : tMcp('actions.jsonConfig')}");
+    expect(source).toContain('{!showJsonEditor && <ExternalMcpOverview />}');
+    expect(source).not.toContain('<h3>{tMcp(\'jsonEditor.title\')}</h3>');
   });
 });

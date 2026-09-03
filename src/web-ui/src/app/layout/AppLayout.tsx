@@ -15,7 +15,6 @@ import { isWindowFullscreenShortcut } from '../hooks/windowFullscreenShortcut';
 import { useAssistantBootstrap } from '../hooks/useAssistantBootstrap';
 import { usePermissionRequestNotify } from '../hooks/usePermissionRequestNotify';
 import { useApp } from '../hooks/useApp';
-import { useSceneStore } from '../stores/sceneStore';
 import { useShortcut } from '@/infrastructure/hooks/useShortcut';
 import { configManager } from '@/infrastructure/config/services/ConfigManager';
 import { FlowChatManager } from '../../flow_chat/services/FlowChatManager';
@@ -26,14 +25,14 @@ import { MCPInteractionDialog } from '../components/MCPInteractionDialog/MCPInte
 import { workspaceAPI } from '@/infrastructure/api';
 import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
 import type { CloseBehavior } from '@/infrastructure/api/service-api/SystemAPI';
-import { confirmDialog, PresenceBoundary } from '@/component-library';
+import { RetainedMountBoundary } from '@/shared/presence';
+import { confirmDialog } from '@/infrastructure/confirm-dialog';
 import { createLogger } from '@/shared/utils/logger';
 import { DailyAppUpdateGate } from '@/infrastructure/update';
 import { useI18n } from '@/infrastructure/i18n';
 import { WorkspaceKind } from '@/shared/types';
 import { SSHContext } from '@/features/ssh-remote/SSHRemoteContext';
 import { shortcutManager, parseStoredKeybindings } from '@/infrastructure/services/ShortcutManager';
-import { useSessionModeStore } from '../stores/sessionModeStore';
 import { isMacOSDesktopRuntime } from '@/infrastructure/runtime';
 import { flowChatSessionConfigForWorkspace } from '../utils/projectSessionWorkspace';
 import { notificationService } from '@/shared/notification-system';
@@ -201,10 +200,6 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
       window.removeEventListener('keydown', handleSystemFullscreenShortcut, { capture: true });
     };
   }, [canUseNativeWindowControls, handleToggleFullscreen, isToolbarMode, showWindowFullscreenHint]);
-  const activeSceneId = useSceneStore(s => s.activeTabId);
-  const isAgentScene = activeSceneId === 'session';
-  const isWelcomeScene = activeSceneId === 'welcome';
-
   const isTransitioning = false;
   const transitionDir: TransitionDirection = null;
 
@@ -604,32 +599,25 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
     return () => window.removeEventListener('toolbar-cancel-task', handleToolbarCancelTask);
   }, []);
 
-  // Create FlowChat session (toolbar / floating UI). detail.mode: 'cowork' → Cowork, else code (agentic).
-  const handleCreateFlowChatSession = React.useCallback(async (mode?: 'code' | 'cowork') => {
+  // Create one unified project session. Balanced Harness currently uses the
+  // existing agentic runtime path until the typed Harness contract lands.
+  const handleCreateFlowChatSession = React.useCallback(async () => {
     try {
       if (!currentWorkspace?.rootPath) {
         log.warn('Cannot create FlowChat session without an active workspace');
         return;
       }
       const flowChatManager = FlowChatManager.getInstance();
-      const setMode = useSessionModeStore.getState().setMode;
       const sessionConfig = flowChatSessionConfigForWorkspace(currentWorkspace);
-      if (mode === 'cowork') {
-        setMode('cowork');
-        await flowChatManager.createChatSession(sessionConfig, 'Cowork');
-      } else {
-        setMode('code');
-        await flowChatManager.createChatSession(sessionConfig, 'agentic');
-      }
+      await flowChatManager.createChatSession(sessionConfig, 'agentic');
     } catch (error) {
       log.error('Failed to create FlowChat session', error);
     }
   }, [currentWorkspace]);
 
   React.useEffect(() => {
-    const handler = (e: Event) => {
-      const mode = (e as CustomEvent<{ mode?: 'code' | 'cowork' }>).detail?.mode;
-      void handleCreateFlowChatSession(mode === 'cowork' ? 'cowork' : 'code');
+    const handler = () => {
+      void handleCreateFlowChatSession();
     };
     window.addEventListener('toolbar-create-session', handler);
     return () => window.removeEventListener('toolbar-create-session', handler);
@@ -787,12 +775,10 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
           />
         </main>
 
-        {/* Non-agent scenes: floating mini chat button */}
-        {!isWelcomeScene && !isAgentScene && (
-          <Suspense fallback={null}>
-            <FloatingMiniChat />
-          </Suspense>
-        )}
+        {/* Hello stays available across every client scene, including Welcome. */}
+        <Suspense fallback={null}>
+          <FloatingMiniChat />
+        </Suspense>
 
         {/* Agent scenes: bee colony architecture monitor (self-gates to agentic tabs) */}
         {!isWelcomeScene && isAgentScene && (
@@ -803,7 +789,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
       </div>
 
       {/* Dialogs (previously owned by TitleBar) */}
-      <PresenceBoundary active={showNewProjectDialog}>
+      <RetainedMountBoundary present={showNewProjectDialog}>
         <Suspense fallback={null}>
           <NewProjectDialog
             isOpen={showNewProjectDialog}
@@ -812,16 +798,16 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
             defaultParentPath={hasWorkspace ? currentWorkspace?.rootPath : undefined}
           />
         </Suspense>
-      </PresenceBoundary>
-      <PresenceBoundary active={showAboutDialog}>
+      </RetainedMountBoundary>
+      <RetainedMountBoundary present={showAboutDialog}>
         <Suspense fallback={null}>
           <AboutDialog
             isOpen={showAboutDialog}
             onClose={() => setShowAboutDialog(false)}
           />
         </Suspense>
-      </PresenceBoundary>
-      <PresenceBoundary active={showWorkspaceStatus}>
+      </RetainedMountBoundary>
+      <RetainedMountBoundary present={showWorkspaceStatus}>
         <Suspense fallback={null}>
           <WorkspaceManager
             isVisible={showWorkspaceStatus}
@@ -829,7 +815,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
             onWorkspaceSelect={() => {}}
           />
         </Suspense>
-      </PresenceBoundary>
+      </RetainedMountBoundary>
       <MCPInteractionDialog />
     </>
   );

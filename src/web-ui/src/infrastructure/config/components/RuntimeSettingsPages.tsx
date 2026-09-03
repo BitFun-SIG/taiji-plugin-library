@@ -1,0 +1,1820 @@
+import {
+  Button,
+  Icon,
+  IconButton,
+  NumberInput,
+  Select,
+  Switch,
+  Tooltip,
+  type ComboboxOption,
+  type SelectOption,
+  Dialog,
+  DialogBody,
+  DialogClose,
+  DialogHeader,
+  DialogHeading,
+  DialogTitle,
+} from '@bitfun/ui';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
+import { ConfigLoadingState, ConfigMessage, ConfigRetryState } from '@/infrastructure/config/components/common';
+import { confirmDanger } from '@/infrastructure/confirm-dialog';
+import { ConfigPageHeader, ConfigPageLayout, ConfigPageContent, ConfigPageSection, ConfigPageRow } from './common';
+import { aiExperienceConfigService, type AIExperienceSettings } from '../services/AIExperienceConfigService';
+import {
+  DEFAULT_AGENT_COMPANION_PET,
+  deleteAgentCompanionPetPackage,
+  importAgentCompanionPetPackage,
+  listAgentCompanionPets,
+  releaseAgentCompanionPetPreviewBlobs,
+  type AgentCompanionPetPackage,
+} from '../services/AgentCompanionPetService';
+import { configManager } from '../services/ConfigManager';
+import { useComputerUseEnabled } from '../hooks/useComputerUseEnabled';
+import {
+  DEFAULT_TOOL_PERMISSION_CONFIG,
+  normalizeToolPermissionConfig,
+  permissionConfigService,
+} from '../services/PermissionConfigService';
+import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
+import { api } from '@/infrastructure/api/service-api/ApiClient';
+import { useNotification, notificationService } from '@/shared/notification-system';
+import type {
+  PermissionRule,
+  ToolPermissionConfig,
+} from '../types';
+import { GlobalPermissionRulesDialog } from './GlobalPermissionRulesDialog';
+import SessionTitleConfig from './SessionTitleConfig';
+import ReviewCapacitySection from './ReviewCapacitySection';
+import ToolJsonRepairSection from './ToolJsonRepairSection';
+import { ask, open } from '@tauri-apps/plugin-dialog';
+import { createLogger } from '@/shared/utils/logger';
+import { usePeerDeviceModeOptional } from '@/infrastructure/peer-device/peerDeviceContextState';
+import './RuntimeSettingsPages.scss';
+
+type DescribedSelectOption = SelectOption & { description?: string };
+
+const log = createLogger('RuntimeSettings');
+
+const IS_TAURI_DESKTOP = typeof window !== 'undefined' && '__TAURI__' in window;
+
+/**
+ * A peer host that refuses Browser Control / Computer Use (CLI Peer returns
+ * "local-only and cannot run on peer"; Desktop Peer would surface a different
+ * error). We detect that string so the settings section can show an explicit
+ * "unsupported on this peer" notice instead of firing invokes that silently
+ * fail on every refresh. See PR #2428 review #4 issue #1.
+ */
+function isPeerUnsupportedBrowserControlError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error ?? '');
+  return /is local-only and cannot run on peer|is not supported on CLI peer host/i.test(message);
+}
+
+type ComputerUseStatusPayload = {
+  computerUseEnabled: boolean;
+  accessibilityGranted: boolean;
+  screenCaptureGranted: boolean;
+  platformNote: string | null;
+};
+
+type BrowserControlLaunchResponse = {
+  success: boolean;
+  status: string;
+  message: string | null;
+  browserKind: string;
+  setupUrl?: string;
+};
+
+type BrowserControlDisconnectResponse = {
+  success: boolean;
+  status: string;
+  browserKind: string;
+};
+
+type BrowserControlBrowserOption = {
+  value: string;
+  label: string;
+  installed: boolean;
+};
+
+type SubagentBatchExecutionPolicy = 'safe_only' | 'force_parallel' | 'serial';
+type ToolPermissionMode = 'ask' | 'auto' | 'full_access';
+
+const DEFAULT_SUBAGENT_BATCH_EXECUTION_POLICY: SubagentBatchExecutionPolicy = 'force_parallel';
+const DEFAULT_SUBAGENT_MAX_CONCURRENCY = 5;
+const DEFAULT_SWARM_MAX_CONCURRENCY = 16;
+const SHOW_PERMISSION_MODE_CONTROL_CONFIG_PATH = 'app.flow_chat.show_permission_mode_control';
+
+function normalizeSubagentBatchExecutionPolicy(value: unknown): SubagentBatchExecutionPolicy {
+  return value === 'force_parallel' || value === 'serial' || value === 'safe_only'
+    ? value
+    : DEFAULT_SUBAGENT_BATCH_EXECUTION_POLICY;
+}
+
+function resolveToolPermissionMode(config: ToolPermissionConfig): ToolPermissionMode {
+  if (config.policy.preset === 'full_access') return 'full_access';
+  return config.interaction.auto_approve_ask ? 'auto' : 'ask';
+}
+
+function browserSetupUrlFallback(browser: string): string {
+  const normalized = browser.toLowerCase();
+  if (normalized.includes('edge')) return 'edge://inspect/#remote-debugging';
+  if (normalized.includes('chrome')) return 'chrome://inspect/#remote-debugging';
+  return '';
+}
+
+const DEFAULT_BROWSER_CONTROL_BROWSER = 'default';
+
+export type RuntimeSettingsPageKind =
+  | 'pet'
+  | 'session-workspace'
+  | 'execution'
+  | 'browser-desktop-control';
+
+export type ExecutionSettingsView = 'common' | 'advanced';
+
+interface RuntimeSettingsPageProps {
+  page: RuntimeSettingsPageKind;
+  executionView?: ExecutionSettingsView;
+  isActive?: boolean;
+}
+
+const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({
+  page,
+  executionView = 'common',
+  isActive = true,
+}) => {
+  const { t } = useTranslation('settings/runtime');
+  const { t: tNavigation } = useTranslation('settings');
+  const { t: tTools } = useTranslation('settings/agentic-tools');
+  const notification = useNotification();
+
+  // ── Session config state ─────────────────────────────────────────────────
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const hasLoadedPageDataRef = useRef(false);
+  const [settings, setSettings] = useState<AIExperienceSettings | null>(null);
+  const [companionPets, setCompanionPets] = useState<AgentCompanionPetPackage[]>([]);
+  const [companionPetImporting, setCompanionPetImporting] = useState(false);
+  const [companionPetDeletingPath, setCompanionPetDeletingPath] = useState<string | null>(null);
+  const [enableDeferredToolLoading, setEnableDeferredToolLoading] = useState(true);
+  const [subagentMaxConcurrency, setSubagentMaxConcurrency] = useState(DEFAULT_SUBAGENT_MAX_CONCURRENCY);
+  const [swarmMaxConcurrency, setSwarmMaxConcurrency] = useState(DEFAULT_SWARM_MAX_CONCURRENCY);
+  const [executionTimeout, setExecutionTimeout] = useState('');
+  const [subagentBatchExecutionPolicy, setSubagentBatchExecutionPolicy] =
+    useState<SubagentBatchExecutionPolicy>(DEFAULT_SUBAGENT_BATCH_EXECUTION_POLICY);
+  const [toolExecConfigLoading, setToolExecConfigLoading] = useState(false);
+  const [deferredToolLoadingConfigSaving, setDeferredToolLoadingConfigSaving] = useState(false);
+  const [toolPermissionConfig, setToolPermissionConfig] = useState<ToolPermissionConfig>(DEFAULT_TOOL_PERMISSION_CONFIG);
+  const [permissionConfigSaving, setPermissionConfigSaving] = useState(false);
+  const [showPermissionModeControl, setShowPermissionModeControl] = useState(true);
+  const [permissionModeControlVisibilitySaving, setPermissionModeControlVisibilitySaving] = useState(false);
+  const [isGlobalPermissionRulesDialogOpen, setIsGlobalPermissionRulesDialogOpen] = useState(false);
+  const [externalInstructionSourcesEnabled, setExternalInstructionSourcesEnabled] = useState(false);
+  const [externalInstructionSourcesSaving, setExternalInstructionSourcesSaving] = useState(false);
+  const [workspaceInstructionFilesEnabled, setWorkspaceInstructionFilesEnabled] = useState(false);
+  const [workspaceInstructionFilesSaving, setWorkspaceInstructionFilesSaving] = useState(false);
+
+  const { computerUseEnabled, setComputerUseEnabled } = useComputerUseEnabled();
+  // Browser Control / Computer Use run on the host that runs the Tool. Desktop
+  // Peer B executes them on B; CLI Peer refuses them (deny.rs). When the
+  // rendered peer is a CLI Peer the refresh invokes return "local-only and
+  // cannot run on peer" — we surface that as an explicit unsupported notice
+  // instead of silently degrading. Null = controller local (no peer) or peer
+  // capabilities not yet probed (optimistically supported). See PR #2428 #1.
+  const peerDevice = usePeerDeviceModeOptional();
+  const peerModeActive = peerDevice?.peerMode.active === true;
+  const [peerBrowserControlUnsupported, setPeerBrowserControlUnsupported] = useState(false);
+  const [computerUseAccess, setComputerUseAccess] = useState(false);
+  const [computerUseScreen, setComputerUseScreen] = useState(false);
+  const [computerUseBusy, setComputerUseBusy] = useState(false);
+  const [computerUseStatusLoading, setComputerUseStatusLoading] = useState(false);
+  const [computerUseStatusError, setComputerUseStatusError] = useState(false);
+  const [computerUsePlatformNote, setComputerUsePlatformNote] = useState<string | null>(null);
+
+  // ── Browser control state ───────────────────────────────────────────────
+  const [browserCdpAvailable, setBrowserCdpAvailable] = useState(false);
+  const [browserReady, setBrowserReady] = useState(false);
+  const [browserAutoConnectOnStartup, setBrowserAutoConnectOnStartup] = useState(false);
+  const [browserDefaultCdpSupported, setBrowserDefaultCdpSupported] = useState(false);
+  const [browserDefaultCdpEnabled, setBrowserDefaultCdpEnabled] = useState(false);
+  const [browserSetupUrl, setBrowserSetupUrl] = useState('');
+  const [browserKind, setBrowserKind] = useState('');
+  const [browserVersion, setBrowserVersion] = useState<string | null>(null);
+  const [browserPageCount, setBrowserPageCount] = useState(0);
+  const [browserOptions, setBrowserOptions] = useState<BrowserControlBrowserOption[]>([]);
+  const [preferredBrowser, setPreferredBrowser] = useState(DEFAULT_BROWSER_CONTROL_BROWSER);
+  const [browserControlBusy, setBrowserControlBusy] = useState(false);
+  const [browserStatusLoading, setBrowserStatusLoading] = useState(false);
+  const [browserStatusError, setBrowserStatusError] = useState(false);
+  const [platform, setPlatform] = useState<string>('');
+  const [browserRestartPrompt, setBrowserRestartPrompt] = useState<BrowserControlLaunchResponse | null>(null);
+
+  const refreshComputerUseStatus = useCallback(async (): Promise<boolean> => {
+    if (!IS_TAURI_DESKTOP) return false;
+    setComputerUseStatusLoading(true);
+    setComputerUseStatusError(false);
+    try {
+      const s = await api.invoke<ComputerUseStatusPayload>('computer_use_get_status');
+      setPeerBrowserControlUnsupported(false);
+      setComputerUseEnabled(s.computerUseEnabled);
+      setComputerUseAccess(s.accessibilityGranted);
+      setComputerUseScreen(s.screenCaptureGranted);
+      setComputerUsePlatformNote(s.platformNote);
+      return true;
+    } catch (error) {
+      if (isPeerUnsupportedBrowserControlError(error)) {
+        setPeerBrowserControlUnsupported(true);
+        setComputerUseStatusError(false);
+        return false;
+      }
+      log.error('computer_use_get_status failed', error);
+      setComputerUseStatusError(true);
+      return false;
+    } finally {
+      setComputerUseStatusLoading(false);
+    }
+  }, [setComputerUseEnabled]);
+
+  const refreshBrowserControlStatus = useCallback(async () => {
+    if (!IS_TAURI_DESKTOP) return;
+    setBrowserStatusLoading(true);
+    setBrowserStatusError(false);
+    try {
+      const [s, browsers] = await Promise.all([
+        api.invoke<{
+          cdpAvailable: boolean;
+          defaultCdpSupported: boolean;
+          defaultCdpEnabled: boolean;
+          setupUrl?: string;
+          browserReady: boolean;
+          browserKind: string;
+          browserVersion: string | null;
+          port: number;
+          pageCount: number;
+        }>('browser_control_get_status', { request: { port: 9222 } }),
+        api.invoke<{ options: BrowserControlBrowserOption[] }>('browser_control_list_browsers'),
+      ]);
+      setPeerBrowserControlUnsupported(false);
+      setBrowserCdpAvailable(s.cdpAvailable);
+      setBrowserDefaultCdpSupported(s.defaultCdpSupported);
+      setBrowserDefaultCdpEnabled(s.defaultCdpEnabled);
+      setBrowserSetupUrl(s.setupUrl ?? browserSetupUrlFallback(s.browserKind));
+      setBrowserReady(s.browserReady);
+      setBrowserKind(s.browserKind);
+      setBrowserVersion(s.browserVersion);
+      setBrowserPageCount(s.pageCount);
+      setBrowserOptions(browsers.options);
+    } catch (error) {
+      if (isPeerUnsupportedBrowserControlError(error)) {
+        setPeerBrowserControlUnsupported(true);
+        setBrowserStatusError(false);
+      } else {
+        setBrowserStatusError(true);
+        log.error('browser_control_get_status failed', error);
+      }
+    } finally {
+      setBrowserStatusLoading(false);
+    }
+  }, []);
+
+  // Browser Control / Computer Use route to the rendered host. Re-probe on every
+  // surface switch (local ↔ peer A ↔ peer B): a CLI Peer returns unsupported,
+  // a Desktop Peer / local host returns status. Resets the unsupported flag so
+  // a switch away from a CLI Peer re-shows controls instead of the notice.
+  // The current peer's deviceId is part of the dep so A→B (both peers) fires.
+  const renderedPeerDeviceId = peerDevice?.peerMode.active
+    ? peerDevice.peerMode.deviceId
+    : null;
+  useEffect(() => {
+    if (!IS_TAURI_DESKTOP) return;
+    setPeerBrowserControlUnsupported(false);
+    if (page === 'browser-desktop-control') {
+      void refreshComputerUseStatus();
+      void refreshBrowserControlStatus();
+      void systemAPI.getSystemInfo()
+        .then((info) => setPlatform(info.platform || ''))
+        .catch((error) => log.warn('getSystemInfo failed', error));
+    }
+  }, [
+    page,
+    peerModeActive,
+    renderedPeerDeviceId,
+    refreshComputerUseStatus,
+    refreshBrowserControlStatus,
+  ]);
+
+  const reloadCompanionPets = useCallback(async () => {
+    setCompanionPets(await listAgentCompanionPets());
+  }, []);
+
+    void refreshBrowserControlStatus();
+
+    void systemAPI.getSystemInfo()
+      .then((info) => setPlatform(info.platform || ''))
+      .catch((error) => log.warn('getSystemInfo failed', error));
+  }, [refreshComputerUseStatus, refreshBrowserControlStatus, setComputerUseEnabled]);
+
+  // Browser Control / Computer Use route to the rendered host. Re-probe on every
+  // surface switch (local ↔ peer A ↔ peer B): a CLI Peer returns unsupported,
+  // a Desktop Peer / local host returns status. Resets the unsupported flag so
+  // a switch away from a CLI Peer re-shows controls instead of the notice.
+  // The current peer's deviceId is part of the dep so A→B (both peers) fires.
+  const renderedPeerDeviceId = peerDevice?.peerMode.active
+    ? peerDevice.peerMode.deviceId
+    : null;
+  useEffect(() => {
+    if (!IS_TAURI_DESKTOP) return;
+    setPeerBrowserControlUnsupported(false);
+    void refreshComputerUseStatus();
+    void refreshBrowserControlStatus();
+  }, [peerModeActive, renderedPeerDeviceId, refreshComputerUseStatus, refreshBrowserControlStatus]);
+
+  const loadPageData = useCallback(async () => {
+    const isInitialLoad = !hasLoadedPageDataRef.current;
+    if (isInitialLoad) {
+      setIsLoading(true);
+      setLoadError(false);
+    }
+    try {
+      if (page === 'pet') {
+        const [loadedSettings] = await Promise.all([
+          aiExperienceConfigService.getSettingsAsync(),
+          reloadCompanionPets(),
+        ]);
+        setSettings(loadedSettings);
+      } else if (page === 'session-workspace') {
+        const [loadedSettings, loadedExternalInstructionSources, loadedWorkspaceInstructionFiles] = await Promise.all([
+          aiExperienceConfigService.getSettingsAsync(),
+          configManager.getConfig<boolean>('ai.external_instruction_sources'),
+          configManager.getConfig<boolean>('ai.workspace_instruction_files'),
+        ]);
+        setSettings(loadedSettings);
+        setExternalInstructionSourcesEnabled(loadedExternalInstructionSources ?? false);
+        setWorkspaceInstructionFilesEnabled(loadedWorkspaceInstructionFiles ?? false);
+      } else if (page === 'execution') {
+        const [
+          deferredToolLoadingEnabled,
+          loadedSubagentMaxConcurrency,
+          loadedSwarmMaxConcurrency,
+          execTimeout,
+          loadedSubagentBatchExecutionPolicy,
+          loadedToolPermissionConfig,
+          loadedPermissionModeControlVisibility,
+        ] = await Promise.all([
+          configManager.getConfig<boolean>('ai.enable_deferred_tool_loading'),
+          configManager.getConfig<number | null>('ai.subagent_max_concurrency'),
+          configManager.getConfig<number | null>('ai.swarm_max_concurrency'),
+          configManager.getConfig<number | null>('ai.tool_execution_timeout_secs'),
+          configManager.getConfig<SubagentBatchExecutionPolicy>('ai.subagent_batch_execution_policy'),
+          permissionConfigService.getConfig(),
+          configManager.getOptionalConfig<boolean>(SHOW_PERMISSION_MODE_CONTROL_CONFIG_PATH),
+        ]);
+        setEnableDeferredToolLoading(deferredToolLoadingEnabled ?? true);
+        setSubagentMaxConcurrency(loadedSubagentMaxConcurrency != null
+          ? loadedSubagentMaxConcurrency
+          : DEFAULT_SUBAGENT_MAX_CONCURRENCY);
+        setSwarmMaxConcurrency(loadedSwarmMaxConcurrency != null
+          ? loadedSwarmMaxConcurrency
+          : DEFAULT_SWARM_MAX_CONCURRENCY);
+        setExecutionTimeout(execTimeout != null ? String(execTimeout) : '');
+        setSubagentBatchExecutionPolicy(normalizeSubagentBatchExecutionPolicy(loadedSubagentBatchExecutionPolicy));
+        setToolPermissionConfig(normalizeToolPermissionConfig(loadedToolPermissionConfig));
+        setShowPermissionModeControl(loadedPermissionModeControlVisibility !== false);
+      } else if (page === 'browser-desktop-control') {
+        const [
+          computerUseCfg,
+          browserControlPreferredBrowser,
+          browserControlAutoConnect,
+        ] = await Promise.all([
+          configManager.getConfig<boolean>('ai.computer_use_enabled'),
+          configManager.getConfig<string>('ai.browser_control_preferred_browser'),
+          configManager.getConfig<boolean>('ai.browser_control_auto_connect_on_startup'),
+        ]);
+        if (!IS_TAURI_DESKTOP) {
+          setComputerUseEnabled(computerUseCfg ?? false);
+        }
+        setPreferredBrowser(browserControlPreferredBrowser || DEFAULT_BROWSER_CONTROL_BROWSER);
+        setBrowserAutoConnectOnStartup(browserControlAutoConnect === true);
+      }
+      hasLoadedPageDataRef.current = true;
+    } catch (error) {
+      log.error('Failed to load settings page data', { page, error });
+      if (isInitialLoad) setLoadError(true);
+    } finally {
+      if (isInitialLoad) setIsLoading(false);
+    }
+  }, [page, reloadCompanionPets, setComputerUseEnabled]);
+
+  const saveToolPermissionConfig = async (
+    nextConfig: ToolPermissionConfig,
+    previousConfig: ToolPermissionConfig,
+  ): Promise<boolean> => {
+    setToolPermissionConfig(nextConfig);
+    setPermissionConfigSaving(true);
+    try {
+      await permissionConfigService.saveConfig(nextConfig);
+      notificationService.success(t('messages.saveSuccess'), { duration: 2000 });
+      return true;
+    } catch (error) {
+      log.error('Failed to save tool permission config', error);
+      setToolPermissionConfig(previousConfig);
+      notificationService.error(t('messages.saveFailed'));
+      return false;
+    } finally {
+      setPermissionConfigSaving(false);
+    }
+  };
+
+  const handlePermissionModeChange = async (value: string | number | (string | number)[]) => {
+    const nextModeValue = String(Array.isArray(value) ? value[0] : value);
+    const nextMode: ToolPermissionMode = nextModeValue === 'full_access'
+      ? 'full_access'
+      : nextModeValue === 'auto'
+        ? 'auto'
+        : 'ask';
+    const previousConfig = toolPermissionConfig;
+    const currentMode = resolveToolPermissionMode(previousConfig);
+    if (nextMode === currentMode) return;
+
+    if (nextMode === 'full_access') {
+      const confirmed = await confirmDanger(
+        t('permissionPolicy.fullAccessWarningTitle'),
+        t('permissionPolicy.fullAccessWarningMessage'),
+        {
+          confirmText: t('permissionPolicy.fullAccessConfirm'),
+          cancelText: t('permissionPolicy.cancel'),
+        },
+      );
+      if (!confirmed) return;
+    }
+
+    await saveToolPermissionConfig(
+      {
+        policy: {
+          ...previousConfig.policy,
+          preset: nextMode === 'full_access' ? 'full_access' : 'ask',
+        },
+        interaction: {
+          ...previousConfig.interaction,
+          auto_approve_ask: nextMode === 'auto',
+        },
+      },
+      previousConfig,
+    );
+  };
+
+  const handleSaveGlobalPermissionRules = async (rules: PermissionRule[]): Promise<boolean> => {
+    const previousConfig = toolPermissionConfig;
+    return saveToolPermissionConfig(
+      { ...previousConfig, policy: { ...previousConfig.policy, rules } },
+      previousConfig,
+    );
+  };
+
+  const handlePermissionModeControlVisibilityChange = async (visible: boolean) => {
+    const previousVisibility = showPermissionModeControl;
+    setShowPermissionModeControl(visible);
+    setPermissionModeControlVisibilitySaving(true);
+    try {
+      await configManager.setConfig(SHOW_PERMISSION_MODE_CONTROL_CONFIG_PATH, visible);
+      notificationService.success(t('messages.saveSuccess'), { duration: 2000 });
+    } catch (error) {
+      log.error('Failed to save permission mode control visibility', error);
+      setShowPermissionModeControl(previousVisibility);
+      notificationService.error(t('messages.saveFailed'));
+    } finally {
+      setPermissionModeControlVisibilitySaving(false);
+    }
+  };
+
+  const handleExternalInstructionSourcesToggle = async (enabled: boolean) => {
+    const previous = externalInstructionSourcesEnabled;
+    setExternalInstructionSourcesEnabled(enabled);
+    setExternalInstructionSourcesSaving(true);
+    try {
+      await configManager.setConfig('ai.external_instruction_sources', enabled);
+      notificationService.success(t('messages.saveSuccess'), { duration: 2000 });
+    } catch (error) {
+      log.error('Failed to save external instruction sources switch', error);
+      setExternalInstructionSourcesEnabled(previous);
+      notificationService.error(t('messages.saveFailed'));
+    } finally {
+      setExternalInstructionSourcesSaving(false);
+    }
+  };
+
+  const handleWorkspaceInstructionFilesToggle = async (enabled: boolean) => {
+    const previous = workspaceInstructionFilesEnabled;
+    setWorkspaceInstructionFilesEnabled(enabled);
+    setWorkspaceInstructionFilesSaving(true);
+    try {
+      await configManager.setConfig('ai.workspace_instruction_files', enabled);
+      notificationService.success(t('messages.saveSuccess'), { duration: 2000 });
+    } catch (error) {
+      log.error('Failed to save workspace instruction files switch', error);
+      setWorkspaceInstructionFilesEnabled(previous);
+      notificationService.error(t('messages.saveFailed'));
+    } finally {
+      setWorkspaceInstructionFilesSaving(false);
+    }
+  };
+
+  useEffect(() => {
+    if (page === 'pet' && !isActive) return;
+    void loadPageData();
+  }, [isActive, loadPageData, page]);
+
+  // ── Session config handlers ──────────────────────────────────────────────
+
+  const updateSetting = async <K extends keyof AIExperienceSettings>(
+    key: K,
+    value: AIExperienceSettings[K]
+  ) => {
+    if (!settings) return;
+    const newSettings = { ...settings, [key]: value };
+    setSettings(newSettings);
+    try {
+      await aiExperienceConfigService.saveSettings({ [key]: value });
+      notification.success(t('messages.saveSuccess'));
+    } catch (error) {
+      log.error('Failed to save AI features settings', error);
+      notification.error(t('messages.saveFailed'));
+      setSettings(settings);
+    }
+  };
+
+  const handleImportCompanionPet = async () => {
+    if (!IS_TAURI_DESKTOP) return;
+    setCompanionPetImporting(true);
+    try {
+      const selected = await open({
+        directory: false,
+        multiple: false,
+        title: t('features.pet.importDialogTitle'),
+        filters: [{ name: 'Petdex', extensions: ['zip'] }],
+      });
+      if (!selected || Array.isArray(selected)) return;
+      const imported = await importAgentCompanionPetPackage(selected);
+      await reloadCompanionPets();
+      await updateSetting('agent_companion_pet', {
+        id: imported.id,
+        displayName: imported.displayName,
+        description: imported.description,
+        source: imported.source,
+        packagePath: imported.packagePath,
+        spritesheetPath: imported.spritesheetPath,
+        spritesheetMimeType: imported.spritesheetMimeType,
+      });
+    } catch (error) {
+      log.error('Failed to import Agent companion pet', error);
+      notification.error(t('features.pet.importFailed'));
+    } finally {
+      setCompanionPetImporting(false);
+    }
+  };
+
+  const handleDeleteCompanionPet = async (event: React.MouseEvent, pet: AgentCompanionPetPackage) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!IS_TAURI_DESKTOP || pet.source !== 'user' || !settings) return;
+    const confirmed = await ask(t('features.pet.deleteConfirmBody'), {
+      title: t('features.pet.deleteConfirmTitle'),
+      kind: 'warning',
+    });
+    if (!confirmed) return;
+    setCompanionPetDeletingPath(pet.packagePath);
+    try {
+      await deleteAgentCompanionPetPackage(pet.packagePath);
+      releaseAgentCompanionPetPreviewBlobs(pet.packagePath, pet.spritesheetPath);
+      await reloadCompanionPets();
+      if (settings.agent_companion_pet?.packagePath === pet.packagePath) {
+        const next = { ...settings, agent_companion_pet: DEFAULT_AGENT_COMPANION_PET };
+        setSettings(next);
+        await aiExperienceConfigService.saveSettings({ agent_companion_pet: DEFAULT_AGENT_COMPANION_PET });
+      }
+      notification.success(t('features.pet.deleteSuccess'));
+    } catch (error) {
+      log.error('Failed to delete Agent companion pet', error);
+      notification.error(t('features.pet.deleteFailed'));
+    } finally {
+      setCompanionPetDeletingPath(null);
+    }
+  };
+
+  const subagentBatchExecutionPolicyOptions: DescribedSelectOption[] = [
+    {
+      value: 'safe_only',
+      label: tTools('config.subagentBatchPolicy.safeOnly'),
+      description: tTools('config.subagentBatchPolicy.safeOnlyDesc'),
+    },
+    {
+      value: 'force_parallel',
+      label: tTools('config.subagentBatchPolicy.forceParallel'),
+      description: tTools('config.subagentBatchPolicy.forceParallelDesc'),
+    },
+  ];
+
+  const selectedCompanionPetValue = settings?.agent_companion_pet?.packagePath
+    ?? DEFAULT_AGENT_COMPANION_PET.packagePath;
+
+  const handleCompanionPetChange = async (value: string | number | (string | number)[]) => {
+    const selectedValue = String(Array.isArray(value) ? value[0] : value);
+    const pet = companionPets.find(item => item.packagePath === selectedValue);
+    if (!pet) return;
+    await updateSetting('agent_companion_pet', {
+      id: pet.id,
+      displayName: pet.displayName,
+      description: pet.description,
+      source: pet.source,
+      packagePath: pet.packagePath,
+      spritesheetPath: pet.spritesheetPath,
+      spritesheetMimeType: pet.spritesheetMimeType,
+    });
+  };
+
+  const handleDeferredToolLoadingChange = async (checked: boolean) => {
+    const previous = enableDeferredToolLoading;
+    setEnableDeferredToolLoading(checked);
+    setDeferredToolLoadingConfigSaving(true);
+    try {
+      await configManager.setConfig('ai.enable_deferred_tool_loading', checked);
+      notificationService.success(t('messages.saveSuccess'), { duration: 2000 });
+    } catch (error) {
+      log.error('Failed to save enable_deferred_tool_loading', error);
+      notificationService.error(
+        `${t('messages.saveFailed')}: ` + (error instanceof Error ? error.message : String(error))
+      );
+      setEnableDeferredToolLoading(previous);
+    } finally {
+      setDeferredToolLoadingConfigSaving(false);
+    }
+  };
+
+  const handleSubagentBatchExecutionPolicyChange = async (value: string | number | (string | number)[]) => {
+    const nextPolicy = normalizeSubagentBatchExecutionPolicy(Array.isArray(value) ? value[0] : value);
+    const previousPolicy = subagentBatchExecutionPolicy;
+    setSubagentBatchExecutionPolicy(nextPolicy);
+    setToolExecConfigLoading(true);
+    try {
+      await configManager.setConfig('ai.subagent_batch_execution_policy', nextPolicy);
+      notificationService.success(tTools('messages.saveSuccess'), { duration: 2000 });
+      const { globalEventBus } = await import('@/infrastructure/event-bus');
+      globalEventBus.emit('mode:config:updated');
+    } catch (error) {
+      log.error('Failed to save subagent_batch_execution_policy', error);
+      notificationService.error(
+        `${tTools('messages.saveFailed')}: ` + (error instanceof Error ? error.message : String(error))
+      );
+      setSubagentBatchExecutionPolicy(previousPolicy);
+    } finally {
+      setToolExecConfigLoading(false);
+    }
+  };
+
+  const handleSwarmMaxConcurrencyChange = async (value: number) => {
+    if (Number.isNaN(value) || value < 1) return;
+    const previous = swarmMaxConcurrency;
+    setSwarmMaxConcurrency(value);
+    setToolExecConfigLoading(true);
+    try {
+      await configManager.setConfig('ai.swarm_max_concurrency', value);
+      notificationService.success(tTools('messages.saveSuccess'), { duration: 2000 });
+    } catch (error) {
+      log.error('Failed to save swarm_max_concurrency', error);
+      setSwarmMaxConcurrency(previous);
+      notificationService.error(tTools('messages.saveFailed'));
+    } finally {
+      setToolExecConfigLoading(false);
+    }
+  };
+
+  const handleSubagentMaxConcurrencyChange = async (value: number) => {
+    if (Number.isNaN(value) || value < 1) return;
+    const previous = subagentMaxConcurrency;
+    setSubagentMaxConcurrency(value);
+    setToolExecConfigLoading(true);
+    try {
+      await configManager.setConfig('ai.subagent_max_concurrency', value);
+      notificationService.success(tTools('messages.saveSuccess'), { duration: 2000 });
+    } catch (error) {
+      log.error('Failed to save subagent_max_concurrency', error);
+      setSubagentMaxConcurrency(previous);
+      notificationService.error(tTools('messages.saveFailed'));
+    } finally {
+      setToolExecConfigLoading(false);
+    }
+  };
+
+  const handleComputerUseEnabledChange = async (checked: boolean) => {
+    setComputerUseBusy(true);
+    setComputerUseEnabled(checked);
+    try {
+      await configManager.setConfig('ai.computer_use_enabled', checked);
+      const { globalEventBus } = await import('@/infrastructure/event-bus');
+      globalEventBus.emit('mode:config:updated');
+      notificationService.success(
+        checked ? t('messages.saveSuccess') : t('messages.saveSuccess'),
+        { duration: 2000 }
+      );
+      if (checked) {
+        // Proactively surface the OS permission prompt (macOS Accessibility /
+        // Screen Recording) the moment the user opts in, instead of waiting
+        // for the first agent tool call to fail with a permission error.
+        try {
+          await api.invoke('computer_use_request_permissions');
+        } catch (permError) {
+          log.warn('computer_use_request_permissions failed', permError);
+        }
+      }
+      await refreshComputerUseStatus();
+    } catch (error) {
+      log.error('Failed to save computer_use_enabled', error);
+      notificationService.error(t('messages.saveFailed'));
+      setComputerUseEnabled(!checked);
+    } finally {
+      setComputerUseBusy(false);
+    }
+  };
+
+  const handleComputerUseOpenSettings = async (pane: 'accessibility' | 'screen_capture') => {
+    try {
+      await api.invoke('computer_use_open_system_settings', { request: { pane } });
+    } catch (error) {
+      log.error('computer_use_open_system_settings failed', error);
+      notificationService.error(t('messages.saveFailed'));
+    }
+  };
+
+  const handleBrowserControlBrowserChange = async (value: string | number) => {
+    const nextValue = String(value || DEFAULT_BROWSER_CONTROL_BROWSER);
+    const previousValue = preferredBrowser;
+    setPreferredBrowser(nextValue);
+    setBrowserControlBusy(true);
+    try {
+      await configManager.setConfig(
+        'ai.browser_control_preferred_browser',
+        nextValue === DEFAULT_BROWSER_CONTROL_BROWSER ? '' : nextValue,
+      );
+      await refreshBrowserControlStatus();
+    } catch (error) {
+      log.error('Failed to save browser_control_preferred_browser', error);
+      setPreferredBrowser(previousValue);
+      notificationService.error(
+        `${tTools('messages.saveFailed')}: ` + (error instanceof Error ? error.message : String(error))
+      );
+    } finally {
+      setBrowserControlBusy(false);
+    }
+  };
+
+  const handleBrowserAutoConnectChange = async (checked: boolean) => {
+    const previousValue = browserAutoConnectOnStartup;
+    setBrowserAutoConnectOnStartup(checked);
+    try {
+      await configManager.setConfig('ai.browser_control_auto_connect_on_startup', checked);
+    } catch (error) {
+      log.error('Failed to save browser_control_auto_connect_on_startup', error);
+      setBrowserAutoConnectOnStartup(previousValue);
+      notificationService.error(
+        `${tTools('messages.saveFailed')}: ` + (error instanceof Error ? error.message : String(error))
+      );
+    }
+  };
+
+  const presentBrowserControlLaunchResult = (result: BrowserControlLaunchResponse) => {
+    const setupUrl = result.setupUrl
+      || browserSetupUrl
+      || browserSetupUrlFallback(result.browserKind);
+    if (result.success) {
+      notificationService.success(
+        t('browserControl.connectSuccess', { browser: result.browserKind }),
+        { duration: 3000 }
+      );
+    } else if (result.status === 'requires_user_profile_setup') {
+      notificationService.info(
+        t('browserControl.userProfileSetupRequired', {
+          browser: result.browserKind,
+          url: setupUrl,
+        }),
+        { duration: 12000 }
+      );
+    } else if (result.status === 'requires_manual_user_profile_setup') {
+      // The platform could not open the settings page, so the URL itself is
+      // the actionable part of the message.
+      notificationService.info(
+        t('browserControl.userProfileSetupManual', {
+          browser: result.browserKind,
+          url: setupUrl,
+        }),
+        { duration: 20000 }
+      );
+    } else if (result.status === 'user_profile_connection_failed') {
+      notificationService.info(
+        t('browserControl.userProfileConnectionFailed', { browser: result.browserKind }),
+        { duration: 12000 }
+      );
+    } else if (result.status === 'needs_restart') {
+      setBrowserRestartPrompt(result);
+    } else if (result.message) {
+      notificationService.info(result.message, { duration: 8000 });
+    }
+  };
+
+  const handleBrowserControlLaunch = async () => {
+    setBrowserControlBusy(true);
+    try {
+      const result = await api.invoke<BrowserControlLaunchResponse>('browser_control_launch', { request: { port: 9222 } });
+      presentBrowserControlLaunchResult(result);
+      await refreshBrowserControlStatus();
+    } catch (error) {
+      log.error('browser_control_launch failed', error);
+      notificationService.error(t('browserControl.connectFailed'));
+    } finally {
+      setBrowserControlBusy(false);
+    }
+  };
+
+  const handleBrowserControlEnableDefaultCdp = async () => {
+    setBrowserControlBusy(true);
+    const setupUrl = browserSetupUrl || browserSetupUrlFallback(browserKind);
+    const promptNotificationId = notificationService.info(
+      t(
+        browserDefaultCdpEnabled
+          ? 'browserControl.defaultCdpConnectPrompt'
+          : 'browserControl.defaultCdpEnablePrompt',
+        { browser: browserKind, url: setupUrl },
+      ),
+      { duration: 0 },
+    );
+    try {
+      notificationService.info(
+        t(
+          browserDefaultCdpEnabled
+            ? 'browserControl.defaultCdpConnectPrompt'
+            : 'browserControl.defaultCdpEnablePrompt',
+          { browser: browserKind },
+        ),
+        { duration: 12000 },
+      );
+      const result = await api.invoke<BrowserControlLaunchResponse>(
+        'browser_control_enable_default_cdp',
+        { request: { port: 9222 } },
+      );
+      notificationService.dismiss(promptNotificationId);
+      presentBrowserControlLaunchResult(result);
+      await refreshBrowserControlStatus();
+    } catch (error) {
+      log.error('browser_control_enable_default_cdp failed', error);
+      notificationService.error(t('browserControl.connectFailed'));
+    } finally {
+      notificationService.dismiss(promptNotificationId);
+      setBrowserControlBusy(false);
+    }
+  };
+
+  const handleBrowserControlDisconnect = async () => {
+    setBrowserControlBusy(true);
+    try {
+      const result = await api.invoke<BrowserControlDisconnectResponse>(
+        'browser_control_disconnect',
+        { request: { port: 9222 } },
+      );
+      notificationService.success(
+        t('browserControl.disconnectSuccess', { browser: result.browserKind }),
+        { duration: 4000 },
+      );
+      await refreshBrowserControlStatus();
+    } catch (error) {
+      log.error('browser_control_disconnect failed', error);
+      notificationService.error(t('browserControl.disconnectFailed'));
+    } finally {
+      setBrowserControlBusy(false);
+    }
+  };
+
+  const handleBrowserControlRestart = async () => {
+    if (!browserRestartPrompt) return;
+    setBrowserControlBusy(true);
+    try {
+      const result = await api.invoke<BrowserControlLaunchResponse>('browser_control_restart_with_cdp', {
+        request: { port: 9222 },
+      });
+      if (result.success) {
+        notificationService.success(
+          t('browserControl.restartSuccess', { browser: result.browserKind }),
+          { duration: 3000 }
+        );
+        setBrowserRestartPrompt(null);
+      } else if (result.message) {
+        notificationService.info(result.message, { duration: 8000 });
+      }
+      await refreshBrowserControlStatus();
+    } catch (error) {
+      log.error('browser_control_restart_with_cdp failed', error);
+      notificationService.error(t('browserControl.restartFailed'));
+    } finally {
+      setBrowserControlBusy(false);
+    }
+  };
+
+  const handleToolTimeoutChange = async (value: string) => {
+    const configKey = 'ai.tool_execution_timeout_secs';
+    const trimmedValue = value.trim();
+    if (trimmedValue !== '') {
+      const numValue = parseInt(trimmedValue, 10);
+      if (Number.isNaN(numValue) || numValue < 0) return;
+    }
+    const previous = executionTimeout;
+    setExecutionTimeout(trimmedValue);
+    setToolExecConfigLoading(true);
+    const numValue = trimmedValue === '' ? null : parseInt(trimmedValue, 10);
+    try {
+      await configManager.setConfig(configKey, numValue);
+    } catch (error) {
+      log.error('Failed to save tool timeout config', { error });
+      setExecutionTimeout(previous);
+      notificationService.error(tTools('messages.saveFailed'));
+    } finally {
+      setToolExecConfigLoading(false);
+    }
+  };
+
+  // ── Derived values ───────────────────────────────────────────────────────
+
+  const computerUseAccessLabel = computerUseStatusLoading
+    ? t('loading.text')
+    : computerUseStatusError ? t('computerUse.statusUnavailable')
+    : computerUseAccess ? t('computerUse.granted') : t('computerUse.notGranted');
+  const computerUseScreenLabel = computerUseStatusLoading
+    ? t('loading.text')
+    : computerUseStatusError ? t('computerUse.statusUnavailable')
+    : computerUseScreen ? t('computerUse.granted') : t('computerUse.notGranted');
+  const computerUsePlatformMessage = computerUsePlatformNote
+    ? platform === 'macos'
+      ? t('computerUse.platformNotes.macos')
+      : platform === 'windows'
+        ? t('computerUse.platformNotes.windows')
+        : platform === 'linux'
+          ? t('computerUse.platformNotes.linux')
+          : t('computerUse.platformNotes.generic')
+    : null;
+  // A ready browser is not a failure state: BitFun attaches to it the moment
+  // something needs it, so say that rather than the bare "not connected".
+  const browserStatusLabel = browserCdpAvailable
+    ? `${browserKind} · ${browserPageCount} ${t('browserControl.tabs')}`
+    : browserStatusLoading
+      ? t('loading.text')
+      : browserStatusError
+        ? t('browserControl.statusUnavailable')
+      : browserReady
+        ? t('browserControl.readyNotConnected')
+        : t('browserControl.notConnected');
+  const browserSelectOptions: ComboboxOption[] = browserOptions.map((option) => ({
+    value: option.value,
+    label: option.installed ? option.label : `${option.label} (${t('browserControl.notInstalled')})`,
+    disabled: !option.installed,
+  }));
+
+  const pageCopyKey = page === 'session-workspace'
+    ? 'sessionWorkspace'
+    : page === 'browser-desktop-control'
+      ? 'browserDesktopControl'
+      : page;
+  const pageTitle = tNavigation(`navigation.pages.${pageCopyKey}.label`);
+  const pageSubtitle = tNavigation(`navigation.pages.${pageCopyKey}.description`);
+  const appearanceView = page === 'execution'
+    ? `execution-${executionView}`
+    : page;
+  const showsExecutionCommon = page === 'execution' && executionView === 'common';
+  const showsExecutionAdvanced = page === 'execution' && executionView === 'advanced';
+
+  const requiresExperienceSettings = page === 'pet' || page === 'session-workspace';
+  if (loadError) {
+    return (
+      <ConfigPageLayout className="bitfun-runtime-settings" data-bf-component="runtime-settings" data-bf-part="root" data-bf-view={appearanceView}>
+        <ConfigPageHeader title={pageTitle} subtitle={pageSubtitle} />
+        <ConfigPageContent className="bitfun-runtime-settings__content" data-bf-component="runtime-settings" data-bf-part="content">
+          <ConfigRetryState
+            message={t('loading.failed')}
+            retryLabel={t('loading.retry')}
+            onRetry={() => void loadPageData()}
+          />
+        </ConfigPageContent>
+      </ConfigPageLayout>
+    );
+  }
+  if (isLoading || (requiresExperienceSettings && !settings)) {
+    return (
+      <ConfigPageLayout className="bitfun-runtime-settings" data-bf-component="runtime-settings" data-bf-part="root" data-bf-view={appearanceView}>
+        <ConfigPageHeader title={pageTitle} subtitle={pageSubtitle} />
+        <ConfigPageContent className="bitfun-runtime-settings__content" data-bf-component="runtime-settings" data-bf-part="content">
+          <ConfigLoadingState label={t('loading.text')} />
+        </ConfigPageContent>
+      </ConfigPageLayout>
+    );
+  }
+
+  return (
+    <ConfigPageLayout className="bitfun-runtime-settings" data-bf-component="runtime-settings" data-bf-part="root" data-bf-view={appearanceView}>
+      <ConfigPageHeader title={pageTitle} subtitle={pageSubtitle} />
+
+      <ConfigPageContent className="bitfun-runtime-settings__content" data-bf-component="runtime-settings" data-bf-part="content">
+
+        {page === 'pet' && settings ? (
+          <>
+
+        {/* ── External instruction sources ─────────────────────── */}
+        <ConfigPageSection
+          title={t('features.externalInstructionSources.title')}
+          description={t('features.externalInstructionSources.subtitle')}
+        >
+          <ConfigPageRow
+            label={t('features.externalInstructionSources.enable')}
+            description={t('features.externalInstructionSources.description')}
+            align="center"
+          >
+            <div className="bitfun-runtime-settings__row-control" data-bf-component="runtime-settings" data-bf-part="control">
+              <Switch
+                checked={externalInstructionSourcesEnabled}
+                disabled={externalInstructionSourcesSaving}
+                onChange={(e) => void handleExternalInstructionSourcesToggle(e.target.checked)}
+                size="sm"
+              />
+            </div>
+          </ConfigPageRow>
+        </ConfigPageSection>
+
+        {/* ── Workspace instruction files ──────────────────────── */}
+        <ConfigPageSection
+          title={t('features.workspaceInstructionFiles.title')}
+          description={t('features.workspaceInstructionFiles.subtitle')}
+        >
+          <ConfigPageRow
+            label={t('features.workspaceInstructionFiles.enable')}
+            description={t('features.workspaceInstructionFiles.description')}
+            align="center"
+          >
+            <div className="bitfun-runtime-settings__row-control" data-bf-component="runtime-settings" data-bf-part="control">
+              <Switch
+                checked={workspaceInstructionFilesEnabled}
+                disabled={workspaceInstructionFilesSaving}
+                onChange={(e) => void handleWorkspaceInstructionFilesToggle(e.target.checked)}
+                size="sm"
+              />
+            </div>
+          </ConfigPageRow>
+        </ConfigPageSection>
+
+        {/* ── Desktop Agent companion ───────────────────────────── */}
+        <ConfigPageSection
+          title={t('features.pet.title')}
+          description={t('features.pet.subtitle')}
+        >
+          <ConfigPageRow label={t('features.pet.enable')} align="center">
+            <div className="bitfun-runtime-settings__row-control" data-bf-component="runtime-settings" data-bf-part="control">
+              <Switch
+                checked={settings.enable_agent_companion}
+                onChange={(e) => updateSetting('enable_agent_companion', e.target.checked)}
+              />
+            </div>
+          </ConfigPageRow>
+        </ConfigPageSection>
+
+        <ConfigPageSection
+          className="bitfun-runtime-settings__pet-picker"
+          title={t('features.pet.petLabel')}
+          description={t('features.pet.petDescription')}
+          bodySurface={false}
+          extra={(
+            <div
+              className="bitfun-runtime-settings__pet-actions"
+              data-bf-component="runtime-settings"
+              data-bf-part="petActions"
+            >
+              <Button
+                size="md"
+                variant="fill"
+                onClick={() => void handleImportCompanionPet()}
+                disabled={!IS_TAURI_DESKTOP || companionPetImporting}
+                title={t('features.pet.importHint')}
+              >
+                {companionPetImporting ? t('features.pet.importing') : t('features.pet.import')}
+              </Button>
+            </div>
+          )}
+          data-bf-component="runtime-settings"
+          data-bf-part="petPicker"
+        >
+          <div
+            className="bitfun-runtime-settings__pet-chooser"
+            data-bf-component="runtime-settings"
+            data-bf-part="petChooser"
+          >
+            <div
+              className="bitfun-runtime-settings__pet-gallery"
+              data-bf-component="runtime-settings"
+              data-bf-part="petList"
+              role="radiogroup"
+              aria-label={t('features.pet.petLabel')}
+            >
+              {companionPets.map((pet) => {
+                const label = pet.source === 'preset' && pet.id === 'blue-golden'
+                  ? t('features.pet.presets.blueGolden.name')
+                  : pet.displayName;
+                const sourceLabel = pet.source === 'preset'
+                  ? t('features.pet.groupPreset')
+                  : t('features.pet.groupImported');
+                const isUserPet = pet.source === 'user';
+                const isDeleting = companionPetDeletingPath === pet.packagePath;
+                const isSelected = pet.packagePath === selectedCompanionPetValue;
+                const isDisabled = isDeleting;
+                const previewStyle = {
+                  '--bitfun-pet-preview-src': `url("${pet.previewSrc}")`,
+                } as React.CSSProperties;
+
+                return (
+                  <article
+                    key={pet.packagePath}
+                    className="bitfun-runtime-settings__pet-card"
+                    data-testid="companion-pet-card"
+                    data-pet-id={pet.id}
+                    data-bf-component="runtime-settings"
+                    data-bf-part="petOption"
+                    data-bf-state={isSelected ? 'selected' : undefined}
+                  >
+                    <Tooltip
+                      placement="top"
+                      delay={180}
+                      disabled={isDisabled}
+                      content={(
+                        <div className="bitfun-runtime-settings__pet-preview-popover">
+                          <div className="bitfun-runtime-settings__pet-preview-popover-image" aria-hidden>
+                            <span
+                              className="bitfun-runtime-settings__pet-preview-sprite bitfun-runtime-settings__pet-preview-sprite--popover"
+                              style={previewStyle}
+                            />
+                          </div>
+                          <span>{label}</span>
+                        </div>
+                      )}
+                    >
+                      <button
+                        type="button"
+                        className="bitfun-runtime-settings__pet-card-select"
+                        data-bf-component="runtime-settings"
+                        data-bf-part="petTrigger"
+                        data-bf-state={isSelected ? 'selected' : undefined}
+                        role="radio"
+                        aria-checked={isSelected}
+                        aria-label={label}
+                        disabled={isDisabled}
+                        onClick={() => void handleCompanionPetChange(pet.packagePath)}
+                      >
+                        <span className="bitfun-runtime-settings__pet-card-preview" aria-hidden>
+                          <span
+                            className="bitfun-runtime-settings__pet-preview-sprite"
+                            style={previewStyle}
+                          />
+                          {isSelected && (
+                            <span className="bitfun-runtime-settings__pet-selected-mark">
+                              <Icon name="check-line" size="xs" />
+                            </span>
+                          )}
+                        </span>
+                        <span
+                          className="bitfun-runtime-settings__pet-card-body"
+                          data-bf-component="runtime-settings"
+                          data-bf-part="petOptionMain"
+                        >
+                          <strong>{label}</strong>
+                          <span data-bf-component="runtime-settings" data-bf-part="petGroup">
+                            {sourceLabel}
+                          </span>
+                        </span>
+                      </button>
+                    </Tooltip>
+                    {isUserPet && IS_TAURI_DESKTOP && (
+                      <Tooltip content={t('features.pet.delete')}>
+                        <IconButton
+                          type="button"
+                          size="sm"
+                          tone="danger"
+                          className="bitfun-runtime-settings__pet-card-delete"
+                          disabled={isDeleting}
+                          aria-label={`${t('features.pet.delete')}: ${label}`}
+                          onClick={(event) => void handleDeleteCompanionPet(event, pet)}
+                          icon={<Icon name="delete" size="sm" />}
+                        />
+                      </Tooltip>
+                    )}
+                  </article>
+                );
+              })}
+            </div>
+          </div>
+        </ConfigPageSection>
+
+          </>
+        ) : null}
+
+        {page === 'session-workspace' && settings ? (
+          <>
+
+        {/* ── Accelerated workspace search ───────────────────────── */}
+        <ConfigPageSection
+          title={t('features.workspaceSearch.title')}
+          description={t('features.workspaceSearch.subtitle')}
+        >
+          <ConfigPageRow label={t('features.workspaceSearch.enable')} align="center">
+            <div className="bitfun-runtime-settings__row-control" data-bf-component="runtime-settings" data-bf-part="control">
+              <Switch
+                checked={settings.enable_workspace_search}
+                onChange={(e) => updateSetting('enable_workspace_search', e.target.checked)}
+              />
+            </div>
+          </ConfigPageRow>
+        </ConfigPageSection>
+
+        <SessionTitleConfig />
+
+          </>
+        ) : null}
+
+        {showsExecutionCommon ? (
+          <>
+
+        <ConfigPageSection
+          title={t('permissionPolicy.sectionTitle')}
+          description={t('permissionPolicy.sectionDescription')}
+        >
+          <ConfigPageRow
+            label={t('permissionPolicy.mode')}
+            description={`${resolveToolPermissionMode(toolPermissionConfig) === 'full_access'
+              ? t('permissionPolicy.fullAccessDescription')
+              : resolveToolPermissionMode(toolPermissionConfig) === 'auto'
+                ? t('permissionPolicy.autoApproveDescription')
+                : t('permissionPolicy.askDescription')} ${t('permissionPolicy.modeDescription')}`}
+            align="center"
+          >
+            <div className="bitfun-runtime-settings__row-control" data-bf-component="runtime-settings" data-bf-part="control">
+              <Select
+                size="sm"
+                value={resolveToolPermissionMode(toolPermissionConfig)}
+                options={[
+                  { value: 'ask', label: t('permissionPolicy.ask') },
+                  { value: 'auto', label: t('permissionPolicy.autoApprove') },
+                  { value: 'full_access', label: t('permissionPolicy.fullAccess') },
+                ]}
+                disabled={permissionConfigSaving}
+                onValueChange={handlePermissionModeChange}
+              />
+            </div>
+          </ConfigPageRow>
+          <ConfigPageRow
+            label={t('permissionPolicy.showInChatInput')}
+            description={t('permissionPolicy.showInChatInputDescription')}
+            align="center"
+          >
+            <div className="bitfun-runtime-settings__row-control">
+              <Switch
+                checked={showPermissionModeControl}
+                disabled={permissionModeControlVisibilitySaving}
+                onChange={event => void handlePermissionModeControlVisibilityChange(event.target.checked)}
+              />
+            </div>
+          </ConfigPageRow>
+          <ConfigPageRow
+            label={t('permissionPolicy.globalRules')}
+            description={t('permissionPolicy.globalRulesDescription')}
+            align="center"
+          >
+            <div className="bitfun-runtime-settings__row-control" data-bf-component="runtime-settings" data-bf-part="control">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={permissionConfigSaving}
+                onClick={() => setIsGlobalPermissionRulesDialogOpen(true)}
+              >
+                {t('permissionPolicy.manageGlobalRules')}
+              </Button>
+            </div>
+          </ConfigPageRow>
+        </ConfigPageSection>
+
+        <GlobalPermissionRulesDialog
+          isOpen={isGlobalPermissionRulesDialogOpen}
+          rules={toolPermissionConfig.policy.rules}
+          isSaving={permissionConfigSaving}
+          onSave={handleSaveGlobalPermissionRules}
+          onClose={() => setIsGlobalPermissionRulesDialogOpen(false)}
+        />
+
+          </>
+        ) : null}
+
+        {showsExecutionAdvanced ? (
+          <>
+
+        {/* ── Tool execution behavior ────────────────────────────── */}
+        <ConfigPageSection
+          title={t('toolExecution.sectionTitle')}
+          description={t('toolExecution.sectionDescription')}
+        >
+          <ConfigPageRow
+            label={tTools('config.executionTimeout')}
+            description={tTools('config.executionTimeoutDesc')}
+            align="center"
+          >
+            <div className="bitfun-runtime-settings__row-control" data-bf-component="runtime-settings" data-bf-part="control">
+              <NumberInput
+                value={executionTimeout === '' ? 0 : parseInt(executionTimeout, 10)}
+                onValueChange={(val) => handleToolTimeoutChange(val === 0 ? '' : String(val))}
+                min={0}
+                max={3600}
+                step={5}
+                unit={tTools('config.seconds')}
+                size="sm"
+                variant="compact"
+                disabled={toolExecConfigLoading}
+              />
+            </div>
+          </ConfigPageRow>
+          <ConfigPageRow
+            label={tTools('config.subagentBatchPolicy.label')}
+            description={tTools('config.subagentBatchPolicy.desc')}
+            align="center"
+          >
+            <div className="bitfun-runtime-settings__row-control" data-bf-component="runtime-settings" data-bf-part="control">
+              <Select
+                value={subagentBatchExecutionPolicy}
+                options={subagentBatchExecutionPolicyOptions.map(option => ({
+                  disabled: option.disabled,
+                  label: option.description ? `${option.label} — ${option.description}` : option.label,
+                  value: option.value,
+                }))}
+                size="sm"
+                disabled={toolExecConfigLoading}
+                onValueChange={handleSubagentBatchExecutionPolicyChange}
+              />
+            </div>
+          </ConfigPageRow>
+          <ConfigPageRow
+            label={tTools('config.subagentMaxConcurrency')}
+            description={tTools('config.subagentMaxConcurrencyDesc')}
+            align="center"
+          >
+            <div className="bitfun-runtime-settings__row-control" data-bf-component="runtime-settings" data-bf-part="control">
+              <NumberInput
+                value={subagentMaxConcurrency}
+                onValueChange={(val) => void handleSubagentMaxConcurrencyChange(val)}
+                min={1}
+                max={100}
+                step={1}
+                size="sm"
+                variant="compact"
+                disabled={toolExecConfigLoading}
+              />
+            </div>
+          </ConfigPageRow>
+          <ConfigPageRow
+            label={tTools('config.swarmMaxConcurrency')}
+            description={tTools('config.swarmMaxConcurrencyDesc')}
+            align="center"
+          >
+            <div className="bitfun-runtime-settings__row-control" data-bf-component="runtime-settings" data-bf-part="control">
+              <NumberInput
+                value={swarmMaxConcurrency}
+                onValueChange={(val) => void handleSwarmMaxConcurrencyChange(val)}
+                min={1}
+                max={100}
+                step={1}
+                size="sm"
+                variant="compact"
+                disabled={toolExecConfigLoading}
+              />
+            </div>
+          </ConfigPageRow>
+        </ConfigPageSection>
+
+        <ConfigPageSection
+          title={t('deferredToolLoading.sectionTitle')}
+          description={t('deferredToolLoading.sectionDescription')}
+        >
+          <ConfigPageRow
+            label={t('common.enable')}
+            description={!enableDeferredToolLoading ? t('deferredToolLoading.warning') : undefined}
+            align="center"
+          >
+            <div className="bitfun-runtime-settings__row-control" data-bf-component="runtime-settings" data-bf-part="control">
+              <Switch
+                checked={enableDeferredToolLoading}
+                onChange={(event) => handleDeferredToolLoadingChange(event.target.checked)}
+                disabled={deferredToolLoadingConfigSaving}
+              />
+            </div>
+          </ConfigPageRow>
+        </ConfigPageSection>
+
+        <ToolJsonRepairSection />
+        <ReviewCapacitySection />
+
+          </>
+        ) : null}
+
+        {page === 'browser-desktop-control' ? (
+          <>
+
+        {/* ── Computer use (desktop) ─────────────────────────────── */}
+        <ConfigPageSection
+          title={t('computerUse.sectionTitle')}
+          description={
+            IS_TAURI_DESKTOP ? t('computerUse.sectionDescription') : t('computerUse.desktopOnly')
+          }
+        >
+          {IS_TAURI_DESKTOP && !peerBrowserControlUnsupported ? (
+            <>
+              <ConfigMessage
+                message={computerUseStatusError
+                  ? { type: 'error', text: t('computerUse.statusLoadFailed') }
+                  : null}
+              />
+              <ConfigPageRow label={t('computerUse.enable')} description={t('computerUse.enableDesc')} align="center">
+                <div className="bitfun-runtime-settings__row-control" data-bf-component="runtime-settings" data-bf-part="control">
+                  <Switch
+                    checked={computerUseEnabled}
+                    onChange={(e) => handleComputerUseEnabledChange(e.target.checked)}
+                    disabled={computerUseBusy || computerUseStatusLoading || computerUseStatusError}
+                  />
+                </div>
+              </ConfigPageRow>
+              <ConfigPageRow
+                label={t('computerUse.accessibility')}
+                description={t('computerUse.accessibilityDesc')}
+                align="center"
+                balanced
+              >
+                <div
+                  className="bitfun-runtime-settings__row-control"
+                  data-bf-component="runtime-settings"
+                  data-bf-part="control"
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'row',
+                    flexWrap: 'nowrap',
+                    alignItems: 'center',
+                    justifyContent: 'flex-end',
+                    gap: 8,
+                  }}
+                >
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                    <span className={!computerUseStatusLoading && computerUseAccess ? 'bitfun-runtime-settings__perm-status--granted' : undefined}>
+                      {computerUseAccessLabel}
+                    </span>
+                    <Tooltip content={t('computerUse.refreshStatus')}>
+                      <IconButton
+                        type="button"
+                        size="sm"
+                        aria-label={t('computerUse.refreshStatus')}
+                        disabled={computerUseBusy || computerUseStatusLoading}
+                        onClick={() => void refreshComputerUseStatus()}
+                        icon={<Icon name="refresh" size="sm" />}
+                      />
+                    </Tooltip>
+                  </span>
+                  {platform === 'macos' && (
+                    <Button
+                      className="bitfun-runtime-settings__row-action-btn"
+                      size="sm"
+                      variant="outline"
+                      disabled={computerUseBusy || computerUseStatusLoading}
+                      onClick={() => void handleComputerUseOpenSettings('accessibility')}
+                    >
+                      {t('computerUse.openSettings')}
+                    </Button>
+                  )}
+                </div>
+              </ConfigPageRow>
+              <ConfigPageRow
+                label={t('computerUse.screenCapture')}
+                description={t('computerUse.screenCaptureDesc')}
+                align="center"
+                balanced
+              >
+                <div
+                  className="bitfun-runtime-settings__row-control"
+                  data-bf-component="runtime-settings"
+                  data-bf-part="control"
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'row',
+                    flexWrap: 'nowrap',
+                    alignItems: 'center',
+                    justifyContent: 'flex-end',
+                    gap: 8,
+                  }}
+                >
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                    <span className={!computerUseStatusLoading && computerUseScreen ? 'bitfun-runtime-settings__perm-status--granted' : undefined}>
+                      {computerUseScreenLabel}
+                    </span>
+                    <Tooltip content={t('computerUse.refreshStatus')}>
+                      <IconButton
+                        type="button"
+                        size="sm"
+                        aria-label={t('computerUse.refreshStatus')}
+                        disabled={computerUseBusy || computerUseStatusLoading}
+                        onClick={() => void refreshComputerUseStatus()}
+                        icon={<Icon name="refresh" size="sm" />}
+                      />
+                    </Tooltip>
+                  </span>
+                  {platform === 'macos' && (
+                    <Button
+                      className="bitfun-runtime-settings__row-action-btn"
+                      size="sm"
+                      variant="outline"
+                      disabled={computerUseBusy || computerUseStatusLoading}
+                      onClick={() => void handleComputerUseOpenSettings('screen_capture')}
+                    >
+                      {t('computerUse.openSettings')}
+                    </Button>
+                  )}
+                </div>
+              </ConfigPageRow>
+              {computerUsePlatformMessage && (
+                <div
+                  className="bitfun-runtime-settings__platform-note"
+                  data-bf-component="runtime-settings"
+                  data-bf-part="platformNote"
+                  role="note"
+                >
+                  <Icon
+                    aria-hidden="true"
+                    className="bitfun-runtime-settings__platform-note-icon"
+                    name="info"
+                    size="sm"
+                  />
+                  <p className="bitfun-runtime-settings__platform-note-copy">
+                    <strong>{t('computerUse.platformNote')}: </strong>
+                    {computerUsePlatformMessage}
+                  </p>
+                </div>
+              )}
+            </>
+          ) : peerBrowserControlUnsupported ? (
+            <ConfigPageRow
+              label={t('computerUse.peerUnsupported')}
+              description=""
+              align="center"
+            >
+              <span />
+            </ConfigPageRow>
+          ) : null}
+        </ConfigPageSection>
+
+        {/* ── Browser control (CDP) ──────────────────────────────── */}
+        <ConfigPageSection
+          title={t('browserControl.sectionTitle')}
+          description={
+            IS_TAURI_DESKTOP ? t('browserControl.sectionDescription') : t('browserControl.desktopOnly')
+          }
+        >
+          {IS_TAURI_DESKTOP && !peerBrowserControlUnsupported ? (
+            <>
+              <ConfigMessage
+                message={browserStatusError
+                  ? { type: 'error', text: t('browserControl.statusLoadFailed') }
+                  : null}
+              />
+              {/* Only show browser selector when CDP is not connected */}
+              {!browserCdpAvailable && (
+              <ConfigPageRow
+                label={t('browserControl.preferredBrowser')}
+                description={t('browserControl.preferredBrowserDesc')}
+                align="center"
+                balanced
+              >
+                <div className="bitfun-runtime-settings__row-control" data-bf-component="runtime-settings" data-bf-part="control">
+                  <Select
+                    value={preferredBrowser}
+                    options={browserSelectOptions}
+                    size="sm"
+                    disabled={browserControlBusy || browserStatusLoading || browserStatusError || browserSelectOptions.length === 0}
+                    onValueChange={(value) => void handleBrowserControlBrowserChange(value)}
+                  />
+                </div>
+              </ConfigPageRow>
+              )}
+              {browserDefaultCdpSupported && (
+                <ConfigPageRow
+                  label={t('browserControl.defaultCdp')}
+                  description={t('browserControl.defaultCdpDesc')}
+                  align="center"
+                  balanced
+                >
+                  <div
+                    className="bitfun-runtime-settings__row-control"
+                    data-bf-component="runtime-settings"
+                    data-bf-part="control"
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'row',
+                      flexWrap: 'nowrap',
+                      alignItems: 'center',
+                      justifyContent: 'flex-end',
+                      gap: 8,
+                    }}
+                  >
+                    <span className={browserDefaultCdpEnabled ? 'bitfun-runtime-settings__perm-status--granted' : undefined}>
+                      {t(browserDefaultCdpEnabled
+                        ? 'browserControl.defaultCdpEnabled'
+                        : 'browserControl.defaultCdpDisabled')}
+                    </span>
+                    {!browserCdpAvailable && (
+                      <Button
+                        className="bitfun-runtime-settings__row-action-btn"
+                        size="sm"
+                        variant="outline"
+                        disabled={browserControlBusy || browserStatusLoading || browserStatusError}
+                        onClick={() => void handleBrowserControlEnableDefaultCdp()}
+                      >
+                        {t(browserDefaultCdpEnabled
+                          ? 'browserControl.connect'
+                          : 'browserControl.enableDefaultCdp')}
+                      </Button>
+                    )}
+                  </div>
+                </ConfigPageRow>
+              )}
+              {browserDefaultCdpSupported && (
+                <ConfigPageRow
+                  label={t('browserControl.autoConnectOnStartup')}
+                  description={t('browserControl.autoConnectOnStartupDesc')}
+                  align="center"
+                  balanced
+                >
+                  <div className="bitfun-runtime-settings__row-control" data-bf-component="runtime-settings" data-bf-part="control">
+                    <Switch
+                      checked={browserAutoConnectOnStartup}
+                      onChange={(e) => void handleBrowserAutoConnectChange(e.target.checked)}
+                      disabled={browserStatusError}
+                    />
+                  </div>
+                </ConfigPageRow>
+              )}
+              <ConfigPageRow
+                label={t('browserControl.status')}
+                description={t('browserControl.statusDesc') || undefined}
+                align="center"
+                balanced
+              >
+                <div
+                  className="bitfun-runtime-settings__row-control"
+                  data-bf-component="runtime-settings"
+                  data-bf-part="control"
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'row',
+                    flexWrap: 'wrap',
+                    alignItems: 'center',
+                    justifyContent: 'flex-end',
+                    gap: 8,
+                    minWidth: 0,
+                  }}
+                >
+                  <span
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      minWidth: 0,
+                      maxWidth: '100%',
+                    }}
+                    title={browserCdpAvailable && browserVersion ? `${browserKind} ${browserVersion}` : undefined}
+                  >
+                    <span
+                      className={!browserStatusLoading && browserCdpAvailable ? 'bitfun-runtime-settings__perm-status--granted' : undefined}
+                      style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}
+                    >
+                      {browserStatusLabel}
+                    </span>
+                    <Tooltip content={t('browserControl.refreshStatus')}>
+                      <IconButton
+                        type="button"
+                        size="sm"
+                        aria-label={t('browserControl.refreshStatus')}
+                        disabled={browserControlBusy || browserStatusLoading}
+                        onClick={() => void refreshBrowserControlStatus()}
+                        icon={<Icon name="refresh" size="sm" />}
+                      />
+                    </Tooltip>
+                  </span>
+                  {browserCdpAvailable ? (
+                    <Button
+                      className="bitfun-runtime-settings__row-action-btn"
+                      size="sm"
+                      variant="outline"
+                      disabled={browserControlBusy || browserStatusLoading}
+                      onClick={() => void handleBrowserControlDisconnect()}
+                    >
+                      {t('browserControl.disconnect')}
+                    </Button>
+                  ) : !browserDefaultCdpSupported ? (
+                    <Button
+                      className="bitfun-runtime-settings__row-action-btn"
+                      size="sm"
+                      variant="outline"
+                      disabled={browserControlBusy || browserStatusLoading}
+                      onClick={() => void handleBrowserControlLaunch()}
+                    >
+                      {t('browserControl.connect')}
+                    </Button>
+                  ) : null}
+                </div>
+              </ConfigPageRow>
+            </>
+          ) : peerBrowserControlUnsupported ? (
+            <ConfigPageRow
+              label={t('browserControl.peerUnsupported')}
+              description=""
+              align="center"
+            >
+              <span />
+            </ConfigPageRow>
+          ) : null}
+        </ConfigPageSection>
+
+        <Dialog
+          open={browserRestartPrompt !== null}
+          onOpenChange={(nextOpen) => {
+            if (!nextOpen && !browserControlBusy) setBrowserRestartPrompt(null);
+          }}
+          size="sm"
+          closeOnPointerOutside={!browserControlBusy}
+        >
+          <DialogHeader>
+            <DialogHeading>
+              <DialogTitle>{t('browserControl.restartModal.title')}</DialogTitle>
+            </DialogHeading>
+            <DialogClose />
+          </DialogHeader>
+          <DialogBody inset="none">
+          <div className="bitfun-debug-config__modal-body" data-bf-component="runtime-settings" data-bf-part="restartModal">
+            <p>{t('browserControl.restartModal.description', { browser: browserRestartPrompt?.browserKind || browserKind })}</p>
+            <p>{t('browserControl.restartModal.warning')}</p>
+            {browserRestartPrompt?.message ? (
+              <p className="bitfun-runtime-settings__hint">{browserRestartPrompt.message}</p>
+            ) : null}
+          </div>
+          <div className="bitfun-debug-config__modal-footer" data-bf-component="runtime-settings" data-bf-part="modalFooter">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setBrowserRestartPrompt(null)}
+              disabled={browserControlBusy}
+            >
+              {t('browserControl.restartModal.cancel')}
+            </Button>
+            <Button
+              variant="fill"
+              size="sm"
+              onClick={() => void handleBrowserControlRestart()}
+              disabled={browserControlBusy}
+            >
+              {browserControlBusy
+                ? t('browserControl.restartModal.restarting')
+                : t('browserControl.restartModal.confirm')}
+            </Button>
+          </div>
+                  </DialogBody>
+        </Dialog>
+
+          </>
+        ) : null}
+
+      </ConfigPageContent>
+    </ConfigPageLayout>
+  );
+};
+
+export function PetSettingsPage({ isActive }: { isActive?: boolean }): React.ReactElement {
+  return <RuntimeSettingsPage page="pet" isActive={isActive} />;
+}
+
+export function SessionWorkspaceSettingsPage(): React.ReactElement {
+  return <RuntimeSettingsPage page="session-workspace" />;
+}
+
+export function ExecutionCommonSettingsPage(): React.ReactElement {
+  return <RuntimeSettingsPage page="execution" executionView="common" />;
+}
+
+export function ExecutionAdvancedSettingsPage(): React.ReactElement {
+  return <RuntimeSettingsPage page="execution" executionView="advanced" />;
+}
+
+export function BrowserDesktopControlSettingsPage(): React.ReactElement {
+  return <RuntimeSettingsPage page="browser-desktop-control" />;
+}

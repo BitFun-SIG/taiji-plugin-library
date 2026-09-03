@@ -5,9 +5,10 @@ export const sessionsSectionAppearanceDescriptor: AppearanceSurfaceDescriptor = 
   parts: [
     { id: 'root' },
     { id: 'loading' },
-    { id: 'retry' },
+    { id: 'aggregateLoading' },
     { id: 'row' },
     { id: 'rowMain' },
+    { id: 'assistantAvatar' },
     { id: 'edit' },
     { id: 'actions' },
     { id: 'menu' },
@@ -22,5 +23,6 @@ export const sessionsSectionAppearanceDescriptor: AppearanceSurfaceDescriptor = 
     { id: 'expanded', selector: { kind: 'self', suffix: '[data-bf-state~="expanded"]' } },
     { id: 'collapsed', selector: { kind: 'self', suffix: '[data-bf-state~="collapsed"]' } },
     { id: 'orphan', selector: { kind: 'self', suffix: '[data-bf-state~="orphan"]' } },
+    { id: 'partial', selector: { kind: 'self', suffix: '[data-bf-state~="partial"]' } },
   ],
 };

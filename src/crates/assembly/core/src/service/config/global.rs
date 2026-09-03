@@ -145,13 +145,6 @@ pub enum ConfigUpdateEvent {
     /// The models.dev reasoning catalog snapshot changed. Session owners use
     /// this to reconcile persisted reasoning preset selections.
     ReasoningCatalogUpdated,
-    /// Debug-mode configuration updated.
-    DebugModeConfigUpdated {
-        /// The new ingest port.
-        new_port: u16,
-        /// The new log path.
-        new_log_path: String,
-    },
     /// Runtime log level updated.
     LogLevelUpdated {
         /// New runtime log level.
@@ -198,11 +191,17 @@ impl GlobalConfigManager {
         })?;
 
         let config_service = Arc::new(ConfigService::new().await?);
-        let service_wrapper = Arc::new(RwLock::new(Some(config_service)));
+        let service_wrapper = Arc::new(RwLock::new(Some(Arc::clone(&config_service))));
 
         GLOBAL_CONFIG_SERVICE.set(service_wrapper).map_err(|_| {
             BitFunError::config("Failed to initialize global config service".to_string())
         })?;
+
+        #[cfg(feature = "web-tools")]
+        {
+            let ai_config = config_service.get_config(Some("ai")).await?;
+            crate::service::web_search::refresh_global_web_search_runtime(&ai_config).await;
+        }
 
         info!("Global config service initialized");
         refresh_external_instruction_sources_enabled_cache().await;
@@ -252,7 +251,13 @@ impl GlobalConfigManager {
 
         {
             let mut service_guard = service_wrapper.write().await;
-            *service_guard = Some(new_service);
+            *service_guard = Some(Arc::clone(&new_service));
+        }
+
+        #[cfg(feature = "web-tools")]
+        {
+            let ai_config = new_service.get_config(Some("ai")).await?;
+            crate::service::web_search::refresh_global_web_search_runtime(&ai_config).await;
         }
 
         Self::broadcast_update(ConfigUpdateEvent::ConfigReloaded).await;

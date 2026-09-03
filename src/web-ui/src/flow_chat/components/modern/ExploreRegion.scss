@@ -10,10 +10,10 @@
   box-sizing: border-box;
   width: 100%;
   margin: 0 auto;
-  padding: 0 var(--bf-appearance-token-flowchat-content-inline-pad);
+  padding: 0 var(--bf-control-flow-chat-content-padding-inline);
 
   @media (max-width: 768px) {
-    padding: 0 var(--bf-appearance-token-flowchat-content-inline-pad-mobile);
+    padding: 0 var(--bf-control-flow-chat-content-padding-inline-mobile);
   }
 }
 
@@ -21,39 +21,74 @@
 
 .explore-region--collapsible {
   margin: 0 0 0.3rem 0;
-  font-size: var(--bf-appearance-token-flowchat-font-size-sm);
-  line-height: var(--bf-appearance-token-flowchat-support-line-height);
+  font-size: var(--bf-type-flow-control-font-size);
+  line-height: var(--bf-type-flow-support-line-height);
 
   .explore-region__header {
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: var(--bf-control-flow-chat-inline-gap);
     padding: 0;
-    color: var(--bf-appearance-token-color-text-muted);
-    font-size: var(--bf-appearance-token-flowchat-font-size-sm);
-    line-height: var(--bf-appearance-token-flowchat-support-line-height);
+    background: transparent;
+    color: var(--bf-color-content-muted);
+    font-size: var(--bf-type-flow-control-font-size);
+    line-height: var(--bf-type-flow-support-line-height);
     cursor: pointer;
     user-select: none;
-    border-radius: var(--bf-appearance-token-size-radius-sm);
-    transition: color 0.15s ease, background 0.15s ease;
+    border-radius: var(--bf-radius-sm);
+    transition: color 0.15s ease;
 
     &:hover {
-    background: var(--bf-appearance-token-element-bg-hover);
-      color: var(--bf-appearance-token-color-text-secondary);
+      .explore-region__summary {
+        color: var(--bf-color-content-secondary);
+        opacity: 1;
+      }
+
+      .explore-region__leading-icon {
+        opacity: 1;
+      }
+
+      .explore-region__leading-icon--default {
+        opacity: 0;
+      }
+
+      .explore-region__leading-icon--collapsed-hover {
+        opacity: 1;
+      }
     }
   }
 
-  .explore-region__icon {
+  .explore-region__leading-icon {
+    position: relative;
+    width: var(--bf-control-icon-size-sm);
+    height: var(--bf-control-icon-size-sm);
     flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--bf-color-content-muted);
     opacity: 0.6;
-    // Rotate 90° when expanded; 0° = pointing right (collapsed).
-    transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
-    transform: rotate(0deg);
+    transition: opacity 0.15s ease;
+
+    > [data-bf-component='icon'] {
+      position: absolute;
+      inset: 0;
+      transition: opacity 0.15s ease;
+    }
+  }
+
+  .explore-region__leading-icon--default {
+    opacity: 1;
+  }
+
+  .explore-region__leading-icon--collapsed-hover,
+  .explore-region__leading-icon--expanded {
+    opacity: 0;
   }
 
   .explore-region__summary {
-    font-size: var(--bf-appearance-token-flowchat-font-size-sm);
-    line-height: var(--bf-appearance-token-flowchat-support-line-height);
+    font-size: var(--bf-type-flow-control-font-size);
+    line-height: var(--bf-type-flow-support-line-height);
     opacity: 0.8;
   }
 
@@ -81,20 +116,27 @@
     }
 
     &::-webkit-scrollbar-thumb {
-      background: var(--bf-appearance-token-border-base);
+      background: var(--bf-color-border-default);
       border-radius: 2px;
 
       &:hover {
-        background: var(--bf-appearance-token-border-medium);
+        background: var(--bf-color-field-border-hover);
       }
     }
   }
 }
 
-// Expanded state: rotate icon + reveal content.
+// Expanded state: keep the disclosure arrow visible and reveal content.
 .explore-region--collapsible.explore-region--expanded {
-  .explore-region__icon {
-    transform: rotate(90deg); // pointing down = expanded
+  .explore-region__header {
+    .explore-region__leading-icon--default,
+    .explore-region__leading-icon--collapsed-hover {
+      opacity: 0;
+    }
+
+    .explore-region__leading-icon--expanded {
+      opacity: 1;
+    }
   }
 
   .explore-region__content-wrapper {
@@ -119,8 +161,8 @@
     z-index: 3;
     background: linear-gradient(
       to bottom,
-      var(--bf-appearance-token-color-bg-scene) 0%,
-      color-mix(in srgb, var(--bf-appearance-token-color-bg-scene) 60%, transparent) 50%,
+      var(--bf-color-surface-scene) 0%,
+      color-mix(in srgb, var(--bf-color-surface-scene) 60%, transparent) 50%,
       transparent 100%
     );
   }
@@ -138,8 +180,8 @@
     z-index: 3;
     background: linear-gradient(
       to top,
-      var(--bf-appearance-token-color-bg-scene) 0%,
-      color-mix(in srgb, var(--bf-appearance-token-color-bg-scene) 60%, transparent) 50%,
+      var(--bf-color-surface-scene) 0%,
+      color-mix(in srgb, var(--bf-color-surface-scene) 60%, transparent) 50%,
       transparent 100%
     );
   }

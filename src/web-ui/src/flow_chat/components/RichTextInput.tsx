@@ -3,9 +3,11 @@
  * Supports inserting file tags inline and using @ to select files/folders.
  */
 
+import { Button, Dialog, DialogBody, DialogClose, DialogFooter, DialogHeader, DialogHeading, DialogTitle, Icon, Textarea } from '@bitfun/ui';
 import React, { useRef, useEffect, useCallback, useState } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { MessageCircle, Puzzle } from 'lucide-react';
+import { MessageCircle } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import type { ContextItem } from '../../shared/types/context';
 import { getRichTextExternalSyncAction } from './richTextInputSync';
 import {
@@ -17,6 +19,10 @@ import {
   parseSkillPromptReferenceToken,
 } from '../utils/skillPromptReference';
 import {
+  getAdditionalModePromptReferenceMatches,
+  parseAdditionalModePromptReferenceToken,
+} from '../utils/additionalModePromptReference';
+import {
   appendComposerTextSegment,
   COMPOSER_PRESENTATION_VERSION,
   type ComposerPresentation,
@@ -25,11 +31,13 @@ import {
 import './RichTextInput.scss';
 
 const SKILL_REFERENCE_BADGE_ICON = renderToStaticMarkup(
-  <Puzzle size={12} strokeWidth={2.2} aria-hidden="true" />,
+  <Icon name="extension" size="xs" aria-hidden="true" />,
 );
 const SESSION_REFERENCE_BADGE_ICON = renderToStaticMarkup(
   <MessageCircle size={12} strokeWidth={2.2} aria-hidden="true" />,
 );
+const EMPTY_PENDING_LARGE_PASTES: Record<string, string> = Object.freeze({});
+const LARGE_PASTE_CARET_ANCHOR = '\u200B';
 
 /** @ mention state */
 export interface MentionState {
@@ -71,6 +79,9 @@ export interface RichTextInputProps
   value: string;
   onChange: (value: string, contexts: ContextItem[]) => void;
   onLargePaste?: (text: string) => string | null;
+  pendingLargePastes?: Record<string, string>;
+  onUpdateLargePaste?: (placeholder: string, text: string) => string;
+  onRemoveLargePaste?: (placeholder: string) => void;
   onKeyDown?: (e: React.KeyboardEvent) => void;
   onCompositionStart?: () => void;
   onCompositionEnd?: () => void;
@@ -186,6 +197,9 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
   value,
   onChange,
   onLargePaste,
+  pendingLargePastes = EMPTY_PENDING_LARGE_PASTES,
+  onUpdateLargePaste,
+  onRemoveLargePaste,
   onKeyDown,
   onCompositionStart,
   onCompositionEnd,
@@ -200,9 +214,19 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
   onInlineTriggerStateChange,
   ...restProps
 }, ref) => {
+  const { t } = useTranslation('flow-chat');
   const editorRef = useRef<HTMLDivElement>(null);
+  const largePasteTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const largePasteValuesRef = useRef(pendingLargePastes);
+  largePasteValuesRef.current = pendingLargePastes;
   const internalRef = (ref as React.RefObject<HTMLDivElement>) || editorRef;
   const [isFocused, setIsFocused] = useState(false);
+  const [activeLargePaste, setActiveLargePaste] = useState<{
+    placeholder: string;
+    sourceText: string;
+    draft: string;
+  } | null>(null);
+  const [largePasteCopied, setLargePasteCopied] = useState(false);
   const isComposingRef = useRef(false);
   const lastContextIdsRef = useRef<Set<string>>(new Set());
   const mentionStateRef = useRef<MentionState>({ isActive: false, query: '', startOffset: 0 });
@@ -293,11 +317,63 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
 
   const removeInlineTokenElement = useCallback((element: HTMLElement) => {
     const nextSibling = element.nextSibling;
-    if (nextSibling && nextSibling.nodeType === Node.TEXT_NODE && nextSibling.textContent === ' ') {
+    if (
+      nextSibling
+      && nextSibling.nodeType === Node.TEXT_NODE
+      && (nextSibling.textContent === ' ' || nextSibling.textContent === LARGE_PASTE_CARET_ANCHOR)
+    ) {
       nextSibling.remove();
     }
     element.remove();
   }, []);
+
+  const createLargePasteElement = useCallback((placeholder: string): HTMLSpanElement => {
+    const capsule = document.createElement('span');
+    capsule.className = 'rich-text-large-paste';
+    capsule.contentEditable = 'false';
+    capsule.setAttribute('contenteditable', 'false');
+    capsule.dataset.bfComponent = 'rich-text-input';
+    capsule.dataset.bfPart = 'contextTag';
+    capsule.dataset.bfContextType = 'large-paste';
+    capsule.dataset.largePastePlaceholder = placeholder;
+    capsule.dataset.tagFormat = placeholder;
+    capsule.tabIndex = 0;
+    capsule.setAttribute('role', 'button');
+    capsule.setAttribute('aria-label', t('input.largePasteOpen', { placeholder }));
+
+    const label = document.createElement('span');
+    label.className = 'rich-text-large-paste__label';
+    label.textContent = placeholder;
+
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.className = 'rich-text-large-paste__remove';
+    remove.textContent = '×';
+    remove.setAttribute('aria-label', t('input.largePasteRemove'));
+    remove.onclick = (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      onRemoveLargePaste?.(placeholder);
+      removeInlineTokenElement(capsule);
+      triggerSyncRef.current?.();
+    };
+
+    const open = () => {
+      const text = largePasteValuesRef.current[placeholder];
+      if (text === undefined) return;
+      setLargePasteCopied(false);
+      setActiveLargePaste({ placeholder, sourceText: text, draft: text });
+    };
+    capsule.onclick = open;
+    capsule.onkeydown = (event) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        open();
+      }
+    };
+    capsule.append(label, remove);
+    return capsule;
+  }, [onRemoveLargePaste, removeInlineTokenElement, t]);
 
   const createWidgetReferenceElement = useCallback((token: string): HTMLSpanElement | null => {
     const payload = parseWidgetPromptReferenceToken(token);
@@ -350,21 +426,27 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
     return tag;
   }, [internalRef, removeInlineTokenElement]);
 
-  const createSkillReferenceElement = useCallback((token: string): HTMLSpanElement | null => {
-    const payload = parseSkillPromptReferenceToken(token);
-    if (!payload) {
-      return null;
-    }
-
+  const createSkillStyledReferenceElement = useCallback((options: {
+    token: string;
+    contextType: 'skill-reference' | 'additional-mode-reference';
+    inlineTokenType: 'skill-ref' | 'additional-mode-ref';
+    title: string;
+    displayText: string;
+    modifierClass?: string;
+  }): HTMLSpanElement => {
     const tag = document.createElement('span');
-    tag.className = 'rich-text-tag-pill rich-text-tag-pill--skill-ref';
+    tag.className = [
+      'rich-text-tag-pill',
+      'rich-text-tag-pill--skill-ref',
+      options.modifierClass,
+    ].filter(Boolean).join(' ');
     tag.dataset.bfComponent = 'rich-text-input';
     tag.dataset.bfPart = 'contextTag';
-    tag.dataset.bfContextType = 'skill-reference';
+    tag.dataset.bfContextType = options.contextType;
     tag.contentEditable = 'false';
-    tag.dataset.tagFormat = token;
-    tag.dataset.inlineTokenType = 'skill-ref';
-    tag.title = `Skill: ${payload.skillName}`;
+    tag.dataset.tagFormat = options.token;
+    tag.dataset.inlineTokenType = options.inlineTokenType;
+    tag.title = options.title;
 
     const badge = document.createElement('span');
     badge.className = 'rich-text-tag-pill__badge rich-text-tag-pill__badge--icon';
@@ -376,7 +458,7 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
     text.className = 'rich-text-tag-pill__text rich-text-tag-pill__text--skill-ref';
     text.dataset.bfComponent = 'rich-text-input';
     text.dataset.bfPart = 'tagText';
-    text.textContent = payload.skillName;
+    text.textContent = options.displayText;
 
     const remove = document.createElement('button');
     remove.className = 'rich-text-tag-pill__remove';
@@ -401,9 +483,38 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
     return tag;
   }, [internalRef, removeInlineTokenElement]);
 
+  const createSkillReferenceElement = useCallback((token: string): HTMLSpanElement | null => {
+    const payload = parseSkillPromptReferenceToken(token);
+    return payload
+      ? createSkillStyledReferenceElement({
+          token,
+          contextType: 'skill-reference',
+          inlineTokenType: 'skill-ref',
+          title: `Skill: ${payload.skillName}`,
+          displayText: payload.skillName,
+        })
+      : null;
+  }, [createSkillStyledReferenceElement]);
+
+  const createAdditionalModeReferenceElement = useCallback((token: string): HTMLSpanElement | null => {
+    const payload = parseAdditionalModePromptReferenceToken(token);
+    return payload
+      ? createSkillStyledReferenceElement({
+          token,
+          contextType: 'additional-mode-reference',
+          inlineTokenType: 'additional-mode-ref',
+          title: `Additional mode: ${payload.displayText}`,
+          displayText: payload.displayText,
+          modifierClass: 'rich-text-tag-pill--additional-mode-ref',
+        })
+      : null;
+  }, [createSkillStyledReferenceElement]);
+
   const createInlineTokenElement = useCallback((token: string): HTMLSpanElement | null => {
-    return createWidgetReferenceElement(token) ?? createSkillReferenceElement(token);
-  }, [createSkillReferenceElement, createWidgetReferenceElement]);
+    return createWidgetReferenceElement(token)
+      ?? createAdditionalModeReferenceElement(token)
+      ?? createSkillReferenceElement(token);
+  }, [createAdditionalModeReferenceElement, createSkillReferenceElement, createWidgetReferenceElement]);
 
   const buildComposerPresentation = useCallback((): ComposerPresentation | null => {
     const editor = internalRef.current;
@@ -430,6 +541,12 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
         appendText('\n');
       }
 
+      const largePastePlaceholder = element.dataset.largePastePlaceholder;
+      if (largePastePlaceholder) {
+        appendText(largePastePlaceholder);
+        return;
+      }
+
       const contextId = element.dataset.contextId;
       if (contextId) {
         const context = contextsById.get(contextId);
@@ -450,6 +567,11 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
       const inlineToken = element.dataset.inlineTokenType;
       const token = element.dataset.tagFormat;
       if (inlineToken && token) {
+        const additionalMode = parseAdditionalModePromptReferenceToken(token);
+        if (additionalMode) {
+          appendText(token);
+          return;
+        }
         const skill = parseSkillPromptReferenceToken(token);
         if (skill) {
           segments.push({
@@ -516,7 +638,27 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
 
   const renderValueWithInlineTokens = useCallback((editor: HTMLElement, text: string) => {
     const fragment = document.createDocumentFragment();
+    const largePasteMatches = Object.keys(pendingLargePastes).flatMap((placeholder) => {
+      const matches: Array<{
+        start: number;
+        end: number;
+        token: string;
+        kind: 'large-paste';
+      }> = [];
+      let start = text.indexOf(placeholder);
+      while (start !== -1) {
+        matches.push({
+          start,
+          end: start + placeholder.length,
+          token: placeholder,
+          kind: 'large-paste',
+        });
+        start = text.indexOf(placeholder, start + placeholder.length);
+      }
+      return matches;
+    });
     const matches = [
+      ...largePasteMatches,
       ...getWidgetPromptReferenceMatches(text).map(match => ({
         ...match,
         kind: 'widget-ref' as const,
@@ -525,7 +667,11 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
         ...match,
         kind: 'skill-ref' as const,
       })),
-    ].sort((a, b) => a.start - b.start);
+      ...getAdditionalModePromptReferenceMatches(text).map(match => ({
+        ...match,
+        kind: 'additional-mode-ref' as const,
+      })),
+    ].sort((a, b) => a.start - b.start || b.end - a.end);
 
     if (matches.length === 0) {
       editor.textContent = text;
@@ -534,18 +680,19 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
 
     let cursor = 0;
     for (const match of matches) {
+      if (match.start < cursor) continue;
       if (match.start > cursor) {
         fragment.appendChild(document.createTextNode(text.slice(cursor, match.start)));
       }
 
-      const tokenElement = match.kind === 'widget-ref'
-        ? createWidgetReferenceElement(match.token)
-        : createSkillReferenceElement(match.token);
-      if (tokenElement) {
-        fragment.appendChild(tokenElement);
-      } else {
-        fragment.appendChild(document.createTextNode(match.token));
-      }
+      const tokenElement = match.kind === 'large-paste'
+        ? createLargePasteElement(match.token)
+        : match.kind === 'widget-ref'
+          ? createWidgetReferenceElement(match.token)
+          : match.kind === 'additional-mode-ref'
+            ? createAdditionalModeReferenceElement(match.token)
+            : createSkillReferenceElement(match.token);
+      fragment.appendChild(tokenElement ?? document.createTextNode(match.token));
       cursor = match.end;
     }
 
@@ -554,7 +701,13 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
     }
 
     editor.replaceChildren(fragment);
-  }, [createSkillReferenceElement, createWidgetReferenceElement]);
+  }, [
+    createAdditionalModeReferenceElement,
+    createLargePasteElement,
+    createSkillReferenceElement,
+    createWidgetReferenceElement,
+    pendingLargePastes,
+  ]);
 
   /** Map textContent offsets to a DOM Range to replace only the @ span. */
   const getRangeByTextOffsets = useCallback((root: Node, start: number, end: number): Range | null => {
@@ -813,13 +966,22 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
       let node: Text | null;
       while ((node = walker.nextNode() as Text | null)) {
         const original = node.textContent || '';
-        const cleaned = sanitizeText(original);
+        const previousSibling = node.previousSibling;
+        const preservesLargePasteCaretAnchor = original.startsWith(LARGE_PASTE_CARET_ANCHOR)
+          && previousSibling instanceof HTMLElement
+          && previousSibling.hasAttribute('data-large-paste-placeholder');
+        const sanitizeNodeText = (value: string) => (
+          preservesLargePasteCaretAnchor && value.startsWith(LARGE_PASTE_CARET_ANCHOR)
+            ? `${LARGE_PASTE_CARET_ANCHOR}${sanitizeText(value.slice(1))}`
+            : sanitizeText(value)
+        );
+        const cleaned = sanitizeNodeText(original);
         if (cleaned !== original) {
           // Count how many invisible chars were removed before the cursor
           if (cursorOffset >= 0) {
             if (cursorOffset > charsSoFar) {
               const relevantSlice = original.slice(0, Math.min(cursorOffset - charsSoFar, original.length));
-              removedBeforeCursor += relevantSlice.length - sanitizeText(relevantSlice).length;
+              removedBeforeCursor += relevantSlice.length - sanitizeNodeText(relevantSlice).length;
             }
           }
           node.textContent = cleaned;
@@ -892,14 +1054,40 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
     
     const text = e.clipboardData.getData('text/plain');
     const largePastePlaceholder = onLargePaste?.(text);
-    document.execCommand('insertText', false, largePastePlaceholder ?? text);
+    if (largePastePlaceholder && internalRef.current) {
+      const selection = window.getSelection();
+      const selectedRange = selection?.rangeCount ? selection.getRangeAt(0) : null;
+      const range = selectedRange && internalRef.current.contains(selectedRange.commonAncestorContainer)
+        ? selectedRange
+        : document.createRange();
+      if (!selectedRange || !internalRef.current.contains(selectedRange.commonAncestorContainer)) {
+        range.selectNodeContents(internalRef.current);
+        range.collapse(false);
+      }
+      range.deleteContents();
+      const capsule = createLargePasteElement(largePastePlaceholder);
+      range.insertNode(capsule);
+      // A caret placed directly between a non-editable inline capsule and the
+      // trailing <br> is painted at the start of the visual line by Chromium.
+      // Keep it inside a sanitized zero-width text anchor so its visual and
+      // logical positions both remain after the capsule.
+      const caretAnchor = document.createTextNode(LARGE_PASTE_CARET_ANCHOR);
+      capsule.after(caretAnchor);
+      range.setStart(caretAnchor, caretAnchor.length);
+      range.collapse(true);
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+      handleInput();
+    } else {
+      document.execCommand('insertText', false, text);
+    }
     
     // Mark that we just pasted to prevent mention detection in the next input event
     isComposingRef.current = true;
     requestAnimationFrame(() => {
       isComposingRef.current = false;
     });
-  }, [closeInlineTrigger, closeMention, internalRef, onLargePaste]);
+  }, [closeInlineTrigger, closeMention, createLargePasteElement, handleInput, internalRef, onLargePaste]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     const nativeEvent = e.nativeEvent as KeyboardEvent;
@@ -910,18 +1098,39 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
       if (selection) {
         const range = selection.getRangeAt(0);
         
-        if (range.collapsed && range.startOffset === 0) {
-          const previousSibling = range.startContainer.previousSibling;
+        if (range.collapsed) {
+          const isAtLargePasteCaretAnchor = range.startContainer.nodeType === Node.TEXT_NODE
+            && range.startContainer.textContent === LARGE_PASTE_CARET_ANCHOR
+            && range.startOffset === LARGE_PASTE_CARET_ANCHOR.length;
+          const previousSibling = isAtLargePasteCaretAnchor || range.startOffset === 0
+            ? range.startContainer.previousSibling
+            : null;
           const tokenElement = previousSibling instanceof HTMLElement && previousSibling.hasAttribute('data-tag-format')
             ? previousSibling
             : null;
           if (tokenElement) {
             e.preventDefault();
             const contextId = tokenElement.dataset.contextId;
+            const largePastePlaceholder = tokenElement.dataset.largePastePlaceholder;
             if (contextId) {
               onRemoveContext(contextId);
             } else {
+              const previousCaretAnchor = largePastePlaceholder
+                && tokenElement.previousSibling?.nodeType === Node.TEXT_NODE
+                && tokenElement.previousSibling.textContent?.startsWith(LARGE_PASTE_CARET_ANCHOR)
+                ? tokenElement.previousSibling
+                : null;
+              if (largePastePlaceholder) {
+                onRemoveLargePaste?.(largePastePlaceholder);
+              }
               removeInlineTokenElement(tokenElement);
+              if (largePastePlaceholder) {
+                if (previousCaretAnchor?.isConnected) {
+                  selection.collapse(previousCaretAnchor, previousCaretAnchor.textContent?.length ?? 0);
+                } else {
+                  selection.collapse(internalRef.current, 0);
+                }
+              }
               handleInput();
             }
             return;
@@ -931,11 +1140,12 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
     }
     
     if (composing && (e.key === 'Enter' || e.key === 'Escape')) {
+      e.stopPropagation();
       return;
     }
 
     onKeyDown?.(e);
-  }, [handleInput, internalRef, onKeyDown, onRemoveContext, removeInlineTokenElement]);
+  }, [handleInput, internalRef, onKeyDown, onRemoveContext, onRemoveLargePaste, removeInlineTokenElement]);
 
   // Insert tag at cursor
   const insertTagAtCursor = useCallback((context: ContextItem) => {
@@ -1239,26 +1449,121 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
     handleInput();
   }, [handleInput, onCompositionEnd]);
 
+  useEffect(() => {
+    if (
+      activeLargePaste
+      && pendingLargePastes[activeLargePaste.placeholder] !== activeLargePaste.sourceText
+    ) {
+      setActiveLargePaste(null);
+    }
+  }, [activeLargePaste, pendingLargePastes]);
+
+  const handleSaveLargePaste = useCallback(() => {
+    if (!activeLargePaste) return;
+    const capsule = Array.from(
+      internalRef.current?.querySelectorAll<HTMLElement>('[data-large-paste-placeholder]') ?? [],
+    ).find(element => element.dataset.largePastePlaceholder === activeLargePaste.placeholder);
+    if (!capsule) {
+      setActiveLargePaste(null);
+      return;
+    }
+
+    if (activeLargePaste.draft.length === 0) {
+      onRemoveLargePaste?.(activeLargePaste.placeholder);
+      removeInlineTokenElement(capsule);
+    } else {
+      const nextPlaceholder = onUpdateLargePaste?.(
+        activeLargePaste.placeholder,
+        activeLargePaste.draft,
+      ) ?? activeLargePaste.placeholder;
+      capsule.replaceWith(createLargePasteElement(nextPlaceholder));
+    }
+    setActiveLargePaste(null);
+    handleInput();
+    internalRef.current?.focus();
+  }, [
+    activeLargePaste,
+    createLargePasteElement,
+    handleInput,
+    internalRef,
+    onRemoveLargePaste,
+    onUpdateLargePaste,
+    removeInlineTokenElement,
+  ]);
+
+  const handleCopyLargePaste = useCallback(async () => {
+    if (!activeLargePaste) return;
+    try {
+      await navigator.clipboard.writeText(activeLargePaste.draft);
+      setLargePasteCopied(true);
+    } catch {
+      setLargePasteCopied(false);
+    }
+  }, [activeLargePaste]);
+
   return (
-    <div
-      data-bf-component="rich-text-input"
-      data-bf-part="root"
-      data-bf-state={[isFocused ? 'focused' : '', disabled ? 'disabled' : ''].filter(Boolean).join(' ') || undefined}
-      {...restProps}
-      ref={internalRef}
-      className={`rich-text-input ${isFocused ? 'rich-text-input--focused' : ''} ${className}`}
-      contentEditable={!disabled}
-      onBeforeInput={handleBeforeInput}
-      onInput={handleInput}
-      onPaste={handlePaste}
-      onKeyDown={handleKeyDown}
-      onFocus={handleFocus}
-      onBlur={handleBlur}
-      onCompositionStart={handleCompositionStart}
-      onCompositionEnd={handleCompositionEnd}
-      data-placeholder={placeholder}
-      suppressContentEditableWarning
-    />
+    <>
+      <div
+        data-bf-component="rich-text-input"
+        data-bf-part="root"
+        data-bf-state={[isFocused ? 'focused' : '', disabled ? 'disabled' : ''].filter(Boolean).join(' ') || undefined}
+        {...restProps}
+        ref={internalRef}
+        className={`rich-text-input ${isFocused ? 'rich-text-input--focused' : ''} ${className}`}
+        contentEditable={!disabled}
+        onBeforeInput={handleBeforeInput}
+        onInput={handleInput}
+        onPaste={handlePaste}
+        onKeyDown={handleKeyDown}
+        onFocus={handleFocus}
+        onBlur={handleBlur}
+        onCompositionStart={handleCompositionStart}
+        onCompositionEnd={handleCompositionEnd}
+        data-placeholder={placeholder}
+        suppressContentEditableWarning
+      />
+      <Dialog
+        initialFocusRef={largePasteTextareaRef}
+        onOpenChange={(open) => {
+          if (!open) setActiveLargePaste(null);
+        }}
+        open={activeLargePaste !== null}
+        size="md"
+      >
+        <DialogHeader>
+          <DialogHeading>
+            <DialogTitle>{t('input.largePasteDialogTitle')}</DialogTitle>
+          </DialogHeading>
+          <DialogClose />
+        </DialogHeader>
+        <DialogBody>
+          <Textarea
+            ref={largePasteTextareaRef}
+            className="rich-text-large-paste-dialog__textarea"
+            label={t('input.largePasteContentLabel')}
+            value={activeLargePaste?.draft ?? ''}
+            onChange={(event) => {
+              const draft = event.target.value;
+              setLargePasteCopied(false);
+              setActiveLargePaste(current => current ? { ...current, draft } : null);
+            }}
+            rows={12}
+            spellCheck={false}
+          />
+        </DialogBody>
+        <DialogFooter>
+          <Button type="button" size="sm" variant="outline" onClick={() => void handleCopyLargePaste()}>
+            {largePasteCopied ? t('input.largePasteCopied') : t('input.largePasteCopy')}
+          </Button>
+          <Button type="button" size="sm" variant="outline" onClick={() => setActiveLargePaste(null)}>
+            {t('input.largePasteCancel')}
+          </Button>
+          <Button type="button" size="sm" variant="fill" onClick={handleSaveLargePaste}>
+            {t('input.largePasteSave')}
+          </Button>
+        </DialogFooter>
+      </Dialog>
+    </>
   );
 });
 

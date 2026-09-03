@@ -675,6 +675,7 @@ fn platform_asset<'a>(
 }
 
 fn build_client() -> Result<Client> {
+    bitfun_services_core::tls_provider::ensure_ring_crypto_provider();
     Client::builder()
         .connect_timeout(Duration::from_secs(8))
         // Deliberately no `.timeout()`: a whole-request ceiling turns "slow" into
@@ -1204,20 +1205,19 @@ fn validate_entrypoint_pair(primary: &Path, legacy: &Path) -> Result<()> {
     Ok(())
 }
 
-#[cfg(unix)]
 fn validate_plugin_host_resources(directory: &Path) -> Result<()> {
-    let entry = "extension-host.js";
-    let path = directory.join(entry);
-    if !path.is_file() {
-        return Err(anyhow!(
-            "CLI package is missing plugin Host resource {}",
-            path.display()
-        ));
+    for entry in ["extension-host.js"] {
+        let path = directory.join(entry);
+        if !path.is_file() {
+            return Err(anyhow!(
+                "CLI package is missing plugin Host resource {}",
+                path.display()
+            ));
+        }
     }
     Ok(())
 }
 
-#[cfg(unix)]
 fn copy_plugin_host_resources(source: &Path, destination: &Path) -> Result<()> {
     fs::create_dir_all(destination).with_context(|| {
         format!(
@@ -1225,9 +1225,10 @@ fn copy_plugin_host_resources(source: &Path, destination: &Path) -> Result<()> {
             destination.display()
         )
     })?;
-    let entry = "extension-host.js";
-    fs::copy(source.join(entry), destination.join(entry))
-        .with_context(|| format!("stage plugin Host resource {entry}"))?;
+    for entry in ["extension-host.js"] {
+        fs::copy(source.join(entry), destination.join(entry))
+            .with_context(|| format!("stage plugin Host resource {entry}"))?;
+    }
     Ok(())
 }
 

@@ -345,6 +345,7 @@ impl AcpAccumulatedRound {
             thinking_items.push(ThinkingItemData {
                 id: uuid::Uuid::new_v4().to_string(),
                 content: thinking,
+                reasoning_kind: None,
                 is_streaming: false,
                 is_collapsed: true,
                 timestamp: self.started_at_ms,

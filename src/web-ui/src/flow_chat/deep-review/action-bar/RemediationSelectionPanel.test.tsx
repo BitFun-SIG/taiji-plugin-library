@@ -28,7 +28,8 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-vi.mock('@/component-library', () => ({
+vi.mock('@bitfun/ui', () => ({
+  Icon: ({ name }: { name: string }) => <span data-bf-component="icon" data-bf-name={name} />,
   Button: ({
     children,
     disabled,

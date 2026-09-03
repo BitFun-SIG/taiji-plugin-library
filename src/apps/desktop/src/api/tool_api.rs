@@ -105,10 +105,13 @@ pub struct ResetModeToolSelectionRequest {
     pub workspace_path: Option<String>,
 }
 
+/// Builds the tool context for a direct tool call. A remote workspace whose
+/// SSH provider cannot be built is an error: a context without workspace
+/// services would otherwise resolve remote paths against this machine.
 async fn build_tool_context(
     workspace_path: Option<&str>,
     caller_context: Option<&HashMap<String, String>>,
-) -> ToolUseContext {
+) -> Result<ToolUseContext, String> {
     let normalized_workspace_path = workspace_path
         .map(str::trim)
         .filter(|path| !path.is_empty());
@@ -144,24 +147,32 @@ async fn build_tool_context(
 
     let workspace_services = match workspace.as_ref() {
         Some(binding) if binding.is_remote() => {
-            let connection_id = binding.connection_id().map(str::to_string);
-            match (connection_id, get_remote_workspace_manager()) {
-                (Some(connection_id), Some(manager)) => {
-                    match (
-                        manager.get_file_service().await,
-                        manager.get_ssh_manager().await,
-                    ) {
-                        (Some(file_service), Some(ssh_manager)) => Some(remote_workspace_services(
-                            connection_id,
-                            file_service,
-                            ssh_manager,
-                            binding.root_path_string(),
-                        )),
-                        _ => None,
-                    }
-                }
-                _ => None,
-            }
+            let root = binding.root_path_string();
+            let unavailable = |reason: &str| {
+                format!(
+                    "Remote workspace services are unavailable for {root}: {reason}; no controller-local fallback was attempted"
+                )
+            };
+            let connection_id = binding
+                .connection_id()
+                .map(str::to_string)
+                .ok_or_else(|| unavailable("the workspace binding has no connection id"))?;
+            let manager = get_remote_workspace_manager()
+                .ok_or_else(|| unavailable("remote workspace state is not initialized"))?;
+            let file_service = manager
+                .get_file_service()
+                .await
+                .ok_or_else(|| unavailable("the remote file service is not available"))?;
+            let ssh_manager = manager
+                .get_ssh_manager()
+                .await
+                .ok_or_else(|| unavailable("the SSH connection manager is not available"))?;
+            Some(remote_workspace_services(
+                connection_id,
+                file_service,
+                ssh_manager,
+                root,
+            ))
         }
         Some(binding) => Some(local_workspace_services(binding.root_path_string())),
         None => None,
@@ -186,7 +197,7 @@ async fn build_tool_context(
     {
         context.session_id = Some(session_id.clone());
     }
-    context
+    Ok(context)
 }
 
 fn has_explicit_workspace_path(workspace_path: Option<&str>) -> bool {
@@ -211,7 +222,7 @@ fn write_file_path(input: &serde_json::Value) -> Option<&str> {
 
 fn tool_requires_workspace_path(tool_name: &str, input: &serde_json::Value) -> bool {
     match tool_name {
-        "Bash" => true,
+        "ExecCommand" => true,
         "Glob" | "Grep" => input.get("path").is_none() || is_relative_path(input.get("path")),
         "Write" => write_file_path(input).map_or_else(
             || input.get("payload").is_some(),
@@ -294,7 +305,7 @@ pub async fn validate_tool_input(
                 request.workspace_path.as_deref(),
             )?;
 
-            let context = build_tool_context(request.workspace_path.as_deref(), None).await;
+            let context = build_tool_context(request.workspace_path.as_deref(), None).await?;
 
             let validation_result = tool.validate_input(&request.input, Some(&context)).await;
 
@@ -327,7 +338,7 @@ pub async fn execute_tool(request: ToolExecutionRequest) -> Result<ToolExecution
 
             let context =
                 build_tool_context(request.workspace_path.as_deref(), request.context.as_ref())
-                    .await;
+                    .await?;
 
             let validation_result = tool.validate_input(&request.input, Some(&context)).await;
             if !validation_result.result {

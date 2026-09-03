@@ -4,14 +4,15 @@
  */
 
 import React, { useState, useRef, useEffect, useCallback, useMemo, useLayoutEffect } from 'react';
-import { Table2, X, Combine, Trash2 } from 'lucide-react';
+import { Table2, Combine, Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Tooltip } from '@/component-library';
+
 import { Tab } from './Tab';
 import { TabOverflowMenu } from './TabOverflowMenu';
 import type { CanvasTab, EditorGroupId, TabDragPayload } from '../types';
 import { createLogger } from '@/shared/utils/logger';
 import './TabBar.scss';
+import { Icon, Tooltip } from '@bitfun/ui';
 
 const log = createLogger('TabBar');
 const TAB_REORDER_DURATION_MS = 160;
@@ -590,7 +591,7 @@ export const TabBar: React.FC<TabBarProps> = ({
                 await onCloseAllTabs();
               }}
             >
-              <X size={14} />
+              <Icon name="xmark" size="sm" />
             </button>
           </Tooltip>
         )}

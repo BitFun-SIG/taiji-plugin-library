@@ -697,7 +697,6 @@ Use Task to spawn subagent sessions that can receive messages.
 
 Allowed agent types when creating a session are dynamically resolved from the available agent registry (common values include "agentic", "Plan", "Cowork", "DeepResearch", and any custom/external subagent types).
 - "agentic": Coding-focused agent for implementation, debugging, and code changes.
-- "Plan": Planning agent for clarifying requirements and producing an implementation plan before coding.
 - "Cowork": Collaborative agent for office-style work such as research, documentation, presentations, etc.
 - "DeepResearch": Research agent for systematic investigation and evidence-driven reports.
 "#
@@ -2346,6 +2345,7 @@ impl SessionMessageTool {
                     .create_session(AgentSessionCreateRequest {
                         session_name,
                         agent_type: agent_type.clone(),
+                        agent_route_key: None,
                         workspace_path: Some(
                             created_worktree
                                 .as_ref()

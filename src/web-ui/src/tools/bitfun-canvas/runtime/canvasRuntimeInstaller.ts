@@ -63,6 +63,15 @@ function installBitfunCanvasRuntime(initialRevision: string): void {
     const warning = readToken(tokens.warning, 'var(--bitfun-canvas-warning)');
     const danger = readToken(tokens.danger, 'var(--bitfun-canvas-danger)');
     const info = readToken(tokens.info, 'var(--bitfun-canvas-info)');
+    const appearanceVars = tokens.vars && typeof tokens.vars === 'object' ? tokens.vars : {};
+    const codeChangeAdded = readToken(
+      appearanceVars['--bf-color-code-change-added'],
+      'var(--bf-color-code-change-added)',
+    );
+    const codeChangeRemoved = readToken(
+      appearanceVars['--bf-color-code-change-removed'],
+      'var(--bf-color-code-change-removed)',
+    );
     const token = (value: string, fields: CanvasRuntimeRecord = {}) =>
       Object.assign(new String(value), {
         toString() {
@@ -75,7 +84,7 @@ function installBitfunCanvasRuntime(initialRevision: string): void {
       });
     const semanticBg = {
       editor: bg,
-      chrome: 'var(--bf-appearance-token-element-bg-subtle)',
+      chrome: 'var(--bf-color-surface-subtle)',
       elevated: panel,
     };
     const semanticText = {
@@ -84,18 +93,18 @@ function installBitfunCanvasRuntime(initialRevision: string): void {
       tertiary: muted,
       quaternary: muted,
       link: accent,
-      onAccent: 'var(--bf-appearance-token-color-static-white)',
+      onAccent: 'var(--bf-color-content-on-dark)',
     };
     const semanticFill = {
       primary: panel,
-      secondary: 'var(--bf-appearance-token-element-bg-base)',
-      tertiary: 'var(--bf-appearance-token-element-bg-soft)',
-      quaternary: 'var(--bf-appearance-token-element-bg-subtle)',
+      secondary: 'var(--bf-color-action-neutral-surface)',
+      tertiary: 'var(--bf-color-action-quiet-hover)',
+      quaternary: 'var(--bf-color-surface-subtle)',
     };
     const semanticStroke = {
       primary: border,
-      secondary: 'var(--bf-appearance-token-border-base)',
-      tertiary: 'var(--bf-appearance-token-border-subtle)',
+      secondary: 'var(--bf-color-border-default)',
+      tertiary: 'var(--bf-color-border-subtle)',
       focused: accent,
     };
     const semanticAccent = {
@@ -118,10 +127,10 @@ function installBitfunCanvasRuntime(initialRevision: string): void {
       orange: warning,
     };
     const diff = {
-      insertedLine: 'color-mix(in srgb, var(--bf-appearance-token-color-success) 12%, transparent)',
-      removedLine: 'color-mix(in srgb, var(--bf-appearance-token-color-error) 12%, transparent)',
-      stripAdded: success,
-      stripRemoved: danger,
+      insertedLine: `color-mix(in srgb, ${codeChangeAdded} 12%, transparent)`,
+      removedLine: `color-mix(in srgb, ${codeChangeRemoved} 12%, transparent)`,
+      stripAdded: codeChangeAdded,
+      stripRemoved: codeChangeRemoved,
     };
     const semanticTokens = {
       bg: semanticBg,
@@ -362,8 +371,16 @@ function installBitfunCanvasRuntime(initialRevision: string): void {
   }
 
   function ErrorPanel({ error }: CanvasRuntimeRecord = {}) {
-    return React.createElement('main', { style: { maxWidth: 860, margin: '0 auto', padding: 12, border: '1px solid var(--bf-appearance-token-border-base)', borderRadius: 8 } }, [
-      React.createElement('h1', { key: 'title', style: { fontSize: 18, margin: '0 0 8px' } }, 'Canvas runtime error'),
+    return React.createElement('main', { style: { maxWidth: 860, margin: '0 auto', padding: 12, border: '1px solid var(--bf-color-border-default)', borderRadius: 8 } }, [
+      React.createElement('h1', {
+        key: 'title',
+        style: {
+          fontSize: 'var(--bf-type-heading-page-font-size)',
+          fontWeight: 'var(--bf-type-heading-page-font-weight)',
+          lineHeight: 'var(--bf-type-heading-page-line-height)',
+          margin: '0 0 8px',
+        },
+      }, 'Canvas runtime error'),
       React.createElement('pre', { key: 'error', style: { whiteSpace: 'pre-wrap', color: 'var(--bitfun-canvas-danger)' } }, errorText(error)),
     ]);
   }
@@ -410,7 +427,7 @@ function installBitfunCanvasRuntime(initialRevision: string): void {
   function reportRuntimeError(error: unknown): void {
     if (rootElement) {
       rootElement.innerHTML =
-        '<main style="max-width:860px;margin:0 auto;padding:12px;border:1px solid var(--bf-appearance-token-border-base);border-radius:8px"><h1 style="font-size:18px;margin:0 0 8px">Canvas runtime error</h1><pre style="white-space:pre-wrap;color:var(--bitfun-canvas-danger)"></pre></main>';
+        '<main style="max-width:860px;margin:0 auto;padding:12px;border:1px solid var(--bf-color-border-default);border-radius:8px"><h1 style="font-size:var(--bf-type-heading-page-font-size);font-weight:var(--bf-type-heading-page-font-weight);line-height:var(--bf-type-heading-page-line-height);margin:0 0 8px">Canvas runtime error</h1><pre style="white-space:pre-wrap;color:var(--bitfun-canvas-danger)"></pre></main>';
       const pre = rootElement.querySelector('pre');
       if (pre) pre.textContent = errorText(error);
     }

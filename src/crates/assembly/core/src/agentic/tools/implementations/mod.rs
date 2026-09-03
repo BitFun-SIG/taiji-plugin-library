@@ -1,13 +1,15 @@
 //! Tool implementation module
 
 pub mod acp_tools;
+pub mod agent_delete_tool;
+pub mod agent_list_tool;
 pub mod agent_wait_tool;
 #[cfg(feature = "tools-image-analysis")]
 pub mod analyze_image_tool;
 #[cfg(feature = "tools-miniapp")]
 pub mod appearance_publish_tool;
 pub mod ask_user_question_tool;
-pub mod bash_tool;
+pub mod bitfun_control_tool;
 #[cfg(feature = "tools-canvas")]
 pub mod canvas_tools;
 pub mod code_review_tool;
@@ -21,7 +23,6 @@ pub mod computer_use_tool;
 pub mod control_hub;
 #[cfg(feature = "tools-browser-web")]
 pub mod control_hub_tool;
-pub mod create_plan_tool;
 #[cfg(feature = "tools-agent-control")]
 pub mod cron_tool;
 pub mod delete_file_tool;
@@ -29,13 +30,13 @@ pub mod exec_command;
 pub mod file_edit_tool;
 pub mod file_read_tool;
 pub mod file_write_tool;
+#[cfg(feature = "tools-creation")]
+pub mod frontend_workbench_tool;
 #[cfg(feature = "tools-miniapp")]
 pub mod generative_ui_tool;
 #[cfg(feature = "tools-git")]
 pub mod get_file_diff_tool;
 pub mod get_time_tool;
-#[cfg(feature = "tools-git")]
-pub mod git_tool;
 pub mod glob_tool;
 pub mod grep_tool;
 pub mod group_room_aliases;
@@ -56,11 +57,15 @@ pub mod miniapp_publish_tool;
 pub mod page_deploy_tool;
 #[cfg(feature = "tools-miniapp")]
 pub mod page_publish_tool;
+pub mod create_plan_tool;
 pub mod plan_list_tool;
 pub mod plan_read_tool;
 pub mod plan_update_tool;
+mod plan_artifact_diagnostics;
 #[cfg(feature = "tools-miniapp")]
 pub mod playbook_tool;
+#[cfg(feature = "tools-agent-control")]
+pub mod port_forward_tool;
 #[cfg(feature = "tools-git")]
 pub mod review_platform_tool;
 pub mod session_control_tool;
@@ -69,7 +74,6 @@ pub mod session_message_tool;
 pub mod skill_tool;
 pub mod skills;
 pub mod task;
-pub mod terminal_control_tool;
 pub mod thread_goal_tools;
 pub mod todo_write_tool;
 pub mod tools;
@@ -79,19 +83,20 @@ pub mod view_image_tool;
 #[cfg(feature = "tools-browser-web")]
 pub mod web;
 pub mod workspace_scan_tool;
-#[cfg(feature = "tools-git")]
 pub mod worktree_tool;
 
 #[deprecated(note = "GetToolSpecTool is owned by the product tool runtime boundary")]
 pub use crate::agentic::tools::product_runtime::GetToolSpecTool;
 pub use acp_tools::{AcpControlTool, AcpHistoryTool, AcpMessageTool};
+pub use agent_delete_tool::AgentDeleteTool;
+pub use agent_list_tool::AgentListTool;
 pub use agent_wait_tool::AgentWaitTool;
 #[cfg(feature = "tools-image-analysis")]
 pub use analyze_image_tool::AnalyzeImageTool;
 #[cfg(feature = "tools-miniapp")]
 pub use appearance_publish_tool::PublishAppearanceTool;
 pub use ask_user_question_tool::AskUserQuestionTool;
-pub use bash_tool::BashTool;
+pub use bitfun_control_tool::BitFunControlTool;
 #[cfg(feature = "tools-canvas")]
 pub use canvas_tools::{CreateCanvasTool, PatchCanvasTool, ReadCanvasTool, UpdateCanvasTool};
 pub use code_review_tool::CodeReviewTool;
@@ -99,7 +104,6 @@ pub use code_review_tool::CodeReviewTool;
 pub use computer_use_tool::ComputerUseTool;
 #[cfg(feature = "tools-browser-web")]
 pub use control_hub_tool::ControlHubTool;
-pub use create_plan_tool::CreatePlanTool;
 #[cfg(feature = "tools-agent-control")]
 pub use cron_tool::CronTool;
 pub use delete_file_tool::DeleteFileTool;
@@ -107,13 +111,13 @@ pub use exec_command::{ExecCommandTool, ExecControlTool, WriteStdinTool};
 pub use file_edit_tool::FileEditTool;
 pub use file_read_tool::FileReadTool;
 pub use file_write_tool::FileWriteTool;
+#[cfg(feature = "tools-creation")]
+pub use frontend_workbench_tool::FrontendWorkbenchTool;
 #[cfg(feature = "tools-miniapp")]
 pub use generative_ui_tool::GenerativeUITool;
 #[cfg(feature = "tools-git")]
 pub use get_file_diff_tool::GetFileDiffTool;
 pub use get_time_tool::GetTimeTool;
-#[cfg(feature = "tools-git")]
-pub use git_tool::GitTool;
 pub use glob_tool::GlobTool;
 pub use grep_tool::GrepTool;
 pub use group_room_aliases::{GroupRoomAliasTool, GROUP_ROOM_ALIAS_TOOL_NAMES};
@@ -138,16 +142,21 @@ pub use page_publish_tool::PagePublishTool;
 pub use plan_list_tool::PlanListTool;
 pub use plan_read_tool::PlanReadTool;
 pub use plan_update_tool::PlanUpdateTool;
+pub use create_plan_tool::CreatePlanTool;
 #[cfg(feature = "tools-miniapp")]
 pub use playbook_tool::PlaybookTool;
+#[cfg(feature = "tools-agent-control")]
+pub use port_forward_tool::PortForwardTool;
 #[cfg(feature = "tools-git")]
 pub use review_platform_tool::ReviewPlatformTool;
 pub use session_control_tool::SessionControlTool;
 pub use session_history_tool::SessionHistoryTool;
 pub use session_message_tool::SessionMessageTool;
 pub use skill_tool::SkillTool;
-pub use task::{DeepReviewTool, LaunchReviewAgentTool, TaskTool};
-pub use terminal_control_tool::TerminalControlTool;
+pub use task::{
+    AgentInterruptTool, AgentSendInputTool, AgentSpawnTool, DeepReviewTool, LaunchReviewAgentTool,
+    TaskTool,
+};
 pub use thread_goal_tools::{CreateGoalTool, GetGoalTool, UpdateGoalTool};
 pub use todo_write_tool::TodoWriteTool;
 #[cfg(feature = "tools-image-analysis")]
@@ -155,5 +164,4 @@ pub use view_image_tool::ViewImageTool;
 #[cfg(feature = "tools-browser-web")]
 pub use web::{WebFetchTool, WebSearchTool};
 pub use workspace_scan_tool::WorkspaceScanTool;
-#[cfg(feature = "tools-git")]
 pub use worktree_tool::WorktreeTool;

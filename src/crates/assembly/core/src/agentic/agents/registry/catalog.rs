@@ -1,10 +1,11 @@
 use super::types::AgentCategory;
 use super::visibility::SubagentVisibilityPolicy;
 use crate::agentic::agents::{
-    Agent, AgenticMode, ClawMode, CodeReviewAgent, ComputerUseMode, CoworkMode, DebugMode,
-    DeepResearchMode, DeepReviewAgent, ExploreAgent, FileFinderAgent, GeneralPurposeAgent,
-    GenerateDocAgent, GroupMode, LegionMode, MinimalMode, MultitaskMode, PlanMode,
-    ResearchSpecialistAgent, ReviewFixerAgent, ReviewJudgeAgent, ReviewWorkerAgent, TeamMode,
+    Agent, AgenticMode, ClawMode, CodeReviewAgent, ComputerUseMode, CoworkMode, CreativeMode,
+    DeepResearchMode, DeepReviewAgent, ExploreAgent, GeneralPurposeAgent, GenerateDocAgent,
+    GroupMode, LegionMode, MinimalMode, ResearchSpecialistAgent, ReviewFixerAgent,
+    ReviewJudgeAgent, ReviewWorkerAgent, SwarmPlannerAgent, SwarmReviewerAgent, SwarmWorkerAgent,
+    UltraMode,
 };
 use crate::agentic::memories::MemoryPhase2Agent;
 use bitfun_agent_runtime::agents as runtime_agents;
@@ -44,22 +45,22 @@ pub(crate) fn builtin_agent_specs_for_ids<'a>(
 
 fn builtin_agent_factory(id: &str) -> fn() -> Arc<dyn Agent> {
     match id {
-        "agentic" => || Arc::new(AgenticMode::new()),
         "minimal" => || Arc::new(MinimalMode::new()),
+        "agentic" => || Arc::new(AgenticMode::new()),
         "Cowork" => || Arc::new(CoworkMode::new()),
-        "debug" => || Arc::new(DebugMode::new()),
-        "Multitask" => || Arc::new(MultitaskMode::new()),
-        "Plan" => || Arc::new(PlanMode::new()),
+        "Creative" => || Arc::new(CreativeMode::new()),
         "Claw" => || Arc::new(ClawMode::new()),
         "group" => || Arc::new(GroupMode::new()),
         "DeepResearch" => || Arc::new(DeepResearchMode::new()),
-        "Team" => || Arc::new(TeamMode::new()),
         "Legion" => || Arc::new(LegionMode::new()),
+        "Ultra" => || Arc::new(UltraMode::new()),
+        "SwarmPlanner" => || Arc::new(SwarmPlannerAgent::new()),
+        "SwarmWorker" => || Arc::new(SwarmWorkerAgent::new()),
+        "SwarmReviewer" => || Arc::new(SwarmReviewerAgent::new()),
         "ComputerUse" => || Arc::new(ComputerUseMode::new()),
         "Explore" => || Arc::new(ExploreAgent::new()),
         "GeneralPurpose" => || Arc::new(GeneralPurposeAgent::new()),
         "ResearchSpecialist" => || Arc::new(ResearchSpecialistAgent::new()),
-        "FileFinder" => || Arc::new(FileFinderAgent::new()),
         "ReviewWorker" => || Arc::new(ReviewWorkerAgent::new()),
         "ReviewJudge" => || Arc::new(ReviewJudgeAgent::new()),
         "ReviewFixer" => || Arc::new(ReviewFixerAgent::new()),

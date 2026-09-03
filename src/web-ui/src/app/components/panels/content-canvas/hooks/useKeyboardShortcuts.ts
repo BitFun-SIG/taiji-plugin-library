@@ -8,8 +8,6 @@
 
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useHasDismissibleLayer } from '@/infrastructure/hooks/useDismissibleLayer';
-import { dismissibleLayerManager } from '@/infrastructure/services/DismissibleLayerManager';
 import { useShortcut } from '@/infrastructure/hooks/useShortcut';
 import { notificationService } from '@/shared/notification-system';
 import { activeEditTargetService } from '@/tools/editor/services/ActiveEditTargetService';
@@ -23,7 +21,6 @@ interface UseKeyboardShortcutsOptions {
 
 export const useKeyboardShortcuts = (options: UseKeyboardShortcutsOptions = {}) => {
   const { enabled = true, handleCloseWithDirtyCheck } = options;
-  const hasCanvasDismissibleLayer = useHasDismissibleLayer('canvas');
   const { t } = useTranslation('components');
 
   const {
@@ -182,20 +179,6 @@ export const useKeyboardShortcuts = (options: UseKeyboardShortcutsOptions = {}) 
     { key: 'M', ctrl: true, shift: true, scope: 'canvas' },
     () => toggleMaximize(),
     { enabled, description: 'keyboard.shortcuts.canvas.maximize' }
-  );
-
-  // Close canvas preview/modal overlay: Escape
-  useShortcut(
-    'canvas.closePreview',
-    { key: 'Escape', scope: 'canvas', allowInInput: true },
-    () => {
-      dismissibleLayerManager.dismissTop('canvas');
-    },
-    {
-      enabled: enabled && hasCanvasDismissibleLayer,
-      priority: 5,
-      description: 'keyboard.shortcuts.canvas.closePreview',
-    }
   );
 
   // Close current tab: mod+W

@@ -1,11 +1,7 @@
 import React, { useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import {
-  AlertCircle,
-  CheckCircle2,
-  Timer,
-  Infinity as InfinityIcon,
-} from 'lucide-react';
+import { Menu, MenuItem, Icon } from '@bitfun/ui';
+import { AlertCircle, Timer, Infinity as InfinityIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { useAnchoredPopoverPosition } from '@/shared/utils/useAnchoredPopoverPosition';
@@ -51,7 +47,7 @@ export interface ToolTimeoutIndicatorProps {
 
 function renderCompletedDurationIcon(status: ToolTimeoutIndicatorProps['completedStatus']) {
   if (status === 'success') {
-    return <CheckCircle2 size={13} strokeWidth={2.2} />;
+    return <Icon name="check-circle" size="lg" style={{ width: 13, height: 13 }} />;
   }
   if (status === 'error' || status === 'cancelled') {
     return <AlertCircle size={13} strokeWidth={2.2} />;
@@ -240,7 +236,7 @@ export const ToolTimeoutIndicator: React.FC<ToolTimeoutIndicatorProps> = ({
           </button>
 
           {isPopoverOpen && createPortal(
-            <div
+            <Menu
               ref={popoverRef}
               data-bf-component="tool-timeout-indicator"
               data-bf-part="popover"
@@ -251,58 +247,52 @@ export const ToolTimeoutIndicator: React.FC<ToolTimeoutIndicatorProps> = ({
                 left: `${popoverLayout?.left ?? 0}px`,
                 visibility: popoverLayout ? 'visible' : 'hidden',
               }}
+              aria-label={t('toolCards.timeout.disableTooltip')}
+              autoFocusFirstItem
             >
               {remainingAtDisable > 0 ? (
-                <button
-                  type="button"
+                <MenuItem
                   data-bf-component="tool-timeout-indicator"
                   data-bf-part="option"
-                  className="timeout-extend-option timeout-extend-option--danger"
                   onClick={(e) => {
                     e.stopPropagation();
                     extendTimeout(remainingAtDisable);
                   }}
                 >
                   {t('toolCards.timeout.restoreShort', { seconds: remainingAtDisable })}
-                </button>
+                </MenuItem>
               ) : null}
-              <button
-                type="button"
+              <MenuItem
                 data-bf-component="tool-timeout-indicator"
                 data-bf-part="option"
-                className="timeout-extend-option"
                 onClick={(e) => {
                   e.stopPropagation();
                   extendTimeout(60);
                 }}
               >
                 +1m
-              </button>
-              <button
-                type="button"
+              </MenuItem>
+              <MenuItem
                 data-bf-component="tool-timeout-indicator"
                 data-bf-part="option"
-                className="timeout-extend-option"
                 onClick={(e) => {
                   e.stopPropagation();
                   extendTimeout(300);
                 }}
               >
                 +5m
-              </button>
-              <button
-                type="button"
+              </MenuItem>
+              <MenuItem
                 data-bf-component="tool-timeout-indicator"
                 data-bf-part="option"
-                className="timeout-extend-option"
                 onClick={(e) => {
                   e.stopPropagation();
                   extendTimeout(600);
                 }}
               >
                 +10m
-              </button>
-            </div>,
+              </MenuItem>
+            </Menu>,
             getAppearanceOverlayHost(),
           )}
         </div>

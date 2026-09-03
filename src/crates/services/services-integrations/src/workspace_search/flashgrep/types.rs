@@ -8,7 +8,6 @@ pub(crate) use super::protocol::{
 pub(crate) struct SearchRequest {
     pub query: QuerySpec,
     pub scope: PathScope,
-    pub allow_scan_fallback: bool,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -41,17 +40,11 @@ impl SearchRequest {
         Self {
             query,
             scope: PathScope::default(),
-            allow_scan_fallback: false,
         }
     }
 
     pub(crate) fn with_scope(mut self, scope: PathScope) -> Self {
         self.scope = scope;
-        self
-    }
-
-    pub(crate) fn with_scan_fallback(mut self, allow_scan_fallback: bool) -> Self {
-        self.allow_scan_fallback = allow_scan_fallback;
         self
     }
 }

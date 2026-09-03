@@ -35,13 +35,13 @@
     "clarificationBatchCompleted": "批量澄清處理完成"
   },
   "header": {
-    "openProject": "開啟工作區",
-    "newProject": "新增工作區",
+    "openProject": "開啟項目",
+    "newProject": "新增項目",
     "goHome": "返回首頁",
     "about": "關於",
     "openMenu": "開啟菜單",
     "closeMenu": "關閉菜單",
-    "selectProjectDirectory": "選擇要開啟的工作區目錄",
+    "selectProjectDirectory": "選擇要開啟的項目目錄",
     "configCenter": "設定中心",
     "expandLeftPanel": "展開左側面板",
     "collapseLeftPanel": "收起左側面板",
@@ -59,8 +59,8 @@
     "hideAgentic": "隱藏 Agentic",
     "activateAgentic": "激活 Agentic",
     "switchWorkspace": "切換工作區",
-    "recentWorkspaces": "最近工作區",
-    "noRecentWorkspaces": "暫無最近工作區",
+    "recentWorkspaces": "最近項目",
+    "noRecentWorkspaces": "暫無最近項目",
     "noWorkspaceOpen": "選擇工作區",
     "remoteConnectRequiresWorkspace": "請先開啟工作區再使用遠端控制。"
   },
@@ -75,31 +75,38 @@
     "forwardShortcut": "前進 (Alt+→)",
     "items": {
       "sessions": "會話",
-      "project": "目錄",
-      "persona": "助理",
+      "project": "項目",
+      "persona": "智能成員",
       "workflowClaw": "工作流 Claw",
-      "todos": "待辦事項",
-      "agents": "專業智能體",
+      "todos": "任務看板",
+      "agents": "智能體",
       "skills": "技能",
       "tools": "工具",
       "workflow": "工作流",
       "terminal": "Shell",
       "git": "Git",
       "miniApps": "小應用",
-      "insights": "洞察"
+      "insights": "洞察",
+      "assistant": "智能助理",
+      "longTermTracking": "長期跟蹤",
+      "ecosystemCompatibility": "生態兼容"
     },
     "tooltips": {
-      "persona": "助理 — 建立與管理所有助理實例",
+      "persona": "智能成員 — 展開查看基於角色和記憶的成員會話",
       "workflowClaw": "工作流 Claw — 獨立展示工作流成員助理",
-      "todos": "待辦 — 匯總所有定時任務，列表與日曆兩層檢視",
+      "todos": "任務看板 — 管理全部任務",
       "agents": "它能調用哪些 Agent",
       "skills": "它懂什麼專項知識 — 技能知識檔案",
       "tools": "它能用什麼工具 — 內置工具與 MCP 服務",
       "workflow": "工作流 — 編排多智能體協作完成複雜任務",
-      "addWorkspace": "新增工作區"
+      "addWorkspace": "新增工作區",
+      "longTermTracking": "長期跟蹤 — 持續任務與長期對話",
+      "ecosystemCompatibility": "生態兼容 — 管理其他 AI 應用的兼容能力與擴展",
+      "ecosystemCompatibilityUnseen": "生態兼容 — 發現了新的兼容應用",
+      "addSessionGroup": "新增項目或個人助理"
     },
     "sections": {
-      "extensions": "定製",
+      "extensions": "擴展與兼容",
       "shell": "Shell",
       "assistantSessions": "助理會話",
       "groupChats": "群聊"
@@ -144,15 +151,89 @@
       "membersSearch": "搜尋成員..."
     },
     "search": {
-      "triggerPlaceholder": "搜尋...",
+      "triggerPlaceholder": "搜尋一切",
       "triggerTooltip": "搜尋 (Ctrl+K、Alt+F)",
-      "inputPlaceholder": "搜尋工作區、助理、會話...",
-      "groupWorkspaces": "已開啟工作區",
+      "inputPlaceholder": "搜尋任何內容，或輸入 > 尋找命令",
+      "groupWorkspaces": "項目",
       "groupAssistants": "助理",
       "groupSessions": "所有會話",
       "empty": "未找到相關結果",
-      "sessionSearchHintDefault": "輸入關鍵詞，搜尋已開啟工作區內的會話",
-      "sessionWorkspaceHint": "位於 {{workspace}}"
+      "sessionSearchHintDefault": "輸入關鍵詞，搜尋所有會話",
+      "sessionWorkspaceHint": "位於 {{workspace}}",
+      "dialogLabel": "全域搜尋",
+      "inputLabel": "搜尋 BitFun",
+      "resultsLabel": "搜尋結果",
+      "clear": "清除搜尋",
+      "searching": "正在搜尋…",
+      "partialUnavailable": "部分搜尋來源目前不可用",
+      "typeMoreForContent": "至少輸入兩個字元以搜尋檔案與內容",
+      "resultCount": "{{count}} 個",
+      "back": "返回",
+      "backToOverview": "返回搜尋概覽",
+      "openGroup": "查看全部{{group}}，共 {{count}} 個",
+      "scopes": {
+        "all": "全部",
+        "actions": "命令",
+        "content": "內容"
+      },
+      "groups": {
+        "actions": "命令",
+        "frequentActions": "常用命令",
+        "messages": "訊息",
+        "sessions": "會話",
+        "files": "檔案",
+        "workspaces": "項目",
+        "assistants": "助理",
+        "capabilities": "功能",
+        "settings": "$t(shared:features.settings)"
+      },
+      "actions": {
+        "newSession": "新增會話",
+        "openBrowser": "開啟瀏覽器",
+        "openTerminal": "開啟終端機",
+        "openProject": "開啟項目",
+        "newProject": "新增項目",
+        "openFiles": "開啟檔案",
+        "openAgents": "開啟智能體",
+        "openSkills": "開啟技能",
+        "openMiniApps": "開啟 Mini Apps",
+        "openTodos": "開啟待辦",
+        "openInsights": "開啟洞察",
+        "openSettings": "開啟設定",
+        "openKeyboardShortcuts": "開啟鍵盤快速鍵",
+        "openIntegrations": "開啟生態兼容"
+      },
+      "actionDescriptions": {
+        "newSession": "透過統一會話流程開始新對話",
+        "openBrowser": "在目前工作上下文中開啟瀏覽器",
+        "openTerminal": "在目前項目中新增終端機",
+        "openProject": "選擇並開啟本機或對端裝置上的項目",
+        "newProject": "從範本或空白工作區建立項目",
+        "openFiles": "瀏覽和編輯目前項目檔案",
+        "openAgents": "管理已安裝和自訂智能體",
+        "openSkills": "瀏覽和管理可重用技能",
+        "openMiniApps": "開啟 Mini App 庫",
+        "openTodos": "查看任務與後續工作",
+        "openInsights": "查看活動與使用洞察",
+        "openSettings": "設定 BitFun",
+        "openKeyboardShortcuts": "查看和自訂鍵盤快速鍵",
+        "openIntegrations": "管理外部 AI 應用中的兼容能力與執行方式"
+      },
+      "badges": {
+        "userMessage": "你",
+        "assistantMessage": "助理"
+      },
+      "footer": {
+        "navigate": "選擇",
+        "open": "開啟",
+        "back": "返回",
+        "close": "關閉"
+      },
+      "errors": {
+        "activationFailed": "無法開啟該結果",
+        "remoteFileSearchUnavailable": "遠端項目 {{workspace}} 暫不支援檔案搜尋",
+        "sessionUnavailable": "該會話已不可用"
+      }
     },
     "githubStar": {
       "label": "Star",
@@ -272,7 +353,7 @@
       "ariaInputResolvedRemaining": "會話 '{{name}}' 已收到輸入。還有 {{count}} 個會話等待中。",
       "badgeBackgroundSubagents": "後台 {{count}}",
       "backgroundSubagentsRunning": "{{count}} 個背景子 Agent 運行中",
-      "needProjectWorkspaceForSession": "請先開啟或新增項目工作區。編碼與工作（Cowork）會話不能在助理區域建立。",
+      "needProjectWorkspaceForSession": "請先開啟或新增項目工作區，再新增項目會話。",
       "manage": "批量管理會話",
       "batchManageDescription": "選擇此工作區中的會話，然後批量歸檔或刪除。",
       "batchSelectionSummary": "已選擇 {{count}} 個 · 共 {{total}} 個會話",
@@ -300,10 +381,10 @@
       "bulkDeleteConfirmTitle": "刪除所選會話",
       "bulkDeleteConfirmMessage": "確定要永久刪除所選的 {{count}} 個會話嗎？此操作無法復原。",
       "deleteArchivedConfirmTitle": "刪除已歸檔會話",
-      "deleteArchivedConfirmMessage": "確定要永久刪除此已歸檔會話嗎？此操作無法復原。",
+      "deleteArchivedConfirmMessage": "將永久刪除「{{name}}」（工作區：{{workspace}}）。此操作無法復原。",
       "deleteAllArchived": "刪除全部已歸檔",
       "deleteAllArchivedConfirmTitle": "刪除全部已歸檔會話",
-      "deleteAllArchivedConfirmMessage": "確定要永久刪除所有已歸檔會話嗎？此操作無法復原。",
+      "deleteAllArchivedConfirmMessage": "將永久刪除 {{workspaceCount}} 個工作區中的 {{count}} 個已歸檔會話。此操作無法復原。",
       "archivedSessions": "已歸檔會話",
       "noArchivedSessions": "暫無已歸檔會話",
       "archivedSessionsDescription": "檢視、恢復或永久刪除已歸檔的會話。",
@@ -315,7 +396,79 @@
       "deleteAllArchivedFailed": "刪除全部已歸檔會話失敗",
       "archiveAllFailed": "歸檔會話失敗",
       "bulkArchiveFailed": "批量歸檔會話失敗",
-      "bulkDeleteFailed": "批量刪除會話失敗"
+      "bulkDeleteFailed": "批量刪除會話失敗",
+      "acpSessions": "ACP 會話",
+      "noSessions": "暫無會話",
+      "viewToggle": {
+        "label": "會話顯示方式",
+        "all": "全部",
+        "grouped": "分組",
+        "allTooltip": "將所有會話顯示為一個列表",
+        "groupedTooltip": "按項目和助理組織會話"
+      },
+      "viewMenu": {
+        "title": "會話檢視",
+        "tooltip": "組織與篩選會話",
+        "grouping": {
+          "label": "分組",
+          "grouped": "項目與助理",
+          "all": "全部會話"
+        },
+        "ordering": {
+          "label": "排序",
+          "updated": "最近更新",
+          "status": "狀態",
+          "created": "最新建立",
+          "name": "名稱"
+        },
+        "show": {
+          "label": "顯示",
+          "all": "全部會話",
+          "unread": "未讀會話",
+          "attention": "需要處理"
+        },
+        "filters": {
+          "label": "篩選",
+          "reset": "重設"
+        },
+        "status": {
+          "label": "狀態",
+          "running": "$t(shared:statuses.running)",
+          "attention": "需要處理",
+          "error": "錯誤",
+          "completed": "$t(shared:statuses.done)",
+          "idle": "閒置"
+        },
+        "worktree": {
+          "label": "工作樹",
+          "main": "主工作區",
+          "worktree": "工作樹會話"
+        },
+        "environment": {
+          "label": "環境",
+          "local": "本機",
+          "remote": "遠端工作區",
+          "detached": "分離執行"
+        },
+        "source": {
+          "label": "來源",
+          "bitfun": "$t(shared:product.name)",
+          "external": "外部 Agent"
+        },
+        "archived": "封存會話",
+        "collapseAll": "全部摺疊",
+        "markAllRead": "全部標示為已讀",
+        "noMatches": "沒有符合目前篩選條件的會話"
+      },
+      "partialLoadFailedRetry": "部分工作區的會話未載入 — 重試",
+      "showMoreLabel": "顯示更多",
+      "showAllLabel": "展開全部",
+      "deleteArchivedSucceeded": "已永久刪除「{{name}}」（{{workspace}}）。",
+      "deleteAllArchivedSucceeded": "已永久刪除 {{count}} 個已歸檔會話。",
+      "deleteAllArchivedPartial": "已刪除 {{deletedCount}} 個會話；另有 {{failedWorkspaceCount}} 個工作區刪除失敗，請重試。",
+      "loadArchivedFailedForWorkspace": "無法載入 {{workspace}}（{{path}}）的已歸檔會話，請重試。",
+      "restoreSucceeded": "已恢復「{{name}}」（{{workspace}}）。",
+      "restoreRefreshFailed": "會話已恢復，但會話列表重新整理失敗；請手動重新整理工作區。"
     },
     "scheduledJobs": {
       "title": "定時任務",
@@ -422,7 +575,7 @@
     },
     "workspaces": {
       "empty": "暫無已開啟工作區",
-      "emptyProjects": "暫無普通工作區",
+      "emptyProjects": "暫無項目",
       "emptyAssistants": "暫無個人助理",
       "primaryAssistant": "主助理",
       "closeFailed": "關閉工作區失敗",
@@ -431,7 +584,7 @@
       "assistantDeleted": "已刪除個人助理",
       "resetWorkspaceFailed": "重設工作區失敗",
       "workspaceReset": "已重設工作區",
-      "reorderFailed": "調整工作區順序失敗",
+      "reorderFailed": "調整會話分組順序失敗",
       "dropBefore": "鬆開後插入到此項前",
       "dropAfter": "鬆開後插入到此項後",
       "revealFailed": "開啟工作區目錄失敗",
@@ -446,11 +599,11 @@
       "expandSessions": "展開會話列表",
       "collapseSessions": "收起會話列表",
       "groups": {
-        "projects": "普通工作區",
-        "assistants": "個人助理"
+        "projects": "項目",
+        "assistants": "助理"
       },
       "remote": {
-        "tooltip": "遠端工作區 · {{connection}}（{{host}}）\n連線狀態：{{status}}",
+        "tooltip": "遠端項目 · {{connection}}（{{host}}）\n連線狀態：{{status}}",
         "ariaLabel": "遠端連線 {{connection}}，{{status}}",
         "status": {
           "connected": "已連線",
@@ -472,7 +625,7 @@
         "rename": "重新命名專案",
         "copyPath": "複製路徑",
         "reveal": "在資源管理器中開啟",
-        "close": "關閉工作區"
+        "close": "關閉項目"
       },
       "renameDialog": {
         "title": "重新命名專案",
@@ -524,7 +677,8 @@
         "title": "重設 {{name}}？",
         "message": "此操作會清空該工作區目錄下的所有內容，並恢復默認 persona 檔案；不會刪除工作區目錄本身。",
         "pathLabel": "工作區路徑"
-      }
+      },
+      "emptySessionGroups": "暫無項目或助理"
     },
     "agents": {
       "allAgents": "全部子智能體",
@@ -545,7 +699,18 @@
     },
     "moreOptions": "更多選項",
     "multimodalTools": "多模態工具",
-    "notifications": "通知"
+    "notifications": "通知",
+    "messages": {
+      "longTermTrackingComingSoon": "長期跟蹤正在開發中"
+    },
+    "settingsMenu": {
+      "floatingWindow": "懸浮窗",
+      "theme": "主題",
+      "themeConfiguration": "主題配置",
+      "appearanceSwitchFailed": "主題切換失敗，請重試。",
+      "openSettings": "開啟設定",
+      "about": "關於"
+    }
   },
   "window": {
     "minimize": "最小化",
@@ -675,7 +840,7 @@
       "switched": "已切換至 {{name}}",
       "switchedLocal": "已切換回本機",
       "disconnected": "已中斷 {{name}} 的連線",
-      "disconnectHint": "結束對該裝置的控制，並取消它正在為你執行的工作"
+      "disconnectHint": "結束對該裝置的控制；已開始的工作仍會在該裝置上繼續執行"
     },
     "peerAutoExitOffline": "遠端裝置「{{name}}」已離線 — 已中斷連線",
     "peerAutoExitRpc": "與遠端裝置「{{name}}」連線遺失 — 已中斷連線",
@@ -874,7 +1039,32 @@
     "disclaimerStatusAgreed": "已同意",
     "disclaimerStatusPending": "未同意",
     "disclaimerDecline": "不同意",
-    "disclaimerAgree": "同意並繼續"
+    "disclaimerAgree": "同意並繼續",
+    "centerTitle": "裝置與連線",
+    "overviewIntro": "管理登入 BitFun 的裝置，或讓其他裝置連線至目前工作區。",
+    "myDevicesTitle": "我的裝置",
+    "accountDevicesTitle": "BitFun 帳號與裝置",
+    "myDevicesDescription": "登入後同步設定與工作階段，並在自己的裝置之間切換。",
+    "accountSignedIn": "已登入",
+    "accountSignedOut": "未登入",
+    "connectThisDeviceTitle": "連線至此裝置",
+    "connectThisDeviceDescription": "無需登入 BitFun 帳號",
+    "mobileBrowserTitle": "手機或瀏覽器",
+    "mobileBrowserDescription": "透過相同網路、中繼或 ngrok，在手機或其他瀏覽器中開啟目前工作區。",
+    "chatAppsTitle": "聊天應用程式",
+    "chatAppsDescription": "透過 Telegram、飛書或微信向目前工作區傳送訊息。",
+    "requiresWorkspace": "需要先開啟工作區",
+    "notConnected": "尚未連線",
+    "backToOverview": "返回裝置與連線",
+    "cancelAndBack": "取消連線並返回",
+    "methodSameNetwork": "相同網路",
+    "methodBitFunRelay": "BitFun 中繼",
+    "methodNgrok": "ngrok",
+    "methodSelfHosted": "自建中繼",
+    "showConnectionCode": "顯示連線碼",
+    "getPairingCode": "取得配對碼",
+    "workspaceAddress": "目前工作區位址",
+    "botConnectedDescription": "目前工作區已可透過此聊天應用程式收發訊息。"
   },
   "about": {
     "close": "關閉",
@@ -885,7 +1075,22 @@
     "branch": "分支",
     "copyright": "© 2025 BitFun. All rights reserved.",
     "updateSectionTitle": "應用更新",
-    "updateSectionHint": "保持 BitFun 為最新版本，以取得修復與新功能。"
+    "updateSectionHint": "保持 BitFun 為最新版本，以取得修復與新功能。",
+    "copyCommit": "複製提交雜湊",
+    "dialogTitle": "關於 BitFun",
+    "tagline": "智慧體運行環境 · Agent Runtime",
+    "details": "版本與構建資訊",
+    "versionLabel": "版本",
+    "license": "授權條款",
+    "notAvailable": "—",
+    "developmentBuild": "開發版",
+    "stableBuild": "穩定版",
+    "betaBuild": "測試版",
+    "nightlyBuild": "每日構建",
+    "allRightsReserved": "All rights reserved.",
+    "githubStarTitle": "覺得 BitFun 有幫助？在 GitHub 點亮一顆 Star",
+    "githubStarDescription": "你的支持會讓更多人發現 BitFun，也會鼓勵我們持續打磨它。",
+    "githubStarAction": "點亮 Star"
   },
   "update": {
     "checkForUpdates": "檢查更新",
@@ -1252,7 +1457,7 @@
     "insights": "洞察",
     "assistant": "助理",
     "workflowClaw": "工作流 Claw",
-    "todos": "待辦事項",
+    "todos": "任務看板",
     "shell": "Shell",
     "panelView": "面板視圖"
   },
@@ -1318,6 +1523,12 @@
       "openProjectDesc": "選擇一個已有的項目目錄，開始你的 AI 編程之旅",
       "newProject": "新增項目",
       "newProjectDesc": "從零開始建立一個全新的項目"
+    },
+    "greeting": {
+      "morning": "早安，程式搭檔",
+      "afternoon": "午安，程式搭檔",
+      "evening": "晚上好，程式搭檔",
+      "subtitle": "一起創造點新東西吧。"
     }
   },
   "insights": {
@@ -1409,12 +1620,14 @@
     "timeEvening": "晚上（18-24 點）",
     "timeNight": "凌晨（0-6 點）",
     "lines": "行",
-    "files": "檔案"
+    "files": "檔案",
+    "modelPrimary": "主力模型",
+    "modelPrimaryDescription": "使用已設定的主力模型"
   },
   "ssh": {
     "remote": {
       "title": "遠程 SSH",
-      "connect": "連接遠程工作區",
+      "connect": "連接遠程項目",
       "connecting": "連接中...",
       "connected": "已連接",
       "disconnect": "斷開連接",
@@ -1522,7 +1735,38 @@
       "downloadDialogTitle": "儲存檔案",
       "transferFailed": "傳輸失敗",
       "transferNeedsDesktop": "上傳與下載僅適用於桌面版應用。",
-      "transferring": "正在傳輸…"
+      "transferring": "正在傳輸…",
+      "showPassword": "顯示密碼",
+      "hidePassword": "隱藏密碼"
+    },
+    "portForward": {
+      "menuEntry": "連接埠對應",
+      "title": "連接埠對應",
+      "intro": "把遠端主機上正在監聽的連接埠對應到本機存取。對應不會自動建立，只有你在這裡新增的才會生效。",
+      "detectedTitle": "遠端正在監聽",
+      "detecting": "正在偵測遠端連接埠…",
+      "detect": "重新偵測",
+      "detectedEmpty": "遠端主機上沒有偵測到正在監聽的連接埠，可以在下方手動填寫。",
+      "detectedUse": "對應到本機",
+      "detectedAlreadyForwarded": "這個連接埠已經對應過了",
+      "activeTitle": "已對應",
+      "empty": "還沒有連接埠對應。點上面偵測到的連接埠，或在下方手動填寫。",
+      "portMoved": "本機 {{requested}} 已被占用，改用 {{bound}}",
+      "exposedOnLanBadge": "區域網路可存取",
+      "statusActive": "{{active}} 個連線",
+      "statusWarning": "有錯誤",
+      "openInBrowser": "在瀏覽器中開啟",
+      "copyAddress": "複製本機位址",
+      "stop": "停止對應",
+      "manualTitle": "手動新增",
+      "remotePortLabel": "遠端連接埠",
+      "localPortLabel": "本機連接埠",
+      "localPortPlaceholder": "自動",
+      "labelLabel": "備註",
+      "labelPlaceholder": "選填，例如 前端預覽",
+      "add": "新增對應",
+      "exposeOnLan": "允許區域網路存取",
+      "exposeOnLanHint": "綁定本機所有網路介面，同一網路下的其他裝置也能存取這個遠端服務。預設只綁定 127.0.0.1。"
     }
   },
   "notify": {
@@ -1544,7 +1788,11 @@
     "minimizeToTray": "最小化到托盤"
   },
   "sceneBar": {
-    "sceneTabs": "場景標籤"
+    "sceneTabs": "場景標籤",
+    "tabsLabel": "場景標籤頁",
+    "scrollPrevious": "向左捲動標籤頁",
+    "scrollNext": "向右捲動標籤頁",
+    "closeTab": "關閉{{label}}"
   },
   "reviewTeamErrorTitle": "程式碼審核團隊",
   "mcpInteraction": {
@@ -1768,5 +2016,53 @@
     "nextMonth": "下個月",
     "now": "此刻",
     "close": "關閉"
+  },
+  "deviceOverview": {
+    "title": "裝置狀態",
+    "thisDevice": "這台裝置",
+    "thisWindows": "這台 Windows",
+    "thisMac": "這台 Mac",
+    "thisLinux": "這台 Linux",
+    "footerLocal": "本機工作",
+    "footerPeer": "從 {{device}} 使用 · {{count}} 個控制端",
+    "footerControllers": "{{count}} 個控制端",
+    "footerTasks": "{{count}} 個背景任務",
+    "footerWorkDevices": "{{count}} 個工作裝置",
+    "footerLocalSimple": "本機",
+    "footerControlledFromHere": "由這台裝置控制",
+    "footerControlledBy": "{{device}} 正在控制",
+    "footerDistributedExecution": "{{count}} 台裝置正在執行",
+    "current": "目前",
+    "currentUse": "目前使用",
+    "controlling": "正在控制",
+    "executingTasks": "{{count}} 個任務",
+    "connectedDevices": "協同裝置",
+    "connectionService": "連線服務",
+    "accountService": "帳號服務",
+    "controllers": "控制端",
+    "workDevices": "工作裝置",
+    "connections": "連線方式",
+    "currentOperation": "本機",
+    "connected": "已連線",
+    "sessionData": "工作階段資料",
+    "projectExecution": "專案與執行",
+    "backgroundTasks": "{{count}} 個背景任務",
+    "localConnection": "本機",
+    "sameNetwork": "同一網路",
+    "officialService": "BitFun 官方服務",
+    "selfHostedService": "自建服務",
+    "publicConnection": "公網連線",
+    "deviceService": "裝置連線服務",
+    "connectControlDevices": "連線控制裝置",
+    "connectedTo": "連線 {{target}}",
+    "mobileDevice": "行動裝置",
+    "backupSyncing": "加密備份 · 同步中",
+    "backupSynced": "加密備份 · 已同步",
+    "backupFailed": "加密備份 · 同步遇到問題",
+    "statusUnavailable": "其他裝置狀態暫時無法使用，本機工作不受影響",
+    "connectOtherDevices": "連線其他裝置",
+    "backToThisDevice": "返回這台裝置",
+    "returningToThisDevice": "正在返回這台裝置…",
+    "returnedToThisDevice": "已返回這台裝置"
   }
 }

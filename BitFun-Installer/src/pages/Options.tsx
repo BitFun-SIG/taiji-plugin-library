@@ -79,7 +79,11 @@ export function Options({
     <div className="page-shell">
       <div className="page-scroll">
         <div className="page-container page-container--center" style={{ maxWidth: 560 }}>
-          <div style={{ marginBottom: 8, fontSize: 12, color: 'var(--color-text-muted)' }}>
+          <div style={{
+            marginBottom: 8,
+            fontSize: 'var(--bf-type-body-xs-font-size)',
+            color: 'var(--bf-color-content-muted)',
+          }}>
             {t('options.subtitle')}
           </div>
           {existingInstall?.detected ? (
@@ -88,14 +92,17 @@ export function Options({
                 marginBottom: 16,
                 padding: '12px 14px',
                 borderRadius: 10,
-                border: '1px solid color-mix(in srgb, var(--color-accent-500) 45%, transparent)',
-                background: 'color-mix(in srgb, var(--color-accent-500) 8%, transparent)',
-                fontSize: 12,
-                lineHeight: 1.55,
-                color: 'var(--color-text-primary)',
+                border: '1px solid color-mix(in srgb, var(--bf-color-accent-default) 45%, transparent)',
+                background: 'color-mix(in srgb, var(--bf-color-accent-default) 8%, transparent)',
+                fontSize: 'var(--bf-type-body-xs-font-size)',
+                lineHeight: 'var(--bf-type-support-line-height)',
+                color: 'var(--bf-color-content-primary)',
               }}
             >
-              <div style={{ fontWeight: 600, marginBottom: 8 }}>{t('options.existingInstallTitle')}</div>
+              <div style={{
+                fontWeight: 'var(--bf-type-label-selected-font-weight)',
+                marginBottom: 8,
+              }}>{t('options.existingInstallTitle')}</div>
               {existingInstall.displayVersion ? (
                 <div style={{ marginBottom: 4, wordBreak: 'break-all' }}>
                   {t('options.existingInstallVersion', { version: existingInstall.displayVersion })}
@@ -107,7 +114,7 @@ export function Options({
                 </div>
               ) : null}
               {!existingInstall.mainBinaryPresent ? (
-                <div style={{ marginBottom: 8, color: 'var(--color-warning)' }}>
+                <div style={{ marginBottom: 8, color: 'var(--bf-color-status-warning-content)' }}>
                   {t('options.existingInstallBinaryMissing')}
                 </div>
               ) : null}
@@ -117,7 +124,7 @@ export function Options({
                   <button
                     type="button"
                     className="btn"
-                    style={{ padding: '8px 12px', fontSize: 12 }}
+                    style={{ padding: '8px 12px', fontSize: 'var(--bf-type-body-xs-font-size)' }}
                     onClick={() => {
                       void onLaunchRegisteredUninstaller();
                     }}
@@ -172,8 +179,8 @@ export function Options({
                   display: 'flex',
                   gap: 16,
                   marginTop: 8,
-                  fontSize: 11,
-                  color: 'var(--color-text-muted)',
+                  fontSize: 'var(--bf-type-support-font-size)',
+                  color: 'var(--bf-color-content-muted)',
                   opacity: 0.7,
                   flexWrap: 'wrap',
                 }}
@@ -184,7 +191,7 @@ export function Options({
                   {diskSpace.available < Number.MAX_SAFE_INTEGER ? formatBytes(diskSpace.available) : '-'}
                 </span>
                 {!diskSpace.sufficient && (
-                  <span style={{ color: 'var(--color-error)' }}>{t('options.insufficientSpace')}</span>
+                  <span style={{ color: 'var(--bf-color-status-danger-content)' }}>{t('options.insufficientSpace')}</span>
                 )}
               </div>
             )}

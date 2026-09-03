@@ -15,14 +15,20 @@ pub use bitfun_core_types::{
 
 #[cfg(feature = "acp-client")]
 mod acp_client_port;
+#[cfg(feature = "hook-function-runtime")]
+mod hook_function;
 #[cfg(feature = "workspace-ports")]
 mod local_workspace_snapshot;
 #[cfg(feature = "permission")]
 mod permission;
 #[cfg(feature = "plugin-runtime")]
 mod plugin;
+#[cfg(feature = "product-search")]
+mod product_search;
 #[cfg(feature = "script-tool-runtime")]
 mod script_tool;
+#[cfg(feature = "web-search-port")]
+mod web_search;
 #[cfg(feature = "acp-client")]
 pub use acp_client_port::{
     acp_backend_error, acp_flow_client_id_from_session_id, looks_like_uuid,
@@ -30,6 +36,10 @@ pub use acp_client_port::{
     AcpClientCreateResult, AcpClientHistoryEntry, AcpClientHistoryRequest, AcpClientHistoryResult,
     AcpClientListResult, AcpClientMessageRequest, AcpClientMessageResult, AcpClientPort,
     AcpClientReleaseRequest, AcpClientStreamChunk, AcpClientStreamChunkSink, AcpClientSummary,
+};
+#[cfg(feature = "product-search")]
+pub use bitfun_product_domains::product_search::{
+    SessionContentSearchRequest, SessionContentSearchResponse,
 };
 #[cfg(feature = "permission")]
 pub use bitfun_product_domains::tool_permissions::{
@@ -44,6 +54,8 @@ pub use bitfun_product_domains::tool_permissions::{
     PermissionRuleset, PermissionRuntimeCeiling, PermissionRuntimeCeilingValidationError,
     ResolvedPermissionMode, ResolvedPermissionPolicy, ToolPermissionConfig,
 };
+#[cfg(feature = "hook-function-runtime")]
+pub use hook_function::*;
 #[cfg(feature = "workspace-ports")]
 pub use local_workspace_snapshot::{
     LocalWorkspaceSnapshotPort, LocalWorkspaceSnapshotSessionRequest, LocalWorkspaceSnapshotStats,
@@ -70,12 +82,16 @@ pub use plugin::{
     PluginRuntimeUnavailableReason, PluginSourceKind, PluginSourceRef, PluginStatusKind,
     PluginStatusSnapshot, PluginTargetRef, PluginTrustLevel, ProjectionOnlyPluginRuntimeClient,
 };
+#[cfg(feature = "product-search")]
+pub use product_search::ProductSearchPort;
 #[cfg(feature = "script-tool-runtime")]
 pub use script_tool::{
     ScriptToolDescriptor, ScriptToolExpectedExport, ScriptToolInvokeRequest,
     ScriptToolInvokeResponse, ScriptToolLoadRequest, ScriptToolLoadResponse, ScriptToolRuntime,
     ScriptToolRuntimeAvailability,
 };
+#[cfg(feature = "web-search-port")]
+pub use web_search::*;
 
 pub type PortResult<T> = Result<T, PortError>;
 
@@ -270,9 +286,24 @@ pub trait ConfigReadPort: Send + Sync {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+pub enum DelegationScope {
+    Standard,
+    Swarm,
+}
+
+impl Default for DelegationScope {
+    fn default() -> Self {
+        Self::Standard
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub struct DelegationPolicy {
     pub allow_subagent_spawn: bool,
     pub nesting_depth: u8,
+    #[serde(default)]
+    pub scope: DelegationScope,
 }
 
 impl Default for DelegationPolicy {
@@ -286,16 +317,39 @@ impl DelegationPolicy {
         Self {
             allow_subagent_spawn: true,
             nesting_depth: 0,
+            scope: DelegationScope::Standard,
+        }
+    }
+
+    pub fn swarm_root() -> Self {
+        Self {
+            allow_subagent_spawn: true,
+            nesting_depth: 0,
+            scope: DelegationScope::Swarm,
         }
     }
 
     pub fn spawn_child(self) -> Self {
         let new_depth = self.nesting_depth.saturating_add(1);
         Self {
-            // 本地语义（fork）：深度 < MAX_FISSION_DEPTH 允许递归委派；
-            // 上游改为 spawn 后永远禁用，本地 task 契约测试要求保留深度递归。
-            allow_subagent_spawn: new_depth < MAX_FISSION_DEPTH,
+            // 本地语义（fork）：Standard 作用域内深度 < MAX_FISSION_DEPTH 允许
+            // 递归委派（本地 task 契约测试依赖深度递归）；Swarm 作用域沿用上游
+            // 语义（planner 链路经 spawn_child_for 单独裁决）。
+            allow_subagent_spawn: match self.scope {
+                DelegationScope::Standard => new_depth < MAX_FISSION_DEPTH,
+                DelegationScope::Swarm => self.allow_subagent_spawn,
+            },
             nesting_depth: new_depth,
+            scope: self.scope,
+        }
+    }
+
+    pub fn spawn_child_for(self, agent_type: &str) -> Self {
+        let is_swarm_planner = matches!(agent_type, "Ultra" | "SwarmPlanner");
+        Self {
+            allow_subagent_spawn: self.scope == DelegationScope::Swarm && is_swarm_planner,
+            nesting_depth: self.nesting_depth.saturating_add(1),
+            scope: self.scope,
         }
     }
 }
@@ -408,6 +462,19 @@ mod tests {
         assert!(!deep.allow_subagent_spawn);
         assert_eq!(deep.nesting_depth, MAX_FISSION_DEPTH);
         assert_eq!(deep.spawn_child().nesting_depth, MAX_FISSION_DEPTH + 1);
+    }
+
+    #[test]
+    fn swarm_delegation_allows_only_planners_to_recurse() {
+        let root = DelegationPolicy::swarm_root();
+        let planner = root.spawn_child_for("SwarmPlanner");
+        let worker = root.spawn_child_for("SwarmWorker");
+
+        assert!(planner.allow_subagent_spawn);
+        assert_eq!(planner.nesting_depth, 1);
+        assert_eq!(planner.scope, DelegationScope::Swarm);
+        assert!(!worker.allow_subagent_spawn);
+        assert_eq!(worker.nesting_depth, 1);
     }
 
     #[test]

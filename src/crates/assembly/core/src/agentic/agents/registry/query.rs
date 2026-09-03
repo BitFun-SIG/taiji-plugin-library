@@ -6,8 +6,9 @@ use super::support::{
 use super::AgentRegistry;
 use crate::agentic::agents::registry::types::{is_review_agent_entry, AgentEntry, AgentSource};
 use crate::agentic::agents::{
-    mode_presentation_rank, resolve_mode_config_profile_id, AgentCategory, AgentInfo,
-    AgentToolPolicy, SubagentListScope, SubagentQueryContext,
+    is_swarm_delegate_agent_type, is_swarm_planner_agent_type, mode_presentation_rank,
+    resolve_mode_config_profile_id, AgentCategory, AgentInfo, AgentToolPolicy, SubagentListScope,
+    SubagentQueryContext,
 };
 use crate::agentic::deep_review_policy::canonical_review_worker_agent_type;
 use crate::agentic::tools::get_all_registered_tool_names;
@@ -17,6 +18,23 @@ use crate::service::config::mode_config_canonicalizer::{
 use bitfun_agent_runtime::agents::subagent_source_presentation_rank;
 use std::collections::HashSet;
 use std::path::Path;
+
+const DEFAULT_PRODUCT_CONTROL_TOOL: &str = "BitFunControl";
+
+fn append_default_product_control_tool(
+    allowed_tools: &mut Vec<String>,
+    registered_tool_names: &[String],
+) {
+    if registered_tool_names
+        .iter()
+        .any(|tool| tool == DEFAULT_PRODUCT_CONTROL_TOOL)
+        && !allowed_tools
+            .iter()
+            .any(|tool| tool == DEFAULT_PRODUCT_CONTROL_TOOL)
+    {
+        allowed_tools.push(DEFAULT_PRODUCT_CONTROL_TOOL.to_string());
+    }
+}
 
 fn apply_mode_tool_augmentation(
     agent: &dyn crate::agentic::agents::Agent,
@@ -116,10 +134,10 @@ impl AgentRegistry {
                 .unwrap_or_default()
                 .into_iter()
                 .collect();
-        match entry.category {
+        let registered_tool_names = get_all_registered_tool_names().await;
+        let mut policy = match entry.category {
             AgentCategory::Mode => {
                 let mode_configs = get_mode_configs().await;
-                let registered_tool_names = get_all_registered_tool_names().await;
                 let valid_tools: HashSet<String> = registered_tool_names.iter().cloned().collect();
                 let profile_id = resolve_mode_config_profile_id(agent_type);
                 let default_tools = entry.agent.default_tools();
@@ -146,7 +164,6 @@ impl AgentRegistry {
                     resolved_tools.clone(),
                     &registered_tool_names,
                 );
-                let allowed_tools = merge_dynamic_mcp_tools(allowed_tools, &registered_tool_names);
                 // R-WF-16: globally disabled tools (including dynamic MCP tools)
                 // must never be admitted even when merged into the visible set.
                 let allowed_tools = crate::agentic::tools::implementations::tools::mode_overrides::filter_globally_disabled_tools(
@@ -190,7 +207,9 @@ impl AgentRegistry {
                     permission_constraints: entry.agent.permission_constraints().clone(),
                 }
             }
-        }
+        };
+        append_default_product_control_tool(&mut policy.allowed_tools, &registered_tool_names);
+        policy
     }
 
     /// get agent tools from config
@@ -368,6 +387,14 @@ impl AgentRegistry {
         user_overrides: &crate::service::config::types::AgentSubagentOverrideConfig,
     ) -> bool {
         if entry.category != AgentCategory::SubAgent {
+            return false;
+        }
+        if query.list_scope == SubagentListScope::TaskVisible
+            && query
+                .parent_agent_type
+                .is_some_and(is_swarm_planner_agent_type)
+            && !is_swarm_delegate_agent_type(entry.agent.id())
+        {
             return false;
         }
 
@@ -585,4 +612,32 @@ fn local_conflict_info(
     info.override_state = availability.override_state;
     info.state_reason = availability.state_reason;
     Some(info)
+}
+
+#[cfg(test)]
+mod product_control_tool_tests {
+    use super::*;
+
+    #[test]
+    fn product_control_is_added_once_when_the_runtime_registered_it() {
+        let registered = vec!["Read".to_string(), DEFAULT_PRODUCT_CONTROL_TOOL.to_string()];
+        let mut allowed = vec!["Read".to_string()];
+
+        append_default_product_control_tool(&mut allowed, &registered);
+        append_default_product_control_tool(&mut allowed, &registered);
+
+        assert_eq!(
+            allowed,
+            vec!["Read".to_string(), DEFAULT_PRODUCT_CONTROL_TOOL.to_string()]
+        );
+    }
+
+    #[test]
+    fn product_control_is_not_advertised_when_the_runtime_omits_it() {
+        let mut allowed = vec!["Read".to_string()];
+
+        append_default_product_control_tool(&mut allowed, &["Read".to_string()]);
+
+        assert_eq!(allowed, vec!["Read".to_string()]);
+    }
 }

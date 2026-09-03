@@ -333,6 +333,7 @@ impl AcpClientService {
                 args: config.args.clone(),
                 enabled: config.enabled,
                 readonly: config.readonly,
+                subagent: config.subagent.clone(),
                 permission_mode: config.permission_mode,
                 id,
                 status,
@@ -1784,7 +1785,7 @@ impl AcpClientService {
 
         let tools = configs
             .iter()
-            .filter(|(_, config)| config.enabled)
+            .filter(|(_, config)| config.enabled && config.subagent.enabled)
             .map(|(id, config)| {
                 Arc::new(AcpAgentTool::new(id.clone(), config.clone(), self.clone()))
                     as Arc<dyn bitfun_core::agentic::tools::framework::Tool>
@@ -3285,6 +3286,7 @@ mod tests {
                 env: HashMap::new(),
                 enabled: true,
                 readonly: false,
+                subagent: Default::default(),
                 permission_mode: AcpClientPermissionMode::Ask,
                 category: None,
                 description: None,
@@ -3455,6 +3457,7 @@ mod tests {
             ]),
             enabled: true,
             readonly: false,
+            subagent: Default::default(),
             permission_mode: AcpClientPermissionMode::Ask,
             category: None,
             description: None,
@@ -3483,6 +3486,7 @@ mod tests {
                     env: HashMap::from([("BASE".to_string(), "1".to_string())]),
                     enabled: true,
                     readonly: false,
+                    subagent: Default::default(),
                     permission_mode: AcpClientPermissionMode::Ask,
                     category: None,
                     description: None,

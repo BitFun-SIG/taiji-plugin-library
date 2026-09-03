@@ -20,6 +20,22 @@ function readSource(relativePath: string): string {
 }
 
 describe('floating MiniApp chat activity', () => {
+  it('uses the design-system launcher with the catalog mic for Hello', () => {
+    const component = readSource('./FloatingMiniChat.tsx');
+    expect(component).toContain('IconButton, LauncherButton, Tooltip');
+    expect(component).toContain('<LauncherButton');
+    expect(component).toContain('leadingIcon={<Icon name="mic" />}');
+    expect(component).toContain("tVoice('voiceCall.call.launcherLabel')");
+    expect(component).not.toContain('className="bitfun-fmc__button-label"');
+  });
+
+  it('leaves the standalone Hello visual states with LauncherButton', () => {
+    const stylesheet = readSource('./FloatingMiniChat.scss');
+
+    expect(stylesheet).not.toContain('--bf-color-control-launcher');
+    expect(stylesheet).not.toContain('--bf-color-control-highlight');
+  });
+
   it.each([
     'pending',
     'image_analyzing',

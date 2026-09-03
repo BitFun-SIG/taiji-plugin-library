@@ -13,7 +13,7 @@ const tools: SubagentEditorToolInfo[] = [
   { name: 'Glob', description: 'Find files by pattern.', isReadonly: true },
   { name: 'LS', description: 'List directory contents.', isReadonly: true },
   { name: 'Write', description: 'Write file contents.', isReadonly: false },
-  { name: 'Bash', description: 'Run shell commands.', isReadonly: false },
+  { name: 'ExecCommand', description: 'Run shell commands.', isReadonly: false },
 ];
 
 describe('subagentEditorUtils', () => {
@@ -25,7 +25,7 @@ describe('subagentEditorUtils', () => {
       'Glob',
       'LS',
       'Write',
-      'Bash',
+      'ExecCommand',
     ]);
   });
 
@@ -50,7 +50,7 @@ describe('subagentEditorUtils', () => {
     const next = normalizeReviewModeState({
       review: true,
       readonly: false,
-      selectedTools: new Set(['Read', 'Write', 'Bash']),
+      selectedTools: new Set(['Read', 'Write', 'ExecCommand']),
       availableTools: tools,
     });
 
@@ -69,7 +69,7 @@ describe('subagentEditorUtils', () => {
 
     expect(next.readonly).toBe(true);
     expect(Array.from(next.selectedTools)).toEqual(['Read']);
-    expect(next.removedToolNames).toEqual(['Write', 'Bash']);
+    expect(next.removedToolNames).toEqual(['Write', 'ExecCommand']);
   });
 
   it('marks review subagent tooling invalid when the minimum diff or read tool is missing', () => {

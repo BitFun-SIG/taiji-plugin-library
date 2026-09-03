@@ -27,6 +27,11 @@ path = "tests/script_tool_port_contracts.rs"
 required-features = ["script-tool-runtime"]
 
 [[test]]
+name = "hook_function_runtime_contracts"
+path = "tests/hook_function_runtime_contracts.rs"
+required-features = ["hook-function-runtime"]
+
+[[test]]
 name = "session_store_contracts"
 path = "tests/session_store_contracts.rs"
 required-features = ["workspace-ports"]
@@ -46,13 +51,15 @@ ts-rs = { workspace = true, optional = true }
 default = []
 agent-api = ["dep:bitfun-core-types"]
 plugin-runtime = []
+hook-function-runtime = []
 script-tool-runtime = []
 # Local fork: acp_client_port.rs (ACP client contract) is unconditionally
 # needed by coordinator/tool implementations; upstream split tokio behind
 # feature gates, so this feature keeps the local module compiled by default
 # consumers (enabled via the tool-runtime-handles aggregate).
 acp-client = ["dep:tokio"]
-workspace-ports = ["dep:anyhow", "dep:tokio-util"]
+web-search-port = []
+workspace-ports = ["dep:anyhow", "dep:tokio-util", "dep:tokio", "tokio/io-util"]
 terminal-port = ["dep:tokio"]
 remote-exec-port = ["dep:tokio"]
 tool-runtime-handles = [
@@ -69,6 +76,7 @@ remote-workspace-ports = []
 git-port = []
 runtime-event-port = []
 permission = ["dep:bitfun-product-domains"]
+product-search = ["dep:bitfun-product-domains"]
 # Derive `ts_rs::TS` on the wire types so downstream crates (app-server) can
 # export TypeScript bindings. The `permission` feature gates the product
 # types; enabling `ts` requires `permission` so all TS-derivable types are in

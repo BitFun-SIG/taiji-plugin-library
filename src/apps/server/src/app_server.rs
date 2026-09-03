@@ -30,8 +30,13 @@ use crate::bootstrap::ServerAppState;
 /// The caller must keep the runtime services (coordinator, scheduler, ...) and
 /// the `EventQueue` the `event_source` was built from alive for as long as the
 /// [`BitfunAppServer`] is in use.
-pub(crate) fn build(runtime: AgentRuntime, event_source: AgentEventSource) -> BitfunAppServer {
-    let app_runtime = BitfunAppRuntime::new(runtime, event_source);
+pub(crate) fn build(
+    runtime: AgentRuntime,
+    event_source: AgentEventSource,
+    product_search: Arc<bitfun_core::product_runtime::CoreAgentRuntimeCompatibility>,
+) -> BitfunAppServer {
+    let app_runtime =
+        BitfunAppRuntime::new(runtime, event_source).with_product_search(product_search);
     BitfunAppServer::new(app_runtime)
 }
 
@@ -62,11 +67,14 @@ pub(crate) async fn build_lazy(
             server_state.token_usage_service.clone(),
         )
         .map_err(|error| anyhow::anyhow!("Failed to build agent runtime: {error}"))?;
-    // The event source wraps the same `EventQueue` the coordinator publishes to;
-    // each connection's `serve` main loop subscribes independently and projects
-    // runtime events to the frontend shape before pushing them to the browser.
-    let event_source =
-        bitfun_agent_runtime::sdk::AgentEventSource::new(server_state.event_queue.clone());
-
-    Ok((build(agent_runtime, event_source), server_state))
+    // The product owner keeps the legacy queue drained while each connection's
+    // `serve` loop independently subscribes to and projects Runtime events.
+    let event_source = server_state.agent_event_queue_owner.runtime_source();
+    let product_search = Arc::new(
+        bitfun_core::product_runtime::CoreAgentRuntimeCompatibility::build(
+            server_state.coordinator.clone(),
+            server_state.scheduler.clone(),
+        ),
+    );
+    Ok((build(agent_runtime, event_source, product_search), server_state))
 }

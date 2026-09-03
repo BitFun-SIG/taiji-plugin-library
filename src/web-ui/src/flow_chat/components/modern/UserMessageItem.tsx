@@ -6,7 +6,7 @@
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
-import { Copy, Check, RotateCcw, Loader2, ArrowDownToLine, X, CircleUser, Pencil } from 'lucide-react';
+import { RotateCcw, Loader2, CircleUser } from 'lucide-react';
 import type { DialogTurn, FlowUserSteeringItem } from '../../types/flow-chat';
 import { flowChatManager } from '../../services/FlowChatManager';
 import { useFlowChatContext } from './FlowChatContext';
@@ -26,8 +26,9 @@ import { globalEventBus } from '@/infrastructure/event-bus';
 import { shouldIgnoreCardToggleClick } from '@/shared/utils/textSelection';
 import { observeElementResize } from '@/shared/utils/sharedResizeObserver';
 import { formatContextForPrompt } from '@/shared/utils/contextPrompt';
-import { Tooltip, confirmDanger, ToolProcessingDots } from '@/component-library';
-import { ReproductionStepsBlock } from '@/component-library/components/Markdown/ReproductionStepsBlock';
+import { Tooltip, Icon } from '@bitfun/ui';
+import { confirmDanger } from '@/infrastructure/confirm-dialog';
+import { ToolProcessingDots } from '@bitfun/ui/flow-chat';
 import { UserMessageEditComposer } from './UserMessageEditComposer';
 import {
   describeUserMessageEditImpact,
@@ -52,6 +53,7 @@ import {
   parseComposerPresentation,
   type ComposerPresentation,
 } from '../../utils/composerPresentation';
+import { restoreImageContextsFromPayload } from '../../utils/imageContextRestoration';
 import { UserMessagePresentationContent } from './UserMessagePresentationContent';
 import './UserMessageItem.scss';
 
@@ -95,9 +97,8 @@ function buildPresentationRerunPayload(presentation: ComposerPresentation): {
 
 export const UserMessageItem = React.memo<UserMessageItemProps>(
   ({ message, turnId, absoluteTurnIndex, turnStatus, steeringStatus }) => {
-    const { t, formatDate } = useI18n('flow-chat');
+    const { t } = useI18n('flow-chat');
     const {
-      config,
       sessionId,
       activeSessionOverride,
       allowUserMessageRollback = true,
@@ -126,6 +127,14 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
       return hasComposerPresentationReferences(presentation) ? presentation : null;
     }, [message?.metadata?.composerPresentation]);
     const messageImages = useMemo(() => message?.images ?? [], [message?.images]);
+    const restoredComposerContexts = useMemo(() => [
+      ...(composerPresentation ? composerPresentationContexts(composerPresentation) : []),
+      ...restoreImageContextsFromPayload({
+        id: message?.id ?? turnId,
+        timestamp: message?.timestamp ?? 0,
+        imageDisplayData: messageImages,
+      }),
+    ], [composerPresentation, message?.id, message?.timestamp, messageImages, turnId]);
     const isUsageReportMessage = message?.metadata?.localCommandKind === 'usage_report';
     const isGoalLoadingMessage = Boolean(message?.metadata?.threadGoalKickoff);
     const isThreadGoalContinuationCheck = Boolean(message?.metadata?.threadGoalContinuation);
@@ -244,12 +253,8 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
       typeof message?.metadata?.senderSessionId === 'string' &&
       message.metadata.senderSessionId === resolvedSessionId;
 
-    const { displayText, reproductionSteps } = useMemo(() => {
-      const reproductionRegex = /<reproduction_steps>([\s\S]*?)<\/reproduction_steps\s*>?/g;
-      const reproductionMatch = reproductionRegex.exec(messageContent);
-      const reproduction = reproductionMatch ? reproductionMatch[1].trim() : null;
-
-      let cleaned = messageContent.replace(reproductionRegex, '').trim();
+    const displayText = useMemo(() => {
+      let cleaned = messageContent;
       if (isThreadGoalContinuationCheck) {
         cleaned = cleaned.replace(/\s*\n+\s*/g, ' ').trim();
       }
@@ -261,7 +266,7 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
           .trim();
       }
 
-      return { displayText: cleaned, reproductionSteps: reproduction };
+      return cleaned;
     }, [isThreadGoalContinuationCheck, messageContent, messageImages]);
     const copyText = composerPresentation
       ? composerPresentationToAccessibleText(composerPresentation)
@@ -340,9 +345,10 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
         });
 
         const composerContent = result.composerText ?? messageContent;
-        if (composerContent.trim().length > 0) {
+        if (composerContent.trim().length > 0 || restoredComposerContexts.length > 0) {
           globalEventBus.emit('fill-chat-input', {
             content: composerContent,
+            contexts: restoredComposerContexts,
             ...(composerPresentation ? { composerPresentation } : {}),
           });
         }
@@ -352,7 +358,7 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
         log.error('Rollback failed', error);
         notificationService.error(`${t('message.rollbackFailed')}: ${error instanceof Error ? error.message : String(error)}`);
       }
-    }, [actionTurnIndex, canRollback, composerPresentation, resolvedSessionId, t, turnId, messageContent]);
+    }, [actionTurnIndex, canRollback, composerPresentation, resolvedSessionId, restoredComposerContexts, t, turnId, messageContent]);
 
     const handleBeginEdit = useCallback((e: React.MouseEvent) => {
       e.stopPropagation();
@@ -463,9 +469,10 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
       e.stopPropagation();
       globalEventBus.emit('fill-chat-input', {
         content: messageContent,
+        contexts: restoredComposerContexts,
         ...(composerPresentation ? { composerPresentation } : {}),
       });
-    }, [composerPresentation, messageContent]);
+    }, [composerPresentation, messageContent, restoredComposerContexts]);
 
     const handleOpenUsageReport = useCallback((report: SessionUsageReport, initialTab?: SessionUsagePanelTab) => {
       void import('../../services/openSessionUsageReport').then(({ openSessionUsagePanel }) => {
@@ -539,14 +546,6 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
         data-status={resolvedTurnStatus || ''}
         data-failed={isFailed ? 'true' : 'false'}
       >
-        {config?.showTimestamps && (
-          <div className="user-message-item__timestamp" data-bf-component="user-message-item" data-bf-part="timestamp">
-            {formatDate(new Date(message.timestamp), {
-              hour: '2-digit',
-              minute: '2-digit',
-            })}
-          </div>
-        )}
         {isEditing ? (
           <UserMessageEditComposer
             value={editDraft}
@@ -650,7 +649,7 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
                 onClick={handleCopy}
                 title={copied ? t('message.copyFailed') : t('message.copy')}
               >
-                {copied ? <Check size={14} /> : <Copy size={14} />}
+                {copied ? <Icon name="check-line" size="sm" /> : <Icon name="duplicate" size="sm" />}
               </button>
               {canShowEditAction && (
                 <Tooltip content={canEdit ? t('message.edit') : editDisabledReason}>
@@ -661,7 +660,7 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
                     disabled={!canEdit}
                     title={canEdit ? t('message.edit') : editDisabledReason}
                   >
-                    <Pencil size={14} />
+                    <Icon name="edit" size="sm" />
                   </button>
                 </Tooltip>
               )}
@@ -671,7 +670,7 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
                     className="user-message-item__copy-btn"
                     onClick={handleFillToInput}
                   >
-                    <ArrowDownToLine size={14} />
+                    <Icon name="arrow-down" size="sm" />
                   </button>
                 </Tooltip>
               ) : canShowRollbackAction && !steeringStatus ? (
@@ -708,16 +707,10 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
           </div>
         )}
 
-        {reproductionSteps && (
-          <div className="user-message-item__blocks" data-bf-component="user-message-item" data-bf-part="blocks">
-            {reproductionSteps && <ReproductionStepsBlock steps={reproductionSteps} />}
-          </div>
-        )}
-
         {lightboxImage && createPortal(
           <div className="user-message-item__lightbox" onClick={() => setLightboxImage(null)} data-bf-component="user-message-item" data-bf-part="lightbox">
             <button className="user-message-item__lightbox-close" onClick={() => setLightboxImage(null)}>
-              <X size={20} />
+              <Icon name="xmark" size="lg" style={{ width: 20, height: 20 }} />
             </button>
             <img src={lightboxImage} alt="Preview" onClick={(e) => e.stopPropagation()} />
           </div>,

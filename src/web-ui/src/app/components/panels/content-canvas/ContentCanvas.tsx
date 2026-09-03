@@ -43,6 +43,8 @@ export interface ContentCanvasProps {
   onCollapsePanel?: () => void;
   /** Suspend terminal fit/PTY resize while the hosting panel is animating. */
   terminalResizeSuspended?: boolean;
+  /** Host-provided content for the no-tabs state. */
+  emptyState?: React.ReactNode;
 }
 
 export const ContentCanvas: React.FC<ContentCanvasProps> = ({
@@ -57,6 +59,7 @@ export const ContentCanvas: React.FC<ContentCanvasProps> = ({
   onExpandPanel,
   onCollapsePanel,
   terminalResizeSuspended = false,
+  emptyState,
 }) => {
   // Store state — fine-grained selectors so unrelated store changes
   // (drag state, closed-tab history, ...) do not re-render the whole canvas.
@@ -127,8 +130,8 @@ export const ContentCanvas: React.FC<ContentCanvasProps> = ({
     void openMainSession(activeBtwSessionData.parentSessionId);
   }, [activeBtwSessionData?.parentSessionId, activeBtwSessionData?.workspacePath, activeBtwSessionTab?.id, mode, workspacePath]);
 
-  // Keep the editor area mounted for hidden terminal tabs. Closing a terminal
-  // tab backgrounds it without destroying the xterm instance.
+  // Keep the editor area mounted for legacy hidden terminal tabs restored from
+  // an older canvas snapshot. New terminal closes destroy and remove the tab.
   const hasRenderableTabs = useMemo(() => {
     const groups = [primaryGroup, secondaryGroup, tertiaryGroup, slot4Group, slot5Group, slot6Group, slot7Group, slot8Group, slot9Group, slot10Group, slot11Group, slot12Group, slot13Group, slot14Group, slot15Group, slot16Group];
     return groups.some(group =>
@@ -201,7 +204,9 @@ export const ContentCanvas: React.FC<ContentCanvasProps> = ({
             }
           }}
         >
-          <EmptyState onClose={disablePopOut ? undefined : collapsePanel} />
+          <EmptyState onClose={disablePopOut ? undefined : collapsePanel}>
+            {emptyState}
+          </EmptyState>
         </div>
       );
     }

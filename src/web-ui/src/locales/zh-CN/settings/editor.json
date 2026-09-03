@@ -95,7 +95,7 @@
   },
   "advanced": {
     "semanticHighlighting": "语义高亮",
-    "semanticHighlightingDesc": "基于语义分析的代码高亮（需要 LSP 支持）",
+    "semanticHighlightingDesc": "使用语义信息改进代码高亮",
     "bracketPairColorization": "括号对着色",
     "bracketPairColorizationDesc": "用不同颜色区分嵌套的括号对",
     "formatOnSave": "保存时格式化",
@@ -106,17 +106,18 @@
     "trimAutoWhitespaceDesc": "保存时移除行尾多余的空格"
   },
   "actions": {
-    "reset": "重置为默认",
-    "save": "保存设置",
-    "saveDesc": "重置编辑器配置为默认值"
+    "reset": "恢复默认"
   },
   "messages": {
     "loading": "加载中...",
-    "loadFailed": "加载配置失败，使用默认配置",
-    "saving": "保存中...",
+    "loadFailed": "加载配置失败",
+    "loadFailedLocked": "无法读取编辑器设置。为避免用默认值覆盖现有配置，当前页面已锁定。",
+    "retry": "重新加载",
     "saveSuccess": "配置已保存，已打开的编辑器会自动更新",
     "saveFailed": "保存配置失败",
     "confirmReset": "确定要重置编辑器配置为默认值吗？",
-    "resetDone": "已重置为默认值"
+    "resetTitle": "重置编辑器设置？",
+    "resetAction": "恢复默认值",
+    "resetDone": "默认值已保存，已打开的编辑器会自动更新"
   }
 }
