@@ -310,28 +310,6 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({
     setCompanionPets(await listAgentCompanionPets());
   }, []);
 
-    void refreshBrowserControlStatus();
-
-    void systemAPI.getSystemInfo()
-      .then((info) => setPlatform(info.platform || ''))
-      .catch((error) => log.warn('getSystemInfo failed', error));
-  }, [refreshComputerUseStatus, refreshBrowserControlStatus, setComputerUseEnabled]);
-
-  // Browser Control / Computer Use route to the rendered host. Re-probe on every
-  // surface switch (local ↔ peer A ↔ peer B): a CLI Peer returns unsupported,
-  // a Desktop Peer / local host returns status. Resets the unsupported flag so
-  // a switch away from a CLI Peer re-shows controls instead of the notice.
-  // The current peer's deviceId is part of the dep so A→B (both peers) fires.
-  const renderedPeerDeviceId = peerDevice?.peerMode.active
-    ? peerDevice.peerMode.deviceId
-    : null;
-  useEffect(() => {
-    if (!IS_TAURI_DESKTOP) return;
-    setPeerBrowserControlUnsupported(false);
-    void refreshComputerUseStatus();
-    void refreshBrowserControlStatus();
-  }, [peerModeActive, renderedPeerDeviceId, refreshComputerUseStatus, refreshBrowserControlStatus]);
-
   const loadPageData = useCallback(async () => {
     const isInitialLoad = !hasLoadedPageDataRef.current;
     if (isInitialLoad) {
