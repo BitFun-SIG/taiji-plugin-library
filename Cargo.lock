@@ -1163,6 +1163,7 @@ dependencies = [
  "leptess",
  "libc",
  "log",
+ "mime_guess",
  "objc2 0.6.4",
  "objc2-app-kit",
  "objc2-foundation",
