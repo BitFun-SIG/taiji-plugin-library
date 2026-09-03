@@ -5,6 +5,6 @@ export const applicationSettingsAppearanceDescriptor: AppearanceSurfaceDescripto
   parts: [
     { id: 'root' }, { id: 'content' }, { id: 'launchAtLogin' }, { id: 'preventSleep' }, { id: 'autoUpdate' },
     { id: 'logging' }, { id: 'logPath' }, { id: 'terminal' },
-    { id: 'windowBehavior' }, { id: 'notifications' },
+    { id: 'windowBehavior' }, { id: 'notifications' }, { id: 'knowledgeBase' }, { id: 'legion' },
   ],
 };

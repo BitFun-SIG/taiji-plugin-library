@@ -21,9 +21,7 @@ export const navPanelAppearanceDescriptor: AppearanceSurfaceDescriptor = {
     { id: 'stickySectionHeader', visualRole: 'toolbar', continuityGroup: 'nav-panel' },
     { id: 'sectionContent', visualRole: 'content' },
     { id: 'assistantSessionActions', propertyProfile: 'control', visualRole: 'control' },
-    { id: 'assistantSessionMenu', propertyProfile: 'overlay', visualRole: 'popup' },
     { id: 'groupChatsActions', propertyProfile: 'control', visualRole: 'control' },
-    { id: 'bottomBar', visualRole: 'toolbar', continuityGroup: 'nav-panel' },
     { id: 'miniAppFooter', visualRole: 'toolbar', continuityGroup: 'nav-panel' },
     { id: 'footer', visualRole: 'toolbar', continuityGroup: 'nav-panel' },
     { id: 'deviceStatus', propertyProfile: 'control', visualRole: 'control' },
@@ -32,7 +30,7 @@ export const navPanelAppearanceDescriptor: AppearanceSurfaceDescriptor = {
   facets: [
     { id: 'layer', attribute: 'data-bf-layer', values: ['main', 'scene'] },
     { id: 'action', attribute: 'data-bf-action', values: ['new-session', 'smart-members', 'long-term-tracking', 'todos', 'extensions', 'agents', 'skills', 'ecosystem-compatibility', 'session-filter', 'assistant-manager'] },
-    { id: 'section', attribute: 'data-bf-section', values: ['smart-members', 'workspace', 'sessions'] },
+    { id: 'section', attribute: 'data-bf-section', values: ['smart-members', 'workspace', 'sessions', 'group-chats'] },
   ],
   states: [
     { id: 'scene', selector: { kind: 'self', suffix: '[data-bf-state~="scene"]' } },

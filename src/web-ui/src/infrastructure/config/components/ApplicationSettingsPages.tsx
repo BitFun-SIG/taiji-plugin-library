@@ -1235,7 +1235,7 @@ function LegionThresholdsSection() {
   }
 
   return (
-    <div className="bitfun-legion-thresholds-config" data-bf-component="basics-config" data-bf-part="legion">
+    <div className="bitfun-legion-thresholds-config" data-bf-component="application-settings" data-bf-part="legion">
       <div className="bitfun-legion-thresholds-config__content">
         <ConfigMessage message={message} />
         <ConfigPageSection
