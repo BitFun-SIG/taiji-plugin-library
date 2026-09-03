@@ -35,7 +35,7 @@
     align-items: center;
     min-width: 0;
     height: 24px;
-    padding: 0 $size-gap-1;
+    padding: 0 var(--bf-space-1);
     color: var(--bf-appearance-token-color-text-muted);
     font-size: var(--bf-appearance-token-font-size-2xs);
 
@@ -224,8 +224,8 @@
     color: inherit;
     transform: scale(1);
     transform-origin: center;
-    transition: opacity $motion-fast $easing-standard,
-                transform $motion-fast $easing-standard;
+    transition: opacity var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+                transform var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
     &.is-cowork {
       color: var(--bf-appearance-token-color-text-secondary);
@@ -233,7 +233,7 @@
 
     &.is-running {
       color: var(--bf-appearance-token-color-text-secondary);
-      transition: opacity $motion-fast $easing-standard;
+      transition: opacity var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
       animation: bitfun-nav-session-spin 1s linear infinite;
     }
 
@@ -242,7 +242,7 @@
       // Light and Dark themes (pure --bf-appearance-token-color-warning falls below threshold in
       // Light theme). 70% text-primary keeps the icon readable at 14px.
       color: color-mix(in srgb, var(--bf-appearance-token-color-text-primary) 70%, var(--bf-appearance-token-color-warning) 30%);
-      transition: opacity $motion-fast $easing-standard;
+      transition: opacity var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
       animation: bitfun-nav-ask-user-pulse 2s ease-in-out infinite;
     }
 
@@ -604,7 +604,7 @@
     gap: 4px;
     width: 100%;
     height: 22px;
-    padding: 0 $size-gap-1;
+    padding: 0 var(--bf-space-1);
     border: none;
     border-radius: 4px;
     background: transparent;
@@ -614,8 +614,8 @@
     letter-spacing: 0.02em;
     cursor: pointer;
     text-align: left;
-    transition: color $motion-fast $easing-standard,
-                background $motion-fast $easing-standard;
+    transition: color var(--bf-motion-duration-fast) var(--bf-motion-easing-standard),
+                background var(--bf-motion-duration-fast) var(--bf-motion-easing-standard);
 
     &:hover {
       color: var(--bf-appearance-token-color-text-primary);
@@ -729,7 +729,6 @@
   &__inline-toggle:focus-visible &__inline-toggle-count {
     background: color-mix(in srgb, var(--bf-color-accent-default) 22%, transparent);
     color: var(--bf-color-content-primary);
-  }
   }
 
   &__inline-item-edit-btn {

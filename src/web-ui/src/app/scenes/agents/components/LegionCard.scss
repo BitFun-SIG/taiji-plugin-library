@@ -4,10 +4,7 @@
 .legion-card {
   --legion-accent: var(--bf-appearance-token-color-accent-500);
 
-  @include surface.agent-surface-card(
-    var(--legion-card-gradient),
-    var(--legion-accent)
-  );
+  @include surface.agent-surface-card();
 
   // ── Header ────────────────────────────────────────────────────────
 
@@ -104,7 +101,7 @@
     justify-content: space-between;
     gap: $size-gap-2;
     padding: $size-gap-2 $size-gap-3;
-    @include surface.agent-surface-footer(var(--legion-card-gradient));
+    @include surface.agent-surface-footer();
   }
 
   &:hover &__footer::after {

@@ -15,8 +15,6 @@
       "accent600": "#1c1c1f",
       "borderBase": "rgba(16, 26, 39, 0.15)",
       "elementBase": "rgba(0, 0, 0, 0.05)",
-      "radiusBase": "8px",
-      "spacing4": "16px",
       "shadowBase": "0 4px 8px rgba(16, 26, 39, 0.07)",
       "styleNotes": "Light appearance - Crisp white surfaces, soft neutral grays, deep navy actions"
     },
@@ -32,8 +30,6 @@
       "accent600": "#000000",
       "borderBase": "rgba(16, 26, 39, 0.15)",
       "elementBase": "rgba(0, 0, 0, 0.05)",
-      "radiusBase": "8px",
-      "spacing4": "16px",
       "shadowBase": "0 4px 8px rgba(16, 26, 39, 0.07)",
       "styleNotes": "Black-and-white contrast appearance - Deep black chrome, bright white workspace, soft neutral blocks"
     },

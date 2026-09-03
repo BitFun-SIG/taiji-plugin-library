@@ -14,7 +14,7 @@
   height: auto;
   min-height: 0;
   max-width: var(--bf-appearance-token-flowchat-content-max-width);
-  z-index: $z-overlay;
+  z-index: var(--bf-layer-overlay);
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
@@ -25,8 +25,8 @@
   // pane (still horizontally centered) instead of capping at 900px.
   &:has(.bitfun-chat-input--chat-full-width) {
     max-width: none;
-    padding-left: $size-gap-4;
-    padding-right: $size-gap-4;
+    padding-left: var(--bf-space-4);
+    padding-right: var(--bf-space-4);
   }
 
   /* Reserve the band between the input card bottom edge and workspace strip (larger = more gap above strip text). */
