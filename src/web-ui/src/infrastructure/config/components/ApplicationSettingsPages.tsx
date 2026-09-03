@@ -1102,7 +1102,7 @@ function KnowledgeBaseSection() {
             <Button
               type="button"
               onClick={() => void handleSave()}
-              isLoading={saving}
+              loading={saving}
               disabled={saving}
               data-testid="basics-knowledge-base-save"
             >

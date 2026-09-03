@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { i18nService } from '@/infrastructure/i18n';
-import { Badge, Button, ConfigPageLoading } from '@/component-library';
+import { Button, LoadingState, StatusPill } from '@bitfun/ui';
 import {
   ConfigPageContent,
   ConfigPageHeader,
@@ -121,7 +121,6 @@ const ReviewTeamPage: React.FC = () => {
   const { t } = useTranslation('scenes/agents');
   const { t: tModel } = useTranslation('settings/default-model');
   const { openHome } = useAgentsStore();
-  const setSettingsTab = useSettingsStore((state) => state.setActiveTab);
   const openScene = useSceneStore((state) => state.openScene);
   const { workspacePath } = useCurrentWorkspace();
   const { error: notifyError } = useNotification();
@@ -270,14 +269,14 @@ const ReviewTeamPage: React.FC = () => {
   );
 
   const openReviewSettings = useCallback(() => {
-    setSettingsTab('review');
+    useSettingsStore.getState().openDestination({ pageId: 'tools.execution' });
     openScene('settings');
-  }, [openScene, setSettingsTab]);
+  }, [openScene]);
 
   if (loading || !team) {
     return (
       <ConfigPageLayout className="review-team-page">
-        <ConfigPageLoading text={t('reviewTeams.detail.loading')} />
+        <LoadingState>{t('reviewTeams.detail.loading')}</LoadingState>
       </ConfigPageLayout>
     );
   }
@@ -305,11 +304,11 @@ const ReviewTeamPage: React.FC = () => {
         subtitle={t('reviewTeams.detail.subtitle')}
         extra={(
           <div className="review-team-page__header-actions">
-            <Button variant="secondary" size="small" onClick={openReviewSettings}>
+            <Button variant="secondary" size="sm" onClick={openReviewSettings}>
               <Settings size={14} style={{ marginRight: 6 }} />
               {t('reviewTeams.detail.openSettings')}
             </Button>
-            <Button variant="secondary" size="small" onClick={openHome}>
+            <Button variant="secondary" size="sm" onClick={openHome}>
               <ArrowLeft size={14} style={{ marginRight: 6 }} />
               {t('reviewTeams.detail.back')}
             </Button>
@@ -328,18 +327,18 @@ const ReviewTeamPage: React.FC = () => {
               className="agent-team-card__metrics"
               aria-label={reviewTeamCoreMemberNames.join(', ')}
             >
-              <Badge variant="neutral">
+              <StatusPill tone="neutral">
                 <Users size={10} />
                 {reviewTeamMembersLabel}
-              </Badge>
-              <Badge variant="accent">
+              </StatusPill>
+              <StatusPill tone="accent">
                 <GitBranch size={10} />
                 {t('reviewTeams.detail.localOnly')}
-              </Badge>
-              <Badge variant="purple">
+              </StatusPill>
+              <StatusPill tone="accent">
                 <BadgeCheck size={10} />
                 {t('reviewTeams.detail.qualityGate')}
-              </Badge>
+              </StatusPill>
             </div>
           </div>
           <div className="review-team-page__summary-grid" data-bf-component="review-team-page" data-bf-part="summary">
@@ -389,7 +388,7 @@ const ReviewTeamPage: React.FC = () => {
           title={t('reviewTeams.detail.policySummaryTitle')}
           description={t('reviewTeams.detail.policySummaryIntro')}
           extra={(
-            <Button variant="secondary" size="small" onClick={openReviewSettings}>
+            <Button variant="secondary" size="sm" onClick={openReviewSettings}>
               <Settings size={14} style={{ marginRight: 6 }} />
               {t('reviewTeams.detail.openSettings')}
             </Button>
@@ -446,16 +445,16 @@ const ReviewTeamPage: React.FC = () => {
           description={t('reviewTeams.detail.membersDescription')}
           extra={(
             <div className="review-team-page__section-badges">
-              <Badge variant="info">
+              <StatusPill tone="info">
                 {t('reviewTeams.detail.lockedCount', {
                   count: team.coreMembers.length
                 })}
-              </Badge>
-              <Badge variant="neutral">
+              </StatusPill>
+              <StatusPill tone="neutral">
                 {t('reviewTeams.detail.extraCount', {
                   count: team.extraMembers.length
                 })}
-              </Badge>
+              </StatusPill>
             </div>
           )}
         >
@@ -486,14 +485,14 @@ const ReviewTeamPage: React.FC = () => {
                     </div>
                     <div className="review-team-page__member-list-badges">
                       {member.locked ? (
-                        <Badge variant="neutral">
+                        <StatusPill tone="neutral">
                           <Lock size={10} />
                           {t('reviewTeams.detail.memberTypes.locked')}
-                        </Badge>
+                        </StatusPill>
                       ) : (
-                        <Badge variant="info">
+                        <StatusPill tone="info">
                           {t('reviewTeams.detail.memberTypes.extra')}
-                        </Badge>
+                        </StatusPill>
                       )}
                     </div>
                   </button>
@@ -526,14 +525,14 @@ const ReviewTeamPage: React.FC = () => {
                         </p>
                       </div>
                       <div className="review-team-page__detail-badges">
-                        <Badge variant="accent">{formatModelLabel(selectedMember.model)}</Badge>
-                        <Badge variant={selectedMember.strategySource === 'member' ? 'info' : 'neutral'}>
+                        <StatusPill tone="accent">{formatModelLabel(selectedMember.model)}</StatusPill>
+                        <StatusPill tone={selectedMember.strategySource === 'member' ? 'info' : 'neutral'}>
                           {getStrategyLabel(selectedMember.strategyLevel)}
-                        </Badge>
+                        </StatusPill>
                         {selectedMember.locked ? (
-                          <Badge variant="neutral">
+                          <StatusPill tone="neutral">
                             {t('reviewTeams.detail.memberTypes.core')}
-                          </Badge>
+                          </StatusPill>
                         ) : null}
                       </div>
                     </div>

@@ -254,10 +254,7 @@ import {
   setChatPopupActive,
   subscribeChatPopupChange,
 } from './chatPopupState';
-import {
-  resolveChatInputTargetSessionId,
-  type ChatInputTarget,
-} from '../utils/chatInputTarget';
+import { resolveChatInputTargetSessionId } from '../utils/chatInputTarget';
 import { Menu, MenuItem, MenuSeparator, Icon } from '@bitfun/ui';
 import {
   ChatComposer,
@@ -590,11 +587,13 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const activeBtwSessionId = activeBtwSessionData?.parentSessionId === currentSessionId
     ? activeBtwSessionData.childSessionId
     : undefined;
-  const effectiveTargetSessionId = resolveChatInputTargetSessionId({
-    currentSessionId,
-    inputTarget,
-    activeBtwSessionId,
-  });
+  const effectiveTargetSessionId = typeof inputTarget === 'object'
+    ? inputTarget.sessionId
+    : resolveChatInputTargetSessionId({
+      currentSessionId,
+      inputTarget,
+      activeBtwSessionId,
+    });
   const effectiveTargetSessionIdRef = useRef<string | null>(effectiveTargetSessionId);
   effectiveTargetSessionIdRef.current = effectiveTargetSessionId;
 
@@ -4903,7 +4902,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       }
       clearPendingLargePastes();
       dispatchInput({ type: 'CLEAR_VALUE' });
-      dispatchInput({ type: 'DEACTIVATE' });
       return;
     }
 
@@ -5588,7 +5586,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       e.preventDefault();
       void handleCancelCurrentTask();
     }
-  }, [canUseThreadGoal, handleSendOrCancel, submitBtwFromInput, submitGoalFromInput, derivedState, dispatchInput, handleCancelCurrentTask, slashCommandState, getFilteredSelectableModes, getActiveSlashPickerItems, selectSlashCommandMode, selectSlashCommandAction, selectSlashExternalPromptCommand, selectSlashPromptCommand, selectSlashAcpCommand, selectSlashSkill, canSwitchModes, getRichTextInlineTriggerController, historyIndex, inputHistory, savedDraft, inputState.value, currentSessionId, isBtwSession, showTargetSwitcher, setInputTarget, removeContext, isAcpInputSession, caps.ops, registration?.onSubmit, t]);
+  }, [canUseThreadGoal, handleSendOrCancel, submitBtwFromInput, submitGoalFromInput, derivedState, dispatchInput, handleCancelCurrentTask, slashCommandState, getActiveSlashPickerItems, selectSlashCommandAction, selectSlashExternalPromptCommand, selectSlashPromptCommand, selectSlashAcpCommand, selectSlashSkill, canSwitchModes, getRichTextInlineTriggerController, historyIndex, inputHistory, savedDraft, inputState.value, currentSessionId, isBtwSession, showTargetSwitcher, setInputTarget, removeContext, isAcpInputSession, caps.ops, registration?.onSubmit, t]);
 
   const handleImeCompositionStart = useCallback(() => {
     isImeComposingRef.current = true;

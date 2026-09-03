@@ -133,7 +133,6 @@ export const GroupLogView: React.FC<GroupLogViewProps> = ({
             onFileViewRequest={() => {}}
             onTabOpen={() => {}}
             onSwitchToChatPanel={() => {}}
-            config={{ enableMarkdown: true, autoScroll: true, showTimestamps: false }}
           />
         )}
       </div>

@@ -297,7 +297,6 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
   onFileViewRequest,
   onTabOpen,
   onOpenVisualization,
-  onSwitchToChatPanel,
   /**
    * Host-owned content rendered inside the original FlowChatHeader left
    * action group (R-GC-24: group chat reuses the original top bar).

@@ -1,7 +1,7 @@
 import React from 'react';
 import { GitBranch, Users, Network } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Badge } from '@/component-library';
+import { StatusPill } from '@bitfun/ui';
 import { getCardGradient } from '@/shared/utils/cardGradients';
 import type { LegionPattern } from '../data/orchestration-patterns';
 import './LegionCard.scss';
@@ -55,9 +55,9 @@ const LegionCard: React.FC<LegionCardProps> = ({
           <div className="legion-card__title-row" data-bf-component="legion-card" data-bf-part="titleRow">
             <span className="legion-card__name" data-bf-component="legion-card" data-bf-part="name">{patternName}</span>
             <div className="legion-card__badges" data-bf-component="legion-card" data-bf-part="badges">
-              <Badge variant="neutral">
+              <StatusPill tone="neutral">
                 {complexityLabel}
-              </Badge>
+              </StatusPill>
             </div>
           </div>
         </div>

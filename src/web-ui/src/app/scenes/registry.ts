@@ -14,13 +14,13 @@ import {
   FileCode2,
   CircleUserRound,
   Users,
-  Puzzle,
   Wrench,
   Boxes,
   PanelsTopLeft,
   BarChart3,
   CalendarClock,
   Network,
+  GitBranch,
 } from 'lucide-react';
 import type { SceneTabDef, SceneTabIcon, SceneTabId } from '../components/SceneBar/types';
 

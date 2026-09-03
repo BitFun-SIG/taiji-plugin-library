@@ -20,7 +20,7 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-vi.mock('@/component-library', () => ({
+vi.mock('@/infrastructure/confirm-dialog', () => ({
   confirmDanger: mocks.confirmDanger,
 }));
 

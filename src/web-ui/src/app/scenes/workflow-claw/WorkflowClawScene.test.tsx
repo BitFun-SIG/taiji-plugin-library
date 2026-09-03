@@ -48,10 +48,10 @@ vi.mock('react-i18next', async (importOriginal) => ({
   }),
 }));
 
-vi.mock('@/component-library', () => ({
-  Badge: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
+vi.mock('@bitfun/ui', () => ({
+  StatusPill: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
   Tooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-  DotMatrixLoader: () => <div data-testid="dot-matrix-loader" />,
+  Spinner: () => <div data-testid="dot-matrix-loader" />,
 }));
 
 vi.mock('@/app/components', () => ({

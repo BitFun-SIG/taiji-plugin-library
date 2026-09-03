@@ -1,7 +1,7 @@
 import React, { useCallback, useState } from 'react';
 import { ArrowLeft, GitBranch, Network } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Button, IconButton } from '@/component-library';
+import { Button, IconButton } from '@bitfun/ui';
 import { useNotification } from '@/shared/notification-system';
 import { getCardGradient } from '@/shared/utils/cardGradients';
 import PATTERNS, {
@@ -150,9 +150,8 @@ const CreateLegionPage: React.FC<CreateLegionPageProps> = ({ onBack }) => {
           onClick={onBack}
           aria-label={t('agentsOverview.backToOverview')}
           data-testid="create-legion-back"
-        >
-          <ArrowLeft size={18} />
-        </IconButton>
+          icon={<ArrowLeft size={18} />}
+        />
         <h1 className="create-agent-page__title">
           {selectedPattern ? t(`legionPattern.patterns.${selectedPattern.id}.name`, { defaultValue: selectedPattern.name }) : t('legionPattern.choosePattern')}
         </h1>

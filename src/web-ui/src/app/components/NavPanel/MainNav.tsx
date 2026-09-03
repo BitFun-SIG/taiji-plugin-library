@@ -41,7 +41,6 @@ import MiniAppEntry from './components/MiniAppEntry';
 import WorkspaceListSection from './sections/workspaces/WorkspaceListSection';
 import CreateGroupChatDialog from './components/CreateGroupChatDialog';
 import GroupChatsSection from './sections/group-chats/GroupChatsSection';
-import { flowChatManager } from '@/flow_chat/services/FlowChatManager';
 import { openMainSession } from '@/flow_chat/services/sessionActivation';
 import { flowChatStore } from '@/flow_chat/store/FlowChatStore';
 import { useSceneStore } from '../../stores/sceneStore';

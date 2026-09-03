@@ -20,6 +20,12 @@
     min-width: 0;
   }
 
+  &__field-label {
+    font-size: var(--bf-appearance-token-font-size-xs);
+    font-weight: 600;
+    color: var(--bf-appearance-token-color-text-secondary);
+  }
+
   &__members {
     display: flex;
     flex-direction: column;

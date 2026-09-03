@@ -22,6 +22,11 @@ export const APPEARANCE_DOMAIN_TOKENS = {
     creative: domainToken('capability-creative'),
     ops: domainToken('capability-ops'),
   },
+  agentTeam: {
+    roleLeader: domainToken('teal-action'),
+    roleMember: domainToken('review-member-default'),
+    roleReviewer: domainToken('review-judge'),
+  },
   insights: {
     positive: domainToken('insights-positive'),
     time: domainToken('insights-time'),

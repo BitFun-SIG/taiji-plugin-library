@@ -14,7 +14,7 @@ import { useTranslation } from 'react-i18next';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { useSceneManager } from '@/app/hooks/useSceneManager';
-import { DotMatrixLoader } from '@/component-library';
+import { Spinner } from '@bitfun/ui';
 import {
   GalleryLayout,
   GalleryPageHeader,
@@ -63,7 +63,7 @@ const WorkflowClawScene: React.FC = () => {
             aria-busy="true"
             aria-label={tCommon('loading.scenes')}
           >
-            <DotMatrixLoader size="medium" />
+            <Spinner size="md" />
           </div>
         )}
       >

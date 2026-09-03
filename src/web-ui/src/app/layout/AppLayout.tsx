@@ -34,6 +34,7 @@ import { WorkspaceKind } from '@/shared/types';
 import { SSHContext } from '@/features/ssh-remote/SSHRemoteContext';
 import { shortcutManager, parseStoredKeybindings } from '@/infrastructure/services/ShortcutManager';
 import { isMacOSDesktopRuntime } from '@/infrastructure/runtime';
+import { useSceneStore } from '../stores/sceneStore';
 import { flowChatSessionConfigForWorkspace } from '../utils/projectSessionWorkspace';
 import { notificationService } from '@/shared/notification-system';
 import { api } from '@/infrastructure/api/service-api/ApiClient';
@@ -103,6 +104,12 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
 
   const { isToolbarMode } = useToolbarModeContext();
   const { ensureForWorkspace: ensureAssistantBootstrapForWorkspace } = useAssistantBootstrap();
+  // Scene state (sceneStore: activeTabId === null → tabless Welcome viewport).
+  const activeSceneTabId = useSceneStore((s) => s.activeTabId);
+  const isTablessWelcome = activeSceneTabId === null;
+  // Agentic scene gate: agentic tabs self-gate; treat 'agents' (and any
+  // future agentic-class tab) as the agent scene for the monitor mount point.
+  const isAgentScene = activeSceneTabId === 'agents';
   const isMacOS = useMemo(() => {
     return isMacOSDesktopRuntime();
   }, []);
@@ -781,7 +788,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
         </Suspense>
 
         {/* Agent scenes: bee colony architecture monitor (self-gates to agentic tabs) */}
-        {!isWelcomeScene && isAgentScene && (
+        {!isTablessWelcome && isAgentScene && (
           <Suspense fallback={null}>
             <BeeColonyMonitor />
           </Suspense>

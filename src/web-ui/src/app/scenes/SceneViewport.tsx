@@ -323,7 +323,7 @@ function renderScene(
     case 'browser':
       return <BrowserScene />;
     case 'assistant':
-      return <AssistantScene workspacePath={workspacePath} />;
+      return <AssistantScene />;
     case 'workflow-claw':
       return <WorkflowClawScene />;
     case 'todos':

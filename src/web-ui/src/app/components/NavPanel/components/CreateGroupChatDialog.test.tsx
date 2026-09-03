@@ -4,21 +4,25 @@ import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('@/component-library', () => {
+vi.mock('@bitfun/ui', () => {
   const React = require('react');
   return {
-    Modal: ({ isOpen, children }: { isOpen: boolean; children: React.ReactNode }) =>
-      isOpen ? <div data-testid="modal">{children}</div> : null,
-    Input: (props: { label?: string; value?: string; type?: string; min?: number; max?: number; onChange?: (e: { target: { value: string } }) => void; placeholder?: string; autoFocus?: boolean }) => (
+    Dialog: ({ open, children }: { open: boolean; children: React.ReactNode }) =>
+      open ? <div data-testid="modal">{children}</div> : null,
+    DialogHeader: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+    DialogTitle: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+    DialogClose: () => null,
+    DialogBody: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+    DialogFooter: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+    Input: (props: { value?: string; type?: string; min?: number; max?: number; onValueChange?: (value: string) => void; placeholder?: string; autoFocus?: boolean }) => (
       <input
         data-testid="group-name-input"
-        aria-label={props.label}
         type={props.type ?? 'text'}
         min={props.min}
         max={props.max}
         placeholder={props.placeholder}
         value={props.value ?? ''}
-        onChange={props.onChange}
+        onChange={(e) => props.onValueChange?.(e.target.value)}
         autoFocus={props.autoFocus}
       />
     ),
@@ -32,7 +36,7 @@ vi.mock('@/component-library', () => {
         disabled={props.disabled}
       />
     ),
-    Button: (props: { onClick?: () => void; disabled?: boolean; isLoading?: boolean; variant?: string; children?: React.ReactNode; type?: string; size?: string }) => (
+    Button: (props: { onClick?: () => void; disabled?: boolean; loading?: boolean; variant?: string; children?: React.ReactNode; type?: string; size?: string }) => (
       <button
         type={props.type ?? 'button'}
         data-testid={props.variant === 'primary' ? 'group-create-submit' : 'group-cancel'}

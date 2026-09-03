@@ -28,9 +28,9 @@ vi.mock('@/flow_chat/services/sessionActivation', () => ({
   openMainSession: mocks.openMainSession,
 }));
 
-vi.mock('@/component-library', () => ({
-  Badge: ({ children, className, variant }: { children: React.ReactNode; className?: string; variant?: string }) => (
-    <span className={`${className ?? ''} badge-${variant ?? 'neutral'}`}>{children}</span>
+vi.mock('@bitfun/ui', () => ({
+  StatusPill: ({ children, className, tone }: { children: React.ReactNode; className?: string; tone?: string }) => (
+    <span className={`${className ?? ''} badge-${tone ?? 'neutral'}`}>{children}</span>
   ),
   Button: ({ children }: { children: React.ReactNode }) => <button type="button">{children}</button>,
   IconButton: ({ children }: { children: React.ReactNode }) => <button type="button">{children}</button>,

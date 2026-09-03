@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { Search, ChevronDown, ChevronUp, Plus, Check, Bot, Cpu } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Badge } from '@/component-library';
+import { StatusPill } from '@bitfun/ui';
 import {
   useAgentsStore,
   CAPABILITY_CATEGORIES,
@@ -92,10 +92,10 @@ const AgentCard: React.FC<AgentCardProps> = ({ agent, isMember, onAdd, onRemove 
           <div className="ag-card__name-row">
             {isDisabled && <span className="ag-card__badge ag-card__badge--dim">{t('agentCard.badges.disabled')}</span>}
             {/* Agent kind badge */}
-            <Badge variant={badge.variant}>
+            <StatusPill tone={badge.variant}>
               {agent.agentKind === 'mode' ? <Cpu size={9} /> : <Bot size={9} />}
               {badge.label}
-            </Badge>
+            </StatusPill>
             {/* Capability chips */}
             {agent.capabilities.slice(0, 2).map((c) => (
               <span
@@ -135,10 +135,10 @@ const AgentCard: React.FC<AgentCardProps> = ({ agent, isMember, onAdd, onRemove 
           <div className="ag-card__detail-meta">
             <span>{t('gallery.toolCount', { count: agent.toolCount })}</span>
             {agent.model && <span>{t('gallery.modelLabel')} · {agent.model}</span>}
-            <Badge variant={badge.variant}>
+            <StatusPill tone={badge.variant}>
               {agent.agentKind === 'mode' ? <Cpu size={9} /> : <Bot size={9} />}
               {badge.label}
-            </Badge>
+            </StatusPill>
           </div>
           <button
             className={`ag-card__add-full ${isMember ? 'is-added' : ''}`}

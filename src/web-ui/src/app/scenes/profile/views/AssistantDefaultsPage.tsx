@@ -155,12 +155,6 @@ const AssistantDefaultsPage: React.FC = () => {
   const [detail, setDetail] = useState<TemplateDetail | null>(null);
   const loadRequestIdRef = useRef(0);
 
-  // Distinguish "host doesn't expose a catalog" / "read failed" / "really no
-  // tools" so the UI doesn't collapse all three into an empty list. See #2428 #5.
-  const [toolCatalogStatus, setToolCatalogStatus] = useState<
-    'available' | 'unsupported' | 'failed' | 'empty'
-  >('available');
-
   // Whether the current host advertises the `tool_catalog` capability. Local
   // always does; a peer host must answer `peer_mode_ping` with tool_catalog.
   // While the capability is still being probed (null) we stay optimistic so the
@@ -240,6 +234,50 @@ const AssistantDefaultsPage: React.FC = () => {
       setToolCatalogStatus(toolCatalog.status);
       setModeSkills(skillList ?? []);
       setMcpServers(servers ?? []);
+      // Default select-all (user can disable): only when the user has never
+      // configured anything on this page (explicit interaction marker absent,
+      // and enabled_tools matches default_tools exactly = no added/removed
+      // effects), merge all user-selectable tools (builtin + MCP) into
+      // enabled_tools and persist once - new Claw sessions get the full tool
+      // set (WorkspaceScan/TodoWrite/goal family/Plan family/MCP all on), and
+      // the user can later disable any tool manually. In reset scenes the
+      // marker is already set, so no refill happens.
+      if (
+        !isAssistantConfigured() &&
+        modeConf &&
+        modeConf.enabled_tools.length > 0 &&
+        modeConf.default_tools.length > 0
+      ) {
+        const defaultsMatch = modeConf.default_tools.every((name) => modeConf.enabled_tools.includes(name))
+          && modeConf.enabled_tools.every((name) => modeConf.default_tools.includes(name));
+        if (defaultsMatch) {
+          // `tools` here refers to the selectable tool list; use the memoized
+          // user-selectable set (identical semantics to the original intent).
+          const selectable = userSelectableTools;
+          const enabledSet = new Set(modeConf.enabled_tools);
+          let changed = false;
+          for (const tool of selectable) {
+            if (!enabledSet.has(tool.name)) {
+              enabledSet.add(tool.name);
+              changed = true;
+            }
+          }
+          if (changed) {
+            const newConfig: AgentProfileConfigItem = {
+              ...modeConf,
+              enabled_tools: [...enabledSet],
+            };
+            try {
+              await configAPI.setAgentProfileConfig(ASSISTANT_MODE_ID, newConfig);
+              setAssistantModeConfig(newConfig);
+              const { globalEventBus } = await import('@/infrastructure/event-bus');
+              globalEventBus.emit('mode:config:updated');
+            } catch (e) {
+              log.error('Failed to persist default-select-all config', e);
+            }
+          }
+        }
+      }
       setLoadWarning(modeConf === null);
       setSaveState(modeConf === null ? 'error' : 'saved');
     } catch (error) {
@@ -254,10 +292,6 @@ const AssistantDefaultsPage: React.FC = () => {
       }
     }
   }, [canQueryToolCatalog]);
-
-  useEffect(() => {
-    void loadDefaults();
-  }, [loadDefaults, renderedPeerDeviceId]);
 
   useEffect(() => {
     if (!detail) return;
@@ -331,101 +365,8 @@ const AssistantDefaultsPage: React.FC = () => {
   );
 
   useEffect(() => {
-    const requestId = ++loadRequestIdRef.current;
-
-    (async () => {
-      setLoading(true);
-      try {
-        // Skip the tool catalog invoke when the peer host cannot answer it,
-        // instead of swallowing the unsupported error as an empty list. The
-        // empty list then means "this host doesn't expose a catalog", not
-        // "the runtime has no tools".
-        let toolsPromise: Promise<{
-          tools: ToolInfo[];
-          status: 'available' | 'unsupported' | 'failed' | 'empty';
-        }>;
-        if (canQueryToolCatalog) {
-          toolsPromise = api.invoke<ToolInfo[]>('get_all_tools_info')
-            .then((tools) => ({
-              tools,
-              status: tools.length > 0 ? 'available' as const : 'empty' as const,
-            }))
-            .catch((error) => {
-              log.error('Failed to load tool catalog', { error });
-              return { tools: [] as ToolInfo[], status: 'failed' as const };
-            });
-        } else {
-          toolsPromise = Promise.resolve({
-            tools: [] as ToolInfo[],
-            status: 'unsupported' as const,
-          });
-        }
-        const [modeConf, toolCatalog, skillList, servers] = await Promise.all([
-          configAPI.getAgentProfileConfig(ASSISTANT_MODE_ID).catch(() => null as AgentProfileConfigItem | null),
-          toolsPromise,
-          configAPI.getModeSkillConfigs({ modeId: ASSISTANT_MODE_ID }).catch(() => [] as ModeSkillInfo[]),
-          MCPAPI.getServers().catch(() => [] as MCPServerInfo[]),
-        ]);
-        if (requestId !== loadRequestIdRef.current) return;
-
-        setAssistantModeConfig(modeConf);
-        setAvailableTools(toolCatalog.tools);
-        setToolCatalogStatus(toolCatalog.status);
-        setModeSkills(skillList ?? []);
-        setMcpServers(servers ?? []);
-        // Default select-all (user can disable): only when the user has never
-        // configured anything on this page (explicit interaction marker absent,
-        // and enabled_tools matches default_tools exactly = no added/removed
-        // effects), merge all user-selectable tools (builtin + MCP) into
-        // enabled_tools and persist once - new Claw sessions get the full tool
-        // set (WorkspaceScan/TodoWrite/goal family/Plan family/MCP all on), and
-        // the user can later disable any tool manually. In reset scenes the
-        // marker is already set, so no refill happens.
-        if (
-          !isAssistantConfigured() &&
-          modeConf &&
-          modeConf.enabled_tools.length > 0 &&
-          modeConf.default_tools.length > 0
-        ) {
-          const defaultsMatch = modeConf.default_tools.every((name) => modeConf.enabled_tools.includes(name))
-            && modeConf.enabled_tools.every((name) => modeConf.default_tools.includes(name));
-          if (defaultsMatch) {
-            // `tools` here refers to the selectable tool list; use the memoized
-            // user-selectable set (identical semantics to the original intent).
-            const selectable = userSelectableTools;
-            const enabledSet = new Set(modeConf.enabled_tools);
-            let changed = false;
-            for (const tool of selectable) {
-              if (!enabledSet.has(tool.name)) {
-                enabledSet.add(tool.name);
-                changed = true;
-              }
-            }
-            if (changed) {
-              const newConfig: AgentProfileConfigItem = {
-                ...modeConf,
-                enabled_tools: [...enabledSet],
-              };
-              try {
-                await configAPI.setAgentProfileConfig(ASSISTANT_MODE_ID, newConfig);
-                setAssistantModeConfig(newConfig);
-                const { globalEventBus } = await import('@/infrastructure/event-bus');
-                globalEventBus.emit('mode:config:updated');
-              } catch (e) {
-                log.error('Failed to persist default-select-all config', e);
-              }
-            }
-          }
-        }
-      } catch (e) {
-        log.error('Failed to load assistant defaults config', e);
-      } finally {
-        if (requestId === loadRequestIdRef.current) {
-          setLoading(false);
-        }
-      }
-    })();
-  }, [canQueryToolCatalog, renderedPeerDeviceId]);
+    void loadDefaults();
+  }, [loadDefaults, renderedPeerDeviceId]);
 
   const skillRows = useMemo<CapabilityRow[]>(() => modeSkills.map((skill) => {
     const origin = getLocalizedSkillOrigin(skill);

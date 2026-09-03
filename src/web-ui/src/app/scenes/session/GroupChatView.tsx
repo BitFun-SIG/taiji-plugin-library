@@ -42,7 +42,20 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Button, IconButton, Input, Modal, Select, type SelectOption } from '@/component-library';
+import {
+  Button,
+  type ComboboxOption,
+  Dialog,
+  DialogBody,
+  DialogClose,
+  DialogHeader,
+  DialogHeading,
+  DialogTitle,
+  Field,
+  IconButton,
+  Input,
+  MultiSelect,
+} from '@bitfun/ui';
 import { UserPlus, GitBranch, Users } from 'lucide-react';
 import { ModernFlowChatContainer as FlowChatContainer } from '../../../flow_chat/components/modern/ModernFlowChatContainer';
 import { ChatInput } from '../../../flow_chat/components/ChatInput';
@@ -454,33 +467,27 @@ export const GroupChatView: React.FC<GroupChatViewProps> = ({
       data-bf-part="headerActions"
     >
       <IconButton
-        variant="ghost"
+        variant="quiet"
         size="xs"
         aria-label={t('nav.groupChats.membersLabel', { count: memberRows.length })}
-        tooltip={t('nav.groupChats.membersLabel', { count: memberRows.length })}
         data-testid="group-chat-members-toggle"
+        icon={<Users size={14} aria-hidden="true" />}
         onClick={() => setIsMembersOpen(true)}
-      >
-        <Users size={14} aria-hidden="true" />
-      </IconButton>
+      />
       <IconButton
-        variant="ghost"
+        variant="quiet"
         size="xs"
         aria-label={t('nav.groupChats.invite')}
-        tooltip={t('nav.groupChats.invite')}
+        icon={<UserPlus size={14} aria-hidden="true" />}
         onClick={() => setIsInviteOpen(true)}
-      >
-        <UserPlus size={14} aria-hidden="true" />
-      </IconButton>
+      />
       <IconButton
-        variant="ghost"
+        variant="quiet"
         size="xs"
         aria-label={t('nav.groupChats.fork')}
-        tooltip={t('nav.groupChats.fork')}
+        icon={<GitBranch size={14} aria-hidden="true" />}
         onClick={() => setIsForkOpen(true)}
-      >
-        <GitBranch size={14} aria-hidden="true" />
-      </IconButton>
+      />
     </div>
   ), [memberRows.length, t]);
 
@@ -525,7 +532,6 @@ export const GroupChatView: React.FC<GroupChatViewProps> = ({
             onFileViewRequest={() => {}}
             onTabOpen={() => {}}
             onSwitchToChatPanel={() => {}}
-            config={{ enableMarkdown: true, autoScroll: true, showTimestamps: false }}
           />
         )}
       </div>
@@ -533,7 +539,6 @@ export const GroupChatView: React.FC<GroupChatViewProps> = ({
       <div className="group-chat-view__input" data-bf-component="group-chat-view" data-bf-part="input">
         <ChatInput
           isSceneActive={isSceneActive}
-          onSendMessage={(_message: string) => {}}
           registration={registration}
         />
       </div>
@@ -605,20 +610,25 @@ function GroupMembersDialog({
 }: GroupMembersDialogProps) {
   const { t } = useI18n('common');
   return (
-    <Modal
-      isOpen
-      onClose={busy ? () => {} : onClose}
-      title={groupName || t('nav.groupChats.untitled')}
-      size="small"
-      closeOnOverlayClick={!busy}
+    <Dialog
+      open
+      onOpenChange={(open) => { if (!open && !busy) onClose(); }}
+      size="md"
     >
+      <DialogHeader>
+        <DialogHeading>
+          <DialogTitle>{groupName || t('nav.groupChats.untitled')}</DialogTitle>
+        </DialogHeading>
+        <DialogClose />
+      </DialogHeader>
+      <DialogBody>
       <div data-bf-component="group-member-list-dialog" data-bf-part="root" className="group-chat-dialog">
         {isLoading ? (
           <div className="group-chat-dialog__state">{t('nav.sessions.loading')}</div>
         ) : loadFailed ? (
           <div className="group-chat-dialog__state">
             {t('nav.groupChats.membersLoadFailed')}
-            <Button type="button" variant="secondary" size="small" onClick={onRetry}>
+            <Button type="button" variant="secondary" size="sm" onClick={onRetry}>
               {t('actions.retry')}
             </Button>
           </div>
@@ -637,8 +647,8 @@ function GroupMembersDialog({
                 <span className="group-chat-dialog__member-name">{member.name}</span>
                 <Button
                   type="button"
-                  variant="ghost"
-                  size="small"
+                  variant="text"
+                  size="sm"
                   disabled={busy}
                   onClick={() => { void onRemove(member.id); }}
                 >
@@ -650,12 +660,13 @@ function GroupMembersDialog({
         )}
 
         <div className="group-chat-dialog__actions">
-          <Button type="button" variant="ghost" onClick={onClose} disabled={busy}>
+          <Button type="button" variant="text" onClick={onClose} disabled={busy}>
             {t('actions.close')}
           </Button>
         </div>
       </div>
-    </Modal>
+      </DialogBody>
+    </Dialog>
   );
 }
 
@@ -756,7 +767,7 @@ function GroupMemberPickerDialog({
     void loadSessions();
   }, [isOpen, loadSessions]);
 
-  const options = useMemo<SelectOption[]>(
+  const options = useMemo<ComboboxOption[]>(
     () => sessions.map(meta => ({
       value: meta.sessionId,
       label: meta.sessionName || t('nav.sessions.untitled'),
@@ -770,13 +781,18 @@ function GroupMemberPickerDialog({
   );
 
   return (
-    <Modal
-      isOpen={isOpen}
-      onClose={busy ? () => {} : onClose}
-      title={title}
-      size="medium"
-      closeOnOverlayClick={!busy}
+    <Dialog
+      open={isOpen}
+      onOpenChange={(open) => { if (!open && !busy) onClose(); }}
+      size="md"
     >
+      <DialogHeader>
+        <DialogHeading>
+          <DialogTitle>{title}</DialogTitle>
+        </DialogHeading>
+        <DialogClose />
+      </DialogHeader>
+      <DialogBody>
       <div data-bf-component="group-member-picker-dialog" data-bf-part="root" className="group-chat-dialog">
         <div className="group-chat-dialog__field">
           {isLoading ? (
@@ -784,34 +800,28 @@ function GroupMemberPickerDialog({
           ) : loadFailed ? (
             <div className="group-chat-dialog__state">
               {t('nav.groupChats.membersLoadFailed')}
-              <Button type="button" variant="secondary" size="small" onClick={() => { void loadSessions(); }}>
+              <Button type="button" variant="secondary" size="sm" onClick={() => { void loadSessions(); }}>
                 {t('actions.retry')}
               </Button>
             </div>
           ) : (
-            <Select
-              multiple
-              searchable
-              showSelectAll
+            <MultiSelect
+              clearable
               loading={isLoading}
               options={options}
               value={selectedValue}
               placeholder={t('nav.groupChats.members')}
-              emptyText={t('nav.groupChats.noClawSessions')}
-              searchPlaceholder={t('nav.groupChats.membersSearch')}
-              onChange={(value) => {
-                const next = Array.isArray(value) ? value : [value];
-                setSelectedIds(new Set(next.map(String)));
+              filterOption={(option, query) => option.label.toLowerCase().includes(query.toLowerCase())}
+              onValueChange={(value) => {
+                setSelectedIds(new Set(value.map(String)));
               }}
               data-testid="group-member-picker-select"
-              triggerTestId="group-member-picker-trigger"
-              dropdownTestId="group-member-picker-dropdown"
             />
           )}
         </div>
 
         <div className="group-chat-dialog__actions">
-          <Button type="button" variant="ghost" onClick={onClose} disabled={busy}>
+          <Button type="button" variant="text" onClick={onClose} disabled={busy}>
             {t('actions.cancel')}
           </Button>
           <Button
@@ -821,13 +831,14 @@ function GroupMemberPickerDialog({
               void onConfirm(Array.from(selectedIds));
             }}
             disabled={busy || selectedIds.size === 0}
-            isLoading={busy}
+            loading={busy}
           >
             {t('nav.groupChats.confirmInvite')}
           </Button>
         </div>
       </div>
-    </Modal>
+      </DialogBody>
+    </Dialog>
   );
 }
 
@@ -929,7 +940,7 @@ function GroupForkDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 
-  const options = useMemo<SelectOption[]>(
+  const options = useMemo<ComboboxOption[]>(
     () => sessions.map(meta => ({
       value: meta.sessionId,
       label: meta.sessionName || t('nav.sessions.untitled'),
@@ -945,23 +956,28 @@ function GroupForkDialog({
   const trimmedName = name.trim();
 
   return (
-    <Modal
-      isOpen={isOpen}
-      onClose={busy ? () => {} : onClose}
-      title={t('nav.groupChats.forkTitle')}
-      size="medium"
-      closeOnOverlayClick={!busy}
+    <Dialog
+      open={isOpen}
+      onOpenChange={(open) => { if (!open && !busy) onClose(); }}
+      size="md"
     >
+      <DialogHeader>
+        <DialogHeading>
+          <DialogTitle>{t('nav.groupChats.forkTitle')}</DialogTitle>
+        </DialogHeading>
+        <DialogClose />
+      </DialogHeader>
+      <DialogBody>
       <div data-bf-component="group-fork-dialog" data-bf-part="root" className="group-chat-dialog">
         <div className="group-chat-dialog__field">
-          <Input
-            label={t('nav.groupChats.groupName')}
-            value={name}
-            onChange={e => setName(e.target.value)}
-            placeholder={t('nav.groupChats.groupNamePlaceholder')}
-            inputSize="medium"
-            autoFocus
-          />
+          <Field label={t('nav.groupChats.groupName')} orientation="vertical">
+            <Input
+              value={name}
+              onValueChange={setName}
+              placeholder={t('nav.groupChats.groupNamePlaceholder')}
+              autoFocus
+            />
+          </Field>
         </div>
 
         <div className="group-chat-dialog__field">
@@ -970,34 +986,28 @@ function GroupForkDialog({
           ) : loadFailed ? (
             <div className="group-chat-dialog__state">
               {t('nav.groupChats.membersLoadFailed')}
-              <Button type="button" variant="secondary" size="small" onClick={() => { void loadSessions(); }}>
+              <Button type="button" variant="secondary" size="sm" onClick={() => { void loadSessions(); }}>
                 {t('actions.retry')}
               </Button>
             </div>
           ) : (
-            <Select
-              multiple
-              searchable
-              showSelectAll
+            <MultiSelect
+              clearable
               loading={isLoading}
               options={options}
               value={selectedValue}
               placeholder={t('nav.groupChats.members')}
-              emptyText={t('nav.groupChats.noClawSessions')}
-              searchPlaceholder={t('nav.groupChats.membersSearch')}
-              onChange={(value) => {
-                const next = Array.isArray(value) ? value : [value];
-                setSelectedIds(new Set(next.map(String)));
+              filterOption={(option, query) => option.label.toLowerCase().includes(query.toLowerCase())}
+              onValueChange={(value) => {
+                setSelectedIds(new Set(value.map(String)));
               }}
               data-testid="group-fork-picker-select"
-              triggerTestId="group-fork-picker-trigger"
-              dropdownTestId="group-fork-picker-dropdown"
             />
           )}
         </div>
 
         <div className="group-chat-dialog__actions">
-          <Button type="button" variant="ghost" onClick={onClose} disabled={busy}>
+          <Button type="button" variant="text" onClick={onClose} disabled={busy}>
             {t('actions.cancel')}
           </Button>
           <Button
@@ -1007,13 +1017,14 @@ function GroupForkDialog({
               void onConfirm(trimmedName, Array.from(selectedIds));
             }}
             disabled={busy || !trimmedName}
-            isLoading={busy}
+            loading={busy}
           >
             {t('nav.groupChats.confirmFork')}
           </Button>
         </div>
       </div>
-    </Modal>
+      </DialogBody>
+    </Dialog>
   );
 }
 

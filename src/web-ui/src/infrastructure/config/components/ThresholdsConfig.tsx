@@ -1,12 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { RotateCcw } from 'lucide-react';
-import {
-  Button,
-  ConfigPageLoading,
-  NumberInput,
-  Switch,
-} from '@/component-library';
+import { Button, LoadingState, NumberInput, Switch } from '@bitfun/ui';
 import { useNotification } from '@/shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
 import { configManager } from '../services/ConfigManager';
@@ -366,7 +361,7 @@ export default function ThresholdsConfig() {
           step={step}
           precision={precision}
           disabled={savingKey === `ai.thresholds.${domain}.${String(field)}`}
-          onChange={(next) => void updateField(domain, field, Number(next))}
+          onValueChange={(next: number) => void updateField(domain, field, next)}
         />
       </ConfigPageRow>
     );
@@ -383,7 +378,7 @@ export default function ThresholdsConfig() {
         <Switch
           checked={checked}
           disabled={savingKey === `ai.thresholds.${domain}.${String(field)}`}
-          onChange={(event) => void updateField(domain, field, event.target.checked)}
+          onChange={(event: React.ChangeEvent<HTMLInputElement>) => void updateField(domain, field, event.target.checked)}
         />
       </ConfigPageRow>
     );
@@ -544,7 +539,7 @@ export default function ThresholdsConfig() {
   }, [renderField, renderToggle, t, config]);
 
   if (loading) {
-    return <ConfigPageLoading text={t('messages.loading')} />;
+    return <LoadingState>{t('messages.loading')}</LoadingState>;
   }
 
   return (
@@ -556,7 +551,7 @@ export default function ThresholdsConfig() {
           <Button
             type="button"
             variant="secondary"
-            size="small"
+            size="sm"
             disabled={savingKey === 'reset'}
             onClick={() => void handleReset()}
           >

@@ -1,7 +1,7 @@
 import React from 'react';
 import { Bot, Pencil, Users } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Badge } from '@/component-library';
+import { StatusPill } from '@bitfun/ui';
 import type { AgentTeam, AgentWithCapabilities, CapabilityCategory } from '../agentsStore';
 import { AGENT_ICON_MAP, AGENT_TEAM_ICON_MAP, getAgentTeamAccent } from '../agentsIcons';
 import { CAPABILITY_ACCENT } from '../agentAppearance';
@@ -124,10 +124,10 @@ const AgentTeamCard: React.FC<AgentTeamCardProps> = ({
 
       <div className="agent-team-card__footer" data-bf-component="agent-team-card" data-bf-part="footer">
         <div className="agent-team-card__state-badges">
-          {isExample ? <Badge variant="neutral">{t('teamCard.badges.example')}</Badge> : null}
-          <Badge variant="neutral">{strategyLabel}</Badge>
+          {isExample ? <StatusPill tone="neutral">{t('teamCard.badges.example')}</StatusPill> : null}
+          <StatusPill tone="neutral">{strategyLabel}</StatusPill>
           {team.shareContext ? (
-            <Badge variant="success">{t('teamCard.badges.sharedContext')}</Badge>
+            <StatusPill tone="success">{t('teamCard.badges.sharedContext')}</StatusPill>
           ) : null}
         </div>
       </div>

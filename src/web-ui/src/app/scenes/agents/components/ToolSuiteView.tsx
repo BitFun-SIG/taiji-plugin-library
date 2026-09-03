@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Package, RefreshCw, RotateCcw, Settings2, ShieldAlert, ShieldCheck } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Badge, Button } from '@/component-library';
-import { confirmDialog } from '@/component-library/components/ConfirmDialog/confirmService';
+import { Button, IconButton, StatusPill } from '@bitfun/ui';
+import { confirmDialog } from '@/infrastructure/confirm-dialog';
 import { configAPI } from '@/infrastructure/api';
 import { useWorkspaceManagerSync } from '@/infrastructure/hooks/useWorkspaceManagerSync';
 import { useGallerySceneAutoRefresh } from '@/app/hooks/useGallerySceneAutoRefresh';
@@ -369,7 +369,7 @@ const ToolSuiteView: React.FC<ToolSuiteViewProps> = ({
         <div className="skills-suite__hero-actions" data-bf-scene="tools" data-bf-part="toolSuiteHeroActions">
           <Button
             variant="secondary"
-            size="small"
+            size="sm"
             onClick={() => setIsGroupManagerOpen(true)}
             disabled={isSaving}
           >
@@ -378,7 +378,7 @@ const ToolSuiteView: React.FC<ToolSuiteViewProps> = ({
           </Button>
           <Button
             variant="secondary"
-            size="small"
+            size="sm"
             onClick={() => void refresh()}
             title={t('suite.refreshTooltip')}
             aria-label={t('suite.refreshTooltip')}
@@ -413,19 +413,15 @@ const ToolSuiteView: React.FC<ToolSuiteViewProps> = ({
             </button>
           ))}
         </div>
-        <Button
-          variant="secondary"
-          size="small"
+        <IconButton
           className="skills-suite__mode-reset"
-          iconOnly
-          isLoading={resettingModeId === suiteModeId}
+          icon={<RotateCcw size={13} />}
+          loading={resettingModeId === suiteModeId}
           disabled={isSaving}
           onClick={() => { void resetMode(currentMode); }}
           title={t('suite.modeActions.reset', { mode: t(currentMode.labelKey) })}
           aria-label={t('suite.modeActions.reset', { mode: t(currentMode.labelKey) })}
-        >
-          <RotateCcw size={13} />
-        </Button>
+        />
       </div>
 
       {loading && (
@@ -490,7 +486,7 @@ const ToolSuiteView: React.FC<ToolSuiteViewProps> = ({
                         <div className="skills-suite__group-title-wrap" data-bf-scene="tools" data-bf-part="toolSuiteGroupTitleWrap">
                           <div className="skills-suite__group-title-row" data-bf-scene="tools" data-bf-part="toolSuiteGroupTitleRow">
                             <span className="skills-suite__group-title" data-bf-scene="tools" data-bf-part="toolSuiteGroupTitle">{group.label}</span>
-                            <Badge variant={groupStateVariant}>{groupStateLabel}</Badge>
+                            <StatusPill tone={groupStateVariant}>{groupStateLabel}</StatusPill>
                           </div>
                           <span className="skills-suite__group-count" data-bf-scene="tools" data-bf-part="toolSuiteGroupCount">
                             {t('suite.groupCount', { total: group.totalCount })}
@@ -501,8 +497,8 @@ const ToolSuiteView: React.FC<ToolSuiteViewProps> = ({
                           {showSaveButton ? (
                             <Button
                               variant="primary"
-                              size="small"
-                              isLoading={savingAction?.groupKey === group.id && savingAction.kind === 'save'}
+                              size="sm"
+                              loading={savingAction?.groupKey === group.id && savingAction.kind === 'save'}
                               disabled={isSaving}
                               onClick={() => void saveGroup(group)}
                             >
@@ -511,8 +507,8 @@ const ToolSuiteView: React.FC<ToolSuiteViewProps> = ({
                           ) : null}
                           <Button
                             variant={allEnabled ? 'secondary' : 'primary'}
-                            size="small"
-                            isLoading={savingAction?.groupKey === group.id && savingAction.kind === 'toggle'}
+                            size="sm"
+                            loading={savingAction?.groupKey === group.id && savingAction.kind === 'toggle'}
                             disabled={isSaving}
                             onClick={() => void saveGroupVisibility(group, !allEnabled)}
                           >

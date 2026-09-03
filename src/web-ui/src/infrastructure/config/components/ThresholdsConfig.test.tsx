@@ -31,57 +31,64 @@ vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: translateMock }),
 }));
 
-vi.mock('@/component-library', () => ({
-  Button: ({
-    children,
-    disabled,
-    onClick,
-  }: {
-    children: React.ReactNode;
-    disabled?: boolean;
-    onClick?: () => void;
-  }) => (
-    <button type="button" disabled={disabled} onClick={onClick}>
-      {children}
-    </button>
-  ),
-  ConfigPageLoading: ({ text }: { text: string }) => <div>{text}</div>,
-  NumberInput: ({
-    value,
-    onChange,
-    disabled,
-    min,
-  }: {
-    value: number;
-    onChange: (value: number) => void;
-    disabled?: boolean;
-    min?: number;
-  }) => (
-    <input
-      type="number"
-      value={value}
-      min={min}
-      disabled={disabled}
-      onChange={(event) => onChange(Number(event.target.value))}
-    />
-  ),
-  Switch: ({
-    checked,
-    onChange,
-    disabled,
-  }: {
-    checked: boolean;
-    onChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
-    disabled?: boolean;
-  }) => (
-    <input
-      type="checkbox"
-      checked={checked}
-      disabled={disabled}
-      onChange={onChange}
-    />
-  ),
-}));
+vi.mock('@bitfun/ui', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@bitfun/ui')>();
+  return {
+    ...actual,
+    Button: ({
+      children,
+      disabled,
+      onClick,
+    }: {
+      children: React.ReactNode;
+      disabled?: boolean;
+      onClick?: () => void;
+    }) => (
+      <button type="button" disabled={disabled} onClick={onClick}>
+        {children}
+      </button>
+    ),
+    LoadingState: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+    NumberInput: ({
+      value,
+      onValueChange,
+      disabled,
+      min,
+      step,
+    }: {
+      value: number;
+      onValueChange: (value: number) => void;
+      disabled?: boolean;
+      min?: number;
+      step?: number;
+    }) => (
+      <input
+        type="number"
+        value={value}
+        min={min}
+        step={step}
+        disabled={disabled}
+        onChange={(event) => onValueChange(Number(event.target.value))}
+      />
+    ),
+    Switch: ({
+      checked,
+      onChange,
+      disabled,
+    }: {
+      checked: boolean;
+      onChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
+      disabled?: boolean;
+    }) => (
+      <input
+        type="checkbox"
+        checked={checked}
+        disabled={disabled}
+        onChange={onChange}
+      />
+    ),
+  };
+});
 
 vi.mock('./common', () => ({
   ConfigPageLayout: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,

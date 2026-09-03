@@ -8,7 +8,7 @@
 import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button, Icon, IconButton, Input, Menu, MenuItem, Tooltip } from '@bitfun/ui';
 import { createPortal } from 'react-dom';
-import { Bot, Loader2, Archive } from 'lucide-react';
+import { Bot, Loader2, Archive, ClipboardList, Code2, MoreHorizontal, ChevronLeft, FileDown, Pencil, Copy, Clock3, Trash2 } from 'lucide-react';
 import { RetainedMountBoundary } from '@/shared/presence';
 import { useI18n } from '@/infrastructure/i18n';
 import { flowChatStore } from '../../../../../flow_chat/store/FlowChatStore';
@@ -1617,7 +1617,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
       {visibleItems.map(({ session, level }) => {
           const isEditing = editingSessionId === session.sessionId;
           const relationship = resolveSessionRelationship(session);
-          const isChildSession = depth > 0 && relationship.displayAsChild;
+          const isChildSession = level > 0 && relationship.displayAsChild;
           const childSessionBadge = getChildSessionBadge(relationship.kind);
           const parentReviewActivity = deriveSessionReviewActivity(
             flowChatState,
@@ -1800,7 +1800,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
               ]
                 .filter(Boolean)
                 .join(' ')}
-              style={depth > 0 ? { '--indent-level': depth } as React.CSSProperties : undefined}
+              style={level > 0 ? { '--indent-level': level } as React.CSSProperties : undefined}
               data-bf-component="sessions-section"
               data-bf-part="row"
               data-bf-state={[
@@ -1812,7 +1812,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
               data-session-id={session.sessionId}
               data-group-id={sessionIsGroupChat(session) ? session.sessionId : undefined}
               data-session-kind={relationship.kind}
-              data-session-level={String(depth)}
+              data-session-level={String(level)}
               data-session-active={isRowActive ? 'true' : 'false'}
               onPointerDown={event => handleSessionOpenPointerDown(event, session)}
               onClick={() => handleSwitch(session.sessionId)}
@@ -2174,9 +2174,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                   session.mode?.toLowerCase() === 'cowork'
                     ? ClipboardList
                     : session.mode?.toLowerCase() === 'claw'
-                      ? (assistantLabel?.trim()?.length ?? 0) > 0
-                        ? Panda
-                        : Bot
+                      ? Bot
                       : Code2;
                 const isRowActive = isSessionNavRowActive({
                   rowSessionId: session.sessionId,
@@ -2184,6 +2182,9 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                   activeSessionId,
                   activeChildSessionId: activeBtwSessionData?.childSessionId,
                   activeChildParentSessionId: activeBtwSessionData?.parentSessionId,
+                  activeChildHasVisibleRow: activeBtwSessionData?.childSessionId
+                    ? visibleSessionIds.has(activeBtwSessionData.childSessionId)
+                    : false,
                 });
                 const row = (
                   <div
@@ -2214,23 +2215,21 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                     onPointerDown={event => handleSessionOpenPointerDown(event, session)}
                     onClick={() => handleSwitch(session.sessionId)}
                   >
-                    {showSessionModeIcon ? (
-                      <span className="bitfun-nav-panel__inline-item-icon-slot">
-                        {isRunning ? (
-                          <Loader2
-                            size={14}
-                            className="bitfun-nav-panel__inline-item-icon is-running"
-                            aria-hidden="true"
-                          />
-                        ) : (
-                          <SessionIcon
-                            size={14}
-                            className="bitfun-nav-panel__inline-item-icon is-code"
-                            aria-hidden="true"
-                          />
-                        )}
-                      </span>
-                    ) : null}
+                    <span className="bitfun-nav-panel__inline-item-icon-slot">
+                      {isRunning ? (
+                        <Loader2
+                          size={14}
+                          className="bitfun-nav-panel__inline-item-icon is-running"
+                          aria-hidden="true"
+                        />
+                      ) : (
+                        <SessionIcon
+                          size={14}
+                          className="bitfun-nav-panel__inline-item-icon is-code"
+                          aria-hidden="true"
+                        />
+                      )}
+                    </span>
                     <span className="bitfun-nav-panel__inline-item-main">
                       <span className="bitfun-nav-panel__inline-item-label">{sessionTitle}</span>
                       <span
@@ -2394,7 +2393,6 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                       </div>
                     }
                     placement="right"
-                    followCursor
                     disabled={isEditing || openMenuSessionId !== null}
                   >
                     {row}

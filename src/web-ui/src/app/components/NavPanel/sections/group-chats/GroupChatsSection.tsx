@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Users, Workflow } from 'lucide-react';
-import { Tooltip } from '@/component-library';
+import { Tooltip } from '@bitfun/ui';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { useSceneManager } from '@/app/hooks/useSceneManager';
 import { useAgentsStore } from '@/app/scenes/agents/agentsStore';
@@ -37,7 +37,7 @@ const GroupChatsSection: React.FC<GroupChatsSectionProps> = ({
 }) => {
   const { t } = useI18n('common');
   const { openScene } = useSceneManager();
-  const [isOpen, setIsOpen] = useState(true);
+  const [isOpen] = useState(true);
   const [groupChatCount, setGroupChatCount] = useState(0);
 
   // R-WF-12: track how many group chat sessions exist in this workspace so the
@@ -66,8 +66,6 @@ const GroupChatsSection: React.FC<GroupChatsSectionProps> = ({
     openScene('agents');
   }, [openScene]);
 
-  const toggleOpen = useCallback(() => setIsOpen(open => !open), []);
-
   const newWorkflowLabel = t('nav.groupChats.newWorkflow');
   const newGroupChatLabel = t('nav.groupChats.newGroupChat');
 
@@ -81,12 +79,9 @@ const GroupChatsSection: React.FC<GroupChatsSectionProps> = ({
     >
       <SectionHeader
         label={t('nav.sections.groupChats')}
-        collapsible
-        isOpen={isOpen}
-        onToggle={toggleOpen}
         actions={
           <div className="bitfun-nav-panel__section-actions" data-bf-component="nav-panel" data-bf-part="groupChatsActions">
-            <Tooltip content={newWorkflowLabel} placement="right" followCursor>
+            <Tooltip content={newWorkflowLabel} placement="right">
               <button
                 type="button"
                 className="bitfun-nav-panel__section-action"
@@ -97,7 +92,7 @@ const GroupChatsSection: React.FC<GroupChatsSectionProps> = ({
                 <Workflow size={13} />
               </button>
             </Tooltip>
-            <Tooltip content={newGroupChatLabel} placement="right" followCursor>
+            <Tooltip content={newGroupChatLabel} placement="right">
               <button
                 type="button"
                 className="bitfun-nav-panel__section-action"
@@ -125,7 +120,6 @@ const GroupChatsSection: React.FC<GroupChatsSectionProps> = ({
               remoteConnectionId={remoteConnectionId}
               remoteSshHost={remoteSshHost}
               isActiveWorkspace
-              assistantLabel={t('nav.sections.groupChats')}
               isVisible={isOpen}
               groupChatsOnly
             />

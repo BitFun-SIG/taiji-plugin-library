@@ -3,7 +3,7 @@
  * / R-GC-33).
  *
  * Reuse rules:
- * - Modal / Button / Input / Checkbox all from component-library (existing components).
+ * - Dialog / Button / Input / Checkbox all from @bitfun/ui (existing components).
  * - R-GC-30 (owner directive, direction corrected 2026-08-14): the owner picks
  *   group members themselves from a real optional session list — NO member-count
  *   input (R-GC-28 had wrongly added it), NO hardcoded presets. Member source =
@@ -27,7 +27,17 @@
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { Button, Checkbox, Input, Modal } from '@/component-library';
+import {
+  Button,
+  Checkbox,
+  Dialog,
+  DialogBody,
+  DialogClose,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  Input,
+} from '@bitfun/ui';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { toolAPI } from '@/infrastructure/api/service-api/ToolAPI';
 import { sessionAPI } from '@/infrastructure/api/service-api/SessionAPI';
@@ -203,21 +213,24 @@ export const CreateGroupChatDialog: React.FC<CreateGroupChatDialogProps> = ({
   }, [isSubmitting, name, onClose, onCreated, selectedMemberIds, t, workspacePath]);
 
   return (
-    <Modal
-      isOpen={isOpen}
-      onClose={isSubmitting ? () => {} : onClose}
-      title={t('nav.groupChats.newGroupChat')}
-      size="medium"
-      closeOnOverlayClick={!isSubmitting}
+    <Dialog
+      open={isOpen}
+      onOpenChange={(open) => { if (!open) (isSubmitting ? () => {} : onClose)(); }}
+      size="md"
     >
+      <DialogHeader>
+        <DialogTitle>{t('nav.groupChats.newGroupChat')}</DialogTitle>
+        <DialogClose disabled={isSubmitting} />
+      </DialogHeader>
+      <DialogBody>
       <div data-bf-component="create-group-chat-dialog" data-bf-part="root" className="group-chat-dialog">
         <div className="group-chat-dialog__field">
+          <label className="group-chat-dialog__field-label">{t('nav.groupChats.groupName')}</label>
           <Input
-            label={t('nav.groupChats.groupName')}
             value={name}
-            onChange={e => setName(e.target.value)}
+            onValueChange={setName}
             placeholder={t('nav.groupChats.groupNamePlaceholder')}
-            inputSize="medium"
+            size="md"
             autoFocus
           />
         </div>
@@ -233,7 +246,7 @@ export const CreateGroupChatDialog: React.FC<CreateGroupChatDialogProps> = ({
                 checked={allSelected}
                 onChange={toggleSelectAll}
                 label={allSelected ? t('actions.deselectAll') : t('actions.selectAll')}
-                size="small"
+                size="sm"
               />
             ) : null}
           </div>
@@ -243,7 +256,7 @@ export const CreateGroupChatDialog: React.FC<CreateGroupChatDialogProps> = ({
           ) : loadFailed ? (
             <div className="group-chat-dialog__state">
               {t('nav.groupChats.membersLoadFailed')}
-              <Button type="button" variant="secondary" size="small" onClick={() => { void loadMembers(); }}>
+              <Button type="button" variant="secondary" size="sm" onClick={() => { void loadMembers(); }}>
                 {t('actions.retry')}
               </Button>
             </div>
@@ -272,9 +285,11 @@ export const CreateGroupChatDialog: React.FC<CreateGroupChatDialogProps> = ({
             </div>
           )}
         </div>
-
+      </div>
+      </DialogBody>
+      <DialogFooter>
         <div className="group-chat-dialog__actions">
-          <Button type="button" variant="ghost" onClick={onClose} disabled={isSubmitting}>
+          <Button type="button" variant="text" onClick={onClose} disabled={isSubmitting}>
             {t('actions.cancel')}
           </Button>
           <Button
@@ -282,13 +297,13 @@ export const CreateGroupChatDialog: React.FC<CreateGroupChatDialogProps> = ({
             variant="primary"
             onClick={() => { void handleCreate(); }}
             disabled={!name.trim() || isSubmitting}
-            isLoading={isSubmitting}
+            loading={isSubmitting}
           >
             {t('nav.groupChats.create')}
           </Button>
         </div>
-      </div>
-    </Modal>
+      </DialogFooter>
+    </Dialog>
   );
 };
 

@@ -1020,7 +1020,6 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({
                 checked={externalInstructionSourcesEnabled}
                 disabled={externalInstructionSourcesSaving}
                 onChange={(e) => void handleExternalInstructionSourcesToggle(e.target.checked)}
-                size="sm"
               />
             </div>
           </ConfigPageRow>
@@ -1041,7 +1040,6 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({
                 checked={workspaceInstructionFilesEnabled}
                 disabled={workspaceInstructionFilesSaving}
                 onChange={(e) => void handleWorkspaceInstructionFilesToggle(e.target.checked)}
-                size="sm"
               />
             </div>
           </ConfigPageRow>

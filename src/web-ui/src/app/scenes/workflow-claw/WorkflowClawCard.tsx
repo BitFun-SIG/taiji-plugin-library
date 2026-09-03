@@ -10,7 +10,7 @@
 import React from 'react';
 import { Bot, ChevronRight, Settings2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Badge } from '@/component-library';
+import { StatusPill } from '@bitfun/ui';
 import type { WorkspaceInfo } from '@/shared/types';
 
 interface WorkflowClawCardProps {
@@ -55,7 +55,7 @@ const WorkflowClawCard: React.FC<WorkflowClawCardProps> = ({ workspace, onClick 
             </span>
             {creature ? (
               <span className="assistant-card__badges" data-bf-component="workflow-claw-card" data-bf-part="badges">
-                <Badge variant="neutral">{creature}</Badge>
+                <StatusPill tone="neutral">{creature}</StatusPill>
               </span>
             ) : null}
           </span>

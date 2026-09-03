@@ -14,8 +14,8 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-vi.mock('@/component-library', () => ({
-  Badge: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
+vi.mock('@bitfun/ui', () => ({
+  StatusPill: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
   Button: ({ children, onClick, disabled }: {
     children: React.ReactNode;
     onClick?: () => void;
@@ -23,9 +23,16 @@ vi.mock('@/component-library', () => ({
   }) => (
     <button type="button" onClick={onClick} disabled={disabled}>{children}</button>
   ),
+  IconButton: ({ onClick, disabled, 'aria-label': ariaLabel }: {
+    onClick?: () => void;
+    disabled?: boolean;
+    'aria-label'?: string;
+  }) => (
+    <button type="button" onClick={onClick} disabled={disabled} aria-label={ariaLabel} />
+  ),
 }));
 
-vi.mock('@/component-library/components/ConfirmDialog/confirmService', () => ({
+vi.mock('@/infrastructure/confirm-dialog', () => ({
   confirmDialog: vi.fn(async () => true),
 }));
 

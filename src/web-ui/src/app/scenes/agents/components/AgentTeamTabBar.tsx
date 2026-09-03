@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Plus, X, Code2, BarChart2, LayoutTemplate, Rocket, Users, Briefcase, Layers, type LucideIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { confirmDanger } from '@/component-library';
+import { confirmDanger } from '@/infrastructure/confirm-dialog';
 import { useAgentsStore, AGENT_TEAM_TEMPLATES } from '../agentsStore';
 import { AGENT_TEAM_ICON_MAP, getAgentTeamAccent } from '../agentsIcons';
 import './AgentTeamTabBar.scss';

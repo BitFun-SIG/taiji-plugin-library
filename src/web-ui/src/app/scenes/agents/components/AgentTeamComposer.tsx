@@ -15,7 +15,7 @@ import { AGENT_ICON_MAP } from '../agentsIcons';
 import { getCapabilityLabel } from '../utils';
 import { APPEARANCE_DOMAIN_TOKENS } from '@/infrastructure/appearance/appearanceDomainTokens';
 import { computeDAGLayout } from '@/tools/bitfun-canvas/runtime/sdk/diagramLayout';
-import { Badge } from '@/component-library';
+import { StatusPill } from '@bitfun/ui';
 import { openMainSession } from '@/flow_chat/services/sessionActivation';
 import './AgentTeamComposer.scss';
 
@@ -74,19 +74,19 @@ function editableEdges(team: AgentTeam): Array<[string, string]> {
 }
 
 // Seven-state display mapping (R-WF-17 assertion 2) — reuses the backend
-// SessionDisplayState value contract and the component-library Badge variants;
+// SessionDisplayState value contract and the StatusPill tones from @bitfun/ui;
 // no new state system is introduced.
-const DISPLAY_STATE_BADGE: Record<MemberDisplayState, BadgeVariantLike> = {
+const DISPLAY_STATE_BADGE: Record<MemberDisplayState, StatusPillToneLike> = {
   standby: 'neutral',
   processing: 'info',
   completed: 'success',
   hung: 'warning',
-  interrupted: 'error',
+  interrupted: 'danger',
   pending_attention: 'warning',
   viewed: 'neutral',
 };
 
-type BadgeVariantLike = 'neutral' | 'accent' | 'purple' | 'success' | 'warning' | 'error' | 'info';
+type StatusPillToneLike = 'neutral' | 'accent' | 'success' | 'warning' | 'danger' | 'info';
 
 // Formation node
 
@@ -203,9 +203,9 @@ const FormationNode: React.FC<NodeProps> = ({
 
         {/* Row 3: seven-state badge + wire port + session jump (R-WF-17) */}
         <div className="tcf__node-foot tcf__node-status">
-          <Badge variant={DISPLAY_STATE_BADGE[state]} className="tcf__node-state">
+          <StatusPill tone={DISPLAY_STATE_BADGE[state]} className="tcf__node-state">
             {stateLabel}
-          </Badge>
+          </StatusPill>
           <button
             className={`tcf__node-port ${wireMode ? 'is-active' : ''}`}
             onClick={(e) => {

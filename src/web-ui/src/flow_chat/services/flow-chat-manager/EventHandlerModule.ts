@@ -100,7 +100,6 @@ import {
   sessionPendingTurnAdoptionKey,
   stripOptimisticTurnAdoption,
 } from '../../utils/optimisticTurnAdoption';
-import { isAcpFlowSession } from '../../utils/acpSession';
 
 const log = createLogger('EventHandlerModule');
 const TURN_COMPLETION_QUIET_WINDOW_MS = 500;

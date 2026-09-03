@@ -1,7 +1,7 @@
 import { Button, Combobox, Icon, IconButton, SearchField, Select, StatusPill, Tooltip, ScrollArea } from '@bitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import type { TFunction } from 'i18next';
-import { Bot, Cpu, FileText, MessageSquareText, RotateCcw, Users, Wrench, type LucideIcon } from 'lucide-react';
+import { ArrowLeft, Bot, Cpu, FileText, MessageSquareText, RotateCcw, Users, Wrench, type LucideIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { confirmDanger } from '@/infrastructure/confirm-dialog';
@@ -276,7 +276,6 @@ const AgentsHomeView: React.FC = () => {
     openCreateAgent,
     openCreateLegion,
     openEditAgent,
-    openReviewTeam,
     openAgentTeamEditor,
     agentTeams,
     setTeamComposerAgents,
@@ -284,7 +283,6 @@ const AgentsHomeView: React.FC = () => {
   } = useAgentsStore();
   const [selectedAgentId, setSelectedAgentId] = React.useState<string | null>(null);
   const [selectedTeamId, setSelectedTeamId] = React.useState<string | null>(null);
-  const [activeCapabilityTab, setActiveCapabilityTab] = React.useState<CapabilityTab | null>(null);
   const [activeDetailSection, setActiveDetailSection] = React.useState<AgentDetailSection>('basic');
   const [toolsEditing, setToolsEditing] = React.useState(false);
   const [skillsEditing, setSkillsEditing] = React.useState(false);
@@ -1649,17 +1647,17 @@ const AgentsHomeView: React.FC = () => {
         badges={selectedTeam ? (
           <>
             {EXAMPLE_TEAM_IDS.has(selectedTeam.id) ? (
-              <Badge variant="neutral">{t('teamCard.badges.example')}</Badge>
+              <StatusPill tone="neutral">{t('teamCard.badges.example')}</StatusPill>
             ) : null}
-            <Badge variant="neutral">
+            <StatusPill tone="neutral">
               {selectedTeam.strategy === 'collaborative'
                 ? t('composer.strategy.collaborative')
                 : selectedTeam.strategy === 'sequential'
                   ? t('composer.strategy.sequential')
                   : t('composer.strategy.free')}
-            </Badge>
+            </StatusPill>
             {selectedTeam.shareContext ? (
-              <Badge variant="success">{t('teamCard.badges.sharedContext')}</Badge>
+              <StatusPill tone="success">{t('teamCard.badges.sharedContext')}</StatusPill>
             ) : null}
           </>
         ) : null}
@@ -1670,7 +1668,7 @@ const AgentsHomeView: React.FC = () => {
         actions={selectedTeam ? (
           <Button
             variant="primary"
-            size="small"
+            size="sm"
             onClick={() => {
               setSelectedTeamId(null);
               openAgentTeamEditor(selectedTeam.id);
