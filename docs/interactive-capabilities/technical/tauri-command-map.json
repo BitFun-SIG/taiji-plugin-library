@@ -1,13 +1,13 @@
 {
   "schemaVersion": 2,
   "generatedFrom": "src/shared/interactive-capabilities/catalog.json",
-  "catalogDigest": "a6f9d100885542f35435d2a3c7e989abb206f8a8ec9a07284465097097858bba",
-  "commandCount": 665,
+  "catalogDigest": "e710a51d176e7dc9bbccddaa1a9eeac3d928d3204e85a001144aeb70fe2f588a",
+  "commandCount": 657,
   "coverage": {
-    "commandCount": 665,
-    "documentedCommandCount": 630,
-    "implementationCommandCount": 35,
-    "implementationDigest": "61e1b3693c4a07a1c005059672ae6a6d82ad3cf502eed1584a70b9e3894404e8"
+    "commandCount": 657,
+    "documentedCommandCount": 628,
+    "implementationCommandCount": 29,
+    "implementationDigest": "04b59d988f31c5d17d579235cec0da684e565a9aa464cd33d0ce831d7424a7dd"
   },
   "commands": [
     {
@@ -1631,20 +1631,6 @@
       "remoteWorkspacePolicy": "RemoteRouted"
     },
     {
-      "id": "create_legion_preset",
-      "moduleId": "commands",
-      "capabilityId": "feature.projects",
-      "capabilityIds": [
-        "feature.projects"
-      ],
-      "documentedItemIds": [],
-      "visibility": "implementation",
-      "rustPath": "create_legion_preset",
-      "sourceFile": "src/apps/desktop/src/api/commands.rs",
-      "signature": "fn create_legion_preset( request: bitfun_core::agentic::agents::team_presets::LegionPreset, ) -> Result<(), String>",
-      "remoteWorkspacePolicy": "LocalOnly"
-    },
-    {
       "id": "create_miniapp",
       "moduleId": "miniapp",
       "capabilityId": "feature.miniapps",
@@ -1951,20 +1937,6 @@
       "sourceFile": "src/apps/desktop/src/api/agentic_api.rs",
       "signature": "fn delete_session( runtime: State<'_, DesktopRuntimeContext>, request: DeleteSessionRequest, ) -> Result<(), String>",
       "remoteWorkspacePolicy": "LegacyUnaudited"
-    },
-    {
-      "id": "delete_session_tree",
-      "moduleId": "agentic",
-      "capabilityId": "feature.ai-assistant",
-      "capabilityIds": [
-        "feature.ai-assistant"
-      ],
-      "documentedItemIds": [],
-      "visibility": "implementation",
-      "rustPath": "api::agentic_api::delete_session_tree",
-      "sourceFile": "src/apps/desktop/src/api/agentic_api.rs",
-      "signature": "fn delete_session_tree( runtime: State<'_, DesktopRuntimeContext>, request: DeleteSessionRequest, ) -> Result<DeleteSessionTreeResponse, String>",
-      "remoteWorkspacePolicy": "RemoteRouted"
     },
     {
       "id": "delete_skill",
@@ -2493,14 +2465,12 @@
     {
       "id": "export_local_file_to_path",
       "moduleId": "commands",
-      "capabilityId": "feature.files-editor",
+      "capabilityId": "feature.projects",
       "capabilityIds": [
-        "feature.files-editor"
+        "feature.projects"
       ],
-      "documentedItemIds": [
-        "feature.files-editor:attachments"
-      ],
-      "visibility": "documented",
+      "documentedItemIds": [],
+      "visibility": "implementation",
       "rustPath": "export_local_file_to_path",
       "sourceFile": "src/apps/desktop/src/api/commands.rs",
       "signature": "fn export_local_file_to_path(request: ExportLocalFileRequest) -> Result<(), String>",
@@ -4896,20 +4866,6 @@
       "remoteWorkspacePolicy": "LegacyUnaudited"
     },
     {
-      "id": "list_deleted_session_ids",
-      "moduleId": "session",
-      "capabilityId": "feature.ai-assistant",
-      "capabilityIds": [
-        "feature.ai-assistant"
-      ],
-      "documentedItemIds": [],
-      "visibility": "implementation",
-      "rustPath": "list_deleted_session_ids",
-      "sourceFile": "src/apps/desktop/src/api/session_api.rs",
-      "signature": "fn list_deleted_session_ids( request: ListDeletedSessionIdsRequest, runtime: State<'_, DesktopRuntimeContext>, ) -> Result<Vec<String>, String>",
-      "remoteWorkspacePolicy": "RemoteUnsupported"
-    },
-    {
       "id": "list_directory_files",
       "moduleId": "commands",
       "capabilityId": "feature.files-editor",
@@ -4924,20 +4880,6 @@
       "sourceFile": "src/apps/desktop/src/api/commands.rs",
       "signature": "fn list_directory_files( state: State<'_, AppState>, request: ListDirectoryFilesRequest, ) -> Result<Vec<String>, String>",
       "remoteWorkspacePolicy": "RemoteRouted"
-    },
-    {
-      "id": "list_legion_presets",
-      "moduleId": "commands",
-      "capabilityId": "feature.projects",
-      "capabilityIds": [
-        "feature.projects"
-      ],
-      "documentedItemIds": [],
-      "visibility": "implementation",
-      "rustPath": "list_legion_presets",
-      "sourceFile": "src/apps/desktop/src/api/commands.rs",
-      "signature": "fn list_legion_presets( ) -> Result<Vec<bitfun_core::agentic::agents::team_presets::LegionPreset>, String>",
-      "remoteWorkspacePolicy": "LocalOnly"
     },
     {
       "id": "list_manageable_subagents",
@@ -6447,10 +6389,8 @@
       "capabilityIds": [
         "feature.files-editor"
       ],
-      "documentedItemIds": [
-        "feature.files-editor:attachments"
-      ],
-      "visibility": "documented",
+      "documentedItemIds": [],
+      "visibility": "implementation",
       "rustPath": "paste_files",
       "sourceFile": "src/apps/desktop/src/api/clipboard_file_api.rs",
       "signature": "fn paste_files(request: PasteFilesRequest) -> Result<PasteFilesResponse, String>",
@@ -7580,20 +7520,6 @@
       "remoteWorkspacePolicy": "LegacyUnaudited"
     },
     {
-      "id": "replace_mode_tool_selection",
-      "moduleId": "tool",
-      "capabilityId": "feature.ai-assistant",
-      "capabilityIds": [
-        "feature.ai-assistant"
-      ],
-      "documentedItemIds": [],
-      "visibility": "implementation",
-      "rustPath": "replace_mode_tool_selection",
-      "sourceFile": "src/apps/desktop/src/api/tool_api.rs",
-      "signature": "fn replace_mode_tool_selection( request: ReplaceModeToolSelectionRequest, ) -> Result<String, String>",
-      "remoteWorkspacePolicy": "RemoteUnsupported"
-    },
-    {
       "id": "report_bitfun_control_result",
       "moduleId": "bitfun_control_host",
       "capabilityId": null,
@@ -7716,20 +7642,6 @@
       "sourceFile": "src/apps/desktop/src/api/skill_api.rs",
       "signature": "fn reset_mode_skill_selection( state: State<'_, AppState>, request: ResetModeSkillSelectionRequest, ) -> Result<String, String>",
       "remoteWorkspacePolicy": "LegacyUnaudited"
-    },
-    {
-      "id": "reset_mode_tool_selection",
-      "moduleId": "tool",
-      "capabilityId": "feature.ai-assistant",
-      "capabilityIds": [
-        "feature.ai-assistant"
-      ],
-      "documentedItemIds": [],
-      "visibility": "implementation",
-      "rustPath": "reset_mode_tool_selection",
-      "sourceFile": "src/apps/desktop/src/api/tool_api.rs",
-      "signature": "fn reset_mode_tool_selection( request: ResetModeToolSelectionRequest, ) -> Result<String, String>",
-      "remoteWorkspacePolicy": "RemoteUnsupported"
     },
     {
       "id": "reset_workspace_persona_files",
@@ -8806,20 +8718,6 @@
       "remoteWorkspacePolicy": "WorkspaceAgnostic"
     },
     {
-      "id": "set_global_tool_disabled",
-      "moduleId": "tool",
-      "capabilityId": "feature.ai-assistant",
-      "capabilityIds": [
-        "feature.ai-assistant"
-      ],
-      "documentedItemIds": [],
-      "visibility": "implementation",
-      "rustPath": "set_global_tool_disabled",
-      "sourceFile": "src/apps/desktop/src/api/tool_api.rs",
-      "signature": "fn set_global_tool_disabled( request: SetGlobalToolDisabledRequest, ) -> Result<GlobalToolSettingsResponse, String>",
-      "remoteWorkspacePolicy": "WorkspaceAgnostic"
-    },
-    {
       "id": "set_macos_edit_menu_mode",
       "moduleId": "system",
       "capabilityId": "setting.application.general",
@@ -9621,7 +9519,7 @@
       "visibility": "documented",
       "rustPath": "api::agentic_api::start_dialog_turn",
       "sourceFile": "src/apps/desktop/src/api/agentic_api.rs",
-      "signature": "fn start_dialog_turn( app: AppHandle, app_state: State<'_, AppState>, runtime: State<'_, DesktopRuntimeContext>, request: StartDialogTurnRequest, ) -> Result<StartDialogTurnResponse, String>",
+      "signature": "fn start_dialog_turn( _app: AppHandle, runtime: State<'_, DesktopRuntimeContext>, request: StartDialogTurnRequest, ) -> Result<StartDialogTurnResponse, String>",
       "remoteWorkspacePolicy": "RemoteRouted"
     },
     {
@@ -9718,20 +9616,6 @@
       "rustPath": "start_subscription_login",
       "sourceFile": "src/apps/desktop/src/api/commands.rs",
       "signature": "fn start_subscription_login( state: State<'_, AppState>, request: SubscriptionLoginRequest, ) -> Result<bitfun_core::infrastructure::subscription_auth::LoginStartResult, String>",
-      "remoteWorkspacePolicy": "LocalOnly"
-    },
-    {
-      "id": "start_subscription_pat_login",
-      "moduleId": "commands",
-      "capabilityId": "feature.projects",
-      "capabilityIds": [
-        "feature.projects"
-      ],
-      "documentedItemIds": [],
-      "visibility": "implementation",
-      "rustPath": "start_subscription_pat_login",
-      "sourceFile": "src/apps/desktop/src/api/commands.rs",
-      "signature": "fn start_subscription_pat_login( state: State<'_, AppState>, request: SubscriptionPatLoginRequest, ) -> Result<(), String>",
       "remoteWorkspacePolicy": "LocalOnly"
     },
     {
