@@ -1,73 +1,68 @@
 {
-  "configCenter": {
-    "selectConfig": "Select Configuration",
-    "searchPlaceholder": "Search settings…",
-    "searchNoResults": "No matching settings",
-    "searchClear": "Clear search",
-    "beta": "Beta",
-    "unseenItems": "Not seen yet",
-    "searchAliases": {
-      "archivedSessions": [],
-      "keyboard": [],
-      "sessionPersonalization": [],
-      "sessionPermissions": [],
-      "quickActions": [],
-      "review": [],
-      "memories": [],
-      "aiThresholds": [],
-      "usageStatistics": []
-    },
-    "tabDescriptions": {
-      "basics": "Logging, terminal shell, notifications, and launch at login.",
-      "appearance": "Language, visual appearance, and UI font size.",
-      "models": "AI models, API keys, providers, proxy, and session title.",
-      "usageStatistics": "Historical model call statistics: requests, tokens, and cache hit rates by model, provider, and endpoint.",
-      "worktrees": "Defaults for isolated Git worktrees and parallel sessions.",
-      "sessionPersonalization": "Agent companion.",
-      "sessionPermissions": "Tool permissions, execution, desktop control, and browser access.",
-      "quickActions": "One-click AI actions after coding. Built-in and customizable prompts.",
-      "voiceInput": "Local microphone input and speech-to-text model.",
-      "review": "Review strategy, coverage depth, capacity, cost, and latency controls.",
-      "memories": "Automatic memory generation, injection, retention windows, and memory models.",
-      "aiThresholds": "Tune AI behavior thresholds: compression budgets, retry backoff, tool output caps and timeouts, knowledge-base search, ACP timeouts, memory and goal continuation. Defaults match built-in behavior.",
-      "mcpTools": "MCP servers and tool integrations.",
-      "externalSources": "Load compatible commands and extensions from other AI applications.",
-      "hooks": "Run your own commands at Agent lifecycle points. Codex-compatible.",
-      "acpAgents": "External ACP agents such as opencode, Claude Code, and Codex.",
-      "editor": "Editor font, display, and formatting.",
-      "lsp": "Language servers and code intelligence.",
-      "keyboard": "Shortcuts and key bindings.",
-      "archivedSessions": "View, restore, or permanently delete archived sessions."
+  "navigation": {
+    "search": {
+      "placeholder": "Search settings…",
+      "empty": "No matching settings"
     },
     "categories": {
-      "general": "General",
-      "smartCapabilities": "Smart Configuration",
-      "devkit": "Dev Kit"
+      "application": "App & Interface",
+      "ai": "AI & Models",
+      "workspace": "Sessions & Workspace",
+      "tools": "Tools & Integrations",
+      "data": "Data & Maintenance"
     },
-    "tabs": {
-      "basics": "Basics",
-      "appearance": "Appearance",
-      "models": "Models",
-      "usageStatistics": "Usage Statistics",
-      "worktrees": "Worktrees",
-      "sessionPersonalization": "Personalization",
-      "sessionPermissions": "Permissions",
-      "quickActions": "Quick Actions",
-      "voiceInput": "Voice Input",
-      "review": "Review",
-      "memories": "Memory",
-      "aiThresholds": "AI Thresholds",
-      "skills": "Skills",
-      "mcpTools": "MCP",
-      "externalSources": "External AI Apps",
-      "hooks": "Agent Hooks",
-      "acpAgents": "ACP Agents",
-      "agents": "Agents",
-      "editor": "Editor",
-      "lsp": "LSP",
-      "keyboard": "Keyboard",
-      "archivedSessions": "Archived Sessions"
+    "pages": {
+      "general": { "label": "General", "description": "Startup, updates, window behavior, sleep, and notifications." },
+      "appearance": { "label": "Appearance", "description": "Language, themes, effects, appearance packages, and interface typography." },
+      "pet": { "label": "Pet", "description": "Display surface, character packages, import, and preview." },
+      "voice": { "label": "Voice", "description": "Voice input, local speech models, and realtime voice calls." },
+      "shortcuts": { "label": "Keyboard Shortcuts", "description": "Browse, customize, and reset keyboard shortcuts." },
+      "terminal": { "label": "Terminal", "description": "Default shell and terminal panel placement." },
+      "editor": { "label": "Editor", "description": "Code editor appearance, indentation, display, and formatting." },
+      "models": { "label": "Models", "description": "Default models, providers, subscriptions, catalog, and network proxy." },
+      "memory": { "label": "Memory", "description": "Memory generation, use, extraction, and consolidation." },
+      "sessionWorkspace": { "label": "Session & Workspace", "description": "Session titles and current workspace search." },
+      "worktrees": { "label": "Worktrees", "description": "Git worktree isolation and parallel-session defaults." },
+      "execution": { "label": "Execution & Permissions", "description": "Tool permissions, execution, review, and recovery settings." },
+      "browserDesktopControl": { "label": "Browser & Desktop Control", "description": "Browser connections, desktop interaction, and required system permissions." },
+      "automation": { "label": "Automation", "description": "Quick actions and Agent lifecycle hooks." },
+      "webSearch": { "label": "Web Search", "description": "Choose the WebSearch provider, endpoint, and device-local credential." },
+      "mcp": { "label": "MCP", "description": "Manage MCP servers, connections, and exposed tools." },
+      "acp": { "label": "ACP Agents", "description": "Configure external agents that connect through Agent Client Protocol." },
+      "usage": { "label": "Call Statistics", "description": "Model requests, token usage, and cache hit rates." },
+      "archivedSessions": { "label": "Archived Sessions", "description": "View, restore, or permanently delete archived sessions." },
+      "diagnostics": { "label": "Logs & Diagnostics", "description": "Log levels, runtime information, and troubleshooting." }
+    },
+    "views": {
+      "common": "Common",
+      "advanced": "Advanced",
+      "local": "Local",
+      "ssh": "SSH",
+      "json": "Advanced JSON",
+      "quick-actions": "Quick Actions",
+      "hooks": "Hooks"
     }
+  },
+  "changeGuard": {
+    "title": "Save unfinished settings?",
+    "message": "Unsaved settings need attention before you leave.",
+    "message_one": "{{count}} unsaved settings item needs attention before you leave. If it fails, you will stay here.",
+    "message_other": "{{count}} unsaved settings items need attention before you leave. If one fails, you will stay here and completed saves will not run again.",
+    "saveFailed": "Some settings could not be saved. Review the error on this page and retry, or discard those changes before leaving.",
+    "saveAndLeave": "Save and Leave",
+    "discardAndLeave": "Discard and Leave",
+    "keepEditing": "Keep Editing",
+    "unsavedPage": "This page has unsaved changes"
+  },
+  "changeStatus": {
+    "unsaved": "Not saved",
+    "saving": "Saving…",
+    "saved": "Saved",
+    "error": "Save failed"
+  },
+  "changeActions": {
+    "save": "Save Changes",
+    "discard": "Discard Changes"
   },
   "general": {
     "title": "General",
@@ -180,12 +175,14 @@
     "apply": "Apply",
     "saving": "Saving…",
     "reset": "Reset to Defaults",
+    "resetConfirmTitle": "Reset all keyboard shortcuts?",
+    "resetConfirmMessage": "All custom key bindings will be removed and the defaults restored.",
     "clickToRecord": "Click to record a new key binding",
     "recording": "Press new key combination…",
     "revertChange": "Revert this change",
-    "fixedBinding": "This shortcut is fixed and cannot be changed",
     "noResults": "No matching shortcuts found",
     "conflict": "Conflict",
+    "conflictBlocking": "Some shortcuts conflict. Record a different binding for one of the conflicting actions, or revert the change before applying.",
     "saveError": "Failed to save, please try again",
     "resetError": "Failed to reset, please try again",
     "mergedNonUniform": "Mixed bindings — record to reset as a set",
@@ -227,17 +224,13 @@
         "openSettings": "Open Settings",
         "openTerminal": "Open Terminal"
       },
-      "app": {
-        "closePreview": "Close Preview / Dismiss Dialog"
-      },
       "canvas": {
         "missionControl": "Mission Control",
         "splitHorizontal": "Horizontal Split",
         "splitVertical": "Vertical Split",
         "splitGrid9": "3x3 Grid Layout",
         "anchorZone": "Toggle Anchor Zone",
-        "maximize": "Maximize Editor",
-        "closePreview": "Close Preview"
+        "maximize": "Maximize Editor"
       },
       "editor": {
         "findInFile": "Find in file (Monaco)"
@@ -272,21 +265,13 @@
         "push": "Push",
         "pull": "Pull"
       }
-    },
-    "resetConfirmTitle": "Reset all keyboard shortcuts?",
-    "resetConfirmMessage": "All custom key bindings will be removed and the defaults restored.",
-    "conflictBlocking": "Some shortcuts conflict. Record a different binding for one of the conflicting actions, or revert the change before applying."
+    }
   },
   "advanced": {
     "title": "Advanced",
     "experimental": {
       "title": "Experimental Features",
       "description": "These features may be unstable"
-    },
-    "debug": {
-      "title": "Debug",
-      "logging": "Enable Logging",
-      "developerTools": "Developer Tools"
     },
     "data": {
       "title": "Data",
@@ -518,20 +503,6 @@
     "minimap": "Show Minimap",
     "lineNumbers": "Show Line Numbers"
   },
-  "lspConfig": {
-    "title": "LSP",
-    "subtitle": "Configure language servers",
-    "installedServers": "Installed Language Servers",
-    "noServers": "No language servers",
-    "noServersHint": "Language servers provide code intelligence features"
-  },
-  "debugConfig": {
-    "title": "Debug",
-    "subtitle": "Configure debug options",
-    "enableLogging": "Enable Logging",
-    "logLevel": "Log Level",
-    "developerTools": "Developer Tools"
-  },
   "terminalConfig": {
     "title": "Terminal",
     "subtitle": "Configure integrated terminal",
@@ -565,110 +536,6 @@
       "subtitle": "Customize the app appearance and colors",
       "import": "Import Appearance",
       "export": "Export Current Appearance"
-    }
-  },
-  "navigation": {
-    "search": {
-      "placeholder": "Search settings…",
-      "empty": "No matching settings"
-    },
-    "categories": {
-      "application": "App & Interface",
-      "ai": "AI & Models",
-      "workspace": "Sessions & Workspace",
-      "tools": "Tools & Integrations",
-      "data": "Data & Maintenance"
-    },
-    "pages": {
-      "general": {
-        "label": "General",
-        "description": "Startup, updates, window behavior, sleep, and notifications."
-      },
-      "appearance": {
-        "label": "Appearance",
-        "description": "Language, themes, effects, appearance packages, and interface typography."
-      },
-      "pet": {
-        "label": "Pet",
-        "description": "Display surface, character packages, import, and preview."
-      },
-      "voice": {
-        "label": "Voice",
-        "description": "Voice input, local speech models, and realtime voice calls."
-      },
-      "shortcuts": {
-        "label": "Keyboard Shortcuts",
-        "description": "Browse, customize, and reset keyboard shortcuts."
-      },
-      "terminal": {
-        "label": "Terminal",
-        "description": "Default shell and terminal panel placement."
-      },
-      "editor": {
-        "label": "Editor",
-        "description": "Code editor appearance, indentation, display, and formatting."
-      },
-      "models": {
-        "label": "Models",
-        "description": "Default models, providers, subscriptions, catalog, and network proxy."
-      },
-      "memory": {
-        "label": "Memory",
-        "description": "Memory generation, use, extraction, and consolidation."
-      },
-      "sessionWorkspace": {
-        "label": "Session & Workspace",
-        "description": "Session titles and current workspace search."
-      },
-      "worktrees": {
-        "label": "Worktrees",
-        "description": "Git worktree isolation and parallel-session defaults."
-      },
-      "execution": {
-        "label": "Execution & Permissions",
-        "description": "Common permissions plus advanced execution, review, and recovery settings."
-      },
-      "browserDesktopControl": {
-        "label": "Browser & Desktop Control",
-        "description": "Browser connections, desktop interaction, and required system permissions."
-      },
-      "automation": {
-        "label": "Automation",
-        "description": "Quick actions and Agent lifecycle hooks."
-      },
-      "webSearch": {
-        "label": "Web Search",
-        "description": "Choose the WebSearch provider, endpoint, and device-local credential."
-      },
-      "mcp": {
-        "label": "MCP",
-        "description": "Manage MCP servers, connections, and exposed tools."
-      },
-      "acp": {
-        "label": "ACP Agents",
-        "description": "Configure external agents that connect through Agent Client Protocol."
-      },
-      "usage": {
-        "label": "Call Statistics",
-        "description": "Model requests, token usage, and cache hit rates."
-      },
-      "archivedSessions": {
-        "label": "Archived Sessions",
-        "description": "View, restore, or permanently delete archived sessions."
-      },
-      "diagnostics": {
-        "label": "Logs & Diagnostics",
-        "description": "Log levels, runtime information, and troubleshooting."
-      }
-    },
-    "views": {
-      "common": "Common",
-      "advanced": "Advanced",
-      "local": "Local",
-      "ssh": "SSH",
-      "json": "Advanced JSON",
-      "quick-actions": "Quick Actions",
-      "hooks": "Hooks"
     }
   }
 }

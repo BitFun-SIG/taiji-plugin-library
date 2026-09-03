@@ -48,7 +48,11 @@ import {
 import { resolveProviderTemplates } from '../services/builtinProviderCatalog';
 import { normalizeProviderBaseUrl } from '../services/providerCatalog';
 import { supportsResponsesReasoning } from '../utils/reasoning';
-import { canonicalReasoningConfig, validateReasoningConfig } from '../utils/reasoningPresets';
+import {
+  canonicalReasoningConfig,
+  cloneReasoningConfig,
+  validateReasoningConfig,
+} from '../utils/reasoningPresets';
 import { aiApi, systemAPI } from '@/infrastructure/api';
 import type {
   SubscriptionAccount,
@@ -58,7 +62,20 @@ import type {
 import type { ProviderRegion } from '@/shared/types';
 import type { OpenCodePlan, SubscriptionProvider } from '../types';
 import { useNotification } from '@/shared/notification-system';
-import { ConfigPageHeader, ConfigPageLayout, ConfigPageContent, ConfigPageSection, ConfigPageRow, ConfigCollectionItem, ConfigRetryState } from './common';
+import {
+  ConfigActionBar,
+  ConfigPageHeader,
+  ConfigPageLayout,
+  ConfigPageContent,
+  ConfigPageSection,
+  ConfigPageRow,
+  ConfigCollectionItem,
+  ConfigRetryState,
+} from './common';
+import {
+  requestSettingsDraftExit,
+  useSettingsDraft,
+} from '@/infrastructure/config/settingsDraftRegistry';
 import DefaultModelConfig from './DefaultModelConfig';
 import ReasoningConfigPanel, { type ReasoningConfigApplyResult } from './ReasoningConfigPanel';
 import { createLogger } from '@/shared/utils/logger';
@@ -438,6 +455,7 @@ const ModelSettingsPage: React.FC = () => {
   const [isRefreshingModelsDev, setIsRefreshingModelsDev] = useState(false);
   const [showModelsDevDetails, setShowModelsDevDetails] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+  const [isEditorSaving, setIsEditorSaving] = useState(false);
   const [editingConfig, setEditingConfig] = useState<Partial<AIModelConfigType> | null>(null);
   const [showApiKey, setShowApiKey] = useState(false);
   const [testingConfigs, setTestingConfigs] = useState<Record<string, boolean>>({});
@@ -470,6 +488,10 @@ const ModelSettingsPage: React.FC = () => {
   const [savedStreamTimeouts, setSavedStreamTimeouts] = useState({ idle: '', ttft: '' });
   const [isStreamTimeoutSaving, setIsStreamTimeoutSaving] = useState(false);
   const [isProxySaving, setIsProxySaving] = useState(false);
+  const [streamTimeoutSaveError, setStreamTimeoutSaveError] = useState<string | null>(null);
+  const [proxySaveError, setProxySaveError] = useState<string | null>(null);
+  const streamTimeoutSavingRef = React.useRef(false);
+  const proxySavingRef = React.useRef(false);
   const [remoteModelOptions, setRemoteModelOptions] = useState<RemoteModelOption[]>([]);
   const [isFetchingRemoteModels, setIsFetchingRemoteModels] = useState(false);
   const [remoteModelsError, setRemoteModelsError] = useState<string | null>(null);
@@ -479,6 +501,10 @@ const ModelSettingsPage: React.FC = () => {
   const [manualModelInput, setManualModelInput] = useState('');
   const [expandedModelCards, setExpandedModelCards] = useState<Set<string>>(new Set());
   const [reasoningPanelDraftKey, setReasoningPanelDraftKey] = useState<string | null>(null);
+  const reasoningPanelInitialRef = React.useRef<Pick<
+    SelectedModelDraft,
+    'key' | 'reasoning' | 'reasoningProjectionCatalog' | 'reasoningProjectionSnapshot'
+  > | null>(null);
   const [subscriptionAccounts, setSubscriptionAccounts] = useState<SubscriptionAccount[]>([]);
   const [isLoadingSubscriptions, setIsLoadingSubscriptions] = useState(false);
   const [loggingInProvider, setLoggingInProvider] = useState<SubscriptionProvider | null>(null);
@@ -486,7 +512,6 @@ const ModelSettingsPage: React.FC = () => {
   const [subscriptionLoginClock, setSubscriptionLoginClock] = useState(() => Date.now());
   const [subscriptionLogoutRequest, setSubscriptionLogoutRequest] = useState<SubscriptionLogoutRequest | null>(null);
   const [deleteRequest, setDeleteRequest] = useState<ModelDeleteRequest | null>(null);
-  const [discardEditorConfirmOpen, setDiscardEditorConfirmOpen] = useState(false);
   const [showSubscriptionMigrationNotice, setShowSubscriptionMigrationNotice] = useState(() => {
     if (typeof window === 'undefined') return false;
     try {
@@ -497,6 +522,7 @@ const ModelSettingsPage: React.FC = () => {
   });
   const lastRemoteFetchSignatureRef = React.useRef<string | null>(null);
   const activeRemoteFetchSignatureRef = React.useRef<string | null>(null);
+  const editorSavingRef = React.useRef(false);
 
   const requestFormatOptions = useMemo(
     () => [
@@ -747,20 +773,6 @@ const ModelSettingsPage: React.FC = () => {
 
     return providerFieldsChanged || draftFieldsChanged || selectionChanged;
   }, [aiModels, editingConfig, editingProviderModelIds, selectedModelDrafts]);
-
-  const hasUnsavedModelSettings = isProxyDirty
-    || isStreamTimeoutDirty
-    || (editingConfig !== null && editingModalHasUnsavedChanges);
-
-  useEffect(() => {
-    if (!hasUnsavedModelSettings) return undefined;
-    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
-      event.preventDefault();
-      event.returnValue = '';
-    };
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [hasUnsavedModelSettings]);
 
   const createDraftsFromConfigs = (configs: AIModelConfigType[]) => (
     configs.map(config => createModelDraft(config.model_name, config, {
@@ -1646,33 +1658,36 @@ const ModelSettingsPage: React.FC = () => {
     setIsEditing(true);
   };
 
-  const handleSave = async () => {
+  const handleSave = async (): Promise<boolean> => {
+    if (editorSavingRef.current) return false;
     
     if (!editingConfig || !editingConfig.name || !editingConfig.base_url) {
       notification.warning(t('messages.fillRequired'));
-      return;
+      return false;
     }
     
     if (selectedModelDrafts.length === 0) {
       notification.warning(t('messages.fillModelName'));
-      return;
+      return false;
     }
 
+    editorSavingRef.current = true;
+    setIsEditorSaving(true);
     try {
       const providerName = editingConfig.name.trim();
       const baseUrl = editingConfig.base_url.trim();
       if (!providerName || !baseUrl) {
         notification.warning(t('messages.fillRequired'));
-        return;
+        return false;
       }
       if (!hasHttpUrlScheme(baseUrl)) {
         notification.warning(t('messages.invalidBaseUrlScheme'));
-        return;
+        return false;
       }
       const draftsToSave = dedupeSelectedModelDraftsByModelName(selectedModelDrafts);
       if (draftsToSave.some(draft => draft.contextWindow < 32000)) {
         notification.warning(t('messages.contextWindowTooSmall'));
-        return;
+        return false;
       }
       const reasoningValidationResults = draftsToSave.map(draft => ({
         modelName: draft.modelName,
@@ -1688,7 +1703,7 @@ const ModelSettingsPage: React.FC = () => {
       }));
       if (reasoningValidationResults.some(entry => entry.validationError !== null)) {
         notification.warning(t('messages.invalidReasoningPresets'));
-        return;
+        return false;
       }
       const existingProviderInstanceId = getProviderInstanceId(editingConfig);
       const isProviderGroupEdit = !editingConfig.id && editingProviderModelIds.size > 0;
@@ -1831,9 +1846,14 @@ const ModelSettingsPage: React.FC = () => {
           }
         })();
       });
+      return true;
     } catch (error) {
       log.error('Failed to save config', error);
       notification.error(t('messages.saveFailed'));
+      return false;
+    } finally {
+      editorSavingRef.current = false;
+      setIsEditorSaving(false);
     }
   };
 
@@ -1939,27 +1959,45 @@ const ModelSettingsPage: React.FC = () => {
   };
 
   
-  const handleSaveProxy = async () => {
+  const handleSaveProxy = async (): Promise<boolean> => {
+    if (!isProxyDirty) return true;
+    if (proxySavingRef.current) return false;
+    if (proxyConfig.enabled && !proxyConfig.url.trim()) {
+      setProxySaveError(t('messages.fillRequired'));
+      return false;
+    }
+    proxySavingRef.current = true;
     setIsProxySaving(true);
+    setProxySaveError(null);
     try {
       await configManager.setConfig('ai.proxy', proxyConfig);
       setSavedProxyConfig(proxyConfig);
+      setProxySaveError(null);
       notification.success(t('proxy.saveSuccess'));
+      return true;
     } catch (error) {
       log.error('Failed to save proxy config', error);
+      setProxySaveError(t('messages.saveFailed'));
       notification.error(t('messages.saveFailed'));
+      return false;
     } finally {
+      proxySavingRef.current = false;
       setIsProxySaving(false);
     }
   };
 
-  const handleSaveStreamTimeouts = async () => {
+  const handleSaveStreamTimeouts = async (): Promise<boolean> => {
+    if (!isStreamTimeoutDirty) return true;
+    if (streamTimeoutSavingRef.current) return false;
     if (isStreamTimeoutInvalid) {
+      setStreamTimeoutSaveError(t('streamIdleTimeout.invalid'));
       notification.warning(t('streamIdleTimeout.invalid'));
-      return;
+      return false;
     }
 
+    streamTimeoutSavingRef.current = true;
     setIsStreamTimeoutSaving(true);
+    setStreamTimeoutSaveError(null);
     try {
       await Promise.all([
         configManager.setConfig(
@@ -1981,11 +2019,16 @@ const ModelSettingsPage: React.FC = () => {
         idle: parsedStreamIdleTimeout != null ? String(parsedStreamIdleTimeout) : '',
         ttft: parsedStreamTtftTimeout != null ? String(parsedStreamTtftTimeout) : '',
       });
+      setStreamTimeoutSaveError(null);
       notification.success(t('streamIdleTimeout.saveSuccess'));
+      return true;
     } catch (error) {
       log.error('Failed to save stream timeouts', error);
+      setStreamTimeoutSaveError(t('messages.saveFailed'));
       notification.error(t('messages.saveFailed'));
+      return false;
     } finally {
+      streamTimeoutSavingRef.current = false;
       setIsStreamTimeoutSaving(false);
     }
   };
@@ -2003,16 +2046,51 @@ const ModelSettingsPage: React.FC = () => {
     setProviderQuery('');
     setShowAllProviders(false);
     setReasoningPanelDraftKey(null);
-    setDiscardEditorConfirmOpen(false);
+    reasoningPanelInitialRef.current = null;
   };
 
   const requestCloseEditingModal = () => {
-    if (editingModalHasUnsavedChanges) {
-      setDiscardEditorConfirmOpen(true);
-      return;
-    }
-    closeEditingModal();
+    if (editorSavingRef.current) return;
+    requestSettingsDraftExit(['model-provider-editor'], closeEditingModal);
   };
+
+  const discardProxyDraft = useCallback(() => {
+    setProxyConfig(savedProxyConfig);
+    setProxySaveError(null);
+  }, [savedProxyConfig]);
+  const discardStreamTimeoutDraft = useCallback(() => {
+    setStreamIdleTimeoutInput(savedStreamTimeouts.idle);
+    setStreamTtftTimeoutInput(savedStreamTimeouts.ttft);
+    setStreamTimeoutSaveError(null);
+  }, [savedStreamTimeouts]);
+
+  useSettingsDraft({
+    id: 'model-stream-timeouts',
+    pageId: 'ai.models',
+    label: t('streamIdleTimeout.title'),
+    dirty: isStreamTimeoutDirty,
+    saving: isStreamTimeoutSaving,
+    save: handleSaveStreamTimeouts,
+    discard: discardStreamTimeoutDraft,
+  });
+  useSettingsDraft({
+    id: 'model-network-proxy',
+    pageId: 'ai.models',
+    label: tDefault('sections.proxy'),
+    dirty: isProxyDirty,
+    saving: isProxySaving,
+    save: handleSaveProxy,
+    discard: discardProxyDraft,
+  });
+  useSettingsDraft({
+    id: 'model-provider-editor',
+    pageId: 'ai.models',
+    label: editingConfig?.id ? t('editModel') : t('newProvider'),
+    dirty: editingConfig !== null && editingModalHasUnsavedChanges,
+    saving: isEditorSaving,
+    save: handleSave,
+    discard: closeEditingModal,
+  });
 
   const providerGroups = useMemo<ProviderGroup[]>(() => {
     const grouped = aiModels.reduce<Map<string, ProviderGroup>>((map, model) => {
@@ -2510,7 +2588,15 @@ const ModelSettingsPage: React.FC = () => {
                     <button
                       type="button"
                       className="bitfun-model-settings__reasoning-summary"
-                      onClick={() => setReasoningPanelDraftKey(draft.key)}
+                      onClick={() => {
+                        reasoningPanelInitialRef.current = {
+                          key: draft.key,
+                          reasoning: cloneReasoningConfig(draft.reasoning),
+                          reasoningProjectionCatalog: draft.reasoningProjectionCatalog,
+                          reasoningProjectionSnapshot: draft.reasoningProjectionSnapshot,
+                        };
+                        setReasoningPanelDraftKey(draft.key);
+                      }}
                       data-testid="settings-model-reasoning-edit"
                     >
                       <span className="bitfun-model-settings__reasoning-summary-icon">
@@ -3318,6 +3404,32 @@ const ModelSettingsPage: React.FC = () => {
         maxTokens: reasoningPanelDraft.maxTokens,
       }
     : undefined;
+  const updateReasoningPanelDraft = (result: ReasoningConfigApplyResult) => {
+    if (!reasoningPanelDraft) return;
+    updateModelDraft(reasoningPanelDraft.modelName, {
+      reasoning: result.reasoning,
+      reasoningProjectionCatalog: result.projectionCatalog,
+      reasoningProjectionSnapshot: {
+        catalog: result.projectionCatalog,
+        projection: result.projection,
+      },
+    });
+  };
+  const finishReasoningPanel = () => {
+    reasoningPanelInitialRef.current = null;
+    setReasoningPanelDraftKey(null);
+  };
+  const cancelReasoningPanel = () => {
+    const initial = reasoningPanelInitialRef.current;
+    if (reasoningPanelDraft && initial?.key === reasoningPanelDraft.key) {
+      updateModelDraft(reasoningPanelDraft.modelName, {
+        reasoning: cloneReasoningConfig(initial.reasoning),
+        reasoningProjectionCatalog: initial.reasoningProjectionCatalog,
+        reasoningProjectionSnapshot: initial.reasoningProjectionSnapshot,
+      });
+    }
+    finishReasoningPanel();
+  };
   const modelsDevSourceLabel = modelsDevStatus
     ? t(`modelsDevCatalog.source.${modelsDevStatus.active_source}`)
     : t('modelsDevCatalog.loading');
@@ -3741,23 +3853,6 @@ const ModelSettingsPage: React.FC = () => {
         <ConfigPageSection
           title={t('streamIdleTimeout.title')}
           description={t('streamIdleTimeout.effectiveNextRound')}
-          extra={(
-            <div className="bitfun-model-settings__save-state">
-              {isStreamTimeoutDirty && <span role="status">{t('messages.unsaved')}</span>}
-              <Button
-                variant="fill"
-                size="sm"
-                onClick={handleSaveStreamTimeouts}
-                disabled={isStreamTimeoutSaving || isStreamTimeoutInvalid || !isStreamTimeoutDirty}
-              >
-                {isStreamTimeoutSaving ? (
-                  <Loader size={16} className="spinning" />
-                ) : (
-                  t('streamIdleTimeout.save')
-                )}
-              </Button>
-            </div>
-          )}
         >
           <ConfigPageRow
             label={streamTtftTimeoutLabel}
@@ -3781,24 +3876,27 @@ const ModelSettingsPage: React.FC = () => {
               size="sm"
             />
           </ConfigPageRow>
+          <ConfigActionBar
+            status={isStreamTimeoutSaving
+              ? 'saving'
+              : streamTimeoutSaveError
+                ? 'error'
+                : isStreamTimeoutDirty
+                  ? 'unsaved'
+                  : 'saved'}
+            statusMessage={streamTimeoutSaveError}
+            saving={isStreamTimeoutSaving}
+            saveDisabled={isStreamTimeoutInvalid || !isStreamTimeoutDirty}
+            discardDisabled={!isStreamTimeoutDirty}
+            saveLabel={t('streamIdleTimeout.save')}
+            onSave={() => void handleSaveStreamTimeouts()}
+            onDiscard={discardStreamTimeoutDraft}
+          />
         </ConfigPageSection>
 
         <ConfigPageSection
           title={tDefault('sections.proxy')}
           description={t('proxy.enableHint')}
-          extra={(
-            <div className="bitfun-model-settings__save-state">
-              {isProxyDirty && <span role="status">{t('messages.unsaved')}</span>}
-              <Button
-                variant="fill"
-                size="sm"
-                onClick={handleSaveProxy}
-                disabled={isProxySaving || !isProxyDirty || (proxyConfig.enabled && !proxyConfig.url)}
-              >
-                {isProxySaving ? <Loader size={16} className="spinning" /> : t('proxy.save')}
-              </Button>
-            </div>
-          )}
         >
           <ConfigPageRow label={t('proxy.enable')} align="center">
             <Switch
@@ -3834,6 +3932,22 @@ const ModelSettingsPage: React.FC = () => {
               size="sm"
             />
           </ConfigPageRow>
+          <ConfigActionBar
+            status={isProxySaving
+              ? 'saving'
+              : proxySaveError
+                ? 'error'
+                : isProxyDirty
+                  ? 'unsaved'
+                  : 'saved'}
+            statusMessage={proxySaveError}
+            saving={isProxySaving}
+            saveDisabled={!isProxyDirty || (proxyConfig.enabled && !proxyConfig.url.trim())}
+            discardDisabled={!isProxyDirty}
+            saveLabel={t('proxy.save')}
+            onSave={() => void handleSaveProxy()}
+            onDiscard={discardProxyDraft}
+          />
         </ConfigPageSection>
       </ConfigPageContent>
 
@@ -3982,8 +4096,8 @@ const ModelSettingsPage: React.FC = () => {
       <Dialog
         open={isEditing && !!editingConfig}
         onOpenChange={(nextOpen) => {
-          if (!nextOpen) {
-            if (reasoningPanelDraft) setReasoningPanelDraftKey(null);
+          if (!nextOpen && !isEditorSaving) {
+            if (reasoningPanelDraft) finishReasoningPanel();
             else requestCloseEditingModal();
           }
         }}
@@ -4006,9 +4120,13 @@ const ModelSettingsPage: React.FC = () => {
               ? t('editProvider')
               : (currentTemplate ? `${t('newProvider')} - ${currentTemplate.name}` : t('newProvider')))}</DialogTitle>
           </DialogHeading>
-          <DialogClose />
+          <DialogClose disabled={isEditorSaving} />
         </DialogHeader>
-        <DialogBody inset="none">
+        <DialogBody
+          inset="none"
+          aria-busy={isEditorSaving}
+          {...(isEditorSaving ? { inert: '' } : {})}
+        >
         {reasoningPanelDraft ? (
           <ReasoningConfigPanel
             key={reasoningPanelDraft.key}
@@ -4020,27 +4138,26 @@ const ModelSettingsPage: React.FC = () => {
               ? requestFormatLabelMap[reasoningPanelProjectionRequest.provider]
                 || reasoningPanelProjectionRequest.provider
               : undefined}
-            onCancel={() => setReasoningPanelDraftKey(null)}
+            onCancel={cancelReasoningPanel}
+            onDraftChange={updateReasoningPanelDraft}
             onApply={(result: ReasoningConfigApplyResult) => {
-              updateModelDraft(reasoningPanelDraft.modelName, {
-                reasoning: result.reasoning,
-                reasoningProjectionCatalog: result.projectionCatalog,
-                reasoningProjectionSnapshot: {
-                  catalog: result.projectionCatalog,
-                  projection: result.projection,
-                },
-              });
-              setReasoningPanelDraftKey(null);
+              updateReasoningPanelDraft(result);
+              finishReasoningPanel();
             }}
           />
         ) : renderEditingForm()}
               </DialogBody>
         <DialogFooter appearance="floating">{reasoningPanelDraft ? undefined : (
           <>
-            <Button variant="secondary" onClick={requestCloseEditingModal}>
+            <Button variant="secondary" onClick={requestCloseEditingModal} disabled={isEditorSaving}>
               {t('actions.cancel')}
             </Button>
-            <Button data-testid="settings-model-save-btn" variant="primary" onClick={handleSave}>
+            <Button
+              data-testid="settings-model-save-btn"
+              variant="primary"
+              onClick={() => void handleSave()}
+              loading={isEditorSaving}
+            >
               {t('actions.save')}
             </Button>
           </>
@@ -4058,15 +4175,6 @@ const ModelSettingsPage: React.FC = () => {
         confirmText={t('deleteConfirm.confirm')}
         type="warning"
         confirmDanger
-      />
-      <ConfirmDialog
-        open={discardEditorConfirmOpen}
-        onOpenChange={(open) => { if (!open) setDiscardEditorConfirmOpen(false); }}
-        onConfirm={closeEditingModal}
-        title={t('discardChanges.title')}
-        message={t('discardChanges.message')}
-        confirmText={t('discardChanges.confirm')}
-        type="warning"
       />
     </ConfigPageLayout>
   );

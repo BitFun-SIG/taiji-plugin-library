@@ -16,11 +16,16 @@ import type { EditorGroupId, EditorGroupState } from '../types';
 
 interface UseKeyboardShortcutsOptions {
   enabled?: boolean;
+  missionControlEnabled?: boolean;
   handleCloseWithDirtyCheck?: (tabId: string, groupId: EditorGroupId) => Promise<boolean>;
 }
 
 export const useKeyboardShortcuts = (options: UseKeyboardShortcutsOptions = {}) => {
-  const { enabled = true, handleCloseWithDirtyCheck } = options;
+  const {
+    enabled = true,
+    missionControlEnabled = true,
+    handleCloseWithDirtyCheck,
+  } = options;
   const { t } = useTranslation('components');
 
   const {
@@ -118,7 +123,11 @@ export const useKeyboardShortcuts = (options: UseKeyboardShortcutsOptions = {}) 
     'canvas.missionControl',
     { key: 'Tab', ctrl: true, scope: 'canvas', allowInInput: true },
     () => toggleMissionControl(),
-    { enabled, priority: 10, description: 'keyboard.shortcuts.canvas.missionControl' }
+    {
+      enabled: enabled && missionControlEnabled,
+      priority: 10,
+      description: 'keyboard.shortcuts.canvas.missionControl',
+    }
   );
 
   // Horizontal split: mod+\

@@ -43,6 +43,8 @@ export interface ContentCanvasProps {
   onCollapsePanel?: () => void;
   /** Suspend terminal fit/PTY resize while the hosting panel is animating. */
   terminalResizeSuspended?: boolean;
+  /** Whether this host exposes Mission Control. */
+  missionControlEnabled?: boolean;
   /** Host-provided content for the no-tabs state. */
   emptyState?: React.ReactNode;
 }
@@ -59,6 +61,7 @@ export const ContentCanvas: React.FC<ContentCanvasProps> = ({
   onExpandPanel,
   onCollapsePanel,
   terminalResizeSuspended = false,
+  missionControlEnabled = true,
   emptyState,
 }) => {
   // Store state — fine-grained selectors so unrelated store changes
@@ -97,7 +100,11 @@ export const ContentCanvas: React.FC<ContentCanvasProps> = ({
     createTabEventName,
     expandPanelEventName,
   });
-  useKeyboardShortcuts({ enabled: true, handleCloseWithDirtyCheck });
+  useKeyboardShortcuts({
+    enabled: true,
+    missionControlEnabled,
+    handleCloseWithDirtyCheck,
+  });
   // Panel/tab state coordinator (auto manage expand/collapse)
   const { collapsePanel } = usePanelTabCoordinator({
     autoCollapseOnEmpty: true,
@@ -218,7 +225,7 @@ export const ContentCanvas: React.FC<ContentCanvasProps> = ({
           <EditorArea
             workspacePath={workspacePath}
             isSceneActive={isSceneActive}
-            onOpenMissionControl={handleOpenMissionControl}
+            onOpenMissionControl={missionControlEnabled ? handleOpenMissionControl : undefined}
             onInteraction={onInteraction}
             onTabCloseWithDirtyCheck={handleCloseWithDirtyCheck}
             onTabCloseAllWithDirtyCheck={handleCloseAllWithDirtyCheck}
@@ -257,11 +264,13 @@ export const ContentCanvas: React.FC<ContentCanvasProps> = ({
       {renderContent()}
 
       {/* Mission control overlay */}
-      <MissionControl
-        isOpen={isMissionControlOpen}
-        onClose={handleCloseMissionControl}
-        handleCloseWithDirtyCheck={handleCloseWithDirtyCheck}
-      />
+      {missionControlEnabled && (
+        <MissionControl
+          isOpen={isMissionControlOpen}
+          onClose={handleCloseMissionControl}
+          handleCloseWithDirtyCheck={handleCloseWithDirtyCheck}
+        />
+      )}
     </div>
   );
 };
