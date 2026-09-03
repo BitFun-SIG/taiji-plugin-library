@@ -4,7 +4,7 @@
   "title": "BitFun Playbook",
   "origin": "https://playbook.openbitfun.com",
   "source": "src/shared/interactive-capabilities/catalog.json",
-  "digest": "e710a51d176e7dc9bbccddaa1a9eeac3d928d3204e85a001144aeb70fe2f588a",
+  "digest": "5e37241d2ab62bb1b4224eb9b335c31bc99c148b3a5dd95e4ca4a4ab249619eb",
   "ownerDigest": "2ced30785fbed3c5a80085cb8d04cc1ba2604650ae45619134a350e5e4ed7914",
   "searchAcceptance": [
     {
@@ -135,14 +135,14 @@
     }
   ],
   "counts": {
-    "features": 22,
+    "features": 24,
     "settings": 21,
-    "userFacing": 43,
-    "documentedItems": 320,
+    "userFacing": 45,
+    "documentedItems": 325,
     "controlCoverage": {
       "direct": 47,
       "delegated": 61,
-      "interactive": 212,
+      "interactive": 217,
       "unsupported": 0
     }
   },
@@ -18660,6 +18660,329 @@
         "kind": "settings",
         "pageId": "data.diagnostics"
       }
+    },
+    {
+      "id": "feature.tools:query",
+      "capabilityId": "feature.tools",
+      "itemIds": [
+        "tool-inventory",
+        "profile-tool-config",
+        "user-tool-groups"
+      ],
+      "kind": "query",
+      "risk": "read",
+      "executionHost": "productHost",
+      "availability": {
+        "desktop": {
+          "available": true
+        },
+        "cli": {
+          "available": true
+        },
+        "peer": {
+          "available": true,
+          "requiredCapabilities": [
+            "product_control_v1"
+          ]
+        },
+        "remoteControl": {
+          "available": true
+        },
+        "detachedDispatch": {
+          "available": true
+        }
+      },
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "valueSource": {
+        "kind": "static"
+      },
+      "presentationTarget": {
+        "kind": "scene",
+        "sceneId": "tools"
+      }
+    },
+    {
+      "id": "feature.tools:open:tool-inventory",
+      "capabilityId": "feature.tools",
+      "itemIds": [
+        "tool-inventory"
+      ],
+      "kind": "open",
+      "risk": "ui",
+      "executionHost": "presentationSurface",
+      "availability": {
+        "desktop": {
+          "available": true
+        },
+        "cli": {
+          "available": false,
+          "reason": "This delivery profile has no live presentation surface"
+        },
+        "peer": {
+          "available": true,
+          "requiredCapabilities": [
+            "product_control_v1",
+            "product_control_presentation_v1"
+          ]
+        },
+        "remoteControl": {
+          "available": true
+        },
+        "detachedDispatch": {
+          "available": false,
+          "reason": "This delivery profile has no live presentation surface"
+        }
+      },
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "openReason": "unstructuredInteraction",
+      "presentationTarget": {
+        "kind": "scene",
+        "sceneId": "tools"
+      }
+    },
+    {
+      "id": "feature.tools:open:profile-tool-config",
+      "capabilityId": "feature.tools",
+      "itemIds": [
+        "profile-tool-config"
+      ],
+      "kind": "open",
+      "risk": "ui",
+      "executionHost": "presentationSurface",
+      "availability": {
+        "desktop": {
+          "available": true
+        },
+        "cli": {
+          "available": false,
+          "reason": "This delivery profile has no live presentation surface"
+        },
+        "peer": {
+          "available": true,
+          "requiredCapabilities": [
+            "product_control_v1",
+            "product_control_presentation_v1"
+          ]
+        },
+        "remoteControl": {
+          "available": true
+        },
+        "detachedDispatch": {
+          "available": false,
+          "reason": "This delivery profile has no live presentation surface"
+        }
+      },
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "openReason": "unstructuredInteraction",
+      "presentationTarget": {
+        "kind": "scene",
+        "sceneId": "tools"
+      }
+    },
+    {
+      "id": "feature.tools:open:user-tool-groups",
+      "capabilityId": "feature.tools",
+      "itemIds": [
+        "user-tool-groups"
+      ],
+      "kind": "open",
+      "risk": "ui",
+      "executionHost": "presentationSurface",
+      "availability": {
+        "desktop": {
+          "available": true
+        },
+        "cli": {
+          "available": false,
+          "reason": "This delivery profile has no live presentation surface"
+        },
+        "peer": {
+          "available": true,
+          "requiredCapabilities": [
+            "product_control_v1",
+            "product_control_presentation_v1"
+          ]
+        },
+        "remoteControl": {
+          "available": true
+        },
+        "detachedDispatch": {
+          "available": false,
+          "reason": "This delivery profile has no live presentation surface"
+        }
+      },
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "openReason": "unstructuredInteraction",
+      "presentationTarget": {
+        "kind": "scene",
+        "sceneId": "tools"
+      }
+    },
+    {
+      "id": "feature.workflow-claw:query",
+      "capabilityId": "feature.workflow-claw",
+      "itemIds": [
+        "member-gallery",
+        "member-workspace"
+      ],
+      "kind": "query",
+      "risk": "read",
+      "executionHost": "productHost",
+      "availability": {
+        "desktop": {
+          "available": true
+        },
+        "cli": {
+          "available": true
+        },
+        "peer": {
+          "available": true,
+          "requiredCapabilities": [
+            "product_control_v1"
+          ]
+        },
+        "remoteControl": {
+          "available": true
+        },
+        "detachedDispatch": {
+          "available": true
+        }
+      },
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "valueSource": {
+        "kind": "static"
+      },
+      "presentationTarget": {
+        "kind": "scene",
+        "sceneId": "workflow-claw"
+      }
+    },
+    {
+      "id": "feature.workflow-claw:open:member-gallery",
+      "capabilityId": "feature.workflow-claw",
+      "itemIds": [
+        "member-gallery"
+      ],
+      "kind": "open",
+      "risk": "ui",
+      "executionHost": "presentationSurface",
+      "availability": {
+        "desktop": {
+          "available": true
+        },
+        "cli": {
+          "available": false,
+          "reason": "This delivery profile has no live presentation surface"
+        },
+        "peer": {
+          "available": true,
+          "requiredCapabilities": [
+            "product_control_v1",
+            "product_control_presentation_v1"
+          ]
+        },
+        "remoteControl": {
+          "available": true
+        },
+        "detachedDispatch": {
+          "available": false,
+          "reason": "This delivery profile has no live presentation surface"
+        }
+      },
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "openReason": "unstructuredInteraction",
+      "presentationTarget": {
+        "kind": "scene",
+        "sceneId": "workflow-claw"
+      }
+    },
+    {
+      "id": "feature.workflow-claw:open:member-workspace",
+      "capabilityId": "feature.workflow-claw",
+      "itemIds": [
+        "member-workspace"
+      ],
+      "kind": "open",
+      "risk": "ui",
+      "executionHost": "presentationSurface",
+      "availability": {
+        "desktop": {
+          "available": true
+        },
+        "cli": {
+          "available": false,
+          "reason": "This delivery profile has no live presentation surface"
+        },
+        "peer": {
+          "available": true,
+          "requiredCapabilities": [
+            "product_control_v1",
+            "product_control_presentation_v1"
+          ]
+        },
+        "remoteControl": {
+          "available": true
+        },
+        "detachedDispatch": {
+          "available": false,
+          "reason": "This delivery profile has no live presentation surface"
+        }
+      },
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "openReason": "unstructuredInteraction",
+      "presentationTarget": {
+        "kind": "scene",
+        "sceneId": "workflow-claw"
+      }
     }
   ],
   "capabilities": [
@@ -29006,6 +29329,238 @@
         "Take me to export a diagnostic bundle"
       ],
       "docsUrl": "https://playbook.openbitfun.com/capabilities/setting.data.diagnostics/"
+    },
+    {
+      "id": "feature.tools",
+      "kind": "feature",
+      "categoryId": "assistant",
+      "titleZh": "工具套件",
+      "titleEn": "Tools suite",
+      "summaryZh": "集中查看全部 Agent 工具，并按 Agent 档案调整启用工具与默认工具。",
+      "summaryEn": "Inspect every Agent tool in one place and tune enabled and default tools per Agent profile.",
+      "keywordsZh": [
+        "工具",
+        "工具套件",
+        "启用工具",
+        "默认工具",
+        "工具分组"
+      ],
+      "keywordsEn": [
+        "tools",
+        "tool suite",
+        "enabled tools",
+        "default tools",
+        "tool groups"
+      ],
+      "highlightsZh": [
+        "浏览全部 Agent 工具与只读标记",
+        "按档案调整启用与默认工具",
+        "维护自定义用户工具分组"
+      ],
+      "highlightsEn": [
+        "Browse all Agent tools with read-only markers",
+        "Tune enabled and default tools per profile",
+        "Maintain custom user tool groups"
+      ],
+      "items": [
+        {
+          "id": "tool-inventory",
+          "titleZh": "查看全部 Agent 工具、说明与只读属性",
+          "titleEn": "Inspect all Agent tools, descriptions, and read-only flags",
+          "control": {
+            "kind": "open",
+            "reasonCode": "unstructuredInteraction",
+            "reasonZh": "工具清单由运行时注册表实时加载，Agent 会打开工具场景让用户浏览完整列表。",
+            "reasonEn": "The tool inventory is loaded live from the runtime registry; the Agent opens the Tools scene so the user can browse the full list."
+          }
+        },
+        {
+          "id": "profile-tool-config",
+          "titleZh": "按 Agent 档案配置启用工具与默认工具",
+          "titleEn": "Configure enabled and default tools per Agent profile",
+          "control": {
+            "kind": "open",
+            "reasonCode": "unstructuredInteraction",
+            "reasonZh": "档案工具配置涉及多组实时状态联动，Agent 会打开工具场景并保留逐项调整给用户。",
+            "reasonEn": "Per-profile tool configuration spans multiple live state groups; the Agent opens the Tools scene and leaves fine-grained tuning to the user."
+          }
+        },
+        {
+          "id": "user-tool-groups",
+          "titleZh": "维护自定义用户工具分组",
+          "titleEn": "Maintain custom user tool groups",
+          "control": {
+            "kind": "open",
+            "reasonCode": "unstructuredInteraction",
+            "reasonZh": "用户工具分组在工具场景内交互编辑，Agent 会打开对应入口。",
+            "reasonEn": "User tool groups are edited interactively inside the Tools scene; the Agent opens the exact entry."
+          }
+        }
+      ],
+      "stepsZh": [
+        "在导航栏打开“工具”场景",
+        "浏览工具清单或按档案调整启用与默认工具"
+      ],
+      "stepsEn": [
+        "Open the Tools scene from the navigation bar",
+        "Browse the tool inventory or tune enabled and default tools per profile"
+      ],
+      "agentExamplesZh": [
+        "打开工具套件场景",
+        "查看当前有哪些 Agent 工具"
+      ],
+      "agentExamplesEn": [
+        "Open the Tools suite scene",
+        "Show me the available Agent tools"
+      ],
+      "destination": {
+        "kind": "scene",
+        "sceneId": "tools"
+      },
+      "operations": [],
+      "options": [],
+      "searchTerms": [
+        "feature.tools",
+        "工具套件",
+        "Tools suite",
+        "AI 与协作",
+        "AI & collaboration",
+        "工具",
+        "启用工具",
+        "默认工具",
+        "工具分组",
+        "tools",
+        "tool suite",
+        "enabled tools",
+        "default tools",
+        "tool groups",
+        "浏览全部 Agent 工具与只读标记",
+        "按档案调整启用与默认工具",
+        "维护自定义用户工具分组",
+        "Browse all Agent tools with read-only markers",
+        "Tune enabled and default tools per profile",
+        "Maintain custom user tool groups",
+        "查看全部 Agent 工具、说明与只读属性",
+        "Inspect all Agent tools, descriptions, and read-only flags",
+        "按 Agent 档案配置启用工具与默认工具",
+        "Configure enabled and default tools per Agent profile",
+        "打开工具套件场景",
+        "查看当前有哪些 Agent 工具",
+        "Open the Tools suite scene",
+        "Show me the available Agent tools"
+      ],
+      "docsUrl": "https://playbook.openbitfun.com/capabilities/feature.tools/"
+    },
+    {
+      "id": "feature.workflow-claw",
+      "kind": "feature",
+      "categoryId": "assistant",
+      "titleZh": "工作流爪（Workflow Claw）",
+      "titleEn": "Workflow Claw",
+      "summaryZh": "查看由工作流部署的成员 Claw 群，并从独立画廊创建、进入各成员工作区。",
+      "summaryEn": "Inspect the cohort of workflow-deployed member Claws and open or create each member workspace from a dedicated gallery.",
+      "keywordsZh": [
+        "工作流爪",
+        "成员爪",
+        "工作流",
+        "军团",
+        "部署"
+      ],
+      "keywordsEn": [
+        "workflow claw",
+        "member claws",
+        "workflow",
+        "legion",
+        "deployment"
+      ],
+      "highlightsZh": [
+        "独立浏览工作流成员 Claw 画廊",
+        "与普通助手工作区数据源隔离",
+        "一键创建新的工作流成员工作区"
+      ],
+      "highlightsEn": [
+        "Browse the workflow member Claw gallery separately",
+        "Data-source isolation from plain assistant workspaces",
+        "Create new workflow member workspaces in one click"
+      ],
+      "items": [
+        {
+          "id": "member-gallery",
+          "titleZh": "浏览工作流成员 Claw 画廊并区分普通助手",
+          "titleEn": "Browse the workflow member Claw gallery, isolated from plain assistants",
+          "control": {
+            "kind": "open",
+            "reasonCode": "unstructuredInteraction",
+            "reasonZh": "成员画廊依赖实时工作区列表与部署状态，Agent 会打开工作流爪场景让用户浏览。",
+            "reasonEn": "The member gallery depends on live workspace lists and deployment state; the Agent opens the Workflow Claw scene for the user."
+          }
+        },
+        {
+          "id": "member-workspace",
+          "titleZh": "创建并进入工作流成员工作区",
+          "titleEn": "Create and open workflow member workspaces",
+          "control": {
+            "kind": "open",
+            "reasonCode": "unstructuredInteraction",
+            "reasonZh": "成员工作区创建由界面交互完成，Agent 会打开创建入口并保留后续步骤给用户。",
+            "reasonEn": "Member workspace creation is completed through the UI; the Agent opens the create entry and leaves the remaining steps to the user."
+          }
+        }
+      ],
+      "stepsZh": [
+        "在导航栏打开“工作流爪”场景",
+        "浏览成员画廊，或创建并进入成员工作区"
+      ],
+      "stepsEn": [
+        "Open the Workflow Claw scene from the navigation bar",
+        "Browse the member gallery, or create and open a member workspace"
+      ],
+      "agentExamplesZh": [
+        "打开工作流爪场景",
+        "查看已部署的工作流成员"
+      ],
+      "agentExamplesEn": [
+        "Open the Workflow Claw scene",
+        "Show the deployed workflow members"
+      ],
+      "destination": {
+        "kind": "scene",
+        "sceneId": "workflow-claw"
+      },
+      "operations": [],
+      "options": [],
+      "searchTerms": [
+        "feature.workflow-claw",
+        "工作流爪（Workflow Claw）",
+        "Workflow Claw",
+        "AI 与协作",
+        "AI & collaboration",
+        "工作流爪",
+        "成员爪",
+        "工作流",
+        "军团",
+        "部署",
+        "workflow claw",
+        "member claws",
+        "workflow",
+        "legion",
+        "deployment",
+        "独立浏览工作流成员 Claw 画廊",
+        "与普通助手工作区数据源隔离",
+        "一键创建新的工作流成员工作区",
+        "Browse the workflow member Claw gallery separately",
+        "Data-source isolation from plain assistant workspaces",
+        "Create new workflow member workspaces in one click",
+        "浏览工作流成员 Claw 画廊并区分普通助手",
+        "Browse the workflow member Claw gallery, isolated from plain assistants",
+        "创建并进入工作流成员工作区",
+        "Create and open workflow member workspaces",
+        "打开工作流爪场景",
+        "查看已部署的工作流成员",
+        "Open the Workflow Claw scene",
+        "Show the deployed workflow members"
+      ],
+      "docsUrl": "https://playbook.openbitfun.com/capabilities/feature.workflow-claw/"
     }
   ]
 }

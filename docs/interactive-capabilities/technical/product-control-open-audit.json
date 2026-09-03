@@ -1,12 +1,12 @@
 {
   "schemaVersion": 1,
   "generatedFrom": "src/shared/interactive-capabilities/catalog.json",
-  "catalogDigest": "e710a51d176e7dc9bbccddaa1a9eeac3d928d3204e85a001144aeb70fe2f588a",
-  "count": 212,
+  "catalogDigest": "5e37241d2ab62bb1b4224eb9b335c31bc99c148b3a5dd95e4ca4a4ab249619eb",
+  "count": 217,
   "reasonCounts": {
     "externalAuth": 4,
     "secretEntry": 5,
-    "unstructuredInteraction": 185,
+    "unstructuredInteraction": 190,
     "visualSelection": 18
   },
   "entries": [
@@ -3840,6 +3840,86 @@
       "evidence": [
         "command:debug_element_picked",
         "source:src/web-ui/src/infrastructure/debug/mainWindowInspector.ts#debug_element_picked"
+      ]
+    },
+    {
+      "capabilityId": "feature.tools",
+      "itemId": "tool-inventory",
+      "titleZh": "查看全部 Agent 工具、说明与只读属性",
+      "titleEn": "Inspect all Agent tools, descriptions, and read-only flags",
+      "reasonCode": "unstructuredInteraction",
+      "reasonZh": "工具清单由运行时注册表实时加载，Agent 会打开工具场景让用户浏览完整列表。",
+      "reasonEn": "The tool inventory is loaded live from the runtime registry; the Agent opens the Tools scene so the user can browse the full list.",
+      "presentationTarget": {
+        "kind": "scene",
+        "sceneId": "tools"
+      },
+      "evidence": [
+        "source:src/web-ui/src/app/scenes/tools/ToolsScene.tsx#get_all_tools_info"
+      ]
+    },
+    {
+      "capabilityId": "feature.tools",
+      "itemId": "profile-tool-config",
+      "titleZh": "按 Agent 档案配置启用工具与默认工具",
+      "titleEn": "Configure enabled and default tools per Agent profile",
+      "reasonCode": "unstructuredInteraction",
+      "reasonZh": "档案工具配置涉及多组实时状态联动，Agent 会打开工具场景并保留逐项调整给用户。",
+      "reasonEn": "Per-profile tool configuration spans multiple live state groups; the Agent opens the Tools scene and leaves fine-grained tuning to the user.",
+      "presentationTarget": {
+        "kind": "scene",
+        "sceneId": "tools"
+      },
+      "evidence": [
+        "source:src/web-ui/src/app/scenes/tools/ToolsScene.tsx#configAPI.getAgentProfileConfigs"
+      ]
+    },
+    {
+      "capabilityId": "feature.tools",
+      "itemId": "user-tool-groups",
+      "titleZh": "维护自定义用户工具分组",
+      "titleEn": "Maintain custom user tool groups",
+      "reasonCode": "unstructuredInteraction",
+      "reasonZh": "用户工具分组在工具场景内交互编辑，Agent 会打开对应入口。",
+      "reasonEn": "User tool groups are edited interactively inside the Tools scene; the Agent opens the exact entry.",
+      "presentationTarget": {
+        "kind": "scene",
+        "sceneId": "tools"
+      },
+      "evidence": [
+        "source:src/web-ui/src/app/scenes/tools/ToolsScene.tsx#useUserToolGroups"
+      ]
+    },
+    {
+      "capabilityId": "feature.workflow-claw",
+      "itemId": "member-gallery",
+      "titleZh": "浏览工作流成员 Claw 画廊并区分普通助手",
+      "titleEn": "Browse the workflow member Claw gallery, isolated from plain assistants",
+      "reasonCode": "unstructuredInteraction",
+      "reasonZh": "成员画廊依赖实时工作区列表与部署状态，Agent 会打开工作流爪场景让用户浏览。",
+      "reasonEn": "The member gallery depends on live workspace lists and deployment state; the Agent opens the Workflow Claw scene for the user.",
+      "presentationTarget": {
+        "kind": "scene",
+        "sceneId": "workflow-claw"
+      },
+      "evidence": [
+        "source:src/web-ui/src/app/scenes/workflow-claw/workflowClawWorkspace.ts#isWorkflowClawWorkspace"
+      ]
+    },
+    {
+      "capabilityId": "feature.workflow-claw",
+      "itemId": "member-workspace",
+      "titleZh": "创建并进入工作流成员工作区",
+      "titleEn": "Create and open workflow member workspaces",
+      "reasonCode": "unstructuredInteraction",
+      "reasonZh": "成员工作区创建由界面交互完成，Agent 会打开创建入口并保留后续步骤给用户。",
+      "reasonEn": "Member workspace creation is completed through the UI; the Agent opens the create entry and leaves the remaining steps to the user.",
+      "presentationTarget": {
+        "kind": "scene",
+        "sceneId": "workflow-claw"
+      },
+      "evidence": [
+        "source:src/web-ui/src/app/scenes/workflow-claw/WorkflowClawScene.tsx#workflow-claw-create-btn"
       ]
     }
   ]
