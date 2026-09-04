@@ -65,7 +65,7 @@
     "patLoginFailed": "API Key 登录失败：{{error}}",
     "options": {
       "apiKey": "API Key",
-      "codebuddy": "CodeBuddy（腾讯订阅）",
+      "codebuddy": "CodeBuddy（腾讯 AI 订阅）",
       "qoder": "Qoder（Qoder 订阅）",
       "codex": "Codex（ChatGPT 订阅）",
       "antigravity": "Antigravity（Google 订阅）",

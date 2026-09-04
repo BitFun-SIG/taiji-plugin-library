@@ -65,7 +65,7 @@
     "patLoginFailed": "API key sign-in failed: {{error}}",
     "options": {
       "apiKey": "API Key",
-      "codebuddy": "CodeBuddy (Tencent subscription)",
+      "codebuddy": "CodeBuddy (Tencent AI subscription)",
       "qoder": "Qoder (Qoder subscription)",
       "codex": "Codex (ChatGPT subscription)",
       "antigravity": "Antigravity (Google subscription)",
