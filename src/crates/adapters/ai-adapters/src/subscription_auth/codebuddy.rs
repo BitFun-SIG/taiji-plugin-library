@@ -325,6 +325,31 @@ pub(crate) async fn begin_login(
     })
 }
 
+/// Stores a CodeBuddy API key (`ck_...`) as the provider credential.
+///
+/// Unlike Qoder's PAT, a CodeBuddy API key is used directly as the gateway
+/// bearer token and has no exchange step: the key is only trimmed, validated
+/// for emptiness, and persisted locally. No network request is issued here, so
+/// logging in never contacts the provider.
+pub(crate) async fn api_key_login(key: &str, expected_revision: u64) -> Result<()> {
+    let key = key.trim();
+    if key.is_empty() {
+        return Err(anyhow!("CodeBuddy API key is empty"));
+    }
+    let outcome = store::upsert_if_revision(
+        STORE_KEY,
+        expected_revision,
+        StoredCredential::Api {
+            key: key.to_string(),
+            metadata: None,
+        },
+    )
+    .await?;
+    super::require_current_store_revision(super::SubscriptionProvider::CodeBuddy, outcome)?;
+    log::info!("codebuddy API key login saved");
+    Ok(())
+}
+
 /// Loads the stored credential, refreshing the access token when it is about
 /// to expire. Returns `(access, account_id, expires_ms)`.
 async fn ensure_fresh(options: &SubscriptionHttpOptions) -> Result<(String, Option<String>, i64)> {
@@ -332,6 +357,11 @@ async fn ensure_fresh(options: &SubscriptionHttpOptions) -> Result<(String, Opti
     let entry = snapshot
         .credential
         .ok_or_else(|| anyhow!("CodeBuddy is not connected; sign in first"))?;
+    // An API key credential is used verbatim as the bearer token and has no
+    // refresh semantics, so it is returned directly with no expiry.
+    if let StoredCredential::Api { key, .. } = entry {
+        return Ok((key, None, i64::MAX));
+    }
     let StoredCredential::Oauth {
         refresh: refresh_token,
         access,
@@ -678,7 +708,7 @@ fn apply_failure_backoff() {
     }
 }
 
-/// Loads the stored OAuth credential and its metadata for model fetching.
+/// Loads the stored credential and its metadata for model fetching.
 /// Returns `(access_token, metadata_map)`.
 async fn load_auth_for_models(
 ) -> Result<(String, Option<serde_json::Map<String, serde_json::Value>>)> {
@@ -686,11 +716,11 @@ async fn load_auth_for_models(
     let entry = snapshot
         .credential
         .ok_or_else(|| anyhow!("CodeBuddy is not connected; sign in first"))?;
-    let StoredCredential::Oauth {
-        access, metadata, ..
-    } = entry
-    else {
-        return Err(anyhow!("CodeBuddy credential is not an OAuth login"));
+    let (access, metadata) = match entry {
+        StoredCredential::Api { key, metadata } => (key, metadata),
+        StoredCredential::Oauth {
+            access, metadata, ..
+        } => (access, metadata),
     };
     let metadata_map = metadata.and_then(|v| v.as_object().cloned());
     Ok((access, metadata_map))

@@ -799,6 +799,13 @@ pub async fn start_pat_login_with_options(
             drop(guard);
             result
         }
+        SubscriptionProvider::CodeBuddy => {
+            let guard = store_lock(provider).lock().await;
+            let expected_revision = store::credential_revision(provider.key()).await?;
+            let result = codebuddy::api_key_login(&pat, expected_revision).await;
+            drop(guard);
+            result
+        }
         other => Err(anyhow!(
             "{} does not support personal access token login",
             other.display_label()

@@ -3659,7 +3659,7 @@ const ModelSettingsPage: React.FC = () => {
                         </Button>
                       ) : (
                         <>
-                          {account.provider !== 'qoder' && (
+                          {!['qoder', 'codebuddy'].includes(account.provider) && (
                             <Button
                               size="sm"
                               variant="fill"
@@ -3672,7 +3672,7 @@ const ModelSettingsPage: React.FC = () => {
                                 : 'subscriptionAuth.login')}
                             </Button>
                           )}
-                          {account.provider === 'qoder' && (
+                          {['qoder', 'codebuddy'].includes(account.provider) && (
                             <>
                               <Input
                                 type="password"
