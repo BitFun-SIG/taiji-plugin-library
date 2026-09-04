@@ -764,7 +764,6 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
           </div>
 
         </div>
-      </div>
     );
   }
 );
