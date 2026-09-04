@@ -100,7 +100,7 @@ pub fn shared_coding_mode_tool_exposure_overrides() -> AgentToolPolicyOverrides 
 }
 
 pub fn shared_coding_mode_tools() -> Vec<String> {
-    vec![
+    let mut tools = vec![
         "Task".to_string(),
         "SessionMessage".to_string(),
         "ListModels".to_string(),
@@ -149,7 +149,7 @@ pub fn shared_coding_mode_tools() -> Vec<String> {
     // 可见。逐名 contains 防重复，GROUP_CHAT_TOOL_NAMES 为单一权威源。
     // Upstream (3beac1613/b07d07edd) moved canvas provider tools to opt-in and
     // deleted append_provider_group_tools; the group-chat loop is local
-    // customization and is preserved on the upstream tool list.
+    // customization and is preserved on top of the upstream tool list.
     for tool_name in GROUP_CHAT_TOOL_NAMES {
         if !tools.contains(&tool_name.to_string()) {
             tools.push(tool_name.to_string());
