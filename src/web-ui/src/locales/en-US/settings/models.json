@@ -66,6 +66,7 @@
     "options": {
       "apiKey": "API Key",
       "codebuddy": "CodeBuddy (Tencent subscription)",
+      "qoder": "Qoder (Qoder subscription)",
       "codex": "Codex (ChatGPT subscription)",
       "antigravity": "Antigravity (Google subscription)",
       "grok": "xAI (SuperGrok subscription)",

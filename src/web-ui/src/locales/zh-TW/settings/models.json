@@ -66,6 +66,7 @@
     "options": {
       "apiKey": "API Key",
       "codebuddy": "CodeBuddy（騰訊訂閱）",
+      "qoder": "Qoder（Qoder 訂閱）",
       "codex": "Codex（ChatGPT 訂閱）",
       "antigravity": "Antigravity（Google 訂閱）",
       "grok": "xAI（SuperGrok 訂閱）",
