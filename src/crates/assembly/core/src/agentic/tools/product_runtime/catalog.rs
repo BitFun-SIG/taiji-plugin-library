@@ -1037,7 +1037,7 @@ mod tests {
 
     #[cfg(feature = "product-full")]
     #[tokio::test]
-    async fn product_agentic_manifest_exposes_default_product_tools() {
+    async fn product_agentic_manifest_keeps_canvas_tools_opt_in() {
         let policy = crate::agentic::agents::get_agent_registry()
             .get_agent_tool_policy("agentic", None)
             .await;
@@ -1048,10 +1048,10 @@ mod tests {
         )
         .await;
 
-        assert!(manifest
+        assert!(!manifest
             .allowed_tool_names
             .contains(&"CreateCanvas".to_string()));
-        assert!(manifest
+        assert!(!manifest
             .allowed_tool_names
             .contains(&"PatchCanvas".to_string()));
         assert!(manifest
@@ -1063,7 +1063,7 @@ mod tests {
         assert!(manifest
             .deferred_tool_names
             .contains(&"ReviewPlatform".to_string()));
-        assert!(manifest
+        assert!(!manifest
             .tool_definitions
             .iter()
             .any(|tool| tool.name == "CreateCanvas"));
