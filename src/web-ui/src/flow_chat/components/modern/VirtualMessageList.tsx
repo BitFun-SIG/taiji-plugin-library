@@ -101,6 +101,12 @@ const OPEN_REVEAL_QUIET_FRAMES = 2;
 /** Hard cap so the transcript is always revealed, settled or not. */
 const OPEN_REVEAL_MAX_FRAMES = 40;
 /**
+ * Treat sub-pixel scroll offsets as the scroll start. WebView2 and inertial
+ * scrolling can leave a tiny positive value after the viewport reaches the
+ * top, which would otherwise make the edge fade flicker back on.
+ */
+const FLOWCHAT_SCROLL_START_THRESHOLD_PX = 1;
+/**
  * Resize callbacks over which a viewport resting at the end is re-aligned after
  * the scroller's own box changes.
  *
@@ -446,6 +452,11 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     before: false,
     after: false,
   });
+  /** Re-arming is a transition out of a boundary, not a repeated level read. */
+  const boundaryReachedRef = useRef<Record<SessionHistoryWindowDirection, boolean>>({
+    before: false,
+    after: false,
+  });
   /**
    * `exhausted` describes the window that asked, not the session.
    *
@@ -468,6 +479,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
   if (previousWindowBoundsKeyRef.current !== windowBoundsKey) {
     previousWindowBoundsKeyRef.current = windowBoundsKey;
     exhaustedBoundaryRef.current = { before: false, after: false };
+    boundaryReachedRef.current = { before: false, after: false };
   }
   /**
    * Whether a boundary may be asked about again.
@@ -1403,6 +1415,19 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     setIsAtBottom(atTail);
   }, [getFollowTargetScrollTop, isFollowCorrectingViewport, readContentEndScrollTop]);
 
+  const updateIsAtScrollStart = useCallback(() => {
+    const scroller = scrollerElementRef.current;
+    if (!scroller) return;
+    const nextIsAtScrollStart = scroller.scrollTop <= FLOWCHAT_SCROLL_START_THRESHOLD_PX;
+    const nextAttribute = nextIsAtScrollStart ? 'true' : 'false';
+    if (scroller.dataset.scrollAtStart !== nextAttribute) {
+      // This attribute drives only the CSS mask. Keeping it out of React state
+      // prevents a visual scroll update from re-rendering the virtualizer and
+      // evaluating the history boundary a second time for the same gesture.
+      scroller.dataset.scrollAtStart = nextAttribute;
+    }
+  }, []);
+
   /*
    * The band's lower edge is whatever the follow rule owns, so it moves when
    * ownership changes — and that can happen with the viewport perfectly still.
@@ -1516,6 +1541,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
        * the drag transfers ownership to the reader and preserves where it ends.
        */
       if (isScrollbarPressRef.current) notifyUserScrollIntent();
+      updateIsAtScrollStart();
       updateIsAtBottom();
       handleScroll();
       /*
@@ -1574,6 +1600,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     publishViewportSnapshot,
     scheduleVisibleTurnInfoUpdate,
     scrollerElement,
+    updateIsAtScrollStart,
     updateIsAtBottom,
     viewportAnchor,
     viewportOwner,
@@ -1619,6 +1646,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
         }
         return;
       }
+      updateIsAtScrollStart();
       const isResumingSuspendedViewport = isViewportSuspendedRef.current;
       if (isResumingSuspendedViewport) {
         traceViewport({
@@ -1714,6 +1742,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     scheduleViewportSnapshot,
     scheduleVisibleTurnInfoUpdate,
     scrollerElement,
+    updateIsAtScrollStart,
     updateIsAtBottom,
     viewportAnchor,
     viewportOwner,
@@ -2313,9 +2342,11 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     for (const direction of HISTORY_WINDOW_DIRECTIONS) {
       // Off the boundary: whatever the last page added has been absorbed, and
       // arriving there again will be the reader's own doing.
-      if (!reached.has(direction)) {
+      const isReached = reached.has(direction);
+      if (!isReached && boundaryReachedRef.current[direction]) {
         boundaryArmedRef.current[direction] = true;
       }
+      boundaryReachedRef.current[direction] = isReached;
       if (asking.has(direction)) requestHistoryBoundary(direction);
     }
   }, [
@@ -2367,6 +2398,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     scrollerElementRef.current = scroller;
     setScrollerElement(scroller);
     if (scroller) {
+      updateIsAtScrollStart();
       if (!scroller.hasAttribute('tabindex')) {
         scroller.tabIndex = -1;
       }
@@ -2381,7 +2413,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
         observedViewportBoxRef.current = initialViewportBox;
       }
     }
-  }, []);
+  }, [updateIsAtScrollStart]);
 
   const scrollToPhysicalBottom = useCallback(() => {
     setNavigatedTurn(null);

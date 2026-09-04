@@ -97,7 +97,7 @@ function buildPresentationRerunPayload(presentation: ComposerPresentation): {
 
 export const UserMessageItem = React.memo<UserMessageItemProps>(
   ({ message, turnId, absoluteTurnIndex, turnStatus, steeringStatus }) => {
-    const { t } = useI18n('flow-chat');
+    const { t, formatDate } = useI18n('flow-chat');
     const {
       sessionId,
       activeSessionOverride,
@@ -122,6 +122,26 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
     const containerRef = useRef<HTMLDivElement>(null);
     const contentRef = useRef<HTMLDivElement>(null);
     const messageContent = typeof message?.content === 'string' ? message.content : String(message?.content || '');
+    const sentTimestamp = typeof message?.timestamp === 'number'
+      && Number.isFinite(message.timestamp)
+      && message.timestamp > 0
+      ? message.timestamp
+      : null;
+    const sentTime = useMemo(() => sentTimestamp === null ? null : formatDate(sentTimestamp, {
+      hour: '2-digit',
+      minute: '2-digit',
+    }), [formatDate, sentTimestamp]);
+    const sentAtLabel = useMemo(() => sentTimestamp === null ? null : t('message.sentAt', {
+      time: formatDate(sentTimestamp, {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        timeZoneName: 'short',
+      }),
+    }), [formatDate, sentTimestamp, t]);
     const composerPresentation = useMemo(() => {
       const presentation = parseComposerPresentation(message?.metadata?.composerPresentation);
       return hasComposerPresentationReferences(presentation) ? presentation : null;
@@ -535,193 +555,215 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
     }
     
     return (
-      <div
-        data-bf-component="user-message-item"
-        data-bf-part="root"
-        data-bf-state={[expanded && 'expanded', isFailed && 'failed'].filter(Boolean).join(' ') || undefined}
-        ref={containerRef}
-        className={`user-message-item ${expanded ? 'user-message-item--expanded' : ''}${isFailed ? ' user-message-item--failed' : ''}${isGroupMessage && !isGroupSenderSelf ? ' user-message-item--group-other' : ''}${isGroupMessage && isGroupSenderSelf ? ' user-message-item--group-self' : ''}`}
-        data-testid="chat-user-message"
-        data-turn-id={turnId}
-        data-status={resolvedTurnStatus || ''}
-        data-failed={isFailed ? 'true' : 'false'}
-      >
-        {isEditing ? (
-          <UserMessageEditComposer
-            value={editDraft}
-            isSubmitting={isEditSubmitting}
-            submitLabel={t('message.saveEdit')}
-            cancelLabel={t('message.cancelEdit')}
-            placeholder={t('message.editPlaceholder')}
-            onChange={setEditDraft}
-            onSubmit={handleSubmitEdit}
-            onCancel={cancelEdit}
-            presentation={composerPresentation}
-            workspacePath={currentSession?.workspacePath}
-            remoteConnectionId={
-              currentSession?.remoteConnectionId
-              || currentSession?.config?.remoteConnectionId
-            }
-            excludeSessionId={resolvedSessionId}
-          />
-        ) : (
-          <div className="user-message-item__main" data-bf-component="user-message-item" data-bf-part="main">
-            {isFailed && (
-            <span className="user-message-item__failed-avatar" aria-hidden>
-              <CircleUser size={18} strokeWidth={1.75} />
-            </span>
-          )}
-          <div
-            className={
-              isFailed
-                ? 'user-message-item__failed-inline-cluster'
-                : 'user-message-item__main-contents-bridge'
-            }
-          >
-            {isFailed ? (
-              <div className="user-message-item__failed-body">
-                <div 
-                  ref={contentRef}
-                  className={`user-message-item__content${senderBadge ? ' user-message-item__content--with-badge' : ''}`}
-                  data-bf-component="user-message-item"
-                  data-bf-part="content"
-                  data-testid="chat-user-message-content"
-                  data-turn-id={turnId}
-                  onClick={handleToggleExpand}
-                  title={(hasOverflow || expanded) ? (expanded ? t('message.clickToCollapse') : t('message.clickToExpand')) : undefined}
-                  style={{
-                    cursor: (hasOverflow || expanded) ? 'pointer' : 'text',
-                  }}
-                >
-                  {composerPresentation ? (
-                    <UserMessagePresentationContent presentation={composerPresentation} />
-                  ) : (
-                    <>
-                      {senderBadge && (
-                        <span className="user-message-item__sender-badge">{senderBadge}</span>
-                      )}
-                      {displayText}
-                    </>
-                  )}
-                </div>
-                {steeringTag && (
-                  <div className={`user-message-item__steering-tag ${steeringTag.className}`} data-bf-component="user-message-item" data-bf-part="steeringTag">
-                    {steeringTag.label}
-                  </div>
-                )}
-              </div>
-            ) : (
-              <>
-                <div 
-                  ref={contentRef}
-                  className={`user-message-item__content${senderBadge ? ' user-message-item__content--with-badge' : ''}`}
-                  data-bf-component="user-message-item"
-                  data-bf-part="content"
-                  data-testid="chat-user-message-content"
-                  data-turn-id={turnId}
-                  onClick={handleToggleExpand}
-                  title={(hasOverflow || expanded) ? (expanded ? t('message.clickToCollapse') : t('message.clickToExpand')) : undefined}
-                  style={{
-                    cursor: (hasOverflow || expanded) ? 'pointer' : 'text',
-                  }}
-                >
-                  {composerPresentation ? (
-                    <UserMessagePresentationContent presentation={composerPresentation} />
-                  ) : (
-                    <>
-                      {senderBadge && (
-                        <span className="user-message-item__sender-badge">{senderBadge}</span>
-                      )}
-                      {displayText}
-                    </>
-                  )}
-                </div>
-                {steeringTag && (
-                  <div className={`user-message-item__steering-tag ${steeringTag.className}`} data-bf-component="user-message-item" data-bf-part="steeringTag">
-                    {steeringTag.label}
-                  </div>
-                )}
-              </>
+      <div className={`user-message-item-shell${sentTime ? ' user-message-item-shell--with-timestamp' : ''}`}>
+        <div
+          data-bf-component="user-message-item"
+          data-bf-part="root"
+          data-bf-state={[expanded && 'expanded', isFailed && 'failed'].filter(Boolean).join(' ') || undefined}
+          ref={containerRef}
+          className={`user-message-item ${expanded ? 'user-message-item--expanded' : ''}${isFailed ? ' user-message-item--failed' : ''}${isGroupMessage && !isGroupSenderSelf ? ' user-message-item--group-other' : ''}${isGroupMessage && isGroupSenderSelf ? ' user-message-item--group-self' : ''}`}
+          data-testid="chat-user-message"
+          data-turn-id={turnId}
+          data-status={resolvedTurnStatus || ''}
+          data-failed={isFailed ? 'true' : 'false'}
+        >
+          {isEditing ? (
+            <UserMessageEditComposer
+              value={editDraft}
+              isSubmitting={isEditSubmitting}
+              submitLabel={t('message.saveEdit')}
+              cancelLabel={t('message.cancelEdit')}
+              placeholder={t('message.editPlaceholder')}
+              onChange={setEditDraft}
+              onSubmit={handleSubmitEdit}
+              onCancel={cancelEdit}
+              presentation={composerPresentation}
+              workspacePath={currentSession?.workspacePath}
+              remoteConnectionId={
+                currentSession?.remoteConnectionId
+                || currentSession?.config?.remoteConnectionId
+              }
+              excludeSessionId={resolvedSessionId}
+            />
+          ) : (
+            <div className="user-message-item__main" data-bf-component="user-message-item" data-bf-part="main">
+              {isFailed && (
+              <span className="user-message-item__failed-avatar" aria-hidden>
+                <CircleUser size={18} strokeWidth={1.75} />
+              </span>
             )}
-            <div className="user-message-item__actions" data-bf-component="user-message-item" data-bf-part="actions">
-              <button
-                className={`user-message-item__copy-btn ${copied ? 'copied' : ''}`}
-                onClick={handleCopy}
-                title={copied ? t('message.copyFailed') : t('message.copy')}
-              >
-                {copied ? <Icon name="check-line" size="sm" /> : <Icon name="duplicate" size="sm" />}
-              </button>
-              {canShowEditAction && (
-                <Tooltip content={canEdit ? t('message.edit') : editDisabledReason}>
-                  <button
-                    type="button"
-                    className="user-message-item__edit-btn"
-                    onClick={handleBeginEdit}
-                    disabled={!canEdit}
-                    title={canEdit ? t('message.edit') : editDisabledReason}
-                  >
-                    <Icon name="edit" size="sm" />
-                  </button>
-                </Tooltip>
-              )}
+            <div
+              className={
+                isFailed
+                  ? 'user-message-item__failed-inline-cluster'
+                  : 'user-message-item__main-contents-bridge'
+              }
+            >
               {isFailed ? (
-                <Tooltip content={t('message.fillToInput')}>
-                  <button
-                    className="user-message-item__copy-btn"
-                    onClick={handleFillToInput}
+                <div className="user-message-item__failed-body">
+                  <div 
+                    ref={contentRef}
+                    className={`user-message-item__content${senderBadge ? ' user-message-item__content--with-badge' : ''}`}
+                    data-bf-component="user-message-item"
+                    data-bf-part="content"
+                    data-testid="chat-user-message-content"
+                    data-turn-id={turnId}
+                    onClick={handleToggleExpand}
+                    title={(hasOverflow || expanded) ? (expanded ? t('message.clickToCollapse') : t('message.clickToExpand')) : undefined}
+                    style={{
+                      cursor: (hasOverflow || expanded) ? 'pointer' : 'text',
+                    }}
                   >
-                    <Icon name="arrow-down" size="sm" />
-                  </button>
-                </Tooltip>
-              ) : canShowRollbackAction && !steeringStatus ? (
-                <Tooltip content={rollbackTooltip}>
-                  <button
-                    className="user-message-item__rollback-btn"
-                    onClick={handleRollback}
-                    disabled={!canRollback}
-                    title={rollbackTooltip}
-                  >
-                    {sessionMutation?.kind === 'rollback' && sessionMutation.targetTurnId === turnId ? (
-                      <Loader2 size={14} className="user-message-item__rollback-spinner" />
+                    {composerPresentation ? (
+                      <UserMessagePresentationContent presentation={composerPresentation} />
                     ) : (
-                      <RotateCcw size={14} />
+                      <>
+                        {senderBadge && (
+                          <span className="user-message-item__sender-badge">{senderBadge}</span>
+                        )}
+                        {displayText}
+                      </>
                     )}
-                  </button>
-                </Tooltip>
-              ) : null}
-            </div>
-            </div>
-          </div>
-        )}
-
-        {message.images && message.images.length > 0 && (
-          <div className="user-message-item__images" data-bf-component="user-message-item" data-bf-part="images">
-            {message.images.map(img => {
-              const src = img.dataUrl || (img.imagePath ? `https://asset.localhost/${encodeURIComponent(img.imagePath)}` : undefined);
-              return src ? (
-                <div data-bf-component="user-message-item" data-bf-part="image" key={img.id} className="user-message-item__image-thumb" onClick={(e) => { e.stopPropagation(); setLightboxImage(src); }}>
-                  <img src={src} alt={img.name} />
+                  </div>
+                  {steeringTag && (
+                    <div className={`user-message-item__steering-tag ${steeringTag.className}`} data-bf-component="user-message-item" data-bf-part="steeringTag">
+                      {steeringTag.label}
+                    </div>
+                  )}
                 </div>
-              ) : null;
-            })}
-          </div>
-        )}
+              ) : (
+                <>
+                  <div 
+                    ref={contentRef}
+                    className={`user-message-item__content${senderBadge ? ' user-message-item__content--with-badge' : ''}`}
+                    data-bf-component="user-message-item"
+                    data-bf-part="content"
+                    data-testid="chat-user-message-content"
+                    data-turn-id={turnId}
+                    onClick={handleToggleExpand}
+                    title={(hasOverflow || expanded) ? (expanded ? t('message.clickToCollapse') : t('message.clickToExpand')) : undefined}
+                    style={{
+                      cursor: (hasOverflow || expanded) ? 'pointer' : 'text',
+                    }}
+                  >
+                    {composerPresentation ? (
+                      <UserMessagePresentationContent presentation={composerPresentation} />
+                    ) : (
+                      <>
+                        {senderBadge && (
+                          <span className="user-message-item__sender-badge">{senderBadge}</span>
+                        )}
+                        {displayText}
+                      </>
+                    )}
+                  </div>
+                  {steeringTag && (
+                    <div className={`user-message-item__steering-tag ${steeringTag.className}`} data-bf-component="user-message-item" data-bf-part="steeringTag">
+                      {steeringTag.label}
+                    </div>
+                  )}
+                </>
+              )}
+              </div>
+            </div>
+          )}
 
-        {lightboxImage && createPortal(
-          <div
-            className="user-message-item__lightbox"
-            onClick={() => setLightboxImage(null)}
-            data-bf-component="user-message-item"
-            data-bf-part="lightbox"
-            data-bf-native-webview-occlusion
-          >
-            <button className="user-message-item__lightbox-close" onClick={() => setLightboxImage(null)}>
-              <Icon name="xmark" size="lg" style={{ width: 20, height: 20 }} />
-            </button>
-            <img src={lightboxImage} alt="Preview" onClick={(e) => e.stopPropagation()} />
-          </div>,
-          getAppearanceOverlayHost(),
-        )}
+          {message.images && message.images.length > 0 && (
+            <div className="user-message-item__images" data-bf-component="user-message-item" data-bf-part="images">
+              {message.images.map(img => {
+                const src = img.dataUrl || (img.imagePath ? `https://asset.localhost/${encodeURIComponent(img.imagePath)}` : undefined);
+                return src ? (
+                  <div data-bf-component="user-message-item" data-bf-part="image" key={img.id} className="user-message-item__image-thumb" onClick={(e) => { e.stopPropagation(); setLightboxImage(src); }}>
+                    <img src={src} alt={img.name} />
+                  </div>
+                ) : null;
+              })}
+            </div>
+          )}
+
+            {lightboxImage && createPortal(
+              <div
+                className="user-message-item__lightbox"
+                onClick={() => setLightboxImage(null)}
+                data-bf-component="user-message-item"
+                data-bf-part="lightbox"
+                data-bf-native-webview-occlusion
+              >
+                <button className="user-message-item__lightbox-close" onClick={() => setLightboxImage(null)}>
+                  <Icon name="xmark" size="lg" style={{ width: 20, height: 20 }} />
+                </button>
+                <img src={lightboxImage} alt="Preview" onClick={(e) => e.stopPropagation()} />
+              </div>,
+              getAppearanceOverlayHost(),
+            )}
+          </div>
+
+          <div className="user-message-item__meta" data-bf-component="user-message-item" data-bf-part="meta">
+            {sentTime && sentAtLabel && sentTimestamp !== null && (
+              <time
+                className="user-message-item__timestamp"
+                data-bf-component="user-message-item"
+                data-bf-part="timestamp"
+                data-testid="chat-user-message-timestamp"
+                dateTime={new Date(sentTimestamp).toISOString()}
+                title={sentAtLabel}
+                aria-label={sentAtLabel}
+              >
+                {sentTime}
+              </time>
+            )}
+            {!isEditing && (
+              <div className="user-message-item__actions" data-bf-component="user-message-item" data-bf-part="actions">
+                <button
+                  className={`user-message-item__copy-btn ${copied ? 'copied' : ''}`}
+                  onClick={handleCopy}
+                  title={copied ? t('message.copyFailed') : t('message.copy')}
+                >
+                  {copied ? <Icon name="check-line" size="sm" /> : <Icon name="duplicate" size="sm" />}
+                </button>
+                {canShowEditAction && (
+                  <Tooltip content={canEdit ? t('message.edit') : editDisabledReason}>
+                    <button
+                      type="button"
+                      className="user-message-item__edit-btn"
+                      onClick={handleBeginEdit}
+                      disabled={!canEdit}
+                      title={canEdit ? t('message.edit') : editDisabledReason}
+                    >
+                      <Icon name="edit" size="sm" />
+                    </button>
+                  </Tooltip>
+                )}
+                {isFailed ? (
+                  <Tooltip content={t('message.fillToInput')}>
+                    <button
+                      className="user-message-item__copy-btn"
+                      onClick={handleFillToInput}
+                    >
+                      <Icon name="arrow-down" size="sm" />
+                    </button>
+                  </Tooltip>
+                ) : canShowRollbackAction && !steeringStatus ? (
+                  <Tooltip content={rollbackTooltip}>
+                    <button
+                      className="user-message-item__rollback-btn"
+                      onClick={handleRollback}
+                      disabled={!canRollback}
+                      title={rollbackTooltip}
+                    >
+                      {sessionMutation?.kind === 'rollback' && sessionMutation.targetTurnId === turnId ? (
+                        <Loader2 size={14} className="user-message-item__rollback-spinner" />
+                      ) : (
+                        <RotateCcw size={14} />
+                      )}
+                    </button>
+                  </Tooltip>
+                ) : null}
+              </div>
+            )}
+          </div>
+
+        </div>
       </div>
     );
   }
