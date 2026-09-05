@@ -330,14 +330,6 @@ impl Parser {
 /// No filesystem access, process launch, environment expansion, or permission decision.
 pub fn analyze(command: &str, shell_kind: &str, workdir: &str) -> Analysis {
     let mut result = Analysis::default();
-    if !workdir.starts_with('/') {
-        result.add_issue(Issue {
-            status: AnalysisStatus::Unsupported,
-            reason: "non-POSIX working directory requires a shell path adapter",
-            span: Span { start: 0, end: 0 },
-        });
-        return result;
-    }
     analyze_into(
         command,
         shell_kind,
