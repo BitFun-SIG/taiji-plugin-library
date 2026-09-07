@@ -1,0 +1,4 @@
+{
+  "connectionId": "ssh-fixture@example.invalid:22",
+  "remotePath": "/srv/fixture-workspace"
+}

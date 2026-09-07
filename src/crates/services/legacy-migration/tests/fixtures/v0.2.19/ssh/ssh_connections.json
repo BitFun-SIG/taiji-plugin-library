@@ -1,0 +1,9 @@
+[
+  {
+    "id": "ssh-fixture@example.invalid:22",
+    "host": "example.invalid",
+    "port": 22,
+    "username": "fixture",
+    "auth_type": "password"
+  }
+]

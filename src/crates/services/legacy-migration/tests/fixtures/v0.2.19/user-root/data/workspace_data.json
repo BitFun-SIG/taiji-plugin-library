@@ -1,0 +1,14 @@
+{
+  "workspaces": {
+    "workspace-1": {
+      "id": "workspace-1",
+      "name": "Fixture workspace",
+      "path": "C:\\fixture\\workspace",
+      "workspace_type": "local"
+    }
+  },
+  "opened_workspace_ids": ["workspace-1"],
+  "current_workspace_id": "workspace-1",
+  "recent_workspaces": ["workspace-1"],
+  "saved_at": "2026-01-01T00:00:00Z"
+}

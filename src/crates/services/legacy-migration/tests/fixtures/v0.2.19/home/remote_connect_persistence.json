@@ -1,0 +1,11 @@
+{
+  "connections": [
+    {
+      "bot_type": "telegram",
+      "display_name": "Synthetic bot",
+      "enabled": false,
+      "requires_reauthentication": true
+    }
+  ],
+  "account_remote_context": true
+}
