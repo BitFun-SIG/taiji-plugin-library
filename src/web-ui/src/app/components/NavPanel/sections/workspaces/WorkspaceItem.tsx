@@ -545,15 +545,6 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
     setSessionsCollapsed(prev => !prev);
   }, []);
 
-  const handleCardNameClick = useCallback(async () => {
-    if (!isActive) {
-      await setActiveWorkspace(workspace.id);
-      setSessionsCollapsed(false);
-    } else {
-      setSessionsCollapsed(prev => !prev);
-    }
-  }, [isActive, setActiveWorkspace, workspace.id]);
-
   const handleCloseWorkspace = useCallback(async () => {
     setMenuOpen(false);
     try {
@@ -664,13 +655,12 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
     }
 
     setIsResettingWorkspace(true);
+    setResetDialogOpen(false);
     try {
       await resetAssistantWorkspace(workspace.id);
       await flowChatManager.resetWorkspaceSessions(workspace, {
         reinitialize: isActive,
         preferredMode: 'Claw',
-        ensureAssistantBootstrap:
-          isActive && workspace.workspaceKind === WorkspaceKind.Assistant,
       });
       notificationService.success(t('nav.workspaces.workspaceReset'), { duration: 2500 });
     } catch (error) {
@@ -866,7 +856,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
           draggable={draggable}
           onDragStart={onDragStart}
           onDragEnd={onDragEnd}
-          onClick={() => { void handleCardNameClick(); }}
+          onClick={handleCollapseToggle}
           style={{ cursor: 'pointer' }}
           data-testid="nav-workspace-card"
           data-workspace-id={workspace.id}
@@ -897,7 +887,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
               data-openbitfun-part="name"
               type="button"
               className="openbitfun-nav-panel__assistant-item-name-btn"
-              onClick={e => { e.stopPropagation(); void handleCardNameClick(); }}
+              onClick={e => { e.stopPropagation(); handleCollapseToggle(); }}
               data-testid="nav-workspace-name-btn"
               data-workspace-id={workspace.id}
             >
@@ -1150,7 +1140,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
         draggable={draggable}
         onDragStart={onDragStart}
         onDragEnd={onDragEnd}
-        onClick={() => { void handleCardNameClick(); }}
+        onClick={handleCollapseToggle}
         style={{ cursor: 'pointer' }}
         data-testid="nav-workspace-card"
         data-workspace-id={workspace.id}
@@ -1188,7 +1178,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
                   data-openbitfun-part="name"
                   type="button"
                   className="openbitfun-nav-panel__workspace-item-name-btn"
-                  onClick={e => { e.stopPropagation(); void handleCardNameClick(); }}
+                  onClick={e => { e.stopPropagation(); handleCollapseToggle(); }}
                   data-testid="nav-workspace-name-btn"
                   data-workspace-id={workspace.id}
                 >
