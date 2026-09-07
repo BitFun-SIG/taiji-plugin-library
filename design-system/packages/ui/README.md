@@ -18,6 +18,61 @@ export function Example() {
 
 The package owns component anatomy, behavior, accessibility, and stable variants. It does not own theme selection persistence, product state, routes, locale resources, or platform APIs.
 
+## Text overflow
+
+Use `OverflowText` for single-line, non-editable labels instead of local
+`text-overflow: ellipsis` rules or shortening the underlying string. Plain text
+defaults to **fade-out truncation with an interaction marquee**: a background-independent
+gradient mask at the inline end, followed by scrolling on hover or keyboard focus.
+Both effects apply only when the text actually overflows. Short labels remain untouched.
+Standard button, menu, navigation, card, selection, and disclosure text slots
+already use this primitive; consumers should not wrap those slots a second time.
+
+```tsx
+import { OverflowText } from "@openbitfun/ui";
+
+// The surrounding layout owns the available width.
+<OverflowText>{description}</OverflowText>
+
+// Mark the owning control so its whole hit target and keyboard focus reveal text.
+<button data-overflow-trigger style={{ maxInlineSize: 220 }}>
+  <OverflowText behavior="marquee">{workspaceName}</OverflowText>
+</button>
+```
+
+String, number, and plain-text array children use marquee automatically.
+Use `behavior="fade"` for a deliberate static label, and `behavior="marquee"`
+for text-only rich markup such as search highlights. Standard interactive controls
+already own the hover/focus trigger. Put
+`data-overflow-trigger` on one control or row, never the entire list. Virtual
+selection may use `marqueeActive` on the label or `data-overflow-active="true"`
+on its owning trigger, without adding another tab stop. `ListboxOption` forwards
+its virtual active state through this contract. Selected
+tabs do not animate automatically. Motion respects `prefers-reduced-motion`;
+reduced-motion users keep the static fade. Text and movement follow RTL direction.
+
+Rich children default to fade to preserve the label's existing inline composition.
+Composite containers keep their icons/actions fixed and give each text slot its
+own `OverflowText`. Marquee measures and
+translates one inline text span; keep icons, badges, and action buttons outside
+it. Complete text stays in the accessibility tree. Clipped string/number labels
+get a native title unless the caller supplies one; rich content should use its
+own full-text tooltip or detail view. Do not use marquee as the sole way to
+access information on touch surfaces.
+
+Multi-line descriptions should normally wrap. Editable fields, source code,
+structured paths that need to preserve their suffix, and native controls keep
+their appropriate text treatment instead of receiving a blanket fade rule.
+Mobile sheet/page titles and row descriptions wrap for touch access. Tooltips
+also wrap: a full-text fallback must not truncate its own content.
+
+The Web UI uses this contract in shell/navigation and search, workspace/session
+lists, model and context pickers, file/Git lists, settings, tool-card summaries,
+usage reports, and the Canvas SDK's truncating text/file labels. Remaining local
+ellipsis rules are intentional source-code excerpts, contenteditable reference
+chips/placeholders, and multiline message previews. Diagnostic/payload size caps
+and persisted Appearance `textOverflow` values are data contracts, not layout rules.
+
 ## Mobile controls
 
 Touch-first controls use the isolated mobile entry so compact and foldable
@@ -57,14 +112,6 @@ These components own mobile touch targets, pressed/focus/disabled states,
 surface elevation, responsive inline sizing, composer geometry, transparent
 floating action layout, and sheet accessibility. Product state, localized copy,
 routing, and device or session operations stay in the consuming application.
-
-Use `OverflowText` for single-line labels that need a treatment only when their
-rendered content is actually clipped. Its default `fade` behavior softens the
-inline end. `behavior="marquee"` keeps that resting cue, then reveals the full
-label with a measured hover/focus marquee; reduced-motion users keep the static
-fade. The primitive preserves the full text in the accessibility tree, supports
-right-to-left direction, and leaves width constraints and tooltip content to
-the consumer.
 
 `Disclosure` is the shared expandable-content primitive. It owns controlled or
 uncontrolled open state, trigger/region accessibility wiring, focus exclusion
@@ -147,6 +194,17 @@ in the form. Search, typed values, and multiple selection remain component-owned
 `SearchField variant="embedded"` removes its standalone pill surface for these
 compositions; its container must supply padding, height, and visible focus
 treatment. The default SearchField appearance is unchanged.
+
+`SearchField variant="panel"` provides a joined frosted surface with a rounded
+input row and an optional `footer` slot for result status and actions. It reuses
+the same input node when switching from the default pill, preserves input-row
+height, and provides a divider, metadata typography, and a single focus outline.
+The surface uses semantic tint and blur tokens, with an opaque fallback for
+unsupported blur or reduced transparency. Callers own the query, localized
+counts, navigation callbacks, and disabled action states; use `IconButton` for
+the actions. The panel stays in normal flow by default. A toolbar that needs
+downward expansion without reflow should reserve the input height and position
+the SearchField over that anchor.
 
 `FieldGroup fieldSurface="ambient"` keeps text and picker field borders while
 letting their shells reuse the grouped surface. The default field surface stays

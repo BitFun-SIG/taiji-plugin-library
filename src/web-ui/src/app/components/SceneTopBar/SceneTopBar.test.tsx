@@ -54,13 +54,13 @@ describe('SceneTopBar', () => {
 
   afterEach(() => vi.unstubAllGlobals());
 
-  it('extends the Toolbar divider through both side gaps on the same pixel row', () => {
+  it('reclaims the left gutter and extends the divider through the remaining right gap', () => {
     expect(stylesheet).not.toContain('border-block-end: 0;');
     expect(stylesheet).toContain(
       'inset-block-end: calc(0px - var(--openbitfun-border-width-default));',
     );
     expect(stylesheet).toContain('width: var(--openbitfun-space-4);');
-    expect(stylesheet).toContain('inset-inline-end: 100%;');
+    expect(stylesheet).toContain('margin-inline-start: calc(0px - var(--openbitfun-space-4));');
     expect(stylesheet).toContain('inset-inline-start: 100%;');
   });
 

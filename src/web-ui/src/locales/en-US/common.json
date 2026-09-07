@@ -354,6 +354,16 @@
       "reviewRunning": "Reviewing",
       "deepReviewRunning": "Reviewing",
       "unreadCompleted": "Completed — unread",
+      "status": {
+        "approval": "Awaiting approval",
+        "approvalCount": "Awaiting approval · {{count}} requests",
+        "input": "Awaiting your reply",
+        "unread": "Completed · not yet viewed",
+        "stopped": "Stopped or interrupted",
+        "paused": "Paused, ready to resume",
+        "queued": "Queued",
+        "syncing": "Awaiting status synchronization"
+      },
       "unreadError": "Failed — unread",
       "unreadInterrupted": "Interrupted — retry needed",
       "needsUserInput": "Needs your input",

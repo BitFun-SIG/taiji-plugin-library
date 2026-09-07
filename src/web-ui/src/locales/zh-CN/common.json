@@ -354,6 +354,16 @@
       "reviewRunning": "审核中",
       "deepReviewRunning": "审核中",
       "unreadCompleted": "已完成 — 未读",
+      "status": {
+        "approval": "待审批",
+        "approvalCount": "待审批 · {{count}} 项",
+        "input": "待回复",
+        "unread": "完成待查看",
+        "stopped": "已停止或中断",
+        "paused": "已暂停，可继续",
+        "queued": "排队中",
+        "syncing": "等待同步状态"
+      },
       "unreadError": "执行失败 — 未读",
       "unreadInterrupted": "输出中断 — 需重试",
       "needsUserInput": "等待你的输入",

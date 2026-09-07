@@ -1,7 +1,7 @@
 import React from 'react';
 import { Bot, Wrench, Cpu, UsersRound } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Icon, StatusPill } from '@openbitfun/ui';
+import { OverflowText, Icon, StatusPill } from '@openbitfun/ui';
 import type { AgentWithCapabilities } from '../agentsStore';
 import { AGENT_ICON_MAP } from '../agentsIcons';
 import { getAgentBadge, getAgentDescription, getCapabilityLabel } from '../utils';
@@ -32,7 +32,7 @@ const AgentCard: React.FC<AgentCardProps> = ({
   const openDetails = () => onOpenDetails(agent);
 
   return (
-    <div data-openbitfun-component="agent-card" data-openbitfun-part="root"
+    <div data-overflow-trigger data-openbitfun-component="agent-card" data-openbitfun-part="root"
       className="agent-card"
       style={{
         '--surface-stagger-index': index,
@@ -66,7 +66,7 @@ const AgentCard: React.FC<AgentCardProps> = ({
         <div className="agent-card__header" data-openbitfun-component="agent-card" data-openbitfun-part="header">
           <div className="agent-card__header-info" data-openbitfun-component="agent-card" data-openbitfun-part="headerInfo">
             <div className="agent-card__title-row" data-openbitfun-component="agent-card" data-openbitfun-part="titleRow">
-              <span className="agent-card__name" data-openbitfun-component="agent-card" data-openbitfun-part="name" data-testid="agent-list-item-title">{agent.name}</span>
+              <OverflowText className="agent-card__name" data-openbitfun-component="agent-card" data-openbitfun-part="name" data-testid="agent-list-item-title">{agent.name}</OverflowText>
             </div>
             <div className="agent-card__cap-chips" data-openbitfun-component="agent-card" data-openbitfun-part="capabilities">
               {agent.capabilities.slice(0, 2).map((cap) => (
@@ -96,36 +96,36 @@ const AgentCard: React.FC<AgentCardProps> = ({
           <div className="agent-card__meta" data-openbitfun-component="agent-card" data-openbitfun-part="meta">
             <span className="agent-card__meta-item">
               <span className="agent-card__meta-icon"><Icon glyph={Wrench} size="xs" /></span>
-              <span className="agent-card__meta-label">{t('agentCard.metrics.tools')}</span>
-              <strong>{totalTools}</strong>
+              <OverflowText className="agent-card__meta-label">{t('agentCard.metrics.tools')}</OverflowText>
+              <strong><OverflowText>{totalTools}</OverflowText></strong>
             </span>
             {agent.agentKind === 'mode' ? (
               <>
                 <span className="agent-card__meta-item">
                   <span className="agent-card__meta-icon"><Icon name="extension" size="xs" /></span>
-                  <span className="agent-card__meta-label">{t('agentCard.metrics.skills')}</span>
-                  <strong>{skillCount}</strong>
+                  <OverflowText className="agent-card__meta-label">{t('agentCard.metrics.skills')}</OverflowText>
+                  <strong><OverflowText>{skillCount}</OverflowText></strong>
                 </span>
                 <span className="agent-card__meta-item">
                   <span className="agent-card__meta-icon"><Icon glyph={UsersRound} size="xs" /></span>
-                  <span className="agent-card__meta-label">{t('agentCard.metrics.collaboration')}</span>
-                  <strong>{subagentCount}</strong>
+                  <OverflowText className="agent-card__meta-label">{t('agentCard.metrics.collaboration')}</OverflowText>
+                  <strong><OverflowText>{subagentCount}</OverflowText></strong>
                 </span>
               </>
             ) : (
               <span className="agent-card__meta-item">
                 <span className="agent-card__meta-icon"><Icon name="spark" size="2xs" /></span>
-                <span className="agent-card__meta-label">{t('agentCard.metrics.capabilities')}</span>
-                <strong>{capabilityCount}</strong>
+                <OverflowText className="agent-card__meta-label">{t('agentCard.metrics.capabilities')}</OverflowText>
+                <strong><OverflowText>{capabilityCount}</OverflowText></strong>
               </span>
             )}
             {agent.agentKind === 'subagent' && agent.subagentModelDisplayName ? (
               <span className="agent-card__meta-item">
                 <span className="agent-card__meta-icon"><Icon glyph={Cpu} size="xs" /></span>
-                <span className="agent-card__meta-label">{t('agentCard.metrics.model')}</span>
-                <strong className="agent-card__meta-value--text" title={agent.subagentModelDisplayName}>
+                <OverflowText className="agent-card__meta-label">{t('agentCard.metrics.model')}</OverflowText>
+                <strong className="agent-card__meta-value--text" title={agent.subagentModelDisplayName}><OverflowText>
                   {agent.subagentModelDisplayName}
-                </strong>
+                </OverflowText></strong>
               </span>
             ) : null}
           </div>

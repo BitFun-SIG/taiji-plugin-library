@@ -1,17 +1,17 @@
 /**
- * File mention picker styles
+ * Chat context picker styles
  */
 
 @use '@/shared/styles/surface-recipes' as surfaces;
 
-.file-mention-picker {
+.chat-context-picker {
   @include surfaces.floating;
 
   position: absolute;
   bottom: calc(100% + 8px);
   left: 0;
-  min-width: 260px;
-  max-width: 400px;
+  min-width: 220px;
+  max-width: 300px;
   max-height: 320px;
   overflow: hidden;
   z-index: 1100;
@@ -25,8 +25,8 @@
     bottom: auto;
     left: auto;
     z-index: var(--openbitfun-layer-popover);
-    width: min(400px, calc(100vw - 16px));
-    min-width: min(260px, calc(100vw - 16px));
+    width: min(300px, calc(100vw - 16px));
+    min-width: min(220px, calc(100vw - 16px));
     max-width: calc(100vw - 16px);
     max-height: calc(100vh - 16px);
     color: var(--openbitfun-color-content-primary);
@@ -53,29 +53,30 @@
   &__directory-label {
     flex: 1;
     min-width: 0;
-    display: flex;
-    align-items: baseline;
-    gap: var(--openbitfun-control-flow-chat-inline-gap);
   }
 
-  &__dir-name,
-  &__parent-path {
+  &__directory-path {
+    display: block;
     overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
-  }
-
-  &__dir-name {
-    flex: 0 1 auto;
-    max-width: 55%;
     color: var(--openbitfun-color-content-secondary);
   }
 
-  &__parent-path {
-    flex: 1 1 auto;
-    min-width: 0;
-    color: var(--openbitfun-color-content-muted);
-    font-weight: var(--openbitfun-type-body-sm-font-weight);
+  &__directory-path--file {
+    display: flex;
+  }
+
+  &__directory-prefix {
+    flex: 0 1 auto;
+    min-inline-size: 0;
+    overflow: hidden;
+  }
+
+  &__directory-tail {
+    // Keep the current directory visible while the parent path absorbs clipping.
+    flex: 0 0 auto;
+    max-inline-size: 100%;
+    overflow: hidden;
   }
   
   &__content {
@@ -102,10 +103,10 @@
   }
   
   &__spinner {
-    animation: file-mention-picker-spin 1s linear infinite;
+    animation: chat-context-picker-spin 1s linear infinite;
     color: var(--openbitfun-color-accent-default);
     
-    @keyframes file-mention-picker-spin {
+    @keyframes chat-context-picker-spin {
       from { transform: rotate(0deg); }
       to { transform: rotate(360deg); }
     }
@@ -114,6 +115,20 @@
   &__list {
     block-size: 100%;
     padding: var(--openbitfun-overlay-menu-surface-padding);
+  }
+
+  &__skill-option > [data-openbitfun-part='content'] {
+    flex: 0 1 auto;
+  }
+
+  &__skill-option > [data-openbitfun-part='metadata'] {
+    flex: 1 1 auto;
+    min-inline-size: 0;
+    max-inline-size: 60%;
+  }
+
+  &__skill-description {
+    inline-size: 100%;
   }
   
   &__footer {
@@ -146,7 +161,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .file-mention-picker__spinner {
+  .chat-context-picker__spinner {
     animation: none;
   }
 }

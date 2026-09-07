@@ -1,3 +1,4 @@
+import { OverflowText } from '../../primitives/OverflowText';
 import type {
   HTMLAttributes,
   MouseEvent as ReactMouseEvent,
@@ -117,7 +118,7 @@ export function FileOperationToolCard({
             <AmbientToolCardHeader
               action={actionLabel}
               content={(
-                <span
+                <OverflowText
                   className={styles.path}
                   data-path={path}
                   data-openbitfun-operation={operation}
@@ -126,7 +127,7 @@ export function FileOperationToolCard({
                   title={path}
                 >
                   {pathLabel}
-                </span>
+                </OverflowText>
               )}
               icon={(
                 <ToolCardStatusSlot
@@ -188,9 +189,9 @@ export function FileOperationToolCard({
               </ToolCardActions>
             ) : undefined}
             content={inlineMessage ? (
-              <span className={styles.inlineMessage}>{inlineMessage}</span>
+              <OverflowText className={styles.inlineMessage}>{inlineMessage}</OverflowText>
             ) : (
-              <span
+              <OverflowText
                 className={styles.path}
                 data-openbitfun-operation={operation}
                 data-path={path}
@@ -198,10 +199,10 @@ export function FileOperationToolCard({
                 title={path}
               >
                 {pathLabel}
-              </span>
+              </OverflowText>
             )}
             extra={statusDetail ? (
-              <span className={styles.statusDetail}>{statusDetail}</span>
+              <span className={styles.statusDetail}><OverflowText>{statusDetail}</OverflowText></span>
             ) : changeSummary ? (
               <ToolCardChangeSummary
                 additions={changeSummary.additions}

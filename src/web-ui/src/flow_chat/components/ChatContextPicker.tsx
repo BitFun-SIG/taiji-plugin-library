@@ -1,13 +1,22 @@
 /**
- * File and session mention picker.
- * Shown when the user types @ to select files, folders, or idle sessions.
+ * Unified chat context picker.
+ * The source level exposes files, skills, and images; typing searches providers together.
  */
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { IconButton, KeyHint, Listbox, ListboxEmpty, ListboxOption, Tooltip, Icon } from '@openbitfun/ui';
+import {
+  Icon,
+  IconButton,
+  KeyHint,
+  Listbox,
+  ListboxEmpty,
+  ListboxOption,
+  OverflowText,
+  Tooltip,
+} from '@openbitfun/ui';
 import { useTranslation } from 'react-i18next';
-import { File, Loader2, MessageCircle } from 'lucide-react';
+import { File, Loader2, MessageCircle, RotateCcw } from 'lucide-react';
 import { sessionAPI, workspaceAPI } from '@/infrastructure/api';
 import {
   externalSourcesAPI,
@@ -30,13 +39,13 @@ import {
   workspaceReferenceItems,
   type FileItem,
 } from './workspaceReferenceItems';
-import './FileMentionPicker.scss';
+import './ChatContextPicker.scss';
 
-const log = createLogger('FileMentionPicker');
-const FILE_MENTION_SEARCH_DEBOUNCE_MS = 300;
-const FILE_MENTION_MAX_RESULTS = 30;
+const log = createLogger('ChatContextPicker');
+const CONTEXT_PICKER_SEARCH_DEBOUNCE_MS = 300;
+const CONTEXT_PICKER_MAX_RESULTS = 30;
 
-export interface FileMentionPickerProps {
+export interface ChatContextPickerProps {
   isOpen: boolean;
   searchQuery: string;
   workspacePath?: string;
@@ -45,17 +54,38 @@ export interface FileMentionPickerProps {
   remoteConnectionId?: string;
   /** The composing session itself must not appear as a reference candidate. */
   excludeSessionId?: string;
-  onSelect: (context: FileContext | DirectoryContext | SessionReferenceContext) => void;
+  onSelectContext: (context: FileContext | DirectoryContext | SessionReferenceContext) => void;
   onClose: () => void;
   /** Anchor used by the default portalled overlay mode. */
   anchorRef?: React.RefObject<HTMLElement | null>;
   position?: { top: number; left: number };
-  onNavigate?: (direction: 'up' | 'down' | 'enter' | 'escape') => void;
+  /** Controls whether the picker opens at its source level or directly in files. */
+  entryView?: ChatContextPickerEntryView;
+  skills?: readonly ContextPickerSkill[];
+  skillsLoading?: boolean;
+  skillsLoadFailed?: boolean;
+  onRetrySkills?: () => void;
+  onSelectSkill?: (skill: ContextPickerSkill) => void;
+  onAddImage?: () => void;
 }
 
-type MentionItem =
+export interface ContextPickerSkill {
+  key: string;
+  name: string;
+  description?: string;
+  argumentHint?: string | null;
+}
+
+export type ChatContextPickerEntryView = 'sources' | 'files';
+
+type ContextPickerView = ChatContextPickerEntryView | 'skills';
+
+type ContextPickerItem =
   | { kind: 'file'; item: FileItem }
-  | { kind: 'session'; item: SessionReferenceCandidate };
+  | { kind: 'session'; item: SessionReferenceCandidate }
+  | { kind: 'skill'; item: ContextPickerSkill }
+  | { kind: 'source'; id: 'files' | 'skills' }
+  | { kind: 'action'; id: 'add-image' | 'retry-skills' };
 
 function mergeFileSearchResults(
   previous: FileItem[],
@@ -79,20 +109,27 @@ function mergeFileSearchResults(
       if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1;
       return a.name.localeCompare(b.name);
     })
-    .slice(0, FILE_MENTION_MAX_RESULTS);
+    .slice(0, CONTEXT_PICKER_MAX_RESULTS);
 }
 
-export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
+export const ChatContextPicker: React.FC<ChatContextPickerProps> = ({
   isOpen,
   searchQuery,
   workspacePath,
   workspaceId,
   remoteConnectionId,
   excludeSessionId,
-  onSelect,
+  onSelectContext,
   onClose,
   anchorRef,
   position,
+  entryView = 'files',
+  skills = [],
+  skillsLoading = false,
+  skillsLoadFailed = false,
+  onRetrySkills,
+  onSelectSkill,
+  onAddImage,
 }) => {
   const { t } = useTranslation('flow-chat');
   const [results, setResults] = useState<FileItem[]>([]);
@@ -105,6 +142,7 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
   const [directoryLoadError, setDirectoryLoadError] = useState(false);
   const [fileSearchError, setFileSearchError] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [view, setView] = useState<ContextPickerView>(entryView);
   const [currentPath, setCurrentPath] = useState<string>('');
   const [pathHistory, setPathHistory] = useState<string[]>([]);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -187,19 +225,29 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
   }, [currentPath]);
 
   const goBack = useCallback(() => {
-    if (pathHistory.length === 0) return;
-    const previousPath = pathHistory[pathHistory.length - 1];
-    targetSelectedPathRef.current = selectedItemHistoryRef.current.length > 0
-      ? selectedItemHistoryRef.current[selectedItemHistoryRef.current.length - 1]
-      : null;
-    selectedItemHistoryRef.current = selectedItemHistoryRef.current.slice(0, -1);
-    setPathHistory(previous => previous.slice(0, -1));
-    setCurrentPath(previousPath);
-  }, [pathHistory]);
+    if (pathHistory.length > 0) {
+      const previousPath = pathHistory[pathHistory.length - 1];
+      targetSelectedPathRef.current = selectedItemHistoryRef.current.length > 0
+        ? selectedItemHistoryRef.current[selectedItemHistoryRef.current.length - 1]
+        : null;
+      selectedItemHistoryRef.current = selectedItemHistoryRef.current.slice(0, -1);
+      setPathHistory(previous => previous.slice(0, -1));
+      setCurrentPath(previousPath);
+      return;
+    }
+
+    if (entryView === 'sources' && view !== 'sources') {
+      setView('sources');
+      setSelectedIndex(0);
+    }
+  }, [entryView, pathHistory, view]);
 
   useEffect(() => {
-    if (!isOpen || !workspacePath) return;
+    if (!isOpen) return;
+    // Suppress the path effect once while the picker resets from its previous
+    // view. Direct file entry is loaded explicitly below.
     skipNextPathLoadRef.current = true;
+    setView(entryView);
     setCurrentPath('');
     setPathHistory([]);
     setCurrentFiles([]);
@@ -210,8 +258,18 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
     setSelectedIndex(0);
     selectedItemHistoryRef.current = [];
     targetSelectedPathRef.current = null;
-    loadDirectory('', null);
-  }, [isOpen, workspacePath, remoteConnectionId, loadDirectory]);
+    if (entryView === 'sources' || !workspacePath) {
+      setIsDirectoryLoading(false);
+    } else {
+      loadDirectory('', null);
+    }
+  }, [entryView, isOpen, workspacePath, remoteConnectionId, loadDirectory]);
+
+  useEffect(() => {
+    if (isOpen && view === 'sources') {
+      skipNextPathLoadRef.current = false;
+    }
+  }, [isOpen, view]);
 
   useEffect(() => {
     if (!isOpen || !workspacePath) {
@@ -235,7 +293,7 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
   }, [isOpen, workspaceId, workspacePath]);
 
   useEffect(() => {
-    if (!isOpen || searchQuery.trim()) return;
+    if (!isOpen || view !== 'files' || searchQuery.trim()) return;
     if (skipNextPathLoadRef.current) {
       skipNextPathLoadRef.current = false;
       return;
@@ -243,7 +301,7 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
     const targetPath = targetSelectedPathRef.current;
     targetSelectedPathRef.current = null;
     loadDirectory(currentPath, targetPath);
-  }, [currentPath, isOpen, loadDirectory, searchQuery]);
+  }, [currentPath, isOpen, loadDirectory, searchQuery, view]);
 
   const searchFiles = useCallback(async (
     query: string,
@@ -263,7 +321,7 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
         false,
         false,
         undefined,
-        FILE_MENTION_MAX_RESULTS,
+        CONTEXT_PICKER_MAX_RESULTS,
         true,
         {
           onProgress: (event) => {
@@ -280,7 +338,7 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
       );
     } catch (error) {
       if (!(error instanceof DOMException && error.name === 'AbortError')) {
-        log.error('File mention search failed', error);
+        log.error('Context picker file search failed', error);
         if (requestId === fileSearchRequestIdRef.current) setFileSearchError(true);
       }
     } finally {
@@ -320,7 +378,7 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
     fileSearchDebounceTimerRef.current = window.setTimeout(() => {
       fileSearchDebounceTimerRef.current = null;
       void searchFiles(query, controller, requestId);
-    }, FILE_MENTION_SEARCH_DEBOUNCE_MS);
+    }, CONTEXT_PICKER_SEARCH_DEBOUNCE_MS);
     return () => {
       if (fileSearchDebounceTimerRef.current !== null) {
         window.clearTimeout(fileSearchDebounceTimerRef.current);
@@ -347,20 +405,20 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
     setIsSessionLoading(true);
     sessionSearchDebounceTimerRef.current = window.setTimeout(() => {
       sessionSearchDebounceTimerRef.current = null;
-      void sessionAPI.searchReferenceableSessions(query, FILE_MENTION_MAX_RESULTS)
+      void sessionAPI.searchReferenceableSessions(query, CONTEXT_PICKER_MAX_RESULTS)
         .then((items) => {
           if (requestId === sessionSearchRequestIdRef.current) {
             setSessionResults(items.filter(item => item.sessionId !== excludeSessionId));
           }
         })
         .catch((error) => {
-          log.error('Session mention search failed', error);
+          log.error('Context picker session search failed', error);
           if (requestId === sessionSearchRequestIdRef.current) setSessionResults([]);
         })
         .finally(() => {
           if (requestId === sessionSearchRequestIdRef.current) setIsSessionLoading(false);
         });
-    }, FILE_MENTION_SEARCH_DEBOUNCE_MS);
+    }, CONTEXT_PICKER_SEARCH_DEBOUNCE_MS);
     return () => {
       if (sessionSearchDebounceTimerRef.current !== null) {
         window.clearTimeout(sessionSearchDebounceTimerRef.current);
@@ -369,35 +427,105 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
     };
   }, [excludeSessionId, isOpen, searchQuery]);
 
-  const isSearchMode = searchQuery.trim().length > 0;
-  const isFileLoading = isSearchMode ? isFileSearchLoading : isDirectoryLoading;
+  const normalizedSearchQuery = searchQuery.trim().toLocaleLowerCase();
+  const isSearchMode = normalizedSearchQuery.length > 0;
+  const isFileLoading = isSearchMode
+    ? isFileSearchLoading
+    : view === 'files' && isDirectoryLoading;
   const fileLoadError = isSearchMode
     ? (fileSearchError ? 'search' : null)
-    : (directoryLoadError ? 'directory' : null);
+    : (view === 'files' && directoryLoadError ? 'directory' : null);
   const referenceItems = useMemo(
     () => workspaceReferenceItems(workspaceReferences, isSearchMode ? searchQuery : ''),
     [isSearchMode, searchQuery, workspaceReferences],
   );
-  const displayItems = useMemo<MentionItem[]>(() => (
-    isSearchMode
-      ? [
-          ...results.map(item => ({ kind: 'file' as const, item })),
-          ...referenceItems.map(item => ({ kind: 'file' as const, item })),
-          ...sessionResults.map(item => ({ kind: 'session' as const, item })),
-        ]
-      : [
-          ...currentFiles.map(item => ({ kind: 'file' as const, item })),
-          ...(currentPath ? [] : referenceItems.map(item => ({ kind: 'file' as const, item }))),
-        ]
-  ), [currentFiles, currentPath, isSearchMode, referenceItems, results, sessionResults]);
-  const currentDirectoryDisplay = useMemo(() => {
+  const filteredSkills = useMemo(() => {
+    const seenNames = new Set<string>();
+    return skills
+      .filter(skill => {
+        const normalizedName = skill.name.trim().toLocaleLowerCase();
+        if (!normalizedName || seenNames.has(normalizedName)) return false;
+        seenNames.add(normalizedName);
+        if (!normalizedSearchQuery) return true;
+        return [skill.name, skill.description, skill.argumentHint]
+          .filter((value): value is string => Boolean(value?.trim()))
+          .some(value => value.toLocaleLowerCase().includes(normalizedSearchQuery));
+      })
+      .sort((a, b) => {
+        const aName = a.name.toLocaleLowerCase();
+        const bName = b.name.toLocaleLowerCase();
+        const aRank = aName === normalizedSearchQuery
+          ? 0
+          : aName.startsWith(normalizedSearchQuery) ? 1 : 2;
+        const bRank = bName === normalizedSearchQuery
+          ? 0
+          : bName.startsWith(normalizedSearchQuery) ? 1 : 2;
+        return aRank - bRank || aName.localeCompare(bName);
+      });
+  }, [normalizedSearchQuery, skills]);
+  const sourceItems = useMemo<ContextPickerItem[]>(() => [
+    { kind: 'source', id: 'files' },
+    ...(onSelectSkill ? [{ kind: 'source' as const, id: 'skills' as const }] : []),
+    ...(onAddImage ? [{ kind: 'action' as const, id: 'add-image' as const }] : []),
+  ], [onAddImage, onSelectSkill]);
+  const skillItems = useMemo<ContextPickerItem[]>(() => {
+    if (skillsLoading) return [];
+    if (skillsLoadFailed) {
+      return onRetrySkills ? [{ kind: 'action', id: 'retry-skills' }] : [];
+    }
+    return filteredSkills.map(item => ({ kind: 'skill', item }));
+  }, [filteredSkills, onRetrySkills, skillsLoadFailed, skillsLoading]);
+  const displayItems = useMemo<ContextPickerItem[]>(() => {
+    if (isSearchMode) {
+      const addImageMatches = Boolean(onAddImage)
+        && t('input.addImage').toLocaleLowerCase().includes(normalizedSearchQuery);
+      return [
+        ...results.map(item => ({ kind: 'file' as const, item })),
+        ...referenceItems.map(item => ({ kind: 'file' as const, item })),
+        ...(onSelectSkill
+          ? filteredSkills.map(item => ({ kind: 'skill' as const, item }))
+          : []),
+        ...sessionResults.map(item => ({ kind: 'session' as const, item })),
+        ...(onSelectSkill && skillsLoadFailed && onRetrySkills
+          ? [{ kind: 'action' as const, id: 'retry-skills' as const }]
+          : []),
+        ...(addImageMatches
+          ? [{ kind: 'action' as const, id: 'add-image' as const }]
+          : []),
+      ];
+    }
+    if (entryView === 'sources' && view === 'sources') return sourceItems;
+    if (view === 'skills') return skillItems;
+    return [
+      ...currentFiles.map(item => ({ kind: 'file' as const, item })),
+      ...(currentPath ? [] : referenceItems.map(item => ({ kind: 'file' as const, item }))),
+    ];
+  }, [
+    currentFiles,
+    currentPath,
+    filteredSkills,
+    isSearchMode,
+    normalizedSearchQuery,
+    onAddImage,
+    onRetrySkills,
+    onSelectSkill,
+    referenceItems,
+    results,
+    sourceItems,
+    sessionResults,
+    entryView,
+    skillItems,
+    skillsLoadFailed,
+    t,
+    view,
+  ]);
+  const currentDirectoryPath = useMemo(() => {
     if (!workspacePath) {
-      const rootDirectory = t('fileMention.rootDirectory');
-      return { name: rootDirectory, parentPath: '', fullPath: rootDirectory };
+      return t('contextPicker.rootDirectory');
     }
 
     const normalizedWorkspace = workspacePath.replace(/\\/g, '/').replace(/\/+$/, '');
-    const workspaceName = normalizedWorkspace.split('/').pop() || t('fileMention.rootDirectory');
+    const workspaceName = normalizedWorkspace.split('/').pop() || t('contextPicker.rootDirectory');
     const directorySegments = [workspaceName];
 
     if (currentPath) {
@@ -407,12 +535,17 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
       if (relativeCurrentPath) directorySegments.push(...relativeCurrentPath.split('/').filter(Boolean));
     }
 
-    return {
-      name: directorySegments[directorySegments.length - 1],
-      parentPath: directorySegments.slice(0, -1).join('/'),
-      fullPath: directorySegments.join('/'),
-    };
+    return directorySegments.join('/');
   }, [currentPath, getRelativePath, t, workspacePath]);
+  const currentDirectoryTailStart = Math.max(0, currentDirectoryPath.lastIndexOf('/'));
+  const currentViewLabel = view === 'skills'
+    ? t('chatInput.boostSkills')
+    : view === 'sources'
+      ? t('contextPicker.menuTitle')
+      : currentDirectoryPath;
+  const canNavigateBack = !isSearchMode && (
+    pathHistory.length > 0 || (entryView === 'sources' && view !== 'sources')
+  );
   const isOverlay = Boolean(anchorRef) && !position;
   const overlayLayout = useAnchoredPopoverPosition({
     open: isOpen && isOverlay,
@@ -421,7 +554,7 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
     preferredPlacement: 'top',
     alignment: 'start',
     gap: 8,
-    layoutRevision: `${displayItems.length}:${currentPath}:${isSearchMode}`,
+    layoutRevision: `${displayItems.length}:${view}:${currentPath}:${isSearchMode}`,
   });
 
   useEffect(() => () => {
@@ -430,11 +563,35 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
     fileAbortControllerRef.current?.abort();
   }, []);
 
-  const handleSelect = useCallback((mention: MentionItem) => {
+  const openSource = useCallback((source: Extract<ContextPickerItem, { kind: 'source' }>['id']) => {
+    setView(source);
+    setSelectedIndex(0);
+  }, []);
+
+  const handleSelect = useCallback((selection: ContextPickerItem) => {
+    if (selection.kind === 'source') {
+      openSource(selection.id);
+      return;
+    }
+    if (selection.kind === 'action') {
+      if (selection.id === 'retry-skills') {
+        onRetrySkills?.();
+        return;
+      }
+      onAddImage?.();
+      onClose();
+      return;
+    }
+    if (selection.kind === 'skill') {
+      onSelectSkill?.(selection.item);
+      onClose();
+      return;
+    }
+
     const timestamp = Date.now();
-    if (mention.kind === 'session') {
-      const session = mention.item;
-      onSelect({
+    if (selection.kind === 'session') {
+      const session = selection.item;
+      onSelectContext({
         id: `session-reference-${timestamp}-${Math.random().toString(36).slice(2, 9)}`,
         type: 'session-reference',
         sessionId: session.sessionId,
@@ -449,8 +606,8 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
       return;
     }
 
-    const item = mention.item;
-    onSelect(item.isDirectory ? {
+    const item = selection.item;
+    onSelectContext(item.isDirectory ? {
       id: `dir-${timestamp}-${Math.random().toString(36).slice(2, 9)}`,
       type: 'directory',
       directoryPath: item.path,
@@ -466,14 +623,14 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
       timestamp,
     });
     onClose();
-  }, [onClose, onSelect]);
+  }, [onAddImage, onClose, onRetrySkills, onSelectContext, onSelectSkill, openSource]);
 
-  const handleItemClick = useCallback((mention: MentionItem) => {
-    if (mention.kind === 'file' && mention.item.isDirectory && !isSearchMode) {
-      enterDirectory(mention.item);
+  const handleItemClick = useCallback((selection: ContextPickerItem) => {
+    if (selection.kind === 'file' && selection.item.isDirectory && !isSearchMode) {
+      enterDirectory(selection.item);
       return;
     }
-    handleSelect(mention);
+    handleSelect(selection);
   }, [enterDirectory, handleSelect, isSearchMode]);
 
   const handleKeyDown = useCallback((event: KeyboardEvent) => {
@@ -491,26 +648,30 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
         break;
       }
       case 'ArrowRight': {
+        const selected = displayItems[selectedIndex];
+        if (isSearchMode || !selected) break;
+        if (selected.kind !== 'source'
+          && !(selected.kind === 'file' && selected.item.isDirectory)) break;
         event.preventDefault();
         event.stopPropagation();
-        const selected = displayItems[selectedIndex];
-        if (!isSearchMode && selected?.kind === 'file' && selected.item.isDirectory) {
-          enterDirectory(selected.item);
-        }
+        if (selected.kind === 'source') openSource(selected.id);
+        if (selected.kind === 'file') enterDirectory(selected.item);
         break;
       }
-      case 'ArrowLeft':
+      case 'ArrowLeft': {
+        if (!canNavigateBack) break;
         event.preventDefault();
         event.stopPropagation();
-        if (!isSearchMode && pathHistory.length > 0) goBack();
+        goBack();
         break;
+      }
       case 'Enter':
       case 'Tab': {
         event.preventDefault();
         event.stopPropagation();
         const selected = displayItems[selectedIndex];
         if (selected) {
-          if (event.key === 'Tab') handleSelect(selected);
+          if (event.key === 'Tab' && selected.kind !== 'source') handleSelect(selected);
           else handleItemClick(selected);
         }
         break;
@@ -521,7 +682,7 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
         onClose();
         break;
     }
-  }, [displayItems, enterDirectory, goBack, handleItemClick, handleSelect, isOpen, isSearchMode, onClose, pathHistory.length, selectedIndex]);
+  }, [canNavigateBack, displayItems, enterDirectory, goBack, handleItemClick, handleSelect, isOpen, isSearchMode, onClose, openSource, selectedIndex]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -542,7 +703,7 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
     if (!containerRef.current || displayItems.length === 0) return;
     containerRef.current.querySelector(`[data-index="${selectedIndex}"]`)
       ?.scrollIntoView({ block: 'nearest', behavior: 'auto' });
-  }, [displayItems.length, selectedIndex]);
+  }, [displayItems, selectedIndex]);
 
   if (!isOpen) return null;
   const style: React.CSSProperties = position
@@ -554,11 +715,19 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
           visibility: overlayLayout ? 'visible' : 'hidden',
         }
       : {};
-  const isLoading = isFileLoading || isSessionLoading;
+  const isSkillLoading = Boolean(onSelectSkill)
+    && skillsLoading
+    && (isSearchMode || view === 'skills');
+  const isLoading = isFileLoading || isSessionLoading || isSkillLoading;
+  const emptyLabel = isSearchMode
+    ? t('contextPicker.noMatchingResults')
+    : view === 'skills'
+      ? t('chatInput.boostSkillsEmpty')
+      : t('contextPicker.emptyDirectory');
 
   const picker = (
     <div
-      data-openbitfun-component="file-mention-picker"
+      data-openbitfun-component="chat-context-picker"
       data-openbitfun-part="root"
       data-openbitfun-state={[
         isLoading && 'loading',
@@ -566,15 +735,15 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
       ].filter(Boolean).join(' ') || undefined}
       data-openbitfun-placement={isOverlay ? overlayLayout?.placement ?? 'top' : undefined}
       ref={containerRef}
-      className={`file-mention-picker${isOverlay ? ' file-mention-picker--overlay' : ''}`}
+      className={`chat-context-picker${isOverlay ? ' chat-context-picker--overlay' : ''}`}
       style={style}
       onMouseDown={event => event.preventDefault()}
     >
-      <div data-openbitfun-component="file-mention-picker" data-openbitfun-part="header" className="file-mention-picker__header">
-        {!isSearchMode && pathHistory.length > 0 && (
-          <Tooltip content={t('fileMention.goBack')}>
+      <div data-openbitfun-component="chat-context-picker" data-openbitfun-part="header" className="chat-context-picker__header">
+        {canNavigateBack && (
+          <Tooltip content={t('contextPicker.goBack')}>
             <IconButton
-              aria-label={t('fileMention.goBack')}
+              aria-label={t('contextPicker.goBack')}
               icon={<Icon name="chevron-left" size="lg" aria-hidden="true" />}
               onClick={goBack}
               size="xs"
@@ -582,104 +751,158 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
             />
           </Tooltip>
         )}
-        {isSearchMode ? <><Icon name="search" size="lg" style={{ width: 11, height: 11 }} /><span>{t('fileMention.searchResults')}</span></> : (
-          <div className="file-mention-picker__directory-label" title={currentDirectoryDisplay.fullPath}>
-            <span
-              data-openbitfun-component="file-mention-picker"
-              data-openbitfun-part="currentDirectoryName"
-              className="file-mention-picker__dir-name"
-            >
-              {currentDirectoryDisplay.name}
-            </span>
-            {currentDirectoryDisplay.parentPath && (
+        {isSearchMode ? <><Icon name="search" size="lg" style={{ width: 11, height: 11 }} /><span>{t('contextPicker.searchResults')}</span></> : (
+          <div className="chat-context-picker__directory-label" title={currentViewLabel}>
+            {view === 'files' ? (
               <span
-                data-openbitfun-component="file-mention-picker"
-                data-openbitfun-part="parentDirectoryPath"
-                className="file-mention-picker__parent-path"
+                data-openbitfun-component="chat-context-picker"
+                data-openbitfun-part="currentDirectoryPath"
+                className="chat-context-picker__directory-path chat-context-picker__directory-path--file"
               >
-                {currentDirectoryDisplay.parentPath}
+                {currentDirectoryTailStart > 0 && (
+                  <OverflowText title="" className="chat-context-picker__directory-prefix">
+                    {currentDirectoryPath.slice(0, currentDirectoryTailStart)}
+                  </OverflowText>
+                )}
+                <OverflowText title="" className="chat-context-picker__directory-tail">
+                  {currentDirectoryPath.slice(currentDirectoryTailStart)}
+                </OverflowText>
+              </span>
+            ) : (
+              <span
+                data-openbitfun-component="chat-context-picker"
+                data-openbitfun-part="currentViewLabel"
+                className="chat-context-picker__directory-path"
+              >
+                <OverflowText title="">{currentViewLabel}</OverflowText>
               </span>
             )}
           </div>
         )}
       </div>
-      <div data-openbitfun-component="file-mention-picker" data-openbitfun-part="content" className="file-mention-picker__content">
+      <div data-openbitfun-component="chat-context-picker" data-openbitfun-part="content" className="chat-context-picker__content">
         <Listbox
           aria-label={isSearchMode
-            ? t('fileMention.searchResults')
-            : currentDirectoryDisplay.fullPath}
-          className="file-mention-picker__list"
+            ? t('contextPicker.searchResults')
+            : currentViewLabel}
+          className="chat-context-picker__list"
           focusMode="virtual"
         >
           {displayItems.length === 0 && fileLoadError ? (
-          <ListboxEmpty data-openbitfun-state="error" className="file-mention-picker__empty">
+          <ListboxEmpty data-openbitfun-state="error" className="chat-context-picker__empty">
             <span>{t(fileLoadError === 'search'
-              ? 'fileMention.searchUnavailable'
-              : 'fileMention.browseUnavailable')}</span>
+              ? 'contextPicker.searchUnavailable'
+              : 'contextPicker.browseUnavailable')}</span>
           </ListboxEmpty>
         ) : displayItems.length === 0 && isLoading ? (
-          <ListboxEmpty className="file-mention-picker__loading"><Loader2 size={14} className="file-mention-picker__spinner" /><span>{t('fileMention.loading')}</span></ListboxEmpty>
+          <ListboxEmpty className="chat-context-picker__loading"><Loader2 size={14} className="chat-context-picker__spinner" /><span>{t('contextPicker.loading')}</span></ListboxEmpty>
         ) : displayItems.length === 0 ? (
-          <ListboxEmpty className="file-mention-picker__empty"><span>{isSearchMode ? t('fileMention.noMatchingFiles') : t('fileMention.emptyDirectory')}</span></ListboxEmpty>
+          <ListboxEmpty className="chat-context-picker__empty"><span>{emptyLabel}</span></ListboxEmpty>
         ) : (
           <>
-            {displayItems.map((mention, index) => {
-              const isSession = mention.kind === 'session';
-              const file = mention.kind === 'file' ? mention.item : null;
-              const session = mention.kind === 'session' ? mention.item : null;
-              const key = isSession
-                ? `session-${session?.sessionId}-${session?.workspacePath}`
-                : `file-${file?.referenceStableKey || file?.path}`;
+            {displayItems.map((selection, index) => {
+              const isSession = selection.kind === 'session';
+              const file = selection.kind === 'file' ? selection.item : null;
+              const session = selection.kind === 'session' ? selection.item : null;
+              const skill = selection.kind === 'skill' ? selection.item : null;
+              const key = selection.kind === 'source'
+                ? `source-${selection.id}`
+                : selection.kind === 'action'
+                  ? `action-${selection.id}`
+                  : isSession
+                    ? `session-${session?.sessionId}-${session?.workspacePath}`
+                    : skill
+                      ? `skill-${skill.key}`
+                      : `file-${file?.referenceStableKey || file?.path}`;
+              const label = selection.kind === 'source'
+                ? t(selection.id === 'files'
+                  ? 'chatInput.boostAddContext'
+                  : 'chatInput.boostSkills')
+                : selection.kind === 'action'
+                  ? t(selection.id === 'add-image'
+                    ? 'input.addImage'
+                    : 'chatInput.boostSkillsLoadFailed')
+                  : session?.sessionName ?? skill?.name ?? file?.name;
+              const skillDescription = skill?.description?.trim() || undefined;
               return (
-                <ListboxOption
+                <ListboxOption data-overflow-trigger
                   active={index === selectedIndex}
+                  className={skill ? 'chat-context-picker__skill-option' : undefined}
                   key={key}
                   data-index={index}
-                  indicator={file?.isDirectory && !isSearchMode
+                  data-openbitfun-context-kind={selection.kind === 'source' || selection.kind === 'action'
+                    ? selection.id
+                    : selection.kind}
+                  indicator={selection.kind === 'source' || (file?.isDirectory && !isSearchMode)
                     ? <Icon name="chevron-right" size="lg" aria-hidden="true" />
                     : undefined}
-                  leading={isSession
-                    ? <MessageCircle aria-hidden="true" />
-                    : file?.isDirectory
-                      ? <Icon name="folder" size="lg" aria-hidden="true" />
-                      : <File aria-hidden="true" />}
-                  metadata={session?.workspaceLabel
+                  leading={selection.kind === 'source'
+                    ? <Icon name={selection.id === 'files' ? 'files' : 'spark'} size="lg" aria-hidden="true" />
+                    : selection.kind === 'action'
+                      ? selection.id === 'add-image'
+                        ? <Icon name="image" size="lg" aria-hidden="true" />
+                        : <RotateCcw aria-hidden="true" />
+                      : skill
+                        ? <Icon name="spark" size="lg" aria-hidden="true" />
+                        : isSession
+                          ? <MessageCircle aria-hidden="true" />
+                          : file?.isDirectory
+                            ? <Icon name="folder" size="lg" aria-hidden="true" />
+                            : <File aria-hidden="true" />}
+                  metadata={skill && index === selectedIndex && skillDescription
+                    ? (
+                        <OverflowText
+                          aria-label={skillDescription}
+                          behavior="marquee"
+                          className="chat-context-picker__skill-description"
+                          data-openbitfun-component="chat-context-picker"
+                          data-openbitfun-part="skillDescription"
+                          marqueeActive
+                          title={skillDescription}
+                        >
+                          {skillDescription}
+                        </OverflowText>
+                      )
+                    : session?.workspaceLabel
                     ?? (file?.referenceStableKey
                       ? file.referenceDescription || file.path
                       : undefined)}
-                  onClick={() => handleItemClick(mention)}
+                  onClick={() => handleItemClick(selection)}
                   onContextMenu={(event) => {
                     event.preventDefault();
                     if (file?.isDirectory) enterDirectory(file);
                   }}
+                  onMouseEnter={() => setSelectedIndex(index)}
                   value={key}
                 >
-                  {session?.sessionName ?? file?.name}
+                  {label}
                 </ListboxOption>
               );
             })}
             {isLoading && (
-              <ListboxEmpty className="file-mention-picker__loading">
-                <Loader2 size={14} className="file-mention-picker__spinner" />
-                <span>{t('fileMention.loading')}</span>
+              <ListboxEmpty className="chat-context-picker__loading">
+                <Loader2 size={14} className="chat-context-picker__spinner" />
+                <span>{t('contextPicker.loading')}</span>
               </ListboxEmpty>
             )}
             {fileLoadError && (
-              <ListboxEmpty data-openbitfun-state="error" className="file-mention-picker__empty">
+              <ListboxEmpty data-openbitfun-state="error" className="chat-context-picker__empty">
                 <span>{t(fileLoadError === 'search'
-                  ? 'fileMention.searchUnavailable'
-                  : 'fileMention.browseUnavailable')}</span>
+                  ? 'contextPicker.searchUnavailable'
+                  : 'contextPicker.browseUnavailable')}</span>
               </ListboxEmpty>
             )}
           </>
         )}
         </Listbox>
       </div>
-      <div data-openbitfun-component="file-mention-picker" data-openbitfun-part="footer" className="file-mention-picker__footer">
-        <span><KeyHint>↑</KeyHint><KeyHint>↓</KeyHint> {t('fileMention.navHint')}</span>
-        <span><KeyHint>→</KeyHint> {t('fileMention.enterHint')}</span>
-        <span><KeyHint>←</KeyHint> {t('fileMention.backHint')}</span>
-        <span><KeyHint>Enter</KeyHint> {t('fileMention.selectHint')}</span>
+      <div data-openbitfun-component="chat-context-picker" data-openbitfun-part="footer" className="chat-context-picker__footer">
+        <span><KeyHint>↑</KeyHint><KeyHint>↓</KeyHint> {t('contextPicker.navHint')}</span>
+        {!isSearchMode && (view === 'sources' || view === 'files') && (
+          <span><KeyHint>→</KeyHint> {t('contextPicker.enterHint')}</span>
+        )}
+        {canNavigateBack && <span><KeyHint>←</KeyHint> {t('contextPicker.backHint')}</span>}
+        <span><KeyHint>Enter</KeyHint> {t('contextPicker.selectHint')}</span>
       </div>
     </div>
   );
@@ -687,4 +910,4 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
   return isOverlay ? createPortal(picker, getAppearanceOverlayHost()) : picker;
 };
 
-export default FileMentionPicker;
+export default ChatContextPicker;

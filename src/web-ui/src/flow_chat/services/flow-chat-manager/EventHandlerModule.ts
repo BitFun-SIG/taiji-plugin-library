@@ -180,11 +180,6 @@ export const __test_only__ = {
   buildBuiltInBrowserTabOptions,
 };
 
-function shouldMarkUnreadCompletion(sessionId: string): boolean {
-  const activeSessionId = FlowChatStore.getInstance().getState().activeSessionId;
-  return sessionId !== activeSessionId || !isAppWindowFocused();
-}
-
 function eventOwnsLatestSessionTurn(
   session: Session,
   sessionId: string,
@@ -1159,6 +1154,7 @@ function finalizeTurnCompletionState(
       modelRounds: updatedModelRounds,
       status: 'completed' as const,
       endTime: turn.endTime ?? completedAt,
+      recoveryEpoch: turn.recovery?.executionGeneration ?? turn.recoveryEpoch,
       recovery: undefined,
     };
   });
@@ -1196,12 +1192,11 @@ function finalizeTurnCompletionState(
 
   context.userCancelledSessionIds.delete(sessionId);
 
-  if (shouldMarkUnreadCompletion(sessionId)) {
-    const pending = context.pendingTurnCompletions.get(sessionId);
-    const isPartialRecovery = !!pending?.partialRecoveryReason;
-    // Partial recovery after retry failure is treated as an error state (red dot)
-    context.flowChatStore.markSessionUnreadCompletion(sessionId, isPartialRecovery ? 'interrupted' : 'completed');
-  }
+  const pending = context.pendingTurnCompletions.get(sessionId);
+  const isPartialRecovery = !!pending?.partialRecoveryReason;
+  // Selection/focus cannot prove that the result is visible. The transcript
+  // acknowledges this specific completion after it has actually been shown.
+  context.flowChatStore.markSessionUnreadCompletion(sessionId, isPartialRecovery ? 'interrupted' : 'completed', turnId);
 
   clearPendingTurnCompletion(context, sessionId, turnId);
 }
@@ -2782,6 +2777,7 @@ function handleDialogTurnFailed(context: FlowChatContext, event: any): void {
         error: terminalError,
         errorDetail,
         endTime: Date.now(),
+        recoveryEpoch: turn.recovery?.executionGeneration ?? turn.recoveryEpoch,
         recovery: undefined,
       };
     });
@@ -2806,8 +2802,8 @@ function handleDialogTurnFailed(context: FlowChatContext, event: any): void {
     });
   }
   
-  if (ownsSessionSettlement && shouldMarkUnreadCompletion(sessionId)) {
-    context.flowChatStore.markSessionUnreadCompletion(sessionId, 'error');
+  if (ownsSessionSettlement) {
+    context.flowChatStore.markSessionUnreadCompletion(sessionId, 'error', turnId);
   }
   if (ownsSessionSettlement) {
     context.userCancelledSessionIds.delete(sessionId);
@@ -2882,6 +2878,7 @@ function handleDialogTurnCancelled(
       modelRounds: updatedModelRounds,
       status: 'cancelled' as const,
       endTime: Date.now(),
+      recoveryEpoch: turn.recovery?.executionGeneration ?? turn.recoveryEpoch,
       recovery: undefined,
     };
   });
@@ -2908,10 +2905,9 @@ function handleDialogTurnCancelled(
 
   if (
     ownsSessionSettlement
-    && shouldMarkUnreadCompletion(sessionId)
     && !context.userCancelledSessionIds.has(sessionId)
   ) {
-    context.flowChatStore.markSessionUnreadCompletion(sessionId, 'completed');
+    context.flowChatStore.markSessionUnreadCompletion(sessionId, 'interrupted', turnId);
   }
   if (ownsSessionSettlement) {
     context.userCancelledSessionIds.delete(sessionId);
@@ -3007,8 +3003,8 @@ function handleDialogTurnInterrupted(context: FlowChatContext, event: any): void
         });
       });
   }
-  if (ownsSessionSettlement && shouldMarkUnreadCompletion(sessionId)) {
-    context.flowChatStore.markSessionUnreadCompletion(sessionId, 'interrupted');
+  if (ownsSessionSettlement) {
+    context.flowChatStore.markSessionUnreadCompletion(sessionId, 'interrupted', turnId);
   }
   if (ownsSessionSettlement) {
     context.userCancelledSessionIds.delete(sessionId);
@@ -3068,6 +3064,7 @@ export function projectDialogTurnRecovered(
     endTime: undefined,
     success: undefined,
     hasFinalResponse: undefined,
+    recoveryEpoch: executionGeneration,
     recovery: {
       ...turn.recovery,
       status: 'recovering' as const,

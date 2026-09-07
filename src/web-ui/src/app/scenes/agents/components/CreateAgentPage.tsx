@@ -1,4 +1,4 @@
-import { Button, Icon, Input, ScrollArea, Switch, Textarea, Tooltip, type IconSource } from '@openbitfun/ui';
+import { OverflowText, Button, Icon, Input, ScrollArea, Switch, Textarea, Tooltip, type IconSource } from '@openbitfun/ui';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   FileText,
@@ -863,7 +863,7 @@ const CreateAgentPage: React.FC = () => {
                           placement="top"
                           interactive
                         >
-                          <button
+                          <button data-overflow-trigger
                             type="button"
                             className={`th-create-panel__context-option${isSelected ? ' is-on' : ''}`}
                             data-openbitfun-component="create-agent-page"
@@ -874,7 +874,7 @@ const CreateAgentPage: React.FC = () => {
                             aria-pressed={isSelected}
                           >
                             <Icon {...contextIcon} size="sm" />
-                            <span>{label}</span>
+                            <OverflowText>{label}</OverflowText>
                           </button>
                         </Tooltip>
                       );

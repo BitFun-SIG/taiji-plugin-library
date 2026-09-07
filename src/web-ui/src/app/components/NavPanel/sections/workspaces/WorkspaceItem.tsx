@@ -851,7 +851,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
             </span>
           </button>
           <Tooltip content={workspace.rootPath} placement="right" followCursor>
-            <button
+            <button data-overflow-trigger
               data-openbitfun-component="workspace-item"
               data-openbitfun-part="name"
               type="button"
@@ -860,7 +860,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
               data-testid="nav-workspace-name-btn"
               data-workspace-id={workspace.id}
             >
-              <span className="openbitfun-nav-panel__assistant-item-label" data-openbitfun-component="workspace-item" data-openbitfun-part="label">{workspaceDisplayName}</span>
+              <OverflowText className="openbitfun-nav-panel__assistant-item-label" data-openbitfun-component="workspace-item" data-openbitfun-part="label">{workspaceDisplayName}</OverflowText>
             </button>
           </Tooltip>
 
@@ -1149,6 +1149,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
                 <button
                   data-openbitfun-component="workspace-item"
                   data-openbitfun-part="name"
+                  data-overflow-trigger
                   type="button"
                   className="openbitfun-nav-panel__workspace-item-name-btn"
                   onClick={e => { e.stopPropagation(); handleCollapseToggle(); }}
@@ -1156,20 +1157,15 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
                   data-workspace-id={workspace.id}
                 >
                   <span className="openbitfun-nav-panel__workspace-item-name-line">
-                    {workspaceIsRemote ? (
-                      <OverflowText
-                        behavior="marquee"
-                        className="openbitfun-nav-panel__workspace-item-label"
-                        data-openbitfun-component="workspace-item"
-                        data-openbitfun-part="label"
-                      >
-                        {workspaceDisplayName}
-                      </OverflowText>
-                    ) : (
-                      <span className="openbitfun-nav-panel__workspace-item-label" data-openbitfun-component="workspace-item" data-openbitfun-part="label">
-                        {workspaceDisplayName}
-                      </span>
-                    )}
+                    <OverflowText
+                      behavior="marquee"
+                      className="openbitfun-nav-panel__workspace-item-label"
+                      data-openbitfun-component="workspace-item"
+                      data-openbitfun-part="label"
+                      title=""
+                    >
+                      {workspaceDisplayName}
+                    </OverflowText>
                     {relatedPathCount > 0 ? (
                       <span className="openbitfun-nav-panel__workspace-item-badge" data-openbitfun-component="workspace-item" data-openbitfun-part="badge">
                         {t('nav.workspaces.relatedPaths.badge', { count: relatedPathCount })}

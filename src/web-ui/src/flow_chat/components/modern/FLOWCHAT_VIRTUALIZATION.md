@@ -1,5 +1,18 @@
 # FlowChat Virtualization
 
+## Result visibility and read receipts
+
+`useSessionCompletionReceipt` reads the final projected non-user item for the
+unread Turn through `sessionToVirtualItems` and `getVirtualItemStableKey`. Its
+cache is keyed by Session object and device surface, so unrelated stream/store
+updates do not re-project the transcript. It observes only while a settled result
+is unread, and checks the real result end against the visible scroller rectangle
+in a focused, foreground document. A mounted overscan row, an inactive scene, or
+an older result beneath a newer summary cannot acknowledge completion. This hook
+performs no viewport writes and introduces no reservation or follow-output logic.
+The same receipt applies to the Btw viewport; opening either view alone is not a
+receipt. Native visual and focus/scroll acceptance remains a manual check.
+
 What the virtualization library is allowed to decide, what stays ours, and the
 one rule about rendering that only makes sense once a row's lifetime is shorter
 than its content's.
@@ -115,6 +128,12 @@ User-message text and both message-edit inputs use the same `flow-control`
 font-size role as the composer and rendered replies, following the user's font
 preference. User-message text also uses the reply's regular weight. Its
 first-line box must use that same font size when deriving row geometry.
+
+User-message timestamps and actions occupy a normal-flow meta row below the
+bubble. Its full height, including the 28px action targets, belongs to the
+measured message even when no valid timestamp is available. Hover and keyboard
+focus change opacity only. The shell's trailing margin remains the item gap;
+the next Turn may remove that gap without removing space occupied by controls.
 
 ## A Row's Mount Is Not an Arrival
 

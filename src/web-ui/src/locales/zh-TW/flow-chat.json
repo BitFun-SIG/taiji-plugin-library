@@ -965,15 +965,16 @@
     "percentComplete": "{{percent}}% 完成",
     "currentStatus": "目前狀態: {{status}}"
   },
-  "fileMention": {
+  "contextPicker": {
+    "menuTitle": "選擇上下文",
     "searchResults": "搜尋結果",
     "loading": "載入中...",
     "browseUnavailable": "無法載入工作區檔案，請檢查連線後重試。",
     "searchUnavailable": "無法搜尋工作區，請檢查連線後重試。",
-    "noMatchingFiles": "沒有找到匹配的檔案",
+    "noMatchingResults": "找不到相符的上下文",
     "emptyDirectory": "空目錄",
     "rootDirectory": "根目錄",
-    "goBack": "返回上級目錄",
+    "goBack": "返回上一級",
     "navHint": "導航",
     "enterHint": "進入",
     "backHint": "返回",
@@ -1340,7 +1341,7 @@
     "btwBackTooltipWithoutTurn": "返回到來源會話：{{title}}",
     "btwCreateTooltip": "快速發起一個側問",
     "searchPlaceholder": "搜尋對話消息",
-    "searchResult": "{{current}} / {{total}}",
+    "searchResult": "{{current}} / {{total}} 個結果",
     "searchNoResults": "沒有匹配結果",
     "searchPrevious": "上一個匹配結果",
     "searchNext": "下一個匹配結果",

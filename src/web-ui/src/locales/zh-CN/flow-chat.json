@@ -965,15 +965,16 @@
     "percentComplete": "{{percent}}% 完成",
     "currentStatus": "当前状态: {{status}}"
   },
-  "fileMention": {
+  "contextPicker": {
+    "menuTitle": "选择上下文",
     "searchResults": "搜索结果",
     "loading": "加载中...",
     "browseUnavailable": "无法加载工作区文件，请检查连接后重试。",
     "searchUnavailable": "无法搜索工作区，请检查连接后重试。",
-    "noMatchingFiles": "没有找到匹配的文件",
+    "noMatchingResults": "没有找到匹配的上下文",
     "emptyDirectory": "空目录",
     "rootDirectory": "根目录",
-    "goBack": "返回上级目录",
+    "goBack": "返回上一级",
     "navHint": "导航",
     "enterHint": "进入",
     "backHint": "返回",
@@ -1340,7 +1341,7 @@
     "btwBackTooltipWithoutTurn": "返回到来源会话：{{title}}",
     "btwCreateTooltip": "快速发起一个侧问",
     "searchPlaceholder": "搜索对话消息",
-    "searchResult": "{{current}} / {{total}}",
+    "searchResult": "{{current}} / {{total}} 个结果",
     "searchNoResults": "没有匹配结果",
     "searchPrevious": "上一个匹配结果",
     "searchNext": "下一个匹配结果",

@@ -12,7 +12,7 @@
  */
 
 import React, { useState } from 'react';
-import { Button } from '@openbitfun/ui';
+import { OverflowText, Button } from '@openbitfun/ui';
 import { ShieldAlert } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Tooltip, Icon } from '@openbitfun/ui';
@@ -196,11 +196,11 @@ export const ChatInputApprovalBand: React.FC<ChatInputApprovalBandProps> = ({
         </span>
         <span className="openbitfun-chat-input-approval__separator" aria-hidden>·</span>
         {request.delegation ? (
-          <span className="openbitfun-chat-input-approval__owner">
+          <OverflowText className="openbitfun-chat-input-approval__owner">
             {t('permission.subagentOwner', { subagent: request.delegation.subagentType })}
-          </span>
+          </OverflowText>
         ) : (
-          <span className="openbitfun-chat-input-approval__owner">{request.source.identity}</span>
+          <OverflowText className="openbitfun-chat-input-approval__owner">{request.source.identity}</OverflowText>
         )}
         {canAnswerAll ? (
           <Tooltip content={t('permission.batchCount', { count: pendingCount })} placement="top">

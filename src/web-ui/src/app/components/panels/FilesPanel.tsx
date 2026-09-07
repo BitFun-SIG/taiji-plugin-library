@@ -3,7 +3,7 @@
  * Displays the file explorer for the current workspace
  */
 
-import { Button, Icon, IconButton, SearchField, StatusPill, Tooltip, ScrollArea } from '@openbitfun/ui';
+import { OverflowText, Button, Icon, IconButton, SearchField, StatusPill, Tooltip, ScrollArea } from '@openbitfun/ui';
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { CaseSensitive, Regex, WholeWord, List, Loader2 } from 'lucide-react';
@@ -1038,7 +1038,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
   }, [onExplorerToolbarApi]);
 
   return (
-    <div
+    <div data-overflow-trigger
       data-openbitfun-component="files-panel"
       data-openbitfun-part="root"
       ref={panelRef}
@@ -1281,12 +1281,12 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
           {Array.from(transfers.entries()).map(([id, tp]) => (
             <div className="openbitfun-files-panel__transfer" data-openbitfun-component="files-panel" data-openbitfun-part="transfer" role="status" key={id}>
               <div className="openbitfun-files-panel__transfer-label">
-                <span className="openbitfun-files-panel__transfer-label-text">
+                <OverflowText className="openbitfun-files-panel__transfer-label-text">
                   {tp.phase === 'download'
                     ? t('transfer.downloading')
                     : t('transfer.uploading')}
                   {tp.label ? ` — ${tp.label}` : ''}
-                </span>
+                </OverflowText>
                 {!tp.indeterminate &&
                 tp.bytesTotal &&
                 tp.bytesTotal > 0 ? (

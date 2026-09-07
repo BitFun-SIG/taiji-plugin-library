@@ -1,3 +1,4 @@
+import { OverflowText } from '@openbitfun/ui';
 import React from 'react';
 import { Minus } from 'lucide-react';
 import { CodeReviewReportExportActions } from '../../tool-cards/CodeReviewReportExportActions';
@@ -53,7 +54,7 @@ export const ReviewActionHeader: React.FC<ReviewActionHeaderProps> = ({
       />
       <span className="deep-review-action-bar__status-title">{phaseTitle}</span>
       {errorMessage && (
-        <span className="deep-review-action-bar__error-message">{errorMessage}</span>
+        <OverflowText className="deep-review-action-bar__error-message">{errorMessage}</OverflowText>
       )}
     </div>
   </>

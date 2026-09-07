@@ -1,4 +1,4 @@
-import {
+import { OverflowText,
   Button,
   Field,
   StatusPill,
@@ -4002,7 +4002,7 @@ const ModelSettingsPage: React.FC = () => {
           </ConfigPageRow>
           <ConfigPageRow label={t('modelsDevCatalog.cachePath')} align="center" wide>
             <div className="openbitfun-model-settings__catalog-path">
-              <code title={modelsDevStatus?.cache_path}>{modelsDevStatus?.cache_path || '—'}</code>
+              <code title={modelsDevStatus?.cache_path}><OverflowText>{modelsDevStatus?.cache_path || '—'}</OverflowText></code>
               <Tooltip content={t('modelsDevCatalog.reveal')}>
                 <IconButton
                   aria-label={t('modelsDevCatalog.reveal')}

@@ -965,12 +965,13 @@
     "percentComplete": "{{percent}}% Complete",
     "currentStatus": "Current status: {{status}}"
   },
-  "fileMention": {
+  "contextPicker": {
+    "menuTitle": "Choose context",
     "searchResults": "Search Results",
     "loading": "Loading...",
     "browseUnavailable": "Workspace files are unavailable. Check the connection and try again.",
     "searchUnavailable": "Workspace search is unavailable. Check the connection and try again.",
-    "noMatchingFiles": "No matching files found",
+    "noMatchingResults": "No matching context found",
     "emptyDirectory": "Empty directory",
     "rootDirectory": "Root",
     "goBack": "Go back",
@@ -1340,7 +1341,7 @@
     "btwBackTooltipWithoutTurn": "Go back to the source session: {{title}}",
     "btwCreateTooltip": "Start a quick side question",
     "searchPlaceholder": "Search messages",
-    "searchResult": "{{current}} / {{total}}",
+    "searchResult": "{{current}} / {{total}} results",
     "searchNoResults": "No results",
     "searchPrevious": "Previous match",
     "searchNext": "Next match",

@@ -12,7 +12,7 @@
 
 import React, { useCallback, useState, useMemo, useEffect, useRef, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
-import {
+import { OverflowText,
   Icon,
   KeyHint,
   Menu,
@@ -313,7 +313,7 @@ const MainNav: React.FC<MainNavProps> = ({
             const { hostPrefix, folderLabel, tooltip } = getRecentWorkspaceLineParts(workspace);
             const isCurrent = workspace.id === currentWorkspace?.id;
             return (
-              <MenuItem
+              <MenuItem data-overflow-trigger
                 key={workspace.id}
                 leading={<Icon glyph={FolderOpen} />}
                 role="menuitemradio"
@@ -327,13 +327,13 @@ const MainNav: React.FC<MainNavProps> = ({
                 <span className="openbitfun-nav-panel__workspace-menu-item-main">
                   {hostPrefix ? (
                     <>
-                      <span className="openbitfun-nav-panel__workspace-menu-item-host">{hostPrefix}</span>
+                      <OverflowText className="openbitfun-nav-panel__workspace-menu-item-host">{hostPrefix}</OverflowText>
                       <span className="openbitfun-nav-panel__workspace-menu-item-host-sep" aria-hidden>
                         ·
                       </span>
                     </>
                   ) : null}
-                  <span className="openbitfun-nav-panel__workspace-menu-item-name">{folderLabel}</span>
+                  <OverflowText className="openbitfun-nav-panel__workspace-menu-item-name">{folderLabel}</OverflowText>
                 </span>
               </MenuItem>
             );
@@ -367,7 +367,7 @@ const MainNav: React.FC<MainNavProps> = ({
         <div className="openbitfun-nav-panel__utility-row" data-openbitfun-component="nav-panel" data-openbitfun-part="utilityRow">
           <div className="openbitfun-nav-panel__brand-search" data-openbitfun-component="nav-panel" data-openbitfun-part="search">
             <Tooltip content={t('nav.search.triggerTooltip')} placement="right" followCursor>
-              <button
+              <button data-overflow-trigger
                 type="button"
                 className="openbitfun-nav-panel__search-trigger"
                 data-openbitfun-component="nav-panel"
@@ -381,9 +381,9 @@ const MainNav: React.FC<MainNavProps> = ({
                     <Icon name="search" size="xs" />
                   </span>
                 </span>
-                <span className="openbitfun-nav-panel__search-trigger__label">
+                <OverflowText className="openbitfun-nav-panel__search-trigger__label">
                   {t('nav.search.triggerPlaceholder')}
-                </span>
+                </OverflowText>
                 <KeyHint
                   data-testid="nav-search-shortcut"
                   aria-hidden="true"
@@ -416,7 +416,7 @@ const MainNav: React.FC<MainNavProps> = ({
         <div data-testid="nav-sections" className="openbitfun-nav-panel__sections-slot">
         <div data-openbitfun-component="nav-panel" data-openbitfun-part="topActions" className="openbitfun-nav-panel__top-actions">
           <Tooltip content={assistantManagerLabel} placement="right" followCursor>
-            <button
+            <button data-overflow-trigger
               type="button"
               className={[
                 'openbitfun-nav-panel__top-action-btn',
@@ -433,12 +433,12 @@ const MainNav: React.FC<MainNavProps> = ({
               <span className="openbitfun-nav-panel__top-action-icon-slot" aria-hidden="true">
                 <Icon name="user" size="sm" />
               </span>
-              <span>{assistantManagerLabel}</span>
+              <OverflowText>{assistantManagerLabel}</OverflowText>
             </button>
           </Tooltip>
 
           <Tooltip content={t('nav.tooltips.todos')} placement="right" followCursor>
-            <button
+            <button data-overflow-trigger
               type="button"
               className={[
                 'openbitfun-nav-panel__top-action-btn',
@@ -456,7 +456,7 @@ const MainNav: React.FC<MainNavProps> = ({
               <span className="openbitfun-nav-panel__top-action-icon-slot" aria-hidden="true">
                 <Icon name="clock" size="sm" />
               </span>
-              <span>{taskBoardLabel}</span>
+              <OverflowText>{taskBoardLabel}</OverflowText>
             </button>
           </Tooltip>
 
@@ -471,7 +471,7 @@ const MainNav: React.FC<MainNavProps> = ({
 
           <div className="openbitfun-nav-panel__top-action-expand" data-openbitfun-component="nav-panel" data-openbitfun-part="extensionGroup" data-openbitfun-state={isExtensionsOpen ? 'open' : ''} data-testid="agent-skill-panel">
             <Tooltip content={extensionsLabel} placement="right" followCursor>
-              <button
+              <button data-overflow-trigger
                 type="button"
                 className={[
                   'openbitfun-nav-panel__top-action-btn',
@@ -505,7 +505,7 @@ const MainNav: React.FC<MainNavProps> = ({
                     ].filter(Boolean).join(' ')}
                   />
                 </span>
-                <span>{extensionsLabel}</span>
+                <OverflowText>{extensionsLabel}</OverflowText>
               </button>
             </Tooltip>
 
@@ -514,7 +514,7 @@ const MainNav: React.FC<MainNavProps> = ({
               data-testid="agent-skill-tabs"
             >
               <Tooltip content={agentsTooltip} placement="right" followCursor>
-                <button
+                <button data-overflow-trigger
                   type="button"
                   className={[
                     'openbitfun-nav-panel__top-action-btn',
@@ -532,12 +532,12 @@ const MainNav: React.FC<MainNavProps> = ({
                   <span className="openbitfun-nav-panel__top-action-icon-slot" aria-hidden="true">
                     <Icon glyph={Users} size="sm" />
                   </span>
-                  <span>{t('nav.items.agents')}</span>
+                  <OverflowText>{t('nav.items.agents')}</OverflowText>
                 </button>
               </Tooltip>
 
               <Tooltip content={skillsTooltip} placement="right" followCursor>
-                <button
+                <button data-overflow-trigger
                   type="button"
                   className={[
                     'openbitfun-nav-panel__top-action-btn',
@@ -555,12 +555,12 @@ const MainNav: React.FC<MainNavProps> = ({
                   <span className="openbitfun-nav-panel__top-action-icon-slot" aria-hidden="true">
                     <Icon name="extension" size="sm" />
                   </span>
-                  <span>{t('nav.items.skills')}</span>
+                  <OverflowText>{t('nav.items.skills')}</OverflowText>
                 </button>
               </Tooltip>
 
               <Tooltip content={ecosystemCompatibilityTooltip} placement="right" followCursor>
-                <button
+                <button data-overflow-trigger
                   type="button"
                   className={[
                     'openbitfun-nav-panel__top-action-btn',
@@ -578,7 +578,7 @@ const MainNav: React.FC<MainNavProps> = ({
                   <span className="openbitfun-nav-panel__top-action-icon-slot" aria-hidden="true">
                     <Icon glyph={Network} size="sm" />
                   </span>
-                  <span>{t('nav.items.ecosystemCompatibility')}</span>
+                  <OverflowText>{t('nav.items.ecosystemCompatibility')}</OverflowText>
                   {hasUnseenEcosystemCompatibility ? (
                     <span
                       className="openbitfun-nav-panel__top-action-unseen"

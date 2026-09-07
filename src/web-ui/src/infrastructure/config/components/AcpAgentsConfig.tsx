@@ -1,4 +1,4 @@
-import {
+import { OverflowText,
   Button,
   ConfirmDialog,
   Icon,
@@ -1540,7 +1540,7 @@ const AcpAgentsConfig: React.FC<AcpAgentsConfigProps> = ({
                         <Bot size={16} />
                       </span>
                       <div className="openbitfun-acp-agents__registry-copy">
-                        <span className="openbitfun-acp-agents__registry-name">{preset.name}</span>
+                        <OverflowText className="openbitfun-acp-agents__registry-name">{preset.name}</OverflowText>
                         <p className="openbitfun-acp-agents__registry-description">
                           {formatStandaloneUiText(getPresetDescription(preset.id))}
                         </p>
@@ -1682,7 +1682,7 @@ const AcpAgentsConfig: React.FC<AcpAgentsConfigProps> = ({
                         <Bot size={16} />
                       </span>
                       <div className="openbitfun-acp-agents__registry-copy">
-                        <span className="openbitfun-acp-agents__registry-name">{displayName}</span>
+                        <OverflowText className="openbitfun-acp-agents__registry-name">{displayName}</OverflowText>
                         <p className="openbitfun-acp-agents__registry-description openbitfun-acp-agents__registry-command">
                           {[clientConfig.command, ...clientConfig.args].join(' ')}
                         </p>
@@ -1852,9 +1852,9 @@ const AcpAgentsConfig: React.FC<AcpAgentsConfigProps> = ({
                             <Server size={16} />
                           </span>
                           <div className="openbitfun-acp-agents__registry-copy">
-                            <span className="openbitfun-acp-agents__registry-name">
+                            <OverflowText className="openbitfun-acp-agents__registry-name">
                               {connection.name || connection.id}
-                            </span>
+                            </OverflowText>
                             <p className="openbitfun-acp-agents__registry-description">
                               {hostLabel || connection.id}
                             </p>
@@ -1949,7 +1949,7 @@ const AcpAgentsConfig: React.FC<AcpAgentsConfigProps> = ({
                                   <Bot size={16} />
                                 </span>
                                 <div className="openbitfun-acp-agents__registry-copy">
-                                  <span className="openbitfun-acp-agents__registry-name">{row.displayName}</span>
+                                  <OverflowText className="openbitfun-acp-agents__registry-name">{row.displayName}</OverflowText>
                                   <p className="openbitfun-acp-agents__registry-description">{row.preset ? formatStandaloneUiText(row.description) : row.description}</p>
                                 </div>
                               </div>
@@ -2085,9 +2085,9 @@ const AcpAgentsConfig: React.FC<AcpAgentsConfigProps> = ({
                           <Server size={16} />
                         </span>
                         <div className="openbitfun-acp-agents__registry-copy">
-                          <span className="openbitfun-acp-agents__registry-name">
+                          <OverflowText className="openbitfun-acp-agents__registry-name">
                             {connection.name || connection.id}
-                          </span>
+                          </OverflowText>
                           <p className="openbitfun-acp-agents__registry-description">
                             {hostLabel || connection.id}
                           </p>

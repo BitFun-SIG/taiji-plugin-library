@@ -14,16 +14,13 @@
 
   
   &--completed {
-    
     .progress-notification__icon {
-      background: var(--openbitfun-color-status-success-surface);
       color: var(--openbitfun-color-status-success-emphasis);
     }
   }
 
   &--failed {
     .progress-notification__icon {
-      background: var(--openbitfun-color-status-danger-surface);
       color: var(--openbitfun-color-status-danger-emphasis);
     }
   }
@@ -40,8 +37,6 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    border-radius: 50%;
-    background: var(--openbitfun-color-status-info-surface);
     color: var(--openbitfun-color-status-info-emphasis);
   }
 
@@ -55,17 +50,14 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    border-radius: 50%;
     font-size: var(--openbitfun-type-micro-font-size);
     font-weight: var(--openbitfun-type-label-selected-font-weight);
 
     &--success {
-      background: var(--openbitfun-color-status-success-surface);
       color: var(--openbitfun-color-status-success-emphasis);
     }
 
     &--error {
-      background: var(--openbitfun-color-status-danger-surface);
       color: var(--openbitfun-color-status-danger-emphasis);
     }
   }

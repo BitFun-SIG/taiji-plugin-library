@@ -2911,6 +2911,13 @@ impl SessionManager {
         self.sessions.get(session_id).map(|s| s.clone())
     }
 
+    /// Read only the execution fact; navigation must not clone Session content.
+    pub fn get_session_state(&self, session_id: &str) -> Option<SessionState> {
+        self.sessions
+            .get(session_id)
+            .map(|session| session.state.clone())
+    }
+
     pub async fn cached_system_prompt(
         &self,
         session_id: &str,
