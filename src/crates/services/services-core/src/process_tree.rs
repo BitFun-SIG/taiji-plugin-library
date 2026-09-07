@@ -473,28 +473,61 @@ mod tests {
 
     #[cfg(windows)]
     fn descendant_fixture(pid_file: &Path) -> Command {
-        let script = r#"$child = Start-Process -FilePath "$env:SystemRoot\System32\ping.exe" -ArgumentList '-t','127.0.0.1' -WindowStyle Hidden -PassThru; [IO.File]::WriteAllText($env:OPENBITFUN_DESCENDANT_PID_FILE, [string]$child.Id); while ($true) { Start-Sleep -Seconds 60 }"#;
-        let mut command = Command::new("powershell.exe");
-        command
-            .arg("-NoProfile")
-            .arg("-NonInteractive")
-            .arg("-Command")
-            .arg(script)
-            .env("OPENBITFUN_DESCENDANT_PID_FILE", pid_file);
-        command
+        Command::from(windows_fixture_command(pid_file, "parent"))
     }
 
     #[cfg(windows)]
     fn orphaned_descendant_fixture(pid_file: &Path) -> Command {
-        let script = r#"$child = Start-Process -FilePath "$env:SystemRoot\System32\ping.exe" -ArgumentList '-t','127.0.0.1' -WindowStyle Hidden -PassThru; [IO.File]::WriteAllText($env:OPENBITFUN_DESCENDANT_PID_FILE, [string]$child.Id)"#;
-        let mut command = Command::new("powershell.exe");
+        Command::from(windows_fixture_command(pid_file, "orphan-parent"))
+    }
+
+    #[cfg(windows)]
+    fn windows_fixture_command(pid_file: &Path, role: &str) -> std::process::Command {
+        // Reuse the test binary so readiness does not depend on PowerShell
+        // startup, Start-Process behavior, or an external ping executable.
+        let mut command = crate::process_manager::create_command(
+            std::env::current_exe().expect("locate process-tree test executable"),
+        );
         command
-            .arg("-NoProfile")
-            .arg("-NonInteractive")
-            .arg("-Command")
-            .arg(script)
-            .env("OPENBITFUN_DESCENDANT_PID_FILE", pid_file);
+            .args([
+                "--exact",
+                "process_tree::tests::windows_fixture_process",
+                "--nocapture",
+            ])
+            .env("OPENBITFUN_PROCESS_TREE_FIXTURE_ROLE", role)
+            .env("OPENBITFUN_DESCENDANT_PID_FILE", pid_file)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::inherit());
         command
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_fixture_process() {
+        let Ok(role) = std::env::var("OPENBITFUN_PROCESS_TREE_FIXTURE_ROLE") else {
+            return;
+        };
+        let pid_file =
+            std::env::var_os("OPENBITFUN_DESCENDANT_PID_FILE").expect("fixture PID file path");
+        match role.as_str() {
+            "parent" | "orphan-parent" => {
+                let _child = windows_fixture_command(Path::new(&pid_file), "leaf")
+                    .spawn()
+                    .expect("spawn fixture descendant");
+                if role == "orphan-parent" {
+                    return;
+                }
+            }
+            "leaf" => {
+                std::fs::write(&pid_file, std::process::id().to_string())
+                    .expect("publish fixture descendant PID");
+            }
+            _ => panic!("unknown process-tree fixture role: {role}"),
+        }
+        loop {
+            std::thread::sleep(Duration::from_secs(60));
+        }
     }
 
     #[cfg(unix)]
