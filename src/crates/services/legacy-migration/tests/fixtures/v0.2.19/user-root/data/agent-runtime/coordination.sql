@@ -42,4 +42,5 @@ INSERT INTO coordination_sessions VALUES ('session-1', 2, 1);
 INSERT INTO agents VALUES (1, 'session-1', 'helper-1', 'session-child-1', 2, 'historical', 1);
 INSERT INTO background_tasks VALUES (1, 'session-1', 1, 'bg-1', 1, 'turn-1', 'call-1', 'turn-child-1', 'completed', NULL, NULL, 'fixture-owner', 1, 2);
 INSERT INTO swarm_trees VALUES ('session-1', 1);
+INSERT INTO swarm_nodes VALUES ('session-1', 'session-1', NULL, 'Ultra', 0, 1);
 INSERT INTO swarm_nodes VALUES ('session-child-1', 'session-1', 'session-1', 'researcher', 1, 1);

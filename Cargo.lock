@@ -5901,6 +5901,7 @@ dependencies = [
  "openbitfun-dsh-adapter",
  "openbitfun-events",
  "openbitfun-external-sources",
+ "openbitfun-legacy-migration",
  "openbitfun-opencode-adapter",
  "openbitfun-opencode-plugin-host",
  "openbitfun-plugin-runtime-client",

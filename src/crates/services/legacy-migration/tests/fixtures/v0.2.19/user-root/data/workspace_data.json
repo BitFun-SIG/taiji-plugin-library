@@ -3,8 +3,20 @@
     "workspace-1": {
       "id": "workspace-1",
       "name": "Fixture workspace",
-      "path": "C:\\fixture\\workspace",
-      "workspace_type": "local"
+      "rootPath": "C:\\fixture\\workspace",
+      "workspaceType": "Other",
+      "workspaceKind": "normal",
+      "status": "Inactive",
+      "languages": [],
+      "openedAt": "2026-01-01T00:00:00Z",
+      "lastAccessed": "2026-01-01T00:00:00Z",
+      "description": null,
+      "tags": [],
+      "statistics": null,
+      "relatedPaths": [],
+      "metadata": {
+        "sshHost": "localhost"
+      }
     }
   },
   "opened_workspace_ids": ["workspace-1"],

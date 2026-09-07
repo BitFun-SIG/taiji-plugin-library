@@ -4,8 +4,8 @@ Scope: this guide applies to `src/crates/services/services-core`.
 
 `openbitfun-services-core` owns cross-platform service DTOs and helpers that compile
 without the full product runtime. This includes generic filesystem/search/JSON
-IO helpers, bounded local Instruction file reads, session metadata storage
-helpers, and local OS action primitives such as command lookup,
+IO helpers, bounded local Instruction file reads, Session metadata storage
+helpers, the durable Memory SQLite format, and local OS action primitives such as command lookup,
 clipboard, file/url opening, script execution, workspace runtime FS/shell
 providers, process-wide TLS provider selection, managed process-tree lifecycle,
 process-level Agent Runtime ownership locks, and system facts. Product crates may layer routing, policy,
@@ -30,7 +30,7 @@ crate.
   `permission`, `dispatch-workspace`, `markdown`, `session-git`, and
   `workspace-text-runtime` extensions only for behavior they use. Products
   needing IANA time-zone ranges and dashboard aggregation additionally select
-  `token-usage-statistics`. In particular, session metadata consumers must
+  `token-usage-statistics` and `memory-store`. In particular, session metadata consumers must
   not compile libgit2 unless they use the memory-workspace baseline/diff API.
   Keep Tokio and platform API capabilities owner-scoped too: the empty profile
   carries no Tokio dependency, `workspace-runtime` explicitly composes
@@ -91,6 +91,7 @@ cargo test -p openbitfun-services-core --no-default-features --features workspac
 cargo test -p openbitfun-services-core --no-default-features --features workspace-runtime --lib workspace::tests::
 cargo test -p openbitfun-services-core --no-default-features --features local-storage --test session_contracts session_metadata_contracts::
 cargo test -p openbitfun-services-core --no-default-features --features local-storage --test session_write_lock_contracts
+cargo test -p openbitfun-services-core --no-default-features --features memory-store --lib memory_store::tests::
 cargo test -p openbitfun-services-core --no-default-features --features token-usage-statistics --lib token_usage::
 cargo test -p openbitfun-services-core --no-default-features --features process-runtime --test process_runtime_contracts
 cargo test -p openbitfun-services-core --no-default-features --features process-runtime --lib process_tree::tests::

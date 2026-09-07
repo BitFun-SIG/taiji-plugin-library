@@ -1,7 +1,7 @@
 use openbitfun_product_domains::legacy_migration::{
-    MigrationDomainId, MigrationGroupId, MigrationOnboardingState, MigrationPromptChoice,
-    MigrationSelection, MigratorHandoffRequest, MigratorProtocolCapabilities, MigratorRequestMode,
-    CURRENT_MIGRATOR_PROTOCOL_VERSION,
+    MigrationDomainId, MigrationDomainResult, MigrationGroupId, MigrationOnboardingState,
+    MigrationPromptChoice, MigrationSelection, MigratorHandoffRequest,
+    MigratorProtocolCapabilities, MigratorRequestMode, CURRENT_MIGRATOR_PROTOCOL_VERSION,
 };
 use std::collections::BTreeSet;
 
@@ -29,6 +29,19 @@ fn persisted_onboarding_shape_accepts_old_payloads() {
     assert_eq!(state.choice, MigrationPromptChoice::RemindLater);
     assert_eq!(state.format_version, 0);
     assert!(state.run_id.is_none());
+}
+
+#[test]
+fn persisted_domain_result_defaults_new_repair_lists() {
+    let result: MigrationDomainResult = serde_json::from_value(serde_json::json!({
+        "domain": "credentials",
+        "state": "staged",
+        "imported": 1
+    }))
+    .expect("new repair lists must remain additive");
+
+    assert!(result.requires_reauthentication.is_empty());
+    assert!(result.requires_relocation.is_empty());
 }
 
 #[test]

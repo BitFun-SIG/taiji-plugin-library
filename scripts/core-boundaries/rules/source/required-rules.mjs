@@ -2,6 +2,8 @@
 
 import { agentRuntimeRootPublicModules } from './public-api-rules.mjs';
 
+const agentRuntimeDefinitionContractModules = new Set(['custom_agent', 'prompt', 'skills']);
+
 export const requiredContentRules = [
   {
     path: 'src/web-ui/src/infrastructure/api/service-api/ExternalSourcesAPI.ts',
@@ -5156,8 +5158,14 @@ export const requiredContentRules = [
       ...agentRuntimeRootPublicModules
         .filter((moduleName) => moduleName !== 'native_hooks')
         .map((moduleName) => ({
-          regex: new RegExp(`#\\[cfg\\(feature = "agent-runtime"\\)\\]\\r?\\npub mod ${moduleName};`),
-          message: `${moduleName} must stay behind the full agent-runtime owner`,
+          regex: new RegExp(
+            agentRuntimeDefinitionContractModules.has(moduleName)
+              ? `#\\[cfg\\(any\\(feature = "agent-runtime", feature = "definition-contracts"\\)\\)\\]\\r?\\npub mod ${moduleName};`
+              : `#\\[cfg\\(feature = "agent-runtime"\\)\\]\\r?\\npub mod ${moduleName};`,
+          ),
+          message: agentRuntimeDefinitionContractModules.has(moduleName)
+            ? `${moduleName} must stay behind the full runtime or definition-contracts owner`
+            : `${moduleName} must stay behind the full agent-runtime owner`,
         })),
     ],
   },

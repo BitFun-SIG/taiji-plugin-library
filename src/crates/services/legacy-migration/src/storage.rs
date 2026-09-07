@@ -120,9 +120,15 @@ impl Drop for MigrationLock {
 }
 
 pub fn atomic_write_json<T: Serialize>(path: &Path, value: &T) -> LegacyMigrationResult<()> {
-    let bytes = serde_json::to_vec_pretty(value)
+    let mut bytes = serde_json::to_vec_pretty(value)
         .map_err(|error| LegacyMigrationError::json(path, error))?;
+    bytes.push(b'\n');
     atomic_write(path, &bytes)
+}
+
+/// Atomically replace a file with caller-provided bytes on the target volume.
+pub fn atomic_write_bytes(path: &Path, bytes: &[u8]) -> LegacyMigrationResult<()> {
+    atomic_write(path, bytes)
 }
 
 fn atomic_write(path: &Path, bytes: &[u8]) -> LegacyMigrationResult<()> {
@@ -141,8 +147,6 @@ fn atomic_write(path: &Path, bytes: &[u8]) -> LegacyMigrationResult<()> {
         .open(&temp)
         .map_err(|error| LegacyMigrationError::io(&temp, error))?;
     file.write_all(bytes)
-        .map_err(|error| LegacyMigrationError::io(&temp, error))?;
-    file.write_all(b"\n")
         .map_err(|error| LegacyMigrationError::io(&temp, error))?;
     file.sync_all()
         .map_err(|error| LegacyMigrationError::io(&temp, error))?;

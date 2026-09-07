@@ -5,8 +5,9 @@ use openbitfun_legacy_migration::{
     MigrationRoots, NoCrashInjection, ProbeLimits,
 };
 use openbitfun_product_domains::legacy_migration::{
-    MigrationDomainId, MigrationDomainResult, MigrationDomainState, MigrationGroupId,
-    MigrationRunStatus, MigrationSelection, ScanFinding,
+    FindingSeverity, MigrationDiagnostic, MigrationDomainId, MigrationDomainResult,
+    MigrationDomainState, MigrationGroupId, MigrationRunReport, MigrationRunStatus,
+    MigrationSelection, ScanFinding,
 };
 use rusqlite::Connection;
 use sha2::{Digest, Sha256};
@@ -23,11 +24,22 @@ struct CallCounts {
     validate_stage: usize,
     commit: usize,
     validate_commit: usize,
+    finalize_result: usize,
+    rollback: usize,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+enum FinalizeBehavior {
+    #[default]
+    PassThrough,
+    AddRedactedMetadata,
+    Fail,
 }
 
 struct FakeAdapter {
     domain: MigrationDomainId,
     calls: Arc<Mutex<BTreeMap<MigrationDomainId, CallCounts>>>,
+    finalize_behavior: FinalizeBehavior,
 }
 
 impl LegacyDomainAdapter for FakeAdapter {
@@ -88,6 +100,47 @@ impl LegacyDomainAdapter for FakeAdapter {
     fn validate_commit(&self, context: &DomainContext<'_>) -> LegacyMigrationResult<()> {
         self.update(|counts| counts.validate_commit += 1);
         require_file(&target_path(context, self.domain))
+    }
+
+    fn finalize_result(
+        &self,
+        _context: &DomainContext<'_>,
+        staged: &MigrationDomainResult,
+    ) -> LegacyMigrationResult<MigrationDomainResult> {
+        self.update(|counts| counts.finalize_result += 1);
+        match self.finalize_behavior {
+            FinalizeBehavior::PassThrough => Ok(staged.clone()),
+            FinalizeBehavior::AddRedactedMetadata => {
+                let mut finalized = staged.clone();
+                finalized.imported = 2;
+                finalized.skipped = 1;
+                finalized.warnings.push(MigrationDiagnostic {
+                    code: "credential_requires_reauthentication".to_string(),
+                    severity: FindingSeverity::Warning,
+                    domain: Some(self.domain),
+                    message: "A credential must be entered again.".to_string(),
+                    ..MigrationDiagnostic::default()
+                });
+                finalized.requires_reauthentication = vec!["account-1".to_string()];
+                Ok(finalized)
+            }
+            FinalizeBehavior::Fail => Err(LegacyMigrationError::InvalidRequest(
+                "final result is unavailable".to_string(),
+            )),
+        }
+    }
+
+    fn rollback_unverified(&self, context: &DomainContext<'_>) -> LegacyMigrationResult<()> {
+        self.update(|counts| counts.rollback += 1);
+        let path = target_path(context, self.domain);
+        match fs::remove_file(&path) {
+            Ok(()) => Ok(()),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(error) => Err(LegacyMigrationError::InvalidRequest(format!(
+                "failed to roll back fake owner file {}: {error}",
+                path.display()
+            ))),
+        }
     }
 }
 
@@ -170,6 +223,118 @@ fn engine_recovers_after_commit_before_journal_and_deduplicates_repeated_runs() 
 }
 
 #[test]
+fn engine_persists_owner_metadata_finalized_after_commit_validation() {
+    let temp = test_tempdir();
+    let roots = fixture_roots(temp.path());
+    seed_supported_source(&roots);
+    let source = probe_legacy_source(&roots, ProbeLimits::default())
+        .expect("probe should succeed")
+        .expect("source should be present");
+    let calls = Arc::new(Mutex::new(BTreeMap::new()));
+    let engine = fake_engine_with_finalize(
+        roots.clone(),
+        Arc::clone(&calls),
+        FinalizeBehavior::AddRedactedMetadata,
+    );
+    let plan = engine
+        .plan(
+            &source,
+            MigrationSelection {
+                groups: BTreeSet::from([MigrationGroupId::SettingsAndCredentials]),
+            },
+            &CancellationToken::default(),
+        )
+        .expect("plan should succeed");
+
+    let report = engine
+        .execute(&plan, &CancellationToken::default(), &NoCrashInjection)
+        .expect("execution should succeed");
+
+    assert_eq!(report.status, MigrationRunStatus::CompletedWithWarnings);
+    assert_eq!(report.requires_reauthentication, ["account-1"]);
+    let settings = report
+        .domain_results
+        .iter()
+        .find(|result| result.domain == MigrationDomainId::Settings)
+        .expect("settings result should exist");
+    assert_eq!(settings.state, MigrationDomainState::Verified);
+    assert_eq!(settings.imported, 2);
+    assert_eq!(settings.skipped, 1);
+    assert_eq!(settings.warnings.len(), 1);
+    assert_eq!(
+        calls
+            .lock()
+            .expect("calls should not poison")
+            .get(&MigrationDomainId::Settings)
+            .expect("settings calls")
+            .finalize_result,
+        1
+    );
+
+    let persisted: MigrationRunReport = serde_json::from_slice(
+        &fs::read(MigrationLayout::new(&roots, &plan.run_id).report_path())
+            .expect("report should be persisted"),
+    )
+    .expect("persisted report should be valid");
+    assert_eq!(persisted, report);
+}
+
+#[test]
+fn engine_rolls_back_unverified_commit_when_owner_finalization_fails() {
+    let temp = test_tempdir();
+    let roots = fixture_roots(temp.path());
+    seed_supported_source(&roots);
+    let source = probe_legacy_source(&roots, ProbeLimits::default())
+        .expect("probe should succeed")
+        .expect("source should be present");
+    let calls = Arc::new(Mutex::new(BTreeMap::new()));
+    let engine =
+        fake_engine_with_finalize(roots.clone(), Arc::clone(&calls), FinalizeBehavior::Fail);
+    let plan = engine
+        .plan(
+            &source,
+            MigrationSelection {
+                groups: BTreeSet::from([MigrationGroupId::SettingsAndCredentials]),
+            },
+            &CancellationToken::default(),
+        )
+        .expect("plan should succeed");
+
+    assert!(matches!(
+        engine.execute(&plan, &CancellationToken::default(), &NoCrashInjection),
+        Err(LegacyMigrationError::Domain {
+            domain: MigrationDomainId::Settings,
+            ..
+        })
+    ));
+    assert!(!target_path_for_roots(&roots, MigrationDomainId::Settings).exists());
+    let settings_calls = calls
+        .lock()
+        .expect("calls should not poison")
+        .get(&MigrationDomainId::Settings)
+        .copied()
+        .expect("settings calls");
+    assert_eq!(settings_calls.finalize_result, 1);
+    assert_eq!(settings_calls.rollback, 1);
+
+    let persisted: MigrationRunReport = serde_json::from_slice(
+        &fs::read(MigrationLayout::new(&roots, &plan.run_id).report_path())
+            .expect("failed report should be persisted"),
+    )
+    .expect("persisted report should be valid");
+    assert_eq!(persisted.status, MigrationRunStatus::FailedRecoverable);
+    assert_eq!(
+        persisted
+            .domain_results
+            .iter()
+            .find(|result| result.domain == MigrationDomainId::Settings)
+            .expect("settings result should exist")
+            .state,
+        MigrationDomainState::Failed
+    );
+}
+
+#[test]
 fn sqlite_wal_snapshot_contains_committed_rows_without_changing_source_files() {
     let temp = test_tempdir();
     let source = temp.path().join("source.sqlite");
@@ -236,6 +401,14 @@ fn fake_engine(
     roots: MigrationRoots,
     calls: Arc<Mutex<BTreeMap<MigrationDomainId, CallCounts>>>,
 ) -> MigrationEngine {
+    fake_engine_with_finalize(roots, calls, FinalizeBehavior::PassThrough)
+}
+
+fn fake_engine_with_finalize(
+    roots: MigrationRoots,
+    calls: Arc<Mutex<BTreeMap<MigrationDomainId, CallCounts>>>,
+    settings_finalize_behavior: FinalizeBehavior,
+) -> MigrationEngine {
     let adapters = [
         MigrationDomainId::Settings,
         MigrationDomainId::Credentials,
@@ -246,6 +419,11 @@ fn fake_engine(
         Box::new(FakeAdapter {
             domain,
             calls: Arc::clone(&calls),
+            finalize_behavior: if domain == MigrationDomainId::Settings {
+                settings_finalize_behavior
+            } else {
+                FinalizeBehavior::PassThrough
+            },
         }) as Box<dyn LegacyDomainAdapter>
     });
     MigrationEngine::new(roots, adapters).expect("fake engine should be valid")
@@ -276,8 +454,11 @@ fn stage_path(context: &DomainContext<'_>, domain: MigrationDomainId) -> PathBuf
 }
 
 fn target_path(context: &DomainContext<'_>, domain: MigrationDomainId) -> PathBuf {
-    context
-        .roots
+    target_path_for_roots(context.roots, domain)
+}
+
+fn target_path_for_roots(roots: &MigrationRoots, domain: MigrationDomainId) -> PathBuf {
+    roots
         .target_user_root
         .join("data/fake-owner")
         .join(format!("{domain:?}.json"))

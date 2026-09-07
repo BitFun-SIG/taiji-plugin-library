@@ -295,6 +295,12 @@ pub struct MigrationDomainResult {
     pub skipped: u64,
     pub conflicts: u64,
     pub warnings: Vec<MigrationDiagnostic>,
+    /// Non-sensitive logical identifiers whose credentials must be entered again.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub requires_reauthentication: Vec<String>,
+    /// Non-sensitive logical identifiers whose filesystem location must be repaired.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub requires_relocation: Vec<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

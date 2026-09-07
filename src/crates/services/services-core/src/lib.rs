@@ -29,6 +29,8 @@ pub mod local_runtime_ports;
 pub mod managed_runtime;
 #[cfg(feature = "markdown")]
 pub mod markdown;
+#[cfg(feature = "memory-store")]
+pub mod memory_store;
 #[cfg(feature = "permission")]
 pub mod permission_store;
 #[cfg(feature = "local-storage")]

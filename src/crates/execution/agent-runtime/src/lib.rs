@@ -9,7 +9,7 @@ pub mod agents;
 pub mod checkpoint;
 #[cfg(feature = "agent-runtime")]
 pub mod context_profile;
-#[cfg(feature = "agent-runtime")]
+#[cfg(any(feature = "agent-runtime", feature = "definition-contracts"))]
 pub mod custom_agent;
 #[cfg(feature = "agent-runtime")]
 pub mod custom_subagent;
@@ -39,7 +39,7 @@ pub mod output_surface;
 pub mod permission;
 #[cfg(feature = "agent-runtime")]
 pub mod post_call_hooks;
-#[cfg(feature = "agent-runtime")]
+#[cfg(any(feature = "agent-runtime", feature = "definition-contracts"))]
 pub mod prompt;
 #[cfg(feature = "agent-runtime")]
 pub mod prompt_cache;
@@ -67,7 +67,7 @@ pub mod session_state_manager;
 pub mod side_question;
 #[cfg(feature = "agent-runtime")]
 pub mod skill_agent_snapshot;
-#[cfg(feature = "agent-runtime")]
+#[cfg(any(feature = "agent-runtime", feature = "definition-contracts"))]
 pub mod skills;
 #[cfg(feature = "agent-runtime")]
 pub mod subagent_task;

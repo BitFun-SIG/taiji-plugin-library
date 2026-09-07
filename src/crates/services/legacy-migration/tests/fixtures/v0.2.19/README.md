@@ -9,6 +9,10 @@ The fixture is source data, not a ready-to-copy OpenBitFun profile. Tests build
 SQLite databases from the checked-in SQL, enable WAL where needed, and validate
 the fixture through the migration readers before executing a plan.
 
+The Memory SQL mirrors the historical `stage1_outputs` and `jobs` owner schema.
+Only `stage1_outputs` contains migratable facts; `jobs` is included to prove
+that resumable runtime work state is rebuilt instead of imported.
+
 Supported source range for V1 is `>=0.2.0,<1.0.0`. The fixture's canonical
 source revision is `845b4b4d2925f7c41e7e03a4a618606fbd0da8b6`.
 

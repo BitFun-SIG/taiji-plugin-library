@@ -54,6 +54,20 @@ pub trait LegacyDomainAdapter: Send + Sync {
 
     fn validate_commit(&self, context: &DomainContext<'_>) -> LegacyMigrationResult<()>;
 
+    /// Refresh non-sensitive result metadata discovered only while committing.
+    ///
+    /// Secret-bearing adapters deliberately defer decryption until `commit`.
+    /// They can persist a redacted outcome and surface warnings or
+    /// reauthentication identifiers here after the owner has validated the
+    /// installed data.
+    fn finalize_result(
+        &self,
+        _context: &DomainContext<'_>,
+        staged: &MigrationDomainResult,
+    ) -> LegacyMigrationResult<MigrationDomainResult> {
+        Ok(staged.clone())
+    }
+
     fn rollback_unverified(&self, _context: &DomainContext<'_>) -> LegacyMigrationResult<()> {
         Ok(())
     }
@@ -456,9 +470,42 @@ impl MigrationEngine {
                         step.domain,
                         MigrationPhase::ValidateCommit,
                     )?;
+                    let _ = adapter.rollback_unverified(&context);
                     return Err(domain_error(step.domain, error));
                 }
-                report.domain_results[result_index].state = MigrationDomainState::Verified;
+                let mut finalized =
+                    match adapter.finalize_result(&context, &report.domain_results[result_index]) {
+                        Ok(finalized) => finalized,
+                        Err(error) => {
+                            record_domain_failure(
+                                &layout,
+                                &mut report,
+                                &mut journal_sequence,
+                                result_index,
+                                step.domain,
+                                MigrationPhase::ValidateCommit,
+                            )?;
+                            let _ = adapter.rollback_unverified(&context);
+                            return Err(domain_error(step.domain, error));
+                        }
+                    };
+                if finalized.domain != step.domain {
+                    record_domain_failure(
+                        &layout,
+                        &mut report,
+                        &mut journal_sequence,
+                        result_index,
+                        step.domain,
+                        MigrationPhase::ValidateCommit,
+                    )?;
+                    let _ = adapter.rollback_unverified(&context);
+                    return Err(LegacyMigrationError::InvalidPlan(format!(
+                        "adapter {:?} finalized a result for {:?}",
+                        step.domain, finalized.domain
+                    )));
+                }
+                finalized.state = MigrationDomainState::Verified;
+                report.domain_results[result_index] = finalized;
                 persist_report(&layout, &report)?;
                 journal(
                     &layout,
@@ -477,6 +524,20 @@ impl MigrationEngine {
         }
 
         inject(crash_injector, CrashPoint::BeforeFinalize)?;
+        report.requires_reauthentication = report
+            .domain_results
+            .iter()
+            .flat_map(|result| result.requires_reauthentication.iter().cloned())
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .collect();
+        report.requires_relocation = report
+            .domain_results
+            .iter()
+            .flat_map(|result| result.requires_relocation.iter().cloned())
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .collect();
         report.finished_at_ms = Some(now_ms());
         let has_warnings = report.diagnostics.iter().any(|diagnostic| {
             matches!(

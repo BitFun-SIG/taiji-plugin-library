@@ -124,6 +124,13 @@ test('limits retired identity data to the one-time production migration boundary
     ),
     [],
   );
+  assert.deepEqual(
+    violationsFor(
+      `const SOURCE_PRODUCT: &str = "${retiredLowerName}";`,
+      'src/crates/assembly/core/src/legacy_migration/source.rs',
+    ),
+    [],
+  );
   assert.equal(
     violationsFor(
       `const SOURCE_PRODUCT: &str = "${retiredLowerName}";`,
