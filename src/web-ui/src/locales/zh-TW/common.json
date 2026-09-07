@@ -1115,7 +1115,7 @@
     "downloadingTitle": "正在下載更新",
     "downloadFailedTitle": "無法完成更新",
     "installedTitle": "更新已準備就緒",
-    "readyVersion": "版本 {{version}} 已下載，可以安裝並重啟。",
+    "readyVersion": "版本 {{version}} 已下載",
     "installWarning": "安裝將重啟本裝置上的 OpenBitFun，並中斷此裝置上的活動會話。",
     "installAndRestart": "安裝並重啟",
     "installing": "正在安裝…",

@@ -10,6 +10,20 @@
   font-family:var(--openbitfun-type-body-sm-font-family);
 }
 
+.copyable-text-preview--multiline {
+  display: block;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: none;
+  font-size: inherit;
+  font-weight: var(--openbitfun-type-body-sm-font-weight);
+  line-height: inherit;
+  overflow: visible;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .copyable-text-preview--compact {
   font-size: var(--openbitfun-type-flow-support-font-size);
   line-height: var(--openbitfun-type-flow-support-line-height);
