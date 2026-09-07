@@ -1,6 +1,11 @@
-//! Unified process management to avoid Windows child process leaks
+//! Hidden process creation and explicit host-lifetime containment.
+//!
+//! Host containment belongs to long-lived CLI/SDK services. Graceful cleanup
+//! only closes managed child trees; it must never close a Job containing the
+//! calling host before an updater, restart, or shutdown can finish.
 
 use std::process::Command;
+#[cfg(windows)]
 use std::sync::LazyLock;
 #[cfg(target_os = "macos")]
 use std::sync::OnceLock;
@@ -21,6 +26,7 @@ use win32job::Job;
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 
+#[cfg(windows)]
 static GLOBAL_PROCESS_MANAGER: LazyLock<ProcessManager> = LazyLock::new(ProcessManager::new);
 
 pub struct ProcessManager {
@@ -29,6 +35,7 @@ pub struct ProcessManager {
 }
 
 impl ProcessManager {
+    #[cfg(windows)]
     fn new() -> Self {
         let manager = Self {
             #[cfg(windows)]
@@ -68,17 +75,7 @@ impl ProcessManager {
     }
 
     pub fn cleanup_all(&self) {
-        #[cfg(windows)]
-        {
-            let mut job_guard = match self.job.lock() {
-                Ok(guard) => guard,
-                Err(poisoned) => {
-                    warn!("Process manager job mutex was poisoned during cleanup, recovering lock");
-                    poisoned.into_inner() as std::sync::MutexGuard<'_, Option<Job>>
-                }
-            };
-            job_guard.take();
-        }
+        crate::process_tree::cleanup_all_process_trees();
     }
 }
 
@@ -160,11 +157,17 @@ fn build_macos_path_env() -> Option<std::ffi::OsString> {
     std::env::join_paths(merged).ok()
 }
 
+/// Stop managed child trees without creating or closing host containment.
+/// Safe to call repeatedly, including when no child process was ever started.
 pub fn cleanup_all_processes() {
-    GLOBAL_PROCESS_MANAGER.cleanup_all();
+    // Accessing the lazy host manager here would assign this process to a Job
+    // for the first time during Desktop exit. Keep that initialization exclusive
+    // to contain_current_process_tree(), and keep its handle alive until exit.
+    crate::process_tree::cleanup_all_process_trees();
 }
 
-/// Keep descendants of a long-lived service in the process-wide Job.
+/// Keep descendants of a long-lived service in the process-wide Job until the
+/// host exits. This lifetime guard is independent of managed-child cleanup.
 pub fn contain_current_process_tree() -> std::io::Result<()> {
     #[cfg(windows)]
     if GLOBAL_PROCESS_MANAGER

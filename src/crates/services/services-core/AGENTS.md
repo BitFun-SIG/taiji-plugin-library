@@ -68,6 +68,11 @@ crate.
   resource-limit safety. Unix descendants that deliberately create a new
   session/process group are outside this boundary and must be treated as a
   disclosed residual risk until a platform supervisor is introduced.
+- Windows final cleanup closes only registered `process_tree` child Jobs and
+  rejects new managed spawns after shutdown begins. It must not initialize or
+  close the Job used by `contain_current_process_tree`: that explicit CLI/SDK
+  host-lifetime guard includes the host itself and stays alive until process
+  exit. Keep updater/restart handoff processes outside managed child trees.
 
 ## Verification
 
@@ -88,6 +93,7 @@ cargo test -p openbitfun-services-core --no-default-features --features local-st
 cargo test -p openbitfun-services-core --no-default-features --features local-storage --test session_write_lock_contracts
 cargo test -p openbitfun-services-core --no-default-features --features token-usage-statistics --lib token_usage::
 cargo test -p openbitfun-services-core --no-default-features --features process-runtime --test process_runtime_contracts
+cargo test -p openbitfun-services-core --no-default-features --features process-runtime --lib process_tree::tests::
 cargo test --locked -p openbitfun-services-core --no-default-features --features tls-provider --lib tls_provider::tests
 pnpm run check:core-boundaries
 ```

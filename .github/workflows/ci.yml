@@ -372,6 +372,14 @@ jobs:
       - name: Run file watch contract tests
         run: cargo test --locked -p openbitfun-services-integrations --no-default-features --features file-watch --test file_watch_contracts
 
+      # Exercise native child cleanup outside the Tauri test harness. In
+      # particular, Windows update/restart cleanup must leave the host alive.
+      - name: Run process lifecycle contract tests
+        shell: bash
+        run: |
+          cargo test --locked -p openbitfun-services-core --no-default-features --features process-runtime --test process_runtime_contracts
+          cargo test --locked -p openbitfun-services-core --no-default-features --features process-runtime --lib process_tree::tests::
+
       # Search tools share matching but retain provider-specific path and
       # symlink handling. Keep the search module in the full OS matrix.
       - name: Run search tool tests
