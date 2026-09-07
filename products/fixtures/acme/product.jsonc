@@ -10,6 +10,11 @@
       "binaryName": "acme-desktop",
       "bundleId": "com.acme.desktop"
     },
+    "dataMigrator": {
+      "displayNameKey": "product.dataMigrator.name",
+      "binaryName": "acme-data-migrator",
+      "bundleId": "com.acme.data-migrator"
+    },
     "cli": {
       "displayNameKey": "product.cli.name",
       "binaryName": "acme"

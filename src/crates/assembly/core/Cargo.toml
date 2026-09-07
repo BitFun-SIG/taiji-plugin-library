@@ -85,6 +85,9 @@ openbitfun-services-core = { path = "../../services/services-core", features = [
 # Integration service owner crate
 openbitfun-services-integrations = { path = "../../services/services-integrations", optional = true }
 
+# Offline legacy-data migration engine. Product-owned adapters are assembled in Core.
+openbitfun-legacy-migration = { path = "../../services/legacy-migration", optional = true }
+
 # Product domain owner crate
 openbitfun-product-domains = { path = "../../contracts/product-domains", optional = true }
 
@@ -187,6 +190,7 @@ product-full = [
     "product-capabilities",
     "runtime-services",
     "tool-packs",
+    "legacy-migration",
 ]
 # Core compatibility facade and concrete product Agent Runtime assembly. This
 # owns the existing agent/session/tool lifecycle, not app presentation or
@@ -224,6 +228,7 @@ agent-runtime = [
     "dep:tool-runtime",
     "tool-runtime/shell-analysis",
     "openbitfun-services-core/permission",
+    "openbitfun-services-core/memory-store",
     "openbitfun-services-core/runtime-ownership",
     "openbitfun-services-core/workspace-text-runtime",
     "openbitfun-services-core/session-git",
@@ -409,6 +414,22 @@ canvas-runtime = [
     "openbitfun-services-integrations/canvas-runtime",
 ]
 runtime-services = ["dep:openbitfun-runtime-services"]
+legacy-migration = [
+    "dep:openbitfun-agent-runtime",
+    "dep:openbitfun-legacy-migration",
+    "dep:openbitfun-product-domains",
+    "dep:openbitfun-services-integrations",
+    "dep:rusqlite",
+    "openbitfun-agent-runtime/definition-contracts",
+    "openbitfun-product-domains/legacy-migration",
+    "openbitfun-product-domains/miniapp",
+    "openbitfun-services-core/local-storage",
+    "openbitfun-services-core/memory-store",
+    "openbitfun-services-core/workspace-identity",
+    "openbitfun-services-integrations/miniapp-storage",
+    "openbitfun-services-integrations/remote-persistence",
+    "tokio/rt",
+]
 announcement = ["openbitfun-services-integrations/announcement"]
 file-watch = ["openbitfun-services-integrations/file-watch"]
 git = ["openbitfun-services-integrations/git"]

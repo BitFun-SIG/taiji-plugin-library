@@ -1,0 +1,328 @@
+const invoke = window.__TAURI__.core.invoke;
+
+const translations = {
+  en: {
+    eyebrow: 'OpenBitFun maintenance', title: 'Import data from BitFun',
+    intro: 'Choose what to bring forward. Your original BitFun data will not be deleted.',
+    stepSource: 'Step 1', sourceTitle: 'Legacy source', firstLaunch: 'First launch',
+    choiceTitle: 'What would you like to do?',
+    choiceHelp: 'Migration runs only after OpenBitFun and other data writers have stopped.',
+    migrateNow: 'Migrate now', remindLater: 'Remind me later', doNotRemind: 'Do not remind me',
+    stepScope: 'Step 2', scopeTitle: 'Choose migration scope', scan: 'Scan selected data',
+    stepReview: 'Step 3', reviewTitle: 'Review scan', prepare: 'Run preflight plan',
+    stepConfirm: 'Step 4', planTitle: 'Confirm migration', retryWriters: 'Check processes again',
+    start: 'Start migration', stepProgress: 'Step 5', progressTitle: 'Migration progress',
+    phase: 'Phase', domain: 'Domain', count: 'Completed steps',
+    cancel: 'Cancel', stepDone: 'Result', reportTitle: 'Migration report',
+    reportPrivacy: 'This summary contains counts and result codes, not credentials or user content.',
+    exportDiagnostics: 'Export failure diagnostics',
+    diagnosticsExported: 'Sanitized diagnostics saved to {path}',
+    openDesktop: 'Open OpenBitFun', ready: 'Ready', unsupported: 'Unsupported', missing: 'Not found',
+    closeMigrator: 'Close Data Migrator',
+    devRestartHelp: 'Development build: close Data Migrator, then run pnpm run desktop:dev again.',
+    bootstrapPending: 'Data Migrator is still loading. Please try again.',
+    bootstrapFailed: 'Data Migrator could not load its authenticated migration request.',
+    sourceFound: 'BitFun {version} was found. The source stays read-only.',
+    recovery: 'A previous migration journal was found and can be resumed.',
+    blockers: '{count} data-writing process(es) must stop before migration can continue.',
+    noBlockers: 'No data-writing processes are blocking migration.',
+    steps: '{count} migration step(s)', conflicts: '{count} conflict(s)',
+    imported: 'imported', staged: 'staged', skipped: 'skipped', warnings: 'warnings',
+  },
+  'zh-CN': {
+    eyebrow: 'OpenBitFun 数据维护', title: '从 BitFun 导入数据',
+    intro: '选择要迁移的内容。原始 BitFun 数据不会被删除。', stepSource: '第 1 步',
+    sourceTitle: '旧版数据来源', firstLaunch: '首次启动', choiceTitle: '你希望如何处理？',
+    choiceHelp: '迁移只会在 OpenBitFun 和其他数据写入进程停止后运行。', migrateNow: '立即迁移',
+    remindLater: '稍后提醒', doNotRemind: '不再提醒', stepScope: '第 2 步',
+    scopeTitle: '选择迁移范围', scan: '扫描所选数据', stepReview: '第 3 步',
+    reviewTitle: '检查扫描结果', prepare: '运行迁移预检', stepConfirm: '第 4 步',
+    planTitle: '确认迁移', retryWriters: '重新检查进程', start: '开始迁移',
+    stepProgress: '第 5 步', progressTitle: '迁移进度', phase: '阶段', domain: '领域',
+    count: '已完成步骤', cancel: '取消', stepDone: '结果', reportTitle: '迁移报告',
+    reportPrivacy: '此摘要仅包含计数和结果码，不包含凭据或用户正文。',
+    exportDiagnostics: '导出失败诊断', diagnosticsExported: '去敏诊断已保存到 {path}',
+    openDesktop: '打开 OpenBitFun',
+    closeMigrator: '关闭数据迁移器',
+    devRestartHelp: '开发版本：关闭数据迁移器，然后重新运行 pnpm run desktop:dev。',
+    bootstrapPending: '数据迁移器仍在加载，请稍后重试。',
+    bootstrapFailed: '数据迁移器无法加载已认证的迁移请求。',
+    ready: '可迁移', unsupported: '不受支持', missing: '未发现',
+    sourceFound: '已发现 BitFun {version}。迁移期间来源保持只读。',
+    recovery: '发现上次迁移日志，可以从安全状态继续。',
+    blockers: '迁移前还需停止 {count} 个数据写入进程。', noBlockers: '没有进程阻止迁移。',
+    steps: '{count} 个迁移步骤', conflicts: '{count} 个冲突',
+    imported: '已导入', staged: '已暂存', skipped: '已跳过', warnings: '警告',
+  },
+  'zh-TW': {
+    eyebrow: 'OpenBitFun 資料維護', title: '從 BitFun 匯入資料',
+    intro: '選擇要遷移的內容。原始 BitFun 資料不會被刪除。', stepSource: '第 1 步',
+    sourceTitle: '舊版資料來源', firstLaunch: '首次啟動', choiceTitle: '你希望如何處理？',
+    choiceHelp: '遷移只會在 OpenBitFun 和其他資料寫入程序停止後執行。', migrateNow: '立即遷移',
+    remindLater: '稍後提醒', doNotRemind: '不再提醒', stepScope: '第 2 步',
+    scopeTitle: '選擇遷移範圍', scan: '掃描所選資料', stepReview: '第 3 步',
+    reviewTitle: '檢查掃描結果', prepare: '執行遷移預檢', stepConfirm: '第 4 步',
+    planTitle: '確認遷移', retryWriters: '重新檢查程序', start: '開始遷移',
+    stepProgress: '第 5 步', progressTitle: '遷移進度', phase: '階段', domain: '領域',
+    count: '已完成步驟', cancel: '取消', stepDone: '結果', reportTitle: '遷移報告',
+    reportPrivacy: '此摘要僅包含計數和結果碼，不包含憑據或使用者正文。',
+    exportDiagnostics: '匯出失敗診斷', diagnosticsExported: '去敏診斷已儲存至 {path}',
+    openDesktop: '開啟 OpenBitFun',
+    closeMigrator: '關閉資料遷移器',
+    devRestartHelp: '開發版本：關閉資料遷移器，然後重新執行 pnpm run desktop:dev。',
+    bootstrapPending: '資料遷移器仍在載入，請稍後重試。',
+    bootstrapFailed: '資料遷移器無法載入已驗證的遷移請求。',
+    ready: '可遷移', unsupported: '不支援', missing: '未發現',
+    sourceFound: '已發現 BitFun {version}。遷移期間來源保持唯讀。',
+    recovery: '發現上次遷移日誌，可以從安全狀態繼續。',
+    blockers: '遷移前還需停止 {count} 個資料寫入程序。', noBlockers: '沒有程序阻止遷移。',
+    steps: '{count} 個遷移步驟', conflicts: '{count} 個衝突',
+    imported: '已匯入', staged: '已暫存', skipped: '已略過', warnings: '警告',
+  },
+};
+
+const locale = navigator.language.startsWith('zh-TW') || navigator.language.startsWith('zh-HK')
+  ? 'zh-TW'
+  : navigator.language.startsWith('zh') ? 'zh-CN' : 'en';
+const text = translations[locale];
+document.documentElement.lang = locale;
+document.querySelectorAll('[data-i18n]').forEach((node) => {
+  node.textContent = text[node.dataset.i18n] || translations.en[node.dataset.i18n];
+});
+
+const groups = [
+  ['settings_and_credentials', {
+    en: ['Settings and credentials', 'Settings are imported; credentials that cannot be decrypted are marked for sign-in.'],
+    'zh-CN': ['设置与服务凭据', '导入设置；无法解密的凭据会标记为需要重新登录。'],
+    'zh-TW': ['設定與服務憑據', '匯入設定；無法解密的憑據會標記為需要重新登入。'],
+  }],
+  ['agents_skills_and_miniapps', {
+    en: ['Agents, Skills, and MiniApps', 'Imports user extensions and saved data from built-in MiniApps. Built-in code is provided by OpenBitFun.'],
+    'zh-CN': ['Agents、Skills 与 MiniApps', '导入用户扩展和内置 MiniApps 的使用数据；内置代码由新版提供。'],
+    'zh-TW': ['Agents、Skills 與 MiniApps', '匯入使用者擴充與內建 MiniApps 的使用資料；內建程式碼由新版提供。'],
+  }],
+  ['workspaces_sessions_and_tasks', {
+    en: ['Workspaces, sessions, and tasks', 'Imports workspaces, conversation history, and Agent task status.'],
+    'zh-CN': ['工作区、会话与 Agent 任务状态', '导入工作区、会话历史与 Agent 任务状态。'],
+    'zh-TW': ['工作區、工作階段與 Agent 任務狀態', '匯入工作區、會話歷史與 Agent 任務狀態。'],
+  }],
+  ['memory', {
+    en: ['Memory', 'Imports memory databases and memory files.'],
+    'zh-CN': ['记忆', '导入记忆数据库与记忆文件。'],
+    'zh-TW': ['記憶', '匯入記憶資料庫與記憶檔案。'],
+  }],
+  ['remote_connections_and_devices', {
+    en: ['Remote connections and devices', 'Imports remote connections and device settings. Some connections may require signing in again.'],
+    'zh-CN': ['远程连接与设备', '导入远程连接与设备设置；部分连接可能需要重新登录。'],
+    'zh-TW': ['遠端連線與裝置', '匯入遠端連線與裝置設定；部分連線可能需要重新登入。'],
+  }],
+];
+
+let current;
+let pollTimer;
+
+function format(template, values) {
+  return Object.entries(values).reduce((value, [key, replacement]) =>
+    value.replace(`{${key}}`, String(replacement)), template);
+}
+
+function show(id, visible = true) {
+  document.getElementById(id).hidden = !visible;
+}
+
+function setBusy(busy) {
+  document.querySelectorAll('button').forEach((button) => { button.disabled = busy; });
+}
+
+function notice(message) {
+  const node = document.getElementById('notice');
+  node.textContent = message || '';
+  node.hidden = !message;
+}
+
+function requireBootstrap() {
+  if (current) return true;
+  notice(text.bootstrapPending);
+  return false;
+}
+
+function row(title, detail) {
+  const item = document.createElement('div');
+  item.className = 'result-row';
+  const strong = document.createElement('strong');
+  strong.textContent = title;
+  const small = document.createElement('small');
+  small.textContent = detail;
+  item.append(strong, small);
+  return item;
+}
+
+function transferLabel(result) {
+  return result.state === 'verified' ? text.imported : text.staged;
+}
+
+function renderScopes(selection) {
+  const list = document.getElementById('scope-list');
+  list.replaceChildren();
+  const selected = new Set(selection?.groups?.length ? selection.groups : groups.map(([id]) => id));
+  groups.forEach(([id, labels]) => {
+    const option = document.createElement('div');
+    option.className = 'scope-option';
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.id = `scope-${id}`;
+    checkbox.value = id;
+    checkbox.checked = selected.has(id);
+    if (current?.mode === 'execute') checkbox.disabled = true;
+    const label = document.createElement('label');
+    label.htmlFor = checkbox.id;
+    const strong = document.createElement('strong');
+    const description = document.createElement('span');
+    [strong.textContent, description.textContent] = labels[locale] || labels.en;
+    label.append(strong, description);
+    option.append(checkbox, label);
+    list.append(option);
+  });
+}
+
+function selection() {
+  return {
+    groups: [...document.querySelectorAll('#scope-list input:checked')].map((input) => input.value),
+  };
+}
+
+function render(view) {
+  current = view;
+  const source = view.source;
+  document.getElementById('source-badge').textContent = !source
+    ? text.missing : source.supported ? text.ready : text.unsupported;
+  document.getElementById('source-summary').textContent = source
+    ? format(text.sourceFound, { version: source.productVersion }) : text.missing;
+  document.getElementById('source-path').textContent = source?.roots?.[0]?.displayPath || '';
+  notice(view.error?.message || (view.recovery ? text.recovery : ''));
+
+  show('choice-card', view.mode === 'onboarding' && !view.findings.length && !view.plan && !view.running);
+  show('scope-card', Boolean(source) && (view.mode === 'execute' || view.findings.length || view.plan));
+  renderScopes(view.selection);
+
+  const findings = document.getElementById('findings');
+  findings.replaceChildren(...view.findings.map((finding) =>
+    row(finding.code, `${finding.entityCount} item(s), ${finding.logicalBytes} byte(s)`)));
+  show('scan-card', view.findings.length > 0 && !view.plan);
+
+  const planSummary = document.getElementById('plan-summary');
+  if (view.plan) {
+    planSummary.replaceChildren(
+      row(text.steps.replace('{count}', view.plan.steps.length), view.plan.planHash),
+      row(text.conflicts.replace('{count}', view.plan.conflicts.length), `${view.plan.estimatedWriteBytes} byte(s)`),
+    );
+  }
+  show('plan-card', Boolean(view.plan) && !view.running && !view.report);
+  const blocker = document.getElementById('blockers');
+  blocker.textContent = view.blockers.length
+    ? format(text.blockers, { count: view.blockers.length }) : text.noBlockers;
+  blocker.hidden = !view.blockers.length;
+  show('retry-writers', view.blockers.length > 0);
+
+  const progress = view.progress;
+  show('progress-card', Boolean(progress) && (view.running || view.status === 'cancelled'));
+  if (progress) {
+    document.getElementById('phase').textContent = progress.phase;
+    document.getElementById('domain').textContent = progress.domain || '-';
+    document.getElementById('count').textContent = `${progress.processed} / ${progress.total}`;
+    document.getElementById('progress-message').textContent = progress.code.replaceAll('_', ' ');
+    document.getElementById('cancel').disabled = !view.running;
+  }
+
+  const reportSummary = document.getElementById('report-summary');
+  if (view.report) {
+    reportSummary.replaceChildren(...view.report.domainResults.map((result) =>
+      row(result.domain, `${result.imported} ${transferLabel(result)}, ${result.skipped} ${text.skipped}, ${result.warnings.filter((item) => item.severity !== 'info').length} ${text.warnings}`)));
+  }
+  show('dev-restart-help', !view.restartDesktopOnFinish);
+  document.getElementById('open-desktop').textContent = view.restartDesktopOnFinish
+    ? text.openDesktop : text.closeMigrator;
+  show('report-card', !view.running && (Boolean(view.report) || view.status === 'cancelled'));
+  const canExportDiagnostics = ['failed_recoverable', 'failed_manual_action_required'].includes(view.status);
+  show('export-diagnostics', canExportDiagnostics);
+  if (!canExportDiagnostics) {
+    const output = document.getElementById('diagnostics-path');
+    output.textContent = '';
+    output.hidden = true;
+  }
+  document.getElementById('start').disabled = !view.canExecute;
+
+  if (view.running && !pollTimer) {
+    pollTimer = window.setInterval(refresh, 500);
+  } else if (!view.running && pollTimer) {
+    window.clearInterval(pollTimer);
+    pollTimer = undefined;
+  }
+}
+
+async function call(command, request = {}) {
+  setBusy(true);
+  try {
+    const result = await invoke(command, { request });
+    if (result) render(result);
+    return result;
+  } catch (error) {
+    notice(error?.message || String(error));
+    return undefined;
+  } finally {
+    setBusy(false);
+    if (current) render(current);
+  }
+}
+
+async function refresh() {
+  try {
+    render(await invoke('get_migrator_bootstrap', { request: {} }));
+  } catch (error) {
+    const message = error?.message || (typeof error === 'string' ? error : '');
+    notice(message || text.bootstrapFailed);
+    if (pollTimer) window.clearInterval(pollTimer);
+    pollTimer = undefined;
+  }
+}
+
+document.getElementById('migrate-now').addEventListener('click', () => {
+  if (!requireBootstrap()) return;
+  show('choice-card', false);
+  show('scope-card');
+  renderScopes(current.selection);
+});
+document.getElementById('remind-later').addEventListener('click', () =>
+  call('finish_legacy_migration', { choice: 'remind_later' }));
+document.getElementById('do-not-remind').addEventListener('click', () =>
+  call('finish_legacy_migration', { choice: 'do_not_remind' }));
+document.getElementById('scan').addEventListener('click', () =>
+  call('scan_legacy_migration', { selection: selection() }));
+document.getElementById('prepare').addEventListener('click', () =>
+  call('prepare_legacy_migration', { selection: selection() }));
+document.getElementById('retry-writers').addEventListener('click', () =>
+  call('retry_writer_check'));
+document.getElementById('start').addEventListener('click', () =>
+  call('start_legacy_migration', { planHash: current.plan.planHash }));
+document.getElementById('cancel').addEventListener('click', () =>
+  call('cancel_legacy_migration'));
+document.getElementById('export-diagnostics').addEventListener('click', async () => {
+  setBusy(true);
+  try {
+    const result = await invoke('export_migration_diagnostics', { request: {} });
+    const output = document.getElementById('diagnostics-path');
+    output.textContent = format(text.diagnosticsExported, { path: result.filePath });
+    output.hidden = false;
+  } catch (error) {
+    notice(error?.message || String(error));
+  } finally {
+    setBusy(false);
+    if (current) render(current);
+  }
+});
+document.getElementById('open-desktop').addEventListener('click', () =>
+  call('finish_legacy_migration', { choice: current.report ? 'migrate_now' : 'remind_later' }));
+
+refresh().then(() => {
+  if (current?.mode === 'execute') show('scope-card');
+});

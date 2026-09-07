@@ -105,6 +105,7 @@ local-storage = [
     "windows/Win32_Foundation",
     "windows/Win32_Storage_FileSystem",
 ]
+memory-store = ["dep:rusqlite"]
 product-identity = ["dep:openbitfun-core-types"]
 token-usage-statistics = ["local-storage", "dep:chrono-tz"]
 process-runtime = [
@@ -119,6 +120,7 @@ process-runtime = [
     "tokio/time",
     "windows/Win32_Foundation",
     "windows/Win32_System_Diagnostics_ToolHelp",
+    "windows/Win32_System_JobObjects",
     "windows/Win32_System_Threading",
 ]
 workspace-instructions = [

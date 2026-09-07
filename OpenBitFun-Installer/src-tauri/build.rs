@@ -5,8 +5,9 @@ use std::path::{Path, PathBuf};
 use zip::write::FileOptions;
 use zip::{CompressionMethod, ZipWriter};
 
-const REQUIRED_PAYLOAD_FILES: [&str; 5] = [
+const REQUIRED_PAYLOAD_FILES: [&str; 6] = [
     "openbitfun-desktop.exe",
+    "openbitfun-data-migrator.exe",
     "frontend/dist/index.html",
     "mobile-web/dist/index.html",
     "resources/ext-host/extension-host.js",
@@ -14,6 +15,7 @@ const REQUIRED_PAYLOAD_FILES: [&str; 5] = [
 ];
 
 fn main() {
+    println!("cargo:rerun-if-env-changed=OPENBITFUN_RELEASE_CHANNEL");
     if let Err(err) = build_embedded_payload() {
         panic!("failed to build embedded payload: {err}");
     }

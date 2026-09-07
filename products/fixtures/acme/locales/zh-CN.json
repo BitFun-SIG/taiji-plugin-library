@@ -1,4 +1,5 @@
 {
   "product.cli.name": "Acme 命令行",
+  "product.dataMigrator.name": "Acme 数据迁移器",
   "product.desktop.name": "Acme 桌面版"
 }

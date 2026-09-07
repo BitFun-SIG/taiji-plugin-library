@@ -12,6 +12,7 @@ const ACME = join(ROOT, 'products', 'fixtures', 'acme', 'product.jsonc');
 test('default and custom members resolve through one deterministic contract', () => {
   const openbitfun = resolveProductDefinition({ rootDir: ROOT, member: 'desktop' });
   const desktop = resolveProductDefinition({ rootDir: ROOT, productConfig: ACME, member: 'desktop' });
+  const dataMigrator = resolveProductDefinition({ rootDir: ROOT, productConfig: ACME, member: 'dataMigrator' });
   const cli = resolveProductDefinition({ rootDir: ROOT, productConfig: ACME, member: 'cli' });
 
   assert.equal(openbitfun.assembly.productId, 'openbitfun');
@@ -19,9 +20,16 @@ test('default and custom members resolve through one deterministic contract', ()
   assert.equal(openbitfun.assembly.binaryName, 'openbitfun-desktop');
   assert.equal(openbitfun.assembly.bundleId, 'com.openbitfun.desktop');
   assert.equal(desktop.assembly.bundleId, 'com.acme.desktop');
+  assert.equal(dataMigrator.assembly.binaryName, 'acme-data-migrator');
+  assert.equal(dataMigrator.assembly.bundleId, 'com.acme.data-migrator');
+  assert.deepEqual(dataMigrator.assembly.memberBinaryNames, {
+    desktop: 'acme-desktop',
+    dataMigrator: 'acme-data-migrator',
+  });
   assert.equal(cli.assembly.binaryName, 'acme');
   assert.equal(cli.assembly.bundleId, undefined);
   assert.notEqual(desktop.assembly.assemblyDigest, cli.assembly.assemblyDigest);
+  assert.notEqual(desktop.assembly.assemblyDigest, dataMigrator.assembly.assemblyDigest);
   assert.equal(
     resolveProductDefinition({ rootDir: ROOT, productConfig: ACME, member: 'desktop' })
       .assembly.assemblyDigest,

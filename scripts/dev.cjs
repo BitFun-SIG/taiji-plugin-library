@@ -153,6 +153,7 @@ function runCommandPrefixed(prefix, cmd, args, cwd = ROOT_DIR, envOverrides = {}
     const child = spawn(cmd, args, {
       cwd,
       shell: process.platform === 'win32',
+      windowsHide: true,
       stdio: ['ignore', 'pipe', 'pipe'],
       env: {
         ...process.env,
@@ -670,6 +671,22 @@ async function main() {
   });
   if (prepFailed) {
     process.exit(1);
+  }
+
+  // Build after version generation and before Desktop starts. Cargo checks
+  // freshness so an existing but stale Migrator is rebuilt as well.
+  if (desktopMode) {
+    printInfo('Preparing Data Migrator (incremental Debug build)');
+    const migratorBuild = await runCommandPrefixed(
+      'data-migrator',
+      'cargo',
+      ['build', '-p', 'openbitfun-data-migrator', '--bin', 'openbitfun-data-migrator'],
+    );
+    if (!migratorBuild.ok) {
+      printError('Data Migrator build failed; Desktop was not started');
+      if (migratorBuild.error?.message) printError(migratorBuild.error.message);
+      process.exit(1);
+    }
   }
 
   if (desktopMode) {

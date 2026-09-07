@@ -29,9 +29,9 @@ use crate::service::remote_ssh::workspace_state::{
 };
 use crate::service::session::{
     DialogTurnData, SessionMetadata, SessionTranscriptExport, SessionTranscriptExportOptions,
-    SessionTurnCatalog, SessionTurnCatalogEntry, SessionTurnWindowResponse, TranscriptLineRange,
-    TurnRailCapsulePreview, TurnRailCapsuleSegment, SESSION_STORAGE_SCHEMA_VERSION,
-    SESSION_TURN_CATALOG_SCHEMA_VERSION,
+    SessionTurnCatalog, SessionTurnCatalogEntry, SessionTurnWindowResponse, StoredDialogTurnFile,
+    TranscriptLineRange, TurnRailCapsulePreview, TurnRailCapsuleSegment,
+    SESSION_STORAGE_SCHEMA_VERSION, SESSION_TURN_CATALOG_SCHEMA_VERSION,
 };
 use crate::service::workspace_runtime::WorkspaceRuntimeService;
 use crate::util::errors::{OpenBitFunError, OpenBitFunResult};
@@ -158,13 +158,6 @@ fn current_unix_secs() -> i64 {
         .duration_since(UNIX_EPOCH)
         .map(|duration| duration.as_secs() as i64)
         .unwrap_or_default()
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct StoredDialogTurnFile {
-    schema_version: u32,
-    #[serde(flatten)]
-    turn: DialogTurnData,
 }
 
 /// Legacy navigation repair reads only identity/outcome fields. In particular,
@@ -3535,10 +3528,7 @@ impl PersistenceManager {
         self.invalidate_session_search(workspace_path, &turn.session_id)
             .await;
 
-        let file = StoredDialogTurnFile {
-            schema_version: SESSION_STORAGE_SCHEMA_VERSION,
-            turn: turn.clone(),
-        };
+        let file = StoredDialogTurnFile::new(turn.clone());
         let write_started_at = Instant::now();
         self.write_json_atomic(
             &self.turn_path(workspace_path, &turn.session_id, turn.turn_index),

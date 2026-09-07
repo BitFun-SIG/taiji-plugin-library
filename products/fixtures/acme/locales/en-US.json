@@ -1,4 +1,5 @@
 {
   "product.cli.name": "Acme CLI",
+  "product.dataMigrator.name": "Acme Data Migrator",
   "product.desktop.name": "Acme Desktop"
 }

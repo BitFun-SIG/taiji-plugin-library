@@ -63,7 +63,7 @@ pub mod mcp;
 #[cfg(feature = "models-dev")]
 pub mod models_dev;
 
-#[cfg(feature = "miniapp-runtime")]
+#[cfg(any(feature = "miniapp-runtime", feature = "miniapp-storage"))]
 pub mod miniapp;
 
 #[cfg(feature = "miniapp-market")]
@@ -77,6 +77,9 @@ mod repository_trust;
 
 #[cfg(feature = "remote-connect")]
 pub mod remote_connect;
+
+#[cfg(feature = "remote-persistence")]
+pub mod remote_persistence;
 
 #[cfg(all(test, feature = "remote-connect"))]
 mod feature_contract_tests {

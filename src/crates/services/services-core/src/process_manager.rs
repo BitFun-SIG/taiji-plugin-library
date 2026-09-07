@@ -4,7 +4,7 @@
 //! only closes managed child trees; it must never close a Job containing the
 //! calling host before an updater, restart, or shutdown can finish.
 
-use std::process::Command;
+use std::process::{Command, Stdio};
 #[cfg(windows)]
 use std::sync::LazyLock;
 #[cfg(target_os = "macos")]
@@ -25,6 +25,10 @@ use win32job::Job;
 
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x08000000;
+#[cfg(windows)]
+const CREATE_NEW_PROCESS_GROUP: u32 = 0x00000200;
+#[cfg(windows)]
+const CREATE_BREAKAWAY_FROM_JOB: u32 = 0x01000000;
 
 #[cfg(windows)]
 static GLOBAL_PROCESS_MANAGER: LazyLock<ProcessManager> = LazyLock::new(ProcessManager::new);
@@ -62,6 +66,7 @@ impl ProcessManager {
         let mut info = ExtendedLimitInfo::new();
         info.limit_kill_on_job_close();
         job.set_extended_limit_info(&info)?;
+        allow_explicit_job_breakaway(&job)?;
 
         // Assign current process to Job so child processes inherit automatically
         job.assign_current_process()?;
@@ -77,6 +82,43 @@ impl ProcessManager {
     pub fn cleanup_all(&self) {
         crate::process_tree::cleanup_all_process_trees();
     }
+}
+
+#[cfg(windows)]
+fn allow_explicit_job_breakaway(job: &Job) -> Result<(), Box<dyn std::error::Error>> {
+    use std::ffi::c_void;
+    use std::mem::size_of;
+    use windows::Win32::Foundation::HANDLE;
+    use windows::Win32::System::JobObjects::{
+        JobObjectExtendedLimitInformation, QueryInformationJobObject, SetInformationJobObject,
+        JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JOB_OBJECT_LIMIT_BREAKAWAY_OK,
+    };
+
+    let handle = HANDLE(job.handle() as *mut c_void);
+    let mut info = JOBOBJECT_EXTENDED_LIMIT_INFORMATION::default();
+    // SAFETY: `job` owns a live Job handle and `info` is a correctly sized,
+    // writable buffer for the requested information class.
+    unsafe {
+        QueryInformationJobObject(
+            Some(handle),
+            JobObjectExtendedLimitInformation,
+            &mut info as *mut _ as *mut c_void,
+            size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
+            None,
+        )?;
+    }
+    info.BasicLimitInformation.LimitFlags |= JOB_OBJECT_LIMIT_BREAKAWAY_OK;
+    // SAFETY: the same live Job handle and initialized information buffer are
+    // passed with their exact byte size.
+    unsafe {
+        SetInformationJobObject(
+            handle,
+            JobObjectExtendedLimitInformation,
+            &info as *const _ as *const c_void,
+            size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
+        )?;
+    }
+    Ok(())
 }
 
 /// Create synchronous Command (Windows automatically adds CREATE_NO_WINDOW)
@@ -114,6 +156,55 @@ pub fn create_tokio_command<S: AsRef<std::ffi::OsStr>>(program: S) -> TokioComma
 
     #[cfg(not(any(target_os = "macos", windows)))]
     cmd
+}
+
+/// Create a command that must survive the current GUI process exiting.
+///
+/// This is reserved for signed, product-owned process handoffs such as the
+/// offline Data Migrator and the trusted main-app restart. Callers must resolve
+/// the executable from an authenticated installation boundary; this helper
+/// only supplies lifecycle and no-console-window behavior.
+pub fn create_detached_command<S: AsRef<std::ffi::OsStr>>(program: S) -> Command {
+    let mut command = create_handoff_command(program);
+
+    #[cfg(windows)]
+    command.creation_flags(detached_creation_flags());
+
+    command
+}
+
+/// Create a hidden Windows handoff process group without requesting Job
+/// breakaway.
+///
+/// The child keeps the caller's Job association when one exists. This is a
+/// development-only fallback for hosts whose outer Job rejects explicit
+/// breakaway; callers must not treat it as equivalent to a detached handoff.
+#[cfg(windows)]
+pub fn create_inherited_job_process_group_command<S: AsRef<std::ffi::OsStr>>(
+    program: S,
+) -> Command {
+    let mut command = create_handoff_command(program);
+    command.creation_flags(inherited_job_process_group_creation_flags());
+    command
+}
+
+fn create_handoff_command<S: AsRef<std::ffi::OsStr>>(program: S) -> Command {
+    let mut command = Command::new(program.as_ref());
+    command
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+    command
+}
+
+#[cfg(windows)]
+const fn detached_creation_flags() -> u32 {
+    CREATE_NO_WINDOW | CREATE_NEW_PROCESS_GROUP | CREATE_BREAKAWAY_FROM_JOB
+}
+
+#[cfg(windows)]
+const fn inherited_job_process_group_creation_flags() -> u32 {
+    CREATE_NO_WINDOW | CREATE_NEW_PROCESS_GROUP
 }
 
 #[cfg(target_os = "macos")]
@@ -179,4 +270,25 @@ pub fn contain_current_process_tree() -> std::io::Result<()> {
         return Err(std::io::Error::other("Windows process Job is unavailable"));
     }
     Ok(())
+}
+
+#[cfg(all(test, windows))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn detached_handoff_is_hidden_and_can_leave_the_process_job() {
+        let flags = detached_creation_flags();
+        assert_ne!(flags & CREATE_NO_WINDOW, 0);
+        assert_ne!(flags & CREATE_NEW_PROCESS_GROUP, 0);
+        assert_ne!(flags & CREATE_BREAKAWAY_FROM_JOB, 0);
+    }
+
+    #[test]
+    fn inherited_job_handoff_is_hidden_without_requesting_breakaway() {
+        let flags = inherited_job_process_group_creation_flags();
+        assert_ne!(flags & CREATE_NO_WINDOW, 0);
+        assert_ne!(flags & CREATE_NEW_PROCESS_GROUP, 0);
+        assert_eq!(flags & CREATE_BREAKAWAY_FROM_JOB, 0);
+    }
 }

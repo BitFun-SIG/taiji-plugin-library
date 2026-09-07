@@ -28,6 +28,10 @@ slices that are outside pure product logic but still platform-neutral.
   orchestration ports, LAN/ngrok provider helpers, IM bot provider clients,
   provider-private cursor caches, mobile-web relay upload, image-context adapter
   contracts, remote workspace helpers, and command/response assembly.
+- The `remote-persistence` feature is the lightweight persisted-shape owner shared
+  by Remote Connect, remote SSH, and offline migration. Keep it free of network,
+  SSH transport, and runtime orchestration dependencies so owner readers and
+  writers can validate staged data without enabling those heavier families.
 - Remote workspace facts, session metadata, file projection DTOs, and
   workspace/projection host traits belong in `openbitfun-runtime-ports`.
 - Workspace-root source selection, persistence/workspace service reads,
@@ -108,6 +112,7 @@ streamable HTTP stay independent. Representative stable entry points are:
 
 ```bash
 cargo check -p openbitfun-services-integrations --no-default-features
+cargo test -p openbitfun-services-integrations --no-default-features --features remote-persistence --lib remote_persistence::tests::
 cargo test -p openbitfun-services-integrations --no-default-features --features mcp --test mcp_contracts
 cargo test -p openbitfun-services-integrations --no-default-features --features mcp --test mcp_streamable_http_contracts
 cargo test -p openbitfun-services-integrations --no-default-features --features remote-ssh --test remote_ssh_contracts remote_ssh_disabled_contracts::

@@ -10,6 +10,11 @@
       "binaryName": "openbitfun-desktop",
       "bundleId": "com.openbitfun.desktop"
     },
+    "dataMigrator": {
+      "displayNameKey": "product.dataMigrator.name",
+      "binaryName": "openbitfun-data-migrator",
+      "bundleId": "com.openbitfun.data-migrator"
+    },
     "cli": {
       "displayNameKey": "product.cli.name",
       "binaryName": "openbitfun"

@@ -9126,6 +9126,140 @@
       "options": []
     },
     {
+      "id": "setting.data.migration",
+      "kind": "setting",
+      "categoryId": "data",
+      "titleZh": "旧版数据迁移",
+      "titleEn": "Legacy data migration",
+      "summaryZh": "从本机旧版 安装扫描并导入受支持的数据，查看去敏报告，同时保持旧来源不变。",
+      "summaryEn": "Scan and import supported data from a local legacy installation, inspect redacted reports, and leave the legacy source unchanged.",
+      "keywordsZh": [
+        "旧版数据迁移",
+        "旧版数据",
+        "迁移报告",
+        "导入旧数据",
+        "Data Migrator"
+      ],
+      "keywordsEn": [
+        "legacy data migration",
+        "legacy data",
+        "migration report",
+        "import old data",
+        "Data Migrator"
+      ],
+      "highlightsZh": [
+        "只读扫描本机旧版数据",
+        "按五个高层数据组选择迁移范围",
+        "通过独立 Data Migrator 导入并查看去敏报告"
+      ],
+      "highlightsEn": [
+        "Read-only scan of local legacy data",
+        "Choose migration scope across five high-level data groups",
+        "Import through the standalone Data Migrator and inspect redacted reports"
+      ],
+      "items": [
+        {
+          "id": "scan",
+          "titleZh": "只读扫描本机旧版数据来源及所选数据组",
+          "titleEn": "Read-only scan the local legacy source and selected data groups",
+          "control": {
+            "kind": "open",
+            "reasonCode": "unstructuredInteraction",
+            "reasonZh": "“只读扫描本机旧版数据来源及所选数据组”：扫描依赖当前设备上的旧版数据、实时范围选择和结果状态；Agent 会打开精确入口，并把选择与扫描保留在用户可见界面。",
+            "reasonEn": "Read-only scan the local legacy source and selected data groups: Scanning depends on legacy data on the current device, live scope selection, and result state; the Agent opens the exact entry and keeps selection and scanning visible to the user."
+          },
+          "evidence": [
+            "command:get_legacy_migration_status",
+            "command:scan_legacy_migration",
+            "source:src/web-ui/src/locales/zh-CN/settings/legacy-migration.json#actions.scan"
+          ]
+        },
+        {
+          "id": "scope",
+          "titleZh": "选择设置、扩展、会话、记忆和远程连接迁移范围",
+          "titleEn": "Choose settings, extensions, sessions, memory, and remote-connection migration scope",
+          "control": {
+            "kind": "open",
+            "reasonCode": "visualSelection",
+            "reasonZh": "迁移范围是影响本机持久数据的五组可见选择；Agent 会打开精确入口，由用户确认所需范围。",
+            "reasonEn": "Migration scope is a visible five-group selection affecting local persisted data; the Agent opens the exact entry so the user can confirm the intended scope."
+          },
+          "evidence": [
+            "source:src/web-ui/src/locales/zh-CN/settings/legacy-migration.json#sections.scope.title"
+          ]
+        },
+        {
+          "id": "launch",
+          "titleZh": "确认关闭影响后启动独立 Data Migrator",
+          "titleEn": "Launch the standalone Data Migrator after confirming shutdown impact",
+          "control": {
+            "kind": "open",
+            "reasonCode": "unstructuredInteraction",
+            "reasonZh": "“确认关闭影响后启动独立 Data Migrator”：启动迁移器会停止正在运行的 Agent 和终端任务、关闭 Desktop，并交接到独立本机进程；Agent 只打开入口，确认和启动保留在用户可见界面。",
+            "reasonEn": "Launch the standalone Data Migrator after confirming shutdown impact: Launching the migrator can stop running agents and terminal tasks, close Desktop, and hand off to a separate local process; the Agent only opens the entry while confirmation and launch remain visible to the user."
+          },
+          "evidence": [
+            "command:prepare_legacy_migration",
+            "source:src/web-ui/src/locales/zh-CN/settings/legacy-migration.json#confirm.title"
+          ]
+        },
+        {
+          "id": "report",
+          "titleZh": "查看最近运行结果和各领域去敏状态",
+          "titleEn": "Inspect the latest run result and redacted per-domain status",
+          "control": {
+            "kind": "open",
+            "reasonCode": "unstructuredInteraction",
+            "reasonZh": "“查看最近运行结果和各领域去敏状态”：报告取决于本机最近一次迁移运行和各领域实时状态；Agent 会打开精确入口，并把报告查看与失败组重试保留在用户可见界面。",
+            "reasonEn": "Inspect the latest run result and redacted per-domain status: Reports depend on the most recent local migration run and live per-domain state; the Agent opens the exact entry and keeps report review and failed-group retry visible to the user."
+          },
+          "evidence": [
+            "command:get_legacy_migration_report",
+            "source:src/web-ui/src/locales/zh-CN/settings/legacy-migration.json#sections.report.title"
+          ]
+        },
+        {
+          "id": "reminder",
+          "titleZh": "恢复已关闭的首次启动迁移提醒",
+          "titleEn": "Restore the first-start migration reminder after it was disabled",
+          "control": {
+            "kind": "open",
+            "reasonCode": "unstructuredInteraction",
+            "reasonZh": "“恢复已关闭的首次启动迁移提醒”：提醒偏好与当前本机旧数据来源绑定；Agent 会打开精确入口，由用户在可见界面决定是否恢复提醒。",
+            "reasonEn": "Restore the first-start migration reminder after it was disabled: The reminder preference is bound to the current local legacy source; the Agent opens the exact entry so the user can decide visibly whether to restore it."
+          },
+          "evidence": [
+            "command:set_legacy_migration_prompt_preference",
+            "source:src/web-ui/src/locales/zh-CN/settings/legacy-migration.json#actions.restoreReminder"
+          ]
+        }
+      ],
+      "stepsZh": [
+        "打开设置",
+        "进入“数据 > 旧版数据迁移”",
+        "扫描来源、选择范围并在确认关闭影响后启动迁移器"
+      ],
+      "stepsEn": [
+        "Open Settings",
+        "Go to Data > Legacy data migration",
+        "Scan the source, choose scope, and launch the migrator after confirming shutdown impact"
+      ],
+      "agentExamplesZh": [
+        "打开旧版数据迁移",
+        "带我查看数据迁移报告"
+      ],
+      "agentExamplesEn": [
+        "Open legacy data migration",
+        "Show me the data migration report"
+      ],
+      "destination": {
+        "kind": "settings",
+        "pageId": "data.migration"
+      },
+      "operations": [],
+      "options": []
+    },
+    {
       "id": "setting.data.diagnostics",
       "kind": "setting",
       "categoryId": "data",
@@ -9472,6 +9606,9 @@
     },
     "debug": {
       "capabilityId": "setting.data.diagnostics"
+    },
+    "legacy_migration": {
+      "capabilityId": "setting.data.migration"
     },
     "appearance": {
       "capabilityId": "feature.desktop-pet"

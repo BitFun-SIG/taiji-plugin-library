@@ -1,0 +1,224 @@
+:root {
+  color-scheme: light dark;
+  font-family: Inter, "Segoe UI", system-ui, sans-serif;
+  --surface: Canvas;
+  --surface-raised: color-mix(in srgb, Canvas 94%, CanvasText 6%);
+  --text: CanvasText;
+  --muted: color-mix(in srgb, CanvasText 64%, transparent);
+  --border: color-mix(in srgb, CanvasText 18%, transparent);
+  --accent: AccentColor;
+  --accent-text: AccentColorText;
+  --warning: color-mix(in srgb, Mark 18%, Canvas);
+  --focus: AccentColor;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--surface);
+  color: var(--text);
+}
+
+.shell {
+  width: min(760px, calc(100% - 40px));
+  margin: 0 auto;
+  padding: 44px 0 56px;
+}
+
+header {
+  margin-bottom: 26px;
+}
+
+h1,
+h2,
+p {
+  margin-top: 0;
+}
+
+h1 {
+  margin-bottom: 10px;
+  font-size: clamp(28px, 5vw, 42px);
+  line-height: 1.1;
+}
+
+h2 {
+  margin-bottom: 8px;
+  font-size: 20px;
+}
+
+.eyebrow,
+.step {
+  margin-bottom: 8px;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.lead,
+.muted {
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.card,
+.notice {
+  margin-bottom: 16px;
+  padding: 22px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface-raised);
+}
+
+.notice {
+  border-color: var(--accent);
+}
+
+.card-heading,
+.result-row,
+.scope-option {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.badge {
+  align-self: flex-start;
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: var(--border);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.path {
+  overflow-wrap: anywhere;
+  color: var(--muted);
+  font-family: ui-monospace, "Cascadia Mono", monospace;
+  font-size: 12px;
+}
+
+.scope-list,
+.result-list {
+  display: grid;
+  gap: 10px;
+  margin: 18px 0;
+}
+
+.scope-option,
+.result-row {
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.scope-option label {
+  flex: 1;
+  cursor: pointer;
+}
+
+.scope-option strong,
+.scope-option span {
+  display: block;
+}
+
+.scope-option span,
+.result-row small {
+  margin-top: 4px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--accent);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+button {
+  min-height: 40px;
+  padding: 9px 15px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 650;
+}
+
+button.primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-text);
+}
+
+button.quiet {
+  border-color: transparent;
+  background: transparent;
+}
+
+button:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+button:focus-visible,
+input:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.warning {
+  margin-top: 14px;
+  padding: 14px;
+  border-radius: 10px;
+  background: var(--warning);
+  line-height: 1.5;
+}
+
+.progress-facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.progress-facts div {
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.progress-facts dt {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.progress-facts dd {
+  margin: 6px 0 0;
+  overflow-wrap: anywhere;
+  font-weight: 700;
+}
+
+@media (max-width: 680px) {
+  .shell {
+    width: min(100% - 24px, 760px);
+    padding-top: 24px;
+  }
+
+  .progress-facts {
+    grid-template-columns: 1fr;
+  }
+}

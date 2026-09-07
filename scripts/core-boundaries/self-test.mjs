@@ -434,6 +434,7 @@ export function runManifestParserSelfTest({
       ],
     ],
     [servicesCoreManifest, 'product-identity', ['dep:openbitfun-core-types']],
+    [servicesCoreManifest, 'memory-store', ['dep:rusqlite']],
     [
       servicesCoreManifest,
       'local-storage',
@@ -471,6 +472,7 @@ export function runManifestParserSelfTest({
         'tokio/time',
         'windows/Win32_Foundation',
         'windows/Win32_System_Diagnostics_ToolHelp',
+        'windows/Win32_System_JobObjects',
         'windows/Win32_System_Threading',
       ],
     ],
@@ -1160,7 +1162,7 @@ export function runManifestParserSelfTest({
       'regex',
       ['diagnostics', 'filesystem', 'local-storage', 'markdown', 'workspace-instructions'],
     ],
-    ['rusqlite', ['permission']],
+    ['rusqlite', ['memory-store', 'permission']],
     ['serde_yaml', ['markdown', 'workspace-instructions']],
     ['similar', ['diff', 'local-storage']],
     [
@@ -1257,6 +1259,14 @@ export function runManifestParserSelfTest({
     );
     if (!owner?.ownerFeatures.includes('plugin-source')) {
       throw new Error(`services-integrations plugin-source must own optional dependency ${dep}`);
+    }
+  }
+  for (const dep of ['aes-gcm', 'anyhow', 'base64', 'hostname', 'openbitfun-services-core', 'rand', 'sha2', 'windows']) {
+    const owner = servicesOptionalOwnerRule?.dependencies.find(
+      (dependency) => dependency.depName === dep,
+    );
+    if (!owner?.ownerFeatures.includes('remote-persistence')) {
+      throw new Error(`services-integrations remote-persistence must own optional dependency ${dep}`);
     }
   }
   for (const dep of ['openbitfun-product-domains', 'image']) {

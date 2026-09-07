@@ -488,7 +488,7 @@ impl PathManager {
             .insert(workspace_path.to_path_buf(), slug.to_string());
     }
 
-    fn build_project_runtime_slug(canonical: &str) -> String {
+    pub(crate) fn build_project_runtime_slug(canonical: &str) -> String {
         let slug: String = canonical
             .chars()
             .map(|ch| {

@@ -340,6 +340,22 @@ impl StoredSessionMetadataFile {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StoredDialogTurnFile {
+    pub schema_version: u32,
+    #[serde(flatten)]
+    pub turn: DialogTurnData,
+}
+
+impl StoredDialogTurnFile {
+    pub fn new(turn: DialogTurnData) -> Self {
+        Self {
+            schema_version: SESSION_STORAGE_SCHEMA_VERSION,
+            turn,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StoredSessionIndexFile {
     pub schema_version: u32,
     pub updated_at: u64,
