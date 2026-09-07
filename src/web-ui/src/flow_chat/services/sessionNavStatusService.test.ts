@@ -13,6 +13,8 @@ const sources = vi.hoisted(() => ({
   mailbox: vi.fn().mockResolvedValue(undefined),
   permissions: [] as PermissionRequest[],
   permissionListeners: new Set<() => void>(),
+  reachability: new Map<string, 'unknown' | 'reachable' | 'unreachable'>(),
+  navigationListeners: new Set<() => void>(),
 }));
 vi.mock('@/infrastructure/api/service-api/AgentAPI', () => ({ agentAPI: Object.fromEntries([
   'onSessionStateChanged', 'onSessionHistoryChanged', 'onSessionDeleted', 'onDialogTurnStarted',
@@ -40,7 +42,23 @@ vi.mock('../store/FlowChatStore', () => ({ flowChatStore: {
 vi.mock('../state-machine', () => ({ stateMachineManager: {
   getSnapshot: () => null, subscribeGlobal: () => () => {},
 } }));
-vi.mock('../session-drivers/registry', () => ({ driverForSession: () => ({ permissionRequestSource: () => 'live' }) }));
+vi.mock('../session-drivers/registry', () => {
+  const navigationStatusSource = {
+    subscribe: (listener: () => void) => {
+      sources.navigationListeners.add(listener);
+      return () => sources.navigationListeners.delete(listener);
+    },
+    getSnapshot: (sessionId: string) => {
+      const reachability = sources.reachability.get(sessionId);
+      return reachability ? { reachability } : {};
+    },
+  };
+  const driver = { permissionRequestSource: () => 'live', navigationStatusSource };
+  return {
+    driverForSession: () => driver,
+    sessionDriverNavigationStatusSources: () => [navigationStatusSource],
+  };
+});
 vi.mock('./liveSessionInteractionStore', () => ({
   ensureActivePermissionMailbox: sources.mailbox,
   liveSessionInteractionStore: {
@@ -51,10 +69,6 @@ vi.mock('./liveSessionInteractionStore', () => ({
     },
   },
 }));
-vi.mock('@/features/dispatch/dispatchJobStore', () => ({ dispatchJobStore: {
-  getState: () => ({ transportByJobId: {} }), subscribe: () => () => {},
-} }));
-
 import { installSessionNavStatusService, sessionNavStatusService } from './sessionNavStatusService';
 import { sessionActivityStore } from '../store/sessionActivityStore';
 
@@ -76,6 +90,7 @@ beforeEach(() => {
   sources.read.mockReset();
   sources.sessions.clear();
   sources.permissions = [];
+  sources.reachability.clear();
   activateSurface(`service-test-${++sequence}`);
 });
 afterEach(() => {
@@ -236,5 +251,15 @@ describe('navigation status synchronization', () => {
     await vi.advanceTimersByTimeAsync(200);
     expect(sources.read).not.toHaveBeenCalled();
     expect(sessionNavStatusService.getSnapshot(id).kind).toBe('queued');
+  });
+
+  it('reads detached transport reachability through the session driver source', () => {
+    const id = 'offline-dispatch';
+    sources.sessions.set(id, row(id, { dispatchJobId: 'job', dispatchJobState: 'running' }));
+    install(id);
+    expect(sessionNavStatusService.getSnapshot(id).kind).toBe('running');
+    sources.reachability.set(id, 'unreachable');
+    sources.navigationListeners.forEach(listener => listener());
+    expect(sessionNavStatusService.getSnapshot(id).kind).toBe('syncing');
   });
 });

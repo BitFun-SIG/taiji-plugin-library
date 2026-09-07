@@ -1,6 +1,6 @@
 import type { PermissionRequest } from '@/infrastructure/api/service-api/AgentAPI';
-import type { DispatchReachability } from '@/features/dispatch/types';
 import type { SessionActivitySummary } from '@/shared/types/session-history';
+import type { SessionDriverReachability } from '../session-drivers/types';
 import { SessionExecutionState, type SessionStateMachine } from '../state-machine/types';
 import type { Session } from '../types/flow-chat';
 import { findPendingAskUserQuestion, TRANSIENT_TURN_STATUSES } from './askUserQuestionState';
@@ -21,7 +21,7 @@ export interface SessionNavStatusInput {
   session?: Session;
   machine?: SessionStateMachine | null;
   permissions?: readonly PermissionRequest[];
-  reachability?: DispatchReachability;
+  reachability?: SessionDriverReachability;
   activity?: SessionActivitySummary;
   unavailable?: boolean;
 }

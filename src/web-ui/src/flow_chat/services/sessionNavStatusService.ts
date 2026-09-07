@@ -2,13 +2,12 @@ import { agentAPI, type AgenticEvent, type PermissionRequest } from '@/infrastru
 import { sessionAPI } from '@/infrastructure/api/service-api/SessionAPI';
 import { getActiveSurfaceId, getActiveSurfaceScope, onSurfaceActivated, surfaceIdForDevice } from '@/infrastructure/peer-device/deviceSurface';
 import { observeSurfaceEvents } from '@/infrastructure/peer-device/deviceSurfaceRouting';
-import { dispatchJobStore } from '@/features/dispatch/dispatchJobStore';
 import { createLogger } from '@/shared/utils/logger';
 import { flowChatStore } from '../store/FlowChatStore';
 import { sessionActivityStore } from '../store/sessionActivityStore';
 import { stateMachineManager } from '../state-machine';
 import { SessionExecutionState } from '../state-machine/types';
-import { driverForSession } from '../session-drivers/registry';
+import { driverForSession, sessionDriverNavigationStatusSources } from '../session-drivers/registry';
 import { deriveSessionNavStatus, type SessionNavStatus } from '../utils/sessionNavStatus';
 import type { Session } from '../types/flow-chat';
 import { ensureActivePermissionMailbox, liveSessionInteractionStore } from './liveSessionInteractionStore';
@@ -47,7 +46,9 @@ function publish(sessionId: string): void {
   if (!row) return;
   const session = flowChatStore.getState().sessions.get(sessionId);
   row.session = session;
-  const source = driverForSession(sessionId, session).permissionRequestSource(sessionId);
+  const driver = driverForSession(sessionId, session);
+  const source = driver.permissionRequestSource(sessionId);
+  const navigationStatus = driver.navigationStatusSource?.getSnapshot(sessionId);
   indexPermissions();
   const jobId = session?.config.dispatchJobId;
   const activity = jobId ? undefined : sessionActivityStore.get(sessionId);
@@ -57,7 +58,7 @@ function publish(sessionId: string): void {
       && session?.historyState === 'metadata-only' && !session.hasUnreadCompletion && !session.needsUserAttention)),
     permissions: source === 'live' ? permissionsBySession.get(sessionId) ?? []
       : source.getSnapshot() as readonly PermissionRequest[],
-    reachability: jobId ? dispatchJobStore.getState().transportByJobId[jobId]?.reachability : undefined,
+    reachability: navigationStatus?.reachability,
   });
   if (row.status.kind === next.kind && row.status.pendingCount === next.pendingCount) return;
   row.status = next;
@@ -210,9 +211,14 @@ export function installSessionNavStatusService(): () => void {
       refresh(sessionId, true);
     }
   }));
-  disposers.push(dispatchJobStore.subscribe(() => {
-    for (const [sessionId, row] of rows) if (row.session?.config.dispatchJobId) publish(sessionId);
-  }));
+  for (const source of sessionDriverNavigationStatusSources()) {
+    disposers.push(source.subscribe(() => {
+      for (const sessionId of rows.keys()) {
+        const session = flowChatStore.getState().sessions.get(sessionId);
+        if (driverForSession(sessionId, session).navigationStatusSource === source) publish(sessionId);
+      }
+    }));
+  }
   const refreshAll = (force = true) => {
     if (!rows.size) return;
     if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;

@@ -43,18 +43,23 @@ export function useSessionCompletionReceipt(
   useEffect(() => {
     const scroller = scrollerRef.current;
     if (!snapshot || !sessionId || !scroller || !isActive) return;
+    const activeSessionId = sessionId;
+    const activeScroller = scroller;
     const [surfaceId, receipt, resultKey] = JSON.parse(snapshot) as [string, string, string];
     let frame: number | undefined;
     let observedResult: HTMLElement | undefined;
-    const resizeObserver = new ResizeObserver(() => schedule());
-    const check = () => {
+    function schedule() {
+      if (frame === undefined) frame = requestAnimationFrame(check);
+    }
+    const resizeObserver = new ResizeObserver(schedule);
+    function check() {
       frame = undefined;
       if (getActiveSurfaceId() !== surfaceId || document.visibilityState !== 'visible'
-        || !document.hasFocus() || !scroller.isConnected
-        || scroller.closest('[hidden], [inert], [aria-hidden="true"]')) return;
-      const style = getComputedStyle(scroller);
+        || !document.hasFocus() || !activeScroller.isConnected
+        || activeScroller.closest('[hidden], [inert], [aria-hidden="true"]')) return;
+      const style = getComputedStyle(activeScroller);
       if (style.visibility !== 'visible' || style.display === 'none') return;
-      const result = Array.from(scroller.querySelectorAll<HTMLElement>('.virtual-item-wrapper[data-virtual-item-key]'))
+      const result = Array.from(activeScroller.querySelectorAll<HTMLElement>('.virtual-item-wrapper[data-virtual-item-key]'))
         .find(element => element.dataset.virtualItemKey === resultKey);
       if (!result) return;
       if (observedResult !== result) {
@@ -62,26 +67,23 @@ export function useSessionCompletionReceipt(
         resizeObserver.observe(result);
         observedResult = result;
       }
-      const rect = scroller.getBoundingClientRect();
+      const rect = activeScroller.getBoundingClientRect();
       if (isCompletionResultVisible(result.getBoundingClientRect(), {
         top: Math.max(rect.top, 0), bottom: Math.min(rect.bottom, window.innerHeight),
         left: Math.max(rect.left, 0), right: Math.min(rect.right, window.innerWidth),
       })) {
-        flowChatStore.clearSessionUnreadCompletion(sessionId, { surfaceId, receipt });
+        flowChatStore.clearSessionUnreadCompletion(activeSessionId, { surfaceId, receipt });
       }
-    };
-    const schedule = () => {
-      if (frame === undefined) frame = requestAnimationFrame(check);
-    };
+    }
     // Only attached while a settled result is unread. Child-list observation
     // handles virtual-window mounts without watching every streamed text byte.
     const observer = new MutationObserver(schedule);
-    observer.observe(scroller, { childList: true, subtree: true });
-    for (let ancestor: HTMLElement | null = scroller; ancestor; ancestor = ancestor.parentElement) {
+    observer.observe(activeScroller, { childList: true, subtree: true });
+    for (let ancestor: HTMLElement | null = activeScroller; ancestor; ancestor = ancestor.parentElement) {
       observer.observe(ancestor, { attributes: true, attributeFilter: ['hidden', 'inert', 'aria-hidden', 'style', 'class'] });
     }
-    resizeObserver.observe(scroller);
-    scroller.addEventListener('scroll', schedule, { passive: true });
+    resizeObserver.observe(activeScroller);
+    activeScroller.addEventListener('scroll', schedule, { passive: true });
     window.addEventListener('focus', schedule);
     document.addEventListener('visibilitychange', schedule);
     schedule();
@@ -89,7 +91,7 @@ export function useSessionCompletionReceipt(
       if (frame !== undefined) cancelAnimationFrame(frame);
       observer.disconnect();
       resizeObserver.disconnect();
-      scroller.removeEventListener('scroll', schedule);
+      activeScroller.removeEventListener('scroll', schedule);
       window.removeEventListener('focus', schedule);
       document.removeEventListener('visibilitychange', schedule);
     };
