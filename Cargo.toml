@@ -27,6 +27,7 @@ members = [
     "src/crates/adapters/transport",
     "src/crates/services/services-core",
     "src/crates/services/services-integrations",
+    "src/crates/services/legacy-migration",
     "src/crates/services/miniapp-market-service",
     "src/crates/services/skin-market-service",
     "src/crates/services/relay-service",
@@ -197,6 +198,7 @@ urlencoding = "2.1"
 oxc = { version = "0.138.0", default-features = false, features = ["ast_visit", "codegen", "semantic", "transformer"] }
 oxc-parse = { package = "oxc", version = "0.138.0", default-features = false }
 sqlx = { version = "0.8", default-features = false }
+rusqlite = { version = "0.32", default-features = false }
 
 # Tauri (desktop only)
 tauri = { version = "2.11", features = ["unstable", "macos-private-api", "tray-icon"] }

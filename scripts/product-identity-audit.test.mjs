@@ -117,6 +117,20 @@ test('limits retired identity data to the one-time production migration boundary
     violationsFor(`const field = "${retiredField}";`, 'src/example.ts').length,
     1,
   );
+  assert.deepEqual(
+    violationsFor(
+      `const SOURCE_PRODUCT: &str = "${retiredLowerName}";`,
+      'src/crates/services/legacy-migration/src/source.rs',
+    ),
+    [],
+  );
+  assert.equal(
+    violationsFor(
+      `const SOURCE_PRODUCT: &str = "${retiredLowerName}";`,
+      'src/crates/services/example/src/source.rs',
+    ).length,
+    1,
+  );
 });
 
 test('allows retired Harmony identifiers only at the upgrade identity boundary', () => {
