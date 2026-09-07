@@ -1521,6 +1521,7 @@ export const coreClosedFeatureProfileRules = [
       'tokio/time',
       'windows/Win32_Foundation',
       'windows/Win32_System_Diagnostics_ToolHelp',
+      'windows/Win32_System_JobObjects',
       'windows/Win32_System_Threading',
     ],
     exact: true,

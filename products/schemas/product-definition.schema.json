@@ -14,9 +14,10 @@
     "members": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["desktop", "cli"],
+      "required": ["desktop", "dataMigrator", "cli"],
       "properties": {
         "desktop": { "$ref": "#/$defs/desktopMember" },
+        "dataMigrator": { "$ref": "#/$defs/desktopMember" },
         "cli": { "$ref": "#/$defs/commonMember" }
       }
     }

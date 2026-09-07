@@ -31,6 +31,10 @@ impl MigrationLayout {
         self.run_root().join("request.json")
     }
 
+    pub fn consumed_nonce_path(&self) -> PathBuf {
+        self.run_root().join("nonce-consumed.json")
+    }
+
     pub fn plan_path(&self) -> PathBuf {
         self.run_root().join("plan.json")
     }

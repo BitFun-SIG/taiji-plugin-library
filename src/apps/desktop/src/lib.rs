@@ -559,6 +559,19 @@ fn get_startup_native_trace(
 /// Tauri application entry point
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub async fn run() {
+    match api::legacy_migration_api::run_startup_probe() {
+        Ok(api::legacy_migration_api::StartupProbeDisposition::Continue { handled_run_id }) => {
+            api::legacy_migration_api::set_startup_handled_run_id(handled_run_id)
+        }
+        Ok(api::legacy_migration_api::StartupProbeDisposition::MigratorLaunched) => return,
+        Err(error) => {
+            show_fatal_startup_error(&format!(
+                "OpenBitFun could not safely inspect legacy BitFun migration state and cannot continue.\n\n{}\n\nRepair the installation or the migration state before retrying.",
+                api::legacy_migration_api::LegacyMigrationCommandError::from(error).message
+            ));
+            return;
+        }
+    }
     let startup_started = Instant::now();
     let startup_trace_id = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -1453,6 +1466,11 @@ pub async fn run() {
             api::agentic_api::set_session_memory_mode,
             webdriver_bridge_result,
             get_startup_native_trace,
+            api::legacy_migration_api::get_legacy_migration_status,
+            api::legacy_migration_api::scan_legacy_migration,
+            api::legacy_migration_api::prepare_legacy_migration,
+            api::legacy_migration_api::get_legacy_migration_report,
+            api::legacy_migration_api::set_legacy_migration_prompt_preference,
             api::agentic_api::list_sessions,
             api::agentic_api::list_pending_permission_requests,
             api::agentic_api::subscribe_permission_requests,

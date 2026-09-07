@@ -1,4 +1,5 @@
 {
   "product.cli.name": "OpenBitFun CLI",
+  "product.dataMigrator.name": "OpenBitFun Data Migrator",
   "product.desktop.name": "OpenBitFun"
 }

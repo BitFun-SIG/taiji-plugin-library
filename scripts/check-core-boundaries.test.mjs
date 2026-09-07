@@ -3900,6 +3900,7 @@ test('services-core capability profiles keep heavy owners out of the empty profi
     'tokio/time',
     'windows/Win32_Foundation',
     'windows/Win32_System_Diagnostics_ToolHelp',
+    'windows/Win32_System_JobObjects',
     'windows/Win32_System_Threading',
   ]);
   assert.deepEqual(profiles.get('workspace-instructions'), [

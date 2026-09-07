@@ -1,0 +1,20 @@
+.openbitfun-legacy-migration__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--openbitfun-space-2);
+}
+
+.openbitfun-legacy-migration__value {
+  color: var(--openbitfun-color-content-secondary);
+  font-size: var(--openbitfun-type-body-sm-font-size);
+  overflow-wrap: anywhere;
+  text-align: end;
+}
+
+.openbitfun-legacy-migration__impact-list {
+  display: grid;
+  gap: var(--openbitfun-space-1);
+  margin: 0;
+  padding-inline-start: var(--openbitfun-space-5);
+}

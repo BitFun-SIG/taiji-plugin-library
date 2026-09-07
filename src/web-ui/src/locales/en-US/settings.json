@@ -31,6 +31,7 @@
       "acp": { "label": "ACP Agents", "description": "Configure external agents that connect through Agent Client Protocol." },
       "usage": { "label": "Call Statistics", "description": "Model requests, token usage, and cache hit rates." },
       "archivedSessions": { "label": "Archived Sessions", "description": "View, restore, or permanently delete archived sessions." },
+      "legacyMigration": { "label": "Data Migration", "description": "Import supported data from an older BitFun installation." },
       "diagnostics": { "label": "Logs & Diagnostics", "description": "Log levels, runtime information, and troubleshooting." }
     },
     "views": {

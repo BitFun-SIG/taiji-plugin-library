@@ -31,6 +31,7 @@
       "acp": { "label": "ACP Agent", "description": "設定透過 Agent Client Protocol 接入的外部 Agent。" },
       "usage": { "label": "調用統計", "description": "模型請求數、Token 用量與快取命中率。" },
       "archivedSessions": { "label": "已歸檔會話", "description": "檢視、恢復或永久刪除已歸檔的會話。" },
+      "legacyMigration": { "label": "資料遷移", "description": "從受支援的舊版 BitFun 安裝匯入資料。" },
       "diagnostics": { "label": "日誌與診斷", "description": "日誌層級、執行資訊與故障排查。" }
     },
     "views": {

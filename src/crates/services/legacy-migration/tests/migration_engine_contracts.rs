@@ -6,7 +6,7 @@ use openbitfun_legacy_migration::{
 };
 use openbitfun_product_domains::legacy_migration::{
     FindingSeverity, MigrationDiagnostic, MigrationDomainId, MigrationDomainResult,
-    MigrationDomainState, MigrationGroupId, MigrationRunReport, MigrationRunStatus,
+    MigrationDomainState, MigrationGroupId, MigrationPhase, MigrationRunReport, MigrationRunStatus,
     MigrationSelection, ScanFinding,
 };
 use rusqlite::Connection;
@@ -277,6 +277,59 @@ fn engine_persists_owner_metadata_finalized_after_commit_validation() {
     )
     .expect("persisted report should be valid");
     assert_eq!(persisted, report);
+}
+
+#[test]
+fn progress_reports_real_domain_phases_counts_and_cancel_boundaries() {
+    let temp = test_tempdir();
+    let roots = fixture_roots(temp.path());
+    seed_supported_source(&roots);
+    let source = probe_legacy_source(&roots, ProbeLimits::default())
+        .expect("probe should succeed")
+        .expect("source should be present");
+    let engine = fake_engine(roots, Arc::new(Mutex::new(BTreeMap::new())));
+    let plan = engine
+        .plan(
+            &source,
+            MigrationSelection {
+                groups: BTreeSet::from([MigrationGroupId::SettingsAndCredentials]),
+            },
+            &CancellationToken::default(),
+        )
+        .expect("plan should succeed");
+    let mut progress = Vec::new();
+
+    engine
+        .execute_with_progress(
+            &plan,
+            &CancellationToken::default(),
+            &NoCrashInjection,
+            |event| progress.push(event),
+        )
+        .expect("execution should succeed");
+
+    for phase in [
+        MigrationPhase::Stage,
+        MigrationPhase::ValidateStage,
+        MigrationPhase::Commit,
+        MigrationPhase::ValidateCommit,
+        MigrationPhase::Finalize,
+    ] {
+        assert!(
+            progress.iter().any(|event| event.phase == phase),
+            "progress should include {phase:?}"
+        );
+    }
+    assert!(progress
+        .iter()
+        .filter(|event| event.phase == MigrationPhase::Commit)
+        .all(|event| !event.safe_to_cancel));
+    assert!(progress
+        .iter()
+        .any(|event| event.code == "domain_verified" && event.safe_to_cancel));
+    assert!(progress
+        .iter()
+        .all(|event| event.processed <= event.total && event.total == plan.steps.len() as u64));
 }
 
 #[test]

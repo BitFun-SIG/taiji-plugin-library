@@ -1,7 +1,10 @@
-use crate::{LegacyMigrationError, LegacyMigrationResult, MigrationRoots, LEGACY_PRODUCT_ID};
+use crate::{
+    LegacyMigrationError, LegacyMigrationResult, MigrationOnboardingStore, MigrationRoots,
+    LEGACY_PRODUCT_ID,
+};
 use openbitfun_product_domains::legacy_migration::{
     FindingSeverity, LegacyRootDescriptor, LegacyRootKind, LegacySourceDescriptor,
-    MigrationDiagnostic,
+    MigrationDiagnostic, MigrationPromptChoice, MigrationRunStatus,
 };
 use semver::{Version, VersionReq};
 use serde_json::Value;
@@ -69,7 +72,7 @@ pub fn probe_legacy_source(
     }
     let fingerprint = format!("sha256:{}", hex::encode(hasher.finalize()));
     let source_id = format!("bitfun-{}", &fingerprint[7..23]);
-    let already_migrated = source_was_migrated(roots, &fingerprint);
+    let already_migrated = source_was_migrated(roots, &fingerprint)?;
     let mut diagnostics = Vec::new();
     if version.is_none() {
         diagnostics.push(MigrationDiagnostic {
@@ -291,14 +294,17 @@ fn hash_path_fact(hasher: &mut Sha256, root: &Path, path: &Path) -> LegacyMigrat
     Ok(())
 }
 
-fn source_was_migrated(roots: &MigrationRoots, fingerprint: &str) -> bool {
-    let path = roots.migration_root().join("onboarding.json");
-    let Ok(bytes) = fs::read(path) else {
-        return false;
-    };
-    serde_json::from_slice::<Value>(&bytes)
-        .ok()
-        .and_then(|value| value.get("sourceFingerprint").cloned())
-        .and_then(|value| value.as_str().map(ToOwned::to_owned))
-        .is_some_and(|value| value == fingerprint)
+fn source_was_migrated(roots: &MigrationRoots, fingerprint: &str) -> LegacyMigrationResult<bool> {
+    let store = MigrationOnboardingStore::new(roots.clone());
+    let state = store.load()?;
+    if state.source_fingerprint != fingerprint || state.choice != MigrationPromptChoice::MigrateNow
+    {
+        return Ok(false);
+    }
+    Ok(store.load_last_report()?.is_some_and(|report| {
+        matches!(
+            report.status,
+            MigrationRunStatus::Completed | MigrationRunStatus::CompletedWithWarnings
+        )
+    }))
 }

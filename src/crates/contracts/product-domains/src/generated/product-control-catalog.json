@@ -4,7 +4,7 @@
   "title": "OpenBitFun Playbook",
   "origin": "https://playbook.openbitfun.com",
   "source": "src/shared/interactive-capabilities/catalog.json",
-  "digest": "d7a7419ddd673eb733ae8bd33dbb3dcd3b4d1ce0acfc953067a3403fe26d6699",
+  "digest": "cf1a4fae19862b0613cb1144cead8fcaaa7559b47d5a5f0f3a2c361be991083b",
   "ownerDigest": "c0e5c187cf62bc6ed06196ce8520b3eb427bf268cf24659b72d2552fb1d99c54",
   "searchAcceptance": [
     {
@@ -136,13 +136,13 @@
   ],
   "counts": {
     "features": 22,
-    "settings": 21,
-    "userFacing": 43,
-    "documentedItems": 321,
+    "settings": 22,
+    "userFacing": 44,
+    "documentedItems": 326,
     "controlCoverage": {
       "direct": 48,
       "delegated": 61,
-      "interactive": 212,
+      "interactive": 217,
       "unsupported": 0
     }
   },
@@ -18766,6 +18766,285 @@
       }
     },
     {
+      "id": "setting.data.migration:query",
+      "capabilityId": "setting.data.migration",
+      "itemIds": [
+        "scan",
+        "scope",
+        "launch",
+        "report",
+        "reminder"
+      ],
+      "kind": "query",
+      "risk": "read",
+      "executionHost": "productHost",
+      "availability": {
+        "desktop": {
+          "available": true
+        },
+        "cli": {
+          "available": true
+        },
+        "peer": {
+          "available": true,
+          "requiredCapabilities": [
+            "product_control_v1"
+          ]
+        },
+        "remoteControl": {
+          "available": true
+        },
+        "detachedDispatch": {
+          "available": true
+        }
+      },
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "valueSource": {
+        "kind": "static"
+      },
+      "presentationTarget": {
+        "kind": "settings",
+        "pageId": "data.migration"
+      }
+    },
+    {
+      "id": "setting.data.migration:open:scan",
+      "capabilityId": "setting.data.migration",
+      "itemIds": [
+        "scan"
+      ],
+      "kind": "open",
+      "risk": "ui",
+      "executionHost": "presentationSurface",
+      "availability": {
+        "desktop": {
+          "available": true
+        },
+        "cli": {
+          "available": false,
+          "reason": "This delivery profile has no live presentation surface"
+        },
+        "peer": {
+          "available": true,
+          "requiredCapabilities": [
+            "product_control_v1",
+            "product_control_presentation_v1"
+          ]
+        },
+        "remoteControl": {
+          "available": true
+        },
+        "detachedDispatch": {
+          "available": false,
+          "reason": "This delivery profile has no live presentation surface"
+        }
+      },
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "openReason": "unstructuredInteraction",
+      "presentationTarget": {
+        "kind": "settings",
+        "pageId": "data.migration"
+      }
+    },
+    {
+      "id": "setting.data.migration:open:scope",
+      "capabilityId": "setting.data.migration",
+      "itemIds": [
+        "scope"
+      ],
+      "kind": "open",
+      "risk": "ui",
+      "executionHost": "presentationSurface",
+      "availability": {
+        "desktop": {
+          "available": true
+        },
+        "cli": {
+          "available": false,
+          "reason": "This delivery profile has no live presentation surface"
+        },
+        "peer": {
+          "available": true,
+          "requiredCapabilities": [
+            "product_control_v1",
+            "product_control_presentation_v1"
+          ]
+        },
+        "remoteControl": {
+          "available": true
+        },
+        "detachedDispatch": {
+          "available": false,
+          "reason": "This delivery profile has no live presentation surface"
+        }
+      },
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "openReason": "visualSelection",
+      "presentationTarget": {
+        "kind": "settings",
+        "pageId": "data.migration"
+      }
+    },
+    {
+      "id": "setting.data.migration:open:launch",
+      "capabilityId": "setting.data.migration",
+      "itemIds": [
+        "launch"
+      ],
+      "kind": "open",
+      "risk": "ui",
+      "executionHost": "presentationSurface",
+      "availability": {
+        "desktop": {
+          "available": true
+        },
+        "cli": {
+          "available": false,
+          "reason": "This delivery profile has no live presentation surface"
+        },
+        "peer": {
+          "available": true,
+          "requiredCapabilities": [
+            "product_control_v1",
+            "product_control_presentation_v1"
+          ]
+        },
+        "remoteControl": {
+          "available": true
+        },
+        "detachedDispatch": {
+          "available": false,
+          "reason": "This delivery profile has no live presentation surface"
+        }
+      },
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "openReason": "unstructuredInteraction",
+      "presentationTarget": {
+        "kind": "settings",
+        "pageId": "data.migration"
+      }
+    },
+    {
+      "id": "setting.data.migration:open:report",
+      "capabilityId": "setting.data.migration",
+      "itemIds": [
+        "report"
+      ],
+      "kind": "open",
+      "risk": "ui",
+      "executionHost": "presentationSurface",
+      "availability": {
+        "desktop": {
+          "available": true
+        },
+        "cli": {
+          "available": false,
+          "reason": "This delivery profile has no live presentation surface"
+        },
+        "peer": {
+          "available": true,
+          "requiredCapabilities": [
+            "product_control_v1",
+            "product_control_presentation_v1"
+          ]
+        },
+        "remoteControl": {
+          "available": true
+        },
+        "detachedDispatch": {
+          "available": false,
+          "reason": "This delivery profile has no live presentation surface"
+        }
+      },
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "openReason": "unstructuredInteraction",
+      "presentationTarget": {
+        "kind": "settings",
+        "pageId": "data.migration"
+      }
+    },
+    {
+      "id": "setting.data.migration:open:reminder",
+      "capabilityId": "setting.data.migration",
+      "itemIds": [
+        "reminder"
+      ],
+      "kind": "open",
+      "risk": "ui",
+      "executionHost": "presentationSurface",
+      "availability": {
+        "desktop": {
+          "available": true
+        },
+        "cli": {
+          "available": false,
+          "reason": "This delivery profile has no live presentation surface"
+        },
+        "peer": {
+          "available": true,
+          "requiredCapabilities": [
+            "product_control_v1",
+            "product_control_presentation_v1"
+          ]
+        },
+        "remoteControl": {
+          "available": true
+        },
+        "detachedDispatch": {
+          "available": false,
+          "reason": "This delivery profile has no live presentation surface"
+        }
+      },
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "openReason": "unstructuredInteraction",
+      "presentationTarget": {
+        "kind": "settings",
+        "pageId": "data.migration"
+      }
+    },
+    {
       "id": "setting.data.diagnostics:query",
       "capabilityId": "setting.data.diagnostics",
       "itemIds": [
@@ -29954,6 +30233,156 @@
         "Take me to restore an old session"
       ],
       "docsUrl": "https://playbook.openbitfun.com/capabilities/setting.data.archived/"
+    },
+    {
+      "id": "setting.data.migration",
+      "kind": "setting",
+      "categoryId": "data",
+      "titleZh": "旧版数据迁移",
+      "titleEn": "Legacy data migration",
+      "summaryZh": "从本机旧版 BitFun 安装扫描并导入受支持的数据，查看去敏报告，同时保持旧来源不变。",
+      "summaryEn": "Scan and import supported data from a local legacy BitFun installation, inspect redacted reports, and leave the legacy source unchanged.",
+      "keywordsZh": [
+        "旧版数据迁移",
+        "BitFun 数据",
+        "迁移报告",
+        "导入旧数据",
+        "Data Migrator"
+      ],
+      "keywordsEn": [
+        "legacy data migration",
+        "BitFun data",
+        "migration report",
+        "import old data",
+        "Data Migrator"
+      ],
+      "highlightsZh": [
+        "只读扫描本机旧版 BitFun 数据",
+        "按五个高层数据组选择迁移范围",
+        "通过独立 Data Migrator 导入并查看去敏报告"
+      ],
+      "highlightsEn": [
+        "Read-only scan of local legacy BitFun data",
+        "Choose migration scope across five high-level data groups",
+        "Import through the standalone Data Migrator and inspect redacted reports"
+      ],
+      "items": [
+        {
+          "id": "scan",
+          "titleZh": "只读扫描本机旧版 BitFun 来源及所选数据组",
+          "titleEn": "Read-only scan the local legacy BitFun source and selected data groups",
+          "control": {
+            "kind": "open",
+            "reasonCode": "unstructuredInteraction",
+            "reasonZh": "扫描依赖当前设备上的旧版数据、实时范围选择和结果状态；Agent 会打开精确入口，并把选择与扫描保留在用户可见界面。",
+            "reasonEn": "Scanning depends on legacy data on the current device, live scope selection, and result state; the Agent opens the exact entry and keeps selection and scanning visible to the user."
+          }
+        },
+        {
+          "id": "scope",
+          "titleZh": "选择设置、扩展、会话、记忆和远程连接迁移范围",
+          "titleEn": "Choose settings, extensions, sessions, memory, and remote-connection migration scope",
+          "control": {
+            "kind": "open",
+            "reasonCode": "visualSelection",
+            "reasonZh": "迁移范围是影响本机持久数据的五组可见选择；Agent 会打开精确入口，由用户确认所需范围。",
+            "reasonEn": "Migration scope is a visible five-group selection affecting local persisted data; the Agent opens the exact entry so the user can confirm the intended scope."
+          }
+        },
+        {
+          "id": "launch",
+          "titleZh": "确认关闭影响后启动独立 Data Migrator",
+          "titleEn": "Launch the standalone Data Migrator after confirming shutdown impact",
+          "control": {
+            "kind": "open",
+            "reasonCode": "unstructuredInteraction",
+            "reasonZh": "启动迁移器会停止正在运行的 Agent 和终端任务、关闭 Desktop，并交接到独立本机进程；Agent 只打开入口，确认和启动保留在用户可见界面。",
+            "reasonEn": "Launching the migrator can stop running agents and terminal tasks, close Desktop, and hand off to a separate local process; the Agent only opens the entry while confirmation and launch remain visible to the user."
+          }
+        },
+        {
+          "id": "report",
+          "titleZh": "查看最近运行结果和各领域去敏状态",
+          "titleEn": "Inspect the latest run result and redacted per-domain status",
+          "control": {
+            "kind": "open",
+            "reasonCode": "unstructuredInteraction",
+            "reasonZh": "报告取决于本机最近一次迁移运行和各领域实时状态；Agent 会打开精确入口，并把报告查看与失败组重试保留在用户可见界面。",
+            "reasonEn": "Reports depend on the most recent local migration run and live per-domain state; the Agent opens the exact entry and keeps report review and failed-group retry visible to the user."
+          }
+        },
+        {
+          "id": "reminder",
+          "titleZh": "恢复已关闭的首次启动迁移提醒",
+          "titleEn": "Restore the first-start migration reminder after it was disabled",
+          "control": {
+            "kind": "open",
+            "reasonCode": "unstructuredInteraction",
+            "reasonZh": "提醒偏好与当前本机旧数据来源绑定；Agent 会打开精确入口，由用户在可见界面决定是否恢复提醒。",
+            "reasonEn": "The reminder preference is bound to the current local legacy source; the Agent opens the exact entry so the user can decide visibly whether to restore it."
+          }
+        }
+      ],
+      "stepsZh": [
+        "打开设置",
+        "进入“数据 > 旧版数据迁移”",
+        "扫描来源、选择范围并在确认关闭影响后启动迁移器"
+      ],
+      "stepsEn": [
+        "Open Settings",
+        "Go to Data > Legacy data migration",
+        "Scan the source, choose scope, and launch the migrator after confirming shutdown impact"
+      ],
+      "agentExamplesZh": [
+        "打开旧版数据迁移",
+        "带我查看 BitFun 迁移报告"
+      ],
+      "agentExamplesEn": [
+        "Open legacy data migration",
+        "Show me the BitFun migration report"
+      ],
+      "destination": {
+        "kind": "settings",
+        "pageId": "data.migration"
+      },
+      "operations": [],
+      "options": [],
+      "searchTerms": [
+        "setting.data.migration",
+        "旧版数据迁移",
+        "Legacy data migration",
+        "数据与诊断",
+        "Data & diagnostics",
+        "BitFun 数据",
+        "迁移报告",
+        "导入旧数据",
+        "Data Migrator",
+        "legacy data migration",
+        "BitFun data",
+        "migration report",
+        "import old data",
+        "只读扫描本机旧版 BitFun 数据",
+        "按五个高层数据组选择迁移范围",
+        "通过独立 Data Migrator 导入并查看去敏报告",
+        "Read-only scan of local legacy BitFun data",
+        "Choose migration scope across five high-level data groups",
+        "Import through the standalone Data Migrator and inspect redacted reports",
+        "只读扫描本机旧版 BitFun 来源及所选数据组",
+        "Read-only scan the local legacy BitFun source and selected data groups",
+        "选择设置、扩展、会话、记忆和远程连接迁移范围",
+        "Choose settings, extensions, sessions, memory, and remote-connection migration scope",
+        "确认关闭影响后启动独立 Data Migrator",
+        "Launch the standalone Data Migrator after confirming shutdown impact",
+        "查看最近运行结果和各领域去敏状态",
+        "Inspect the latest run result and redacted per-domain status",
+        "恢复已关闭的首次启动迁移提醒",
+        "Restore the first-start migration reminder after it was disabled",
+        "打开旧版数据迁移",
+        "带我查看 BitFun 迁移报告",
+        "Open legacy data migration",
+        "Show me the BitFun migration report"
+      ],
+      "docsUrl": "https://playbook.openbitfun.com/capabilities/setting.data.migration/"
     },
     {
       "id": "setting.data.diagnostics",

@@ -1,7 +1,8 @@
 use openbitfun_product_domains::legacy_migration::{
     MigrationDomainId, MigrationDomainResult, MigrationGroupId, MigrationOnboardingState,
     MigrationPromptChoice, MigrationSelection, MigratorHandoffRequest,
-    MigratorProtocolCapabilities, MigratorRequestMode, CURRENT_MIGRATOR_PROTOCOL_VERSION,
+    MigratorProtocolCapabilities, MigratorProtocolCapability, MigratorRequestMode,
+    CURRENT_MIGRATOR_PROTOCOL_VERSION,
 };
 use std::collections::BTreeSet;
 
@@ -29,6 +30,8 @@ fn persisted_onboarding_shape_accepts_old_payloads() {
     assert_eq!(state.choice, MigrationPromptChoice::RemindLater);
     assert_eq!(state.format_version, 0);
     assert!(state.run_id.is_none());
+    assert!(state.last_scanned_at_ms.is_none());
+    assert!(state.last_report_run_id.is_none());
 }
 
 #[test]
@@ -57,10 +60,35 @@ fn handoff_rejects_expired_or_future_protocol_requests() {
     .expect("request should accept additive defaults");
 
     let capabilities = MigratorProtocolCapabilities::current();
-    assert!(capabilities.accepts(request.protocol_version, request.mode));
+    assert!(capabilities.accepts_request(&request));
     assert!(!capabilities.accepts(
         CURRENT_MIGRATOR_PROTOCOL_VERSION + 1,
         MigratorRequestMode::Onboarding
     ));
     assert!(request.is_expired_at(21));
+}
+
+#[test]
+fn handoff_capability_negotiation_is_additive_and_fail_closed() {
+    let old_request: MigratorHandoffRequest = serde_json::from_value(serde_json::json!({
+        "protocolVersion": CURRENT_MIGRATOR_PROTOCOL_VERSION,
+        "mode": "execute"
+    }))
+    .expect("older requests must default the additive capability set");
+    assert!(old_request.required_capabilities.is_empty());
+    assert!(MigratorProtocolCapabilities::current().accepts_request(&old_request));
+
+    let mut required = BTreeSet::new();
+    required.insert(MigratorProtocolCapability::JournalRecovery);
+    let request = MigratorHandoffRequest {
+        required_capabilities: required,
+        protocol_version: CURRENT_MIGRATOR_PROTOCOL_VERSION,
+        mode: MigratorRequestMode::Execute,
+        ..MigratorHandoffRequest::default()
+    };
+    assert!(MigratorProtocolCapabilities::current().accepts_request(&request));
+
+    let mut limited = MigratorProtocolCapabilities::current();
+    limited.capabilities.clear();
+    assert!(!limited.accepts_request(&request));
 }

@@ -1,0 +1,145 @@
+{
+  "title": "Data Migration",
+  "subtitle": "Import supported data from an older BitFun installation without changing the source.",
+  "localOnlyNotice": "Migration is available only in OpenBitFun Desktop on the device that stores the older BitFun data. It cannot be started through Remote Control, Peer Device Mode, or Detached Dispatch.",
+  "sections": {
+    "source": {
+      "title": "Legacy source",
+      "description": "OpenBitFun performs a read-only check before the standalone Data Migrator is started."
+    },
+    "scope": {
+      "title": "Migration scope",
+      "description": "Select high-level data groups. Session data always includes Agent coordination state."
+    },
+    "scan": {
+      "title": "Latest scan",
+      "description": "Counts and sizes are summaries only; private content and full paths are not shown here."
+    },
+    "report": {
+      "title": "Latest report",
+      "description": "The report shows redacted results for each owning domain. Older BitFun data is never deleted automatically."
+    }
+  },
+  "fields": {
+    "detected": { "label": "Detection", "description": "Whether a supported local BitFun source is available." },
+    "source": { "label": "Source", "description": "Product version and platform reported by the read-only probe." },
+    "lastScan": { "label": "Last scanned", "description": "Time of the latest explicit read-only scan." },
+    "actions": { "label": "Actions", "description": "Scan locally, start the standalone migrator, or refresh the report." },
+    "reminder": { "label": "First-start reminder", "description": "Automatic migration prompts are currently disabled for this source." },
+    "retryFailed": { "label": "Retry failed groups", "description": "Start a new standalone run containing only groups with failed domains." }
+  },
+  "source": {
+    "supported": "Supported",
+    "unsupported": "Unsupported format",
+    "notDetected": "Not detected",
+    "summary": "{{product}} {{version}} on {{platform}}",
+    "unknownVersion": "unknown version",
+    "none": "No older BitFun data was detected on this device.",
+    "neverScanned": "Never scanned"
+  },
+  "actions": {
+    "scan": "Scan old data",
+    "startMigration": "Start migration",
+    "viewReport": "View report",
+    "retryFailed": "Retry failed items",
+    "restoreReminder": "Restore reminder",
+    "retry": "Retry",
+    "cancel": "Cancel"
+  },
+  "groups": {
+    "settings_and_credentials": { "label": "Settings and credentials", "description": "Supported preferences, model/service configuration, and secure credential references." },
+    "agents_skills_and_miniapps": { "label": "Agents, Skills, and MiniApps", "description": "User Agents, non-system Skills, and non-built-in MiniApps." },
+    "workspaces_sessions_and_tasks": { "label": "Workspaces, sessions, and Agent tasks", "description": "Workspace and session records together with required coordination state." },
+    "memory": { "label": "Memory", "description": "Supported structured memory and user-authored memory files." },
+    "remote_connections_and_devices": { "label": "Remote connections and devices", "description": "Supported Remote Connect device records and SSH profiles; secrets may require reauthentication." }
+  },
+  "scan": {
+    "empty": "The selected groups contain no migratable records.",
+    "summary": "{{count}} records, {{bytes}} logical bytes",
+    "migratable": "Migratable",
+    "blocked": "Needs attention"
+  },
+  "report": {
+    "result": "Run result",
+    "none": "No migration report is available yet.",
+    "timeUnavailable": "Completion time unavailable",
+    "domainCounts": "{{imported}} imported, {{skipped}} skipped, {{conflicts}} conflicts"
+  },
+  "statuses": {
+    "discovered": "Discovered",
+    "scanned": "Scanned",
+    "planned": "Planned",
+    "waiting_for_processes": "Waiting for applications",
+    "staging": "Staging",
+    "validating_stage": "Validating staged data",
+    "committing": "Committing",
+    "validating_commit": "Validating imported data",
+    "completed": "$t(shared:statuses.done)",
+    "completed_with_warnings": "Completed with warnings",
+    "cancelled": "$t(shared:statuses.cancelled)",
+    "failed_recoverable": "Failed; retry available",
+    "failed_manual_action_required": "Manual action required"
+  },
+  "domainStates": {
+    "not_started": "Not started",
+    "staged": "Staged",
+    "committed": "Committed",
+    "verified": "Verified",
+    "failed": "$t(shared:statuses.failed)",
+    "skipped": "Skipped"
+  },
+  "domains": {
+    "settings": "$t(shared:features.settings)",
+    "credentials": "Credentials",
+    "skills": "Skills",
+    "miniapps": "MiniApps",
+    "agents": "Agents",
+    "workspace_sessions": "Workspaces and sessions",
+    "agent_coordination": "Agent coordination",
+    "structured_memory": "Structured memory",
+    "file_memory": "Memory files",
+    "remote_connect_devices": "Remote Connect devices",
+    "remote_ssh": "Remote SSH",
+    "cross_reference_repair": "Cross-reference repair"
+  },
+  "messages": {
+    "loading": "Loading migration status…",
+    "loadFailed": "Migration status could not be loaded on this device.",
+    "emptySelection": "Select at least one migration group.",
+    "scanComplete": "Read-only scan completed.",
+    "scanFailed": "The old data could not be scanned safely.",
+    "handoffStarted": "The Data Migrator is starting. OpenBitFun will close after the handoff.",
+    "prepareFailed": "The Data Migrator could not be started safely.",
+    "noReport": "No migration report is available yet.",
+    "reportFailed": "The migration report could not be loaded.",
+    "reminderRestored": "The first-start migration reminder was restored.",
+    "preferenceFailed": "The reminder preference could not be changed."
+  },
+  "startupNotification": {
+    "title": "BitFun data migration",
+    "statuses": {
+      "discovered": "The Data Migrator discovered old data but did not finish a migration.",
+      "scanned": "The Data Migrator completed a read-only scan.",
+      "planned": "The Data Migrator saved a plan but did not import data.",
+      "waiting_for_processes": "Migration is still waiting for local applications to close.",
+      "staging": "Migration stopped while staging data and can be resumed safely.",
+      "validating_stage": "Migration stopped while validating staged data and can be resumed safely.",
+      "committing": "Migration stopped during a domain commit; review the report before retrying.",
+      "validating_commit": "Migration stopped while validating imported data; review the report.",
+      "completed": "Supported BitFun data was migrated successfully.",
+      "completed_with_warnings": "BitFun data migration completed with warnings.",
+      "cancelled": "BitFun data migration was cancelled at a safe boundary.",
+      "failed_recoverable": "BitFun data migration did not finish and can be retried.",
+      "failed_manual_action_required": "BitFun data migration needs manual action before it can continue."
+    }
+  },
+  "confirm": {
+    "title": "Close OpenBitFun and start Data Migrator?",
+    "message": "The standalone Data Migrator needs exclusive access to local product data. Review the shutdown impact before continuing.",
+    "agentImpact": "Running Agent turns will stop.",
+    "terminalImpact": "Terminal tasks and other child processes may stop.",
+    "fileImpact": "Active file writes must finish before migration can proceed.",
+    "unsavedImpact": "Unsaved editor or settings changes may be lost.",
+    "closeImpact": "OpenBitFun will close, the migrator will confirm the final scope, and OpenBitFun will reopen when migration ends."
+  }
+}

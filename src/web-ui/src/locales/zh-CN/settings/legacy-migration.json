@@ -1,0 +1,133 @@
+{
+  "title": "数据迁移",
+  "subtitle": "从旧版 BitFun 安装导入受支持的数据，同时保持来源不变。",
+  "localOnlyNotice": "只能在保存旧 BitFun 数据的设备上，通过 OpenBitFun Desktop 启动迁移。Remote Control、Peer Device Mode 和 Detached Dispatch 均不能启动迁移。",
+  "sections": {
+    "source": { "title": "旧数据来源", "description": "启动独立 Data Migrator 前，OpenBitFun 会先执行只读检查。" },
+    "scope": { "title": "迁移范围", "description": "选择高层数据组。会话数据始终包含 Agent 协调状态。" },
+    "scan": { "title": "最近扫描", "description": "这里只显示数量和大小摘要，不显示私密正文或完整路径。" },
+    "report": { "title": "最近报告", "description": "报告按所属领域显示去敏结果。旧 BitFun 数据永远不会被自动删除。" }
+  },
+  "fields": {
+    "detected": { "label": "检测状态", "description": "本机是否存在受支持的 BitFun 数据来源。" },
+    "source": { "label": "来源", "description": "只读探测得到的产品版本和平台。" },
+    "lastScan": { "label": "上次扫描", "description": "最近一次显式只读扫描的时间。" },
+    "actions": { "label": "操作", "description": "在本机扫描、启动独立迁移器或刷新报告。" },
+    "reminder": { "label": "首次启动提醒", "description": "当前来源的自动迁移提示已关闭。" },
+    "retryFailed": { "label": "重试失败数据组", "description": "仅使用包含失败领域的数据组启动新的独立迁移。" }
+  },
+  "source": {
+    "supported": "支持迁移",
+    "unsupported": "格式不受支持",
+    "notDetected": "未检测到",
+    "summary": "{{platform}} 上的 {{product}} {{version}}",
+    "unknownVersion": "未知版本",
+    "none": "此设备上未检测到旧版 BitFun 数据。",
+    "neverScanned": "尚未扫描"
+  },
+  "actions": {
+    "scan": "扫描旧数据",
+    "startMigration": "开始迁移",
+    "viewReport": "查看报告",
+    "retryFailed": "重试失败项",
+    "restoreReminder": "恢复提醒",
+    "retry": "重试",
+    "cancel": "取消"
+  },
+  "groups": {
+    "settings_and_credentials": { "label": "设置和凭据", "description": "受支持的偏好、模型与服务配置，以及安全凭据引用。" },
+    "agents_skills_and_miniapps": { "label": "Agents、Skills 和 MiniApps", "description": "用户 Agents、非系统 Skills 和非内置 MiniApps。" },
+    "workspaces_sessions_and_tasks": { "label": "工作区、会话与 Agent 任务", "description": "工作区和会话记录，以及必需的协调状态。" },
+    "memory": { "label": "Memory", "description": "受支持的结构化记忆和用户编写的记忆文件。" },
+    "remote_connections_and_devices": { "label": "远程连接和设备", "description": "受支持的 Remote Connect 设备记录和 SSH 配置；秘密可能需要重新认证。" }
+  },
+  "scan": {
+    "empty": "所选数据组中没有可迁移记录。",
+    "summary": "{{count}} 条记录，{{bytes}} 逻辑字节",
+    "migratable": "可迁移",
+    "blocked": "需要处理"
+  },
+  "report": {
+    "result": "运行结果",
+    "none": "尚无迁移报告。",
+    "timeUnavailable": "完成时间不可用",
+    "domainCounts": "导入 {{imported}}，跳过 {{skipped}}，冲突 {{conflicts}}"
+  },
+  "statuses": {
+    "discovered": "已发现",
+    "scanned": "已扫描",
+    "planned": "已计划",
+    "waiting_for_processes": "正在等待应用退出",
+    "staging": "正在暂存",
+    "validating_stage": "正在验证暂存数据",
+    "committing": "正在提交",
+    "validating_commit": "正在验证导入数据",
+    "completed": "$t(shared:statuses.done)",
+    "completed_with_warnings": "已完成，但有警告",
+    "cancelled": "$t(shared:statuses.cancelled)",
+    "failed_recoverable": "失败，可以重试",
+    "failed_manual_action_required": "需要手动处理"
+  },
+  "domainStates": {
+    "not_started": "未开始",
+    "staged": "已暂存",
+    "committed": "已提交",
+    "verified": "已验证",
+    "failed": "$t(shared:statuses.failed)",
+    "skipped": "已跳过"
+  },
+  "domains": {
+    "settings": "$t(shared:features.settings)",
+    "credentials": "凭据",
+    "skills": "Skills",
+    "miniapps": "MiniApps",
+    "agents": "Agents",
+    "workspace_sessions": "工作区和会话",
+    "agent_coordination": "Agent 协调",
+    "structured_memory": "结构化记忆",
+    "file_memory": "记忆文件",
+    "remote_connect_devices": "Remote Connect 设备",
+    "remote_ssh": "Remote SSH",
+    "cross_reference_repair": "交叉引用修复"
+  },
+  "messages": {
+    "loading": "正在加载迁移状态…",
+    "loadFailed": "无法加载此设备上的迁移状态。",
+    "emptySelection": "请至少选择一个迁移数据组。",
+    "scanComplete": "只读扫描已完成。",
+    "scanFailed": "无法安全扫描旧数据。",
+    "handoffStarted": "Data Migrator 正在启动。交接完成后 OpenBitFun 将关闭。",
+    "prepareFailed": "无法安全启动 Data Migrator。",
+    "noReport": "尚无迁移报告。",
+    "reportFailed": "无法加载迁移报告。",
+    "reminderRestored": "已恢复首次启动迁移提醒。",
+    "preferenceFailed": "无法修改提醒偏好。"
+  },
+  "startupNotification": {
+    "title": "BitFun 数据迁移",
+    "statuses": {
+      "discovered": "Data Migrator 发现了旧数据，但尚未完成迁移。",
+      "scanned": "Data Migrator 已完成只读扫描。",
+      "planned": "Data Migrator 已保存计划，但尚未导入数据。",
+      "waiting_for_processes": "迁移仍在等待本机应用退出。",
+      "staging": "迁移在暂存数据时停止，可以安全恢复。",
+      "validating_stage": "迁移在验证暂存数据时停止，可以安全恢复。",
+      "committing": "迁移在提交领域数据时停止；重试前请查看报告。",
+      "validating_commit": "迁移在验证导入数据时停止；请查看报告。",
+      "completed": "受支持的 BitFun 数据已成功迁移。",
+      "completed_with_warnings": "BitFun 数据迁移已完成，但有警告。",
+      "cancelled": "BitFun 数据迁移已在安全边界取消。",
+      "failed_recoverable": "BitFun 数据迁移未完成，可以重试。",
+      "failed_manual_action_required": "BitFun 数据迁移需要手动处理后才能继续。"
+    }
+  },
+  "confirm": {
+    "title": "关闭 OpenBitFun 并启动 Data Migrator？",
+    "message": "独立 Data Migrator 需要独占访问本机产品数据。继续前请确认关闭影响。",
+    "agentImpact": "正在运行的 Agent 回合将停止。",
+    "terminalImpact": "终端任务和其他子进程可能会停止。",
+    "fileImpact": "迁移开始前，正在进行的文件写入必须完成。",
+    "unsavedImpact": "未保存的编辑器或设置更改可能会丢失。",
+    "closeImpact": "OpenBitFun 将关闭；迁移器会再次确认最终范围，并在迁移结束后重新打开 OpenBitFun。"
+  }
+}

@@ -30,6 +30,7 @@ const LINUX_FLASHGREP_BINARIES = [
   'flashgrep-aarch64-unknown-linux-musl',
   'flashgrep-aarch64-unknown-linux-gnu',
 ];
+const DATA_MIGRATOR_CARGO_BINARY = 'openbitfun-data-migrator';
 
 function tauriBuildArgsFromArgv() {
   const args = process.argv.slice(2);
@@ -53,6 +54,7 @@ async function main() {
 
   const desktopDir = join(ROOT, 'src', 'apps', 'desktop');
   preparePluginHost();
+  const dataMigratorSidecar = prepareDataMigratorSidecar(forward, resolution, desktopDir);
   // Flashgrep distribution is temporarily suspended.
   const flashgrepBinary = null;
   // Tauri CLI reads CI and rejects numeric "1" (common in CI providers).
@@ -66,6 +68,7 @@ async function main() {
   const tauriConfig = prepareTauriConfig(join(desktopDir, 'tauri.conf.json'), {
     desktopDir,
     flashgrepBinary,
+    dataMigratorSidecar,
     resolution,
     releaseChannel,
   });
@@ -96,6 +99,10 @@ async function main() {
     process.exit(1);
   }
 
+  if (r.status === 0 && forward.includes('--no-bundle')) {
+    stageNoBundleDataMigrator(dataMigratorSidecar);
+  }
+
   // Keep only the latest useful Cargo caches for this build profile after tauri build ends.
   try {
     const { profileFromTauriBuildArgs, runGcBestEffort, targetFromTauriBuildArgs } = await import(
@@ -117,6 +124,100 @@ async function main() {
   }
 
   process.exit(r.status ?? 1);
+}
+
+function rustHostTargetTriple() {
+  const result = spawnSync('rustc', ['-vV'], {
+    cwd: ROOT,
+    encoding: 'utf8',
+    shell: false,
+    windowsHide: true,
+  });
+  if (result.error || result.status !== 0) {
+    const detail = result.error?.message || result.stderr || `exit status ${result.status}`;
+    throw new Error(`Could not determine the Rust host target: ${detail}`);
+  }
+  const host = String(result.stdout).match(/^host:\s*(\S+)$/m)?.[1];
+  if (!host) throw new Error('rustc -vV did not report a host target triple.');
+  return host;
+}
+
+export function planDataMigratorSidecar(
+  args,
+  resolution,
+  desktopDir,
+  runtime = {},
+) {
+  const explicitTarget = optionValue(args, '--target');
+  const targetTriple = explicitTarget || runtime.hostTarget || rustHostTargetTriple();
+  const profile = args.includes('--debug') ? 'debug' : optionValue(args, '--profile') || 'release';
+  const targetDirValue = runtime.cargoTargetDir ?? process.env.CARGO_TARGET_DIR;
+  const targetDir = targetDirValue
+    ? isAbsolute(targetDirValue)
+      ? targetDirValue
+      : resolve(ROOT, targetDirValue)
+    : join(ROOT, 'target');
+  const windowsTarget = targetTriple.includes('windows');
+  const suffix = windowsTarget ? '.exe' : '';
+  const artifactDirectory = join(targetDir, ...(explicitTarget ? [explicitTarget] : []), profile);
+  const cargoArgs = ['build', '-p', 'openbitfun-data-migrator', '--bin', DATA_MIGRATOR_CARGO_BINARY];
+  if (explicitTarget) cargoArgs.push('--target', explicitTarget);
+  if (args.includes('--debug')) {
+    // Cargo's default profile is the Tauri CLI's debug profile.
+  } else if (optionValue(args, '--profile')) {
+    cargoArgs.push('--profile', profile);
+  } else {
+    cargoArgs.push('--release');
+  }
+
+  const siblingBinaryName = resolution.assembly.memberBinaryNames.dataMigrator;
+  const externalBinBase = join(desktopDir, 'gen', 'sidecars', siblingBinaryName);
+  return {
+    artifactDirectory,
+    cargoArgs,
+    externalBinBase,
+    externalBinInput: `${externalBinBase}-${targetTriple}${suffix}`,
+    sourceArtifact: join(artifactDirectory, `${DATA_MIGRATOR_CARGO_BINARY}${suffix}`),
+    siblingArtifact: join(artifactDirectory, `${siblingBinaryName}${suffix}`),
+    siblingBinaryName,
+    targetTriple,
+  };
+}
+
+function prepareDataMigratorSidecar(args, resolution, desktopDir) {
+  const plan = planDataMigratorSidecar(args, resolution, desktopDir);
+  console.log(
+    `[tauri-build] Building Data Migrator sidecar (${plan.targetTriple}, ${plan.artifactDirectory})`
+  );
+  const result = spawnSync('cargo', plan.cargoArgs, {
+    cwd: ROOT,
+    env: process.env,
+    stdio: 'inherit',
+    shell: false,
+    windowsHide: true,
+  });
+  if (result.error) throw result.error;
+  if (result.status !== 0) {
+    throw new Error(`Data Migrator sidecar build failed with exit code ${result.status}`);
+  }
+  if (!existsSync(plan.sourceArtifact)) {
+    throw new Error(`Data Migrator build did not produce ${plan.sourceArtifact}`);
+  }
+  mkdirSync(dirname(plan.externalBinInput), { recursive: true });
+  copyFileSync(plan.sourceArtifact, plan.externalBinInput);
+  if (!plan.externalBinInput.endsWith('.exe')) {
+    chmodSync(plan.externalBinInput, statSync(plan.externalBinInput).mode | 0o111);
+  }
+  return plan;
+}
+
+export function stageNoBundleDataMigrator(plan) {
+  if (resolve(plan.sourceArtifact) === resolve(plan.siblingArtifact)) return plan.siblingArtifact;
+  copyFileSync(plan.sourceArtifact, plan.siblingArtifact);
+  if (!plan.siblingArtifact.endsWith('.exe')) {
+    chmodSync(plan.siblingArtifact, statSync(plan.siblingArtifact).mode | 0o111);
+  }
+  return plan.siblingArtifact;
 }
 
 function preparePluginHost() {
@@ -277,7 +378,7 @@ export function prepareMacOSFlashgrepForSigning(
 
 export function prepareTauriConfig(
   baseConfigPath,
-  { desktopDir, flashgrepBinary, resolution, releaseChannel }
+  { desktopDir, flashgrepBinary, dataMigratorSidecar, resolution, releaseChannel }
 ) {
   const config = JSON.parse(readFileSync(baseConfigPath, 'utf8'));
   if (resolution) {
@@ -289,6 +390,7 @@ export function prepareTauriConfig(
     config.identifier = resolution.assembly.bundleId;
   }
   injectTargetFlashgrepResource(config, desktopDir, flashgrepBinary);
+  injectDataMigratorSidecar(config, desktopDir, dataMigratorSidecar);
   // The DeepSeek bridge is not a compile-time resource: cargo check and
   // desktop:dev must not require packages/dsh-acp/dist-profile. Official
   // packaging injects it here; frontend:build-all (beforeBuildCommand)
@@ -353,6 +455,16 @@ export function prepareTauriConfig(
   );
   writeFileSync(generatedConfig, `${JSON.stringify(config, null, 2)}\n`, 'utf8');
   return generatedConfig;
+}
+
+function injectDataMigratorSidecar(config, desktopDir, sidecar) {
+  if (!sidecar) return;
+  const externalBin = new Set(config.bundle?.externalBin || []);
+  externalBin.add(toTauriPath(relative(desktopDir, sidecar.externalBinBase)));
+  config.bundle = {
+    ...(config.bundle || {}),
+    externalBin: [...externalBin],
+  };
 }
 
 const DSH_PROFILE_RESOURCE_SOURCE = '../../../packages/dsh-acp/dist-profile';

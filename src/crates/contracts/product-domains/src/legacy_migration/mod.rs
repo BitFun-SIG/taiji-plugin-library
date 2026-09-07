@@ -21,9 +21,12 @@ pub enum MigrationGroupId {
     RemoteConnectionsAndDevices,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize,
+)]
 #[serde(rename_all = "snake_case")]
 pub enum MigrationDomainId {
+    #[default]
     Settings,
     Credentials,
     Skills,
@@ -346,9 +349,13 @@ pub struct MigrationOnboardingState {
     pub format_version: u32,
     pub source_fingerprint: String,
     pub detected_at_ms: Option<i64>,
+    /// Most recent explicit read-only scan started from a product entry point.
+    pub last_scanned_at_ms: Option<i64>,
     pub choice: MigrationPromptChoice,
     pub last_prompted_version: Option<String>,
     pub run_id: Option<String>,
+    /// Most recent run whose report can be shown after a later handoff starts.
+    pub last_report_run_id: Option<String>,
     pub handled_run_id: Option<String>,
 }
 
@@ -371,12 +378,23 @@ pub enum MigratorRequestOrigin {
     Installer,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MigratorProtocolCapability {
+    ReadOnlyScan,
+    OfflineExecute,
+    JournalRecovery,
+    SafeCancellation,
+    TrustedRestart,
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct MigratorProtocolCapabilities {
     pub protocol_version: u32,
     pub minimum_compatible_version: u32,
     pub supported_modes: BTreeSet<MigratorRequestMode>,
+    pub capabilities: BTreeSet<MigratorProtocolCapability>,
 }
 
 impl MigratorProtocolCapabilities {
@@ -388,6 +406,13 @@ impl MigratorProtocolCapabilities {
                 MigratorRequestMode::Onboarding,
                 MigratorRequestMode::Execute,
             ]),
+            capabilities: BTreeSet::from([
+                MigratorProtocolCapability::ReadOnlyScan,
+                MigratorProtocolCapability::OfflineExecute,
+                MigratorProtocolCapability::JournalRecovery,
+                MigratorProtocolCapability::SafeCancellation,
+                MigratorProtocolCapability::TrustedRestart,
+            ]),
         }
     }
 
@@ -395,6 +420,11 @@ impl MigratorProtocolCapabilities {
         version >= self.minimum_compatible_version
             && version <= self.protocol_version
             && self.supported_modes.contains(&mode)
+    }
+
+    pub fn accepts_request(&self, request: &MigratorHandoffRequest) -> bool {
+        self.accepts(request.protocol_version, request.mode)
+            && request.required_capabilities.is_subset(&self.capabilities)
     }
 }
 
@@ -414,6 +444,7 @@ pub struct MigratorHandoffRequest {
     pub release_channel: String,
     pub created_at_ms: i64,
     pub expires_at_ms: i64,
+    pub required_capabilities: BTreeSet<MigratorProtocolCapability>,
 }
 
 impl MigratorHandoffRequest {
@@ -447,10 +478,4 @@ pub struct MigrationJournalEvent {
     pub domain: Option<MigrationDomainId>,
     pub domain_state: Option<MigrationDomainState>,
     pub code: String,
-}
-
-impl Default for MigrationDomainId {
-    fn default() -> Self {
-        Self::Settings
-    }
 }

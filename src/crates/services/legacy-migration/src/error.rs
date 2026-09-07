@@ -25,6 +25,12 @@ pub enum LegacyMigrationError {
     LockUnavailable,
     #[error("legacy migration was cancelled at a safe boundary")]
     Cancelled,
+    #[error("legacy migration process inspection failed: {0}")]
+    ProcessInspection(String),
+    #[error("legacy migration executable is not trusted: {0}")]
+    UntrustedExecutable(PathBuf),
+    #[error("legacy migration trusted installation is unavailable: {0}")]
+    TrustedInstallationUnavailable(String),
     #[error("legacy migration crash injection at {0:?}")]
     InjectedCrash(crate::CrashPoint),
     #[error("legacy migration domain {domain:?} failed: {message}")]

@@ -5944,6 +5944,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "openbitfun-data-migrator"
+version = "1.0.0"
+dependencies = [
+ "openbitfun-core",
+ "openbitfun-core-types",
+ "openbitfun-legacy-migration",
+ "openbitfun-product-capabilities",
+ "openbitfun-product-domains",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-build",
+ "tempfile",
+ "uuid",
+]
+
+[[package]]
 name = "openbitfun-desktop"
 version = "1.0.0"
 dependencies = [
@@ -5986,6 +6003,7 @@ dependencies = [
  "openbitfun-core",
  "openbitfun-core-types",
  "openbitfun-events",
+ "openbitfun-legacy-migration",
  "openbitfun-product-domains",
  "openbitfun-relay-service",
  "openbitfun-runtime-ports",
@@ -6079,6 +6097,7 @@ dependencies = [
  "dirs 6.0.0",
  "fs2",
  "hex",
+ "libc",
  "openbitfun-product-domains",
  "openbitfun-services-core",
  "rusqlite",

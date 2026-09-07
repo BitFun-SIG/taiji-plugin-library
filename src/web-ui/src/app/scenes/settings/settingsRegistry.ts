@@ -378,6 +378,21 @@ export const SETTINGS_PAGE_MANIFESTS: readonly SettingsPageManifest[] = [
     load: () => import('./components/ArchivedSessionsConfig'),
   }),
   definePage({
+    id: 'data.migration',
+    categoryId: 'data',
+    labelKey: 'navigation.pages.legacyMigration.label',
+    descriptionKey: 'navigation.pages.legacyMigration.description',
+    keywords: ['legacy', 'migration', 'import', 'bitfun', 'upgrade', 'maintenance'],
+    namespaces: ['settings/legacy-migration'],
+    searchPhrases: [
+      phrase('settings/legacy-migration', 'title'),
+      phrase('settings/legacy-migration', 'subtitle'),
+      phrase('settings/legacy-migration', 'sections.source.title'),
+      phrase('settings/legacy-migration', 'sections.report.title'),
+    ],
+    load: () => import('../../../infrastructure/config/components/LegacyMigrationSettingsPage'),
+  }),
+  definePage({
     id: 'data.diagnostics',
     categoryId: 'data',
     labelKey: 'navigation.pages.diagnostics.label',

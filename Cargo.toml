@@ -3,6 +3,7 @@ members = [
     "src/apps/cli",
     "src/apps/sdk-host",
     "src/apps/desktop",
+    "src/apps/data-migrator",
     "src/apps/server",
     "src/apps/relay-server",
     "src/apps/miniapp-market-server",
@@ -201,7 +202,7 @@ sqlx = { version = "0.8", default-features = false }
 rusqlite = { version = "0.32", default-features = false }
 
 # Tauri (desktop only)
-tauri = { version = "2.11", features = ["unstable", "macos-private-api", "tray-icon"] }
+tauri = { version = "2.11" }
 tauri-plugin-opener = "2.5"
 tauri-plugin-dialog = "2.7"
 tauri-plugin-fs = "2.5"

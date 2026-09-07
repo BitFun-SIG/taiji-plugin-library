@@ -1,0 +1,133 @@
+{
+  "title": "資料遷移",
+  "subtitle": "從舊版 BitFun 安裝匯入受支援的資料，同時保持來源不變。",
+  "localOnlyNotice": "只能在儲存舊 BitFun 資料的裝置上，透過 OpenBitFun Desktop 啟動遷移。Remote Control、Peer Device Mode 和 Detached Dispatch 均不能啟動遷移。",
+  "sections": {
+    "source": { "title": "舊資料來源", "description": "啟動獨立 Data Migrator 前，OpenBitFun 會先執行唯讀檢查。" },
+    "scope": { "title": "遷移範圍", "description": "選擇高層資料群組。會話資料始終包含 Agent 協調狀態。" },
+    "scan": { "title": "最近掃描", "description": "這裡只顯示數量和大小摘要，不顯示私密正文或完整路徑。" },
+    "report": { "title": "最近報告", "description": "報告按所屬領域顯示去敏結果。舊 BitFun 資料永遠不會被自動刪除。" }
+  },
+  "fields": {
+    "detected": { "label": "偵測狀態", "description": "本機是否存在受支援的 BitFun 資料來源。" },
+    "source": { "label": "來源", "description": "唯讀探測得到的產品版本和平台。" },
+    "lastScan": { "label": "上次掃描", "description": "最近一次明確唯讀掃描的時間。" },
+    "actions": { "label": "操作", "description": "在本機掃描、啟動獨立遷移器或重新整理報告。" },
+    "reminder": { "label": "首次啟動提醒", "description": "目前來源的自動遷移提示已關閉。" },
+    "retryFailed": { "label": "重試失敗資料群組", "description": "僅使用包含失敗領域的資料群組啟動新的獨立遷移。" }
+  },
+  "source": {
+    "supported": "支援遷移",
+    "unsupported": "格式不受支援",
+    "notDetected": "未偵測到",
+    "summary": "{{platform}} 上的 {{product}} {{version}}",
+    "unknownVersion": "未知版本",
+    "none": "此裝置上未偵測到舊版 BitFun 資料。",
+    "neverScanned": "尚未掃描"
+  },
+  "actions": {
+    "scan": "掃描舊資料",
+    "startMigration": "開始遷移",
+    "viewReport": "檢視報告",
+    "retryFailed": "重試失敗項",
+    "restoreReminder": "恢復提醒",
+    "retry": "重試",
+    "cancel": "取消"
+  },
+  "groups": {
+    "settings_and_credentials": { "label": "設定和憑據", "description": "受支援的偏好、模型與服務設定，以及安全憑據引用。" },
+    "agents_skills_and_miniapps": { "label": "Agents、Skills 和 MiniApps", "description": "使用者 Agents、非系統 Skills 和非內建 MiniApps。" },
+    "workspaces_sessions_and_tasks": { "label": "工作區、會話與 Agent 任務", "description": "工作區和會話記錄，以及必需的協調狀態。" },
+    "memory": { "label": "Memory", "description": "受支援的結構化記憶和使用者編寫的記憶檔案。" },
+    "remote_connections_and_devices": { "label": "遠端連線和裝置", "description": "受支援的 Remote Connect 裝置記錄和 SSH 設定；秘密可能需要重新驗證。" }
+  },
+  "scan": {
+    "empty": "所選資料群組中沒有可遷移記錄。",
+    "summary": "{{count}} 筆記錄，{{bytes}} 邏輯位元組",
+    "migratable": "可遷移",
+    "blocked": "需要處理"
+  },
+  "report": {
+    "result": "執行結果",
+    "none": "尚無遷移報告。",
+    "timeUnavailable": "完成時間不可用",
+    "domainCounts": "匯入 {{imported}}，跳過 {{skipped}}，衝突 {{conflicts}}"
+  },
+  "statuses": {
+    "discovered": "已發現",
+    "scanned": "已掃描",
+    "planned": "已規劃",
+    "waiting_for_processes": "正在等待應用程式退出",
+    "staging": "正在暫存",
+    "validating_stage": "正在驗證暫存資料",
+    "committing": "正在提交",
+    "validating_commit": "正在驗證匯入資料",
+    "completed": "$t(shared:statuses.done)",
+    "completed_with_warnings": "已完成，但有警告",
+    "cancelled": "$t(shared:statuses.cancelled)",
+    "failed_recoverable": "失敗，可以重試",
+    "failed_manual_action_required": "需要手動處理"
+  },
+  "domainStates": {
+    "not_started": "未開始",
+    "staged": "已暫存",
+    "committed": "已提交",
+    "verified": "已驗證",
+    "failed": "$t(shared:statuses.failed)",
+    "skipped": "已跳過"
+  },
+  "domains": {
+    "settings": "$t(shared:features.settings)",
+    "credentials": "憑據",
+    "skills": "Skills",
+    "miniapps": "MiniApps",
+    "agents": "Agents",
+    "workspace_sessions": "工作區和會話",
+    "agent_coordination": "Agent 協調",
+    "structured_memory": "結構化記憶",
+    "file_memory": "記憶檔案",
+    "remote_connect_devices": "Remote Connect 裝置",
+    "remote_ssh": "Remote SSH",
+    "cross_reference_repair": "交叉引用修復"
+  },
+  "messages": {
+    "loading": "正在載入遷移狀態…",
+    "loadFailed": "無法載入此裝置上的遷移狀態。",
+    "emptySelection": "請至少選擇一個遷移資料群組。",
+    "scanComplete": "唯讀掃描已完成。",
+    "scanFailed": "無法安全掃描舊資料。",
+    "handoffStarted": "Data Migrator 正在啟動。交接完成後 OpenBitFun 將關閉。",
+    "prepareFailed": "無法安全啟動 Data Migrator。",
+    "noReport": "尚無遷移報告。",
+    "reportFailed": "無法載入遷移報告。",
+    "reminderRestored": "已恢復首次啟動遷移提醒。",
+    "preferenceFailed": "無法修改提醒偏好。"
+  },
+  "startupNotification": {
+    "title": "BitFun 資料遷移",
+    "statuses": {
+      "discovered": "Data Migrator 發現了舊資料，但尚未完成遷移。",
+      "scanned": "Data Migrator 已完成唯讀掃描。",
+      "planned": "Data Migrator 已儲存計畫，但尚未匯入資料。",
+      "waiting_for_processes": "遷移仍在等待本機應用程式退出。",
+      "staging": "遷移在暫存資料時停止，可以安全恢復。",
+      "validating_stage": "遷移在驗證暫存資料時停止，可以安全恢復。",
+      "committing": "遷移在提交領域資料時停止；重試前請檢視報告。",
+      "validating_commit": "遷移在驗證匯入資料時停止；請檢視報告。",
+      "completed": "受支援的 BitFun 資料已成功遷移。",
+      "completed_with_warnings": "BitFun 資料遷移已完成，但有警告。",
+      "cancelled": "BitFun 資料遷移已在安全邊界取消。",
+      "failed_recoverable": "BitFun 資料遷移未完成，可以重試。",
+      "failed_manual_action_required": "BitFun 資料遷移需要手動處理後才能繼續。"
+    }
+  },
+  "confirm": {
+    "title": "關閉 OpenBitFun 並啟動 Data Migrator？",
+    "message": "獨立 Data Migrator 需要獨占存取本機產品資料。繼續前請確認關閉影響。",
+    "agentImpact": "正在執行的 Agent 回合將停止。",
+    "terminalImpact": "終端任務和其他子程序可能會停止。",
+    "fileImpact": "遷移開始前，正在進行的檔案寫入必須完成。",
+    "unsavedImpact": "未儲存的編輯器或設定變更可能會遺失。",
+    "closeImpact": "OpenBitFun 將關閉；遷移器會再次確認最終範圍，並在遷移結束後重新開啟 OpenBitFun。"
+  }
+}

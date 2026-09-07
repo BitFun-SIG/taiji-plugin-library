@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OpenBitFun Data Migrator</title>
+    <link rel="stylesheet" href="styles.css" />
+    <script src="app.js" defer></script>
+  </head>
+  <body>
+    <main class="shell">
+      <header>
+        <p class="eyebrow" data-i18n="eyebrow">OpenBitFun maintenance</p>
+        <h1 data-i18n="title">Import data from BitFun</h1>
+        <p class="lead" data-i18n="intro">
+          Choose what to bring forward. Your original BitFun data will not be deleted.
+        </p>
+      </header>
+
+      <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
+
+      <section id="source-card" class="card" aria-labelledby="source-title">
+        <div class="card-heading">
+          <div>
+            <p class="step" data-i18n="stepSource">Step 1</p>
+            <h2 id="source-title" data-i18n="sourceTitle">Legacy source</h2>
+          </div>
+          <span id="source-badge" class="badge">Checking</span>
+        </div>
+        <p id="source-summary" class="muted"></p>
+        <p id="source-path" class="path"></p>
+      </section>
+
+      <section id="choice-card" class="card" aria-labelledby="choice-title">
+        <p class="step" data-i18n="firstLaunch">First launch</p>
+        <h2 id="choice-title" data-i18n="choiceTitle">What would you like to do?</h2>
+        <p class="muted" data-i18n="choiceHelp">
+          Migration runs only after OpenBitFun and other data writers have stopped.
+        </p>
+        <div class="actions">
+          <button id="migrate-now" class="primary" data-i18n="migrateNow">Migrate now</button>
+          <button id="remind-later" data-i18n="remindLater">Remind me later</button>
+          <button id="do-not-remind" class="quiet" data-i18n="doNotRemind">Do not remind me</button>
+        </div>
+      </section>
+
+      <section id="scope-card" class="card" aria-labelledby="scope-title" hidden>
+        <p class="step" data-i18n="stepScope">Step 2</p>
+        <h2 id="scope-title" data-i18n="scopeTitle">Choose migration scope</h2>
+        <div id="scope-list" class="scope-list"></div>
+        <div class="actions">
+          <button id="scan" class="primary" data-i18n="scan">Scan selected data</button>
+        </div>
+      </section>
+
+      <section id="scan-card" class="card" aria-labelledby="scan-title" hidden>
+        <p class="step" data-i18n="stepReview">Step 3</p>
+        <h2 id="scan-title" data-i18n="reviewTitle">Review scan</h2>
+        <div id="findings" class="result-list"></div>
+        <div class="actions">
+          <button id="prepare" class="primary" data-i18n="prepare">Run preflight plan</button>
+        </div>
+      </section>
+
+      <section id="plan-card" class="card" aria-labelledby="plan-title" hidden>
+        <p class="step" data-i18n="stepConfirm">Step 4</p>
+        <h2 id="plan-title" data-i18n="planTitle">Confirm migration</h2>
+        <div id="plan-summary" class="result-list"></div>
+        <div id="blockers" class="warning" hidden></div>
+        <div class="actions">
+          <button id="retry-writers" data-i18n="retryWriters" hidden>Check processes again</button>
+          <button id="start" class="primary" data-i18n="start">Start migration</button>
+        </div>
+      </section>
+
+      <section id="progress-card" class="card" aria-labelledby="progress-title" hidden>
+        <p class="step" data-i18n="stepProgress">Step 5</p>
+        <h2 id="progress-title" data-i18n="progressTitle">Migration progress</h2>
+        <dl class="progress-facts">
+          <div><dt data-i18n="phase">Phase</dt><dd id="phase">-</dd></div>
+          <div><dt data-i18n="domain">Domain</dt><dd id="domain">-</dd></div>
+          <div><dt data-i18n="count">Completed steps</dt><dd id="count">0 / 0</dd></div>
+        </dl>
+        <p id="progress-message" class="muted"></p>
+        <div class="actions">
+          <button id="cancel" data-i18n="cancel">Cancel at a safe boundary</button>
+        </div>
+      </section>
+
+      <section id="report-card" class="card" aria-labelledby="report-title" hidden>
+        <p class="step" data-i18n="stepDone">Result</p>
+        <h2 id="report-title" data-i18n="reportTitle">Migration report</h2>
+        <div id="report-summary" class="result-list"></div>
+        <p class="muted" data-i18n="reportPrivacy">
+          This summary contains counts and result codes, not credentials or user content.
+        </p>
+        <div class="actions">
+          <button id="open-desktop" class="primary" data-i18n="openDesktop">Open OpenBitFun</button>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

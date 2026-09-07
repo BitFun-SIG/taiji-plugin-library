@@ -38,6 +38,7 @@ import { activateCreationRuntime } from '@/infrastructure/creation/creationRunti
 import { attachCreationRuntime, recordCreationActivationError } from '@/infrastructure/creation/creationBridge';
 import { createCreationUiApi } from './creation/creationUiApi';
 import { usePeerDeviceModeOptional } from '@/infrastructure/peer-device/peerDeviceContextState';
+import { showLegacyMigrationStartupNotification } from './startup/legacyMigrationStartupNotification';
 
 const log = createLogger('App');
 
@@ -871,6 +872,13 @@ function App() {
 
   // Debug inspector shortcuts (desktop devtools only)
   useDebugInspector();
+
+  useEffect(() => {
+    if (!isTauriRuntime() || !interactiveShellReady) return;
+    void showLegacyMigrationStartupNotification().catch((error) => {
+      log.warn('Failed to show legacy migration startup result', error);
+    });
+  }, [interactiveShellReady]);
 
   useEffect(() => {
     if (!isTauriRuntime() || !interactiveShellReady) {

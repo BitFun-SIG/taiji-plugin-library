@@ -5,7 +5,7 @@
  *
  * The normal product is OpenBitFun-only. Legacy exceptions are restricted to
  * the exact data-directory ignore entry and the one-time migration documents,
- * service boundary, and fixtures used for in-place upgrades.
+ * migrator app/service boundary, and fixtures used for in-place upgrades.
  */
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, statSync } from 'node:fs';
@@ -32,6 +32,7 @@ const retiredIdentityDataBoundaryFiles = new Set([
   'src/apps/mobile/harmonyos/entry/src/main/resources/base/profile/backup_config.json',
 ]);
 const retiredIdentityDataBoundaryPrefixes = Object.freeze([
+  'src/apps/data-migrator/',
   'src/crates/assembly/core/src/legacy_migration/',
   'src/crates/services/legacy-migration/',
 ]);

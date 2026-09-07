@@ -177,6 +177,22 @@ impl MigrationEngine {
         selection: MigrationSelection,
         cancellation: &CancellationToken,
     ) -> LegacyMigrationResult<MigrationPlan> {
+        self.plan_with_run_id(
+            source,
+            selection,
+            uuid::Uuid::new_v4().to_string(),
+            cancellation,
+        )
+    }
+
+    /// Build an immutable plan for a run id authenticated by the handoff file.
+    pub fn plan_with_run_id(
+        &self,
+        source: &LegacySourceDescriptor,
+        selection: MigrationSelection,
+        run_id: impl Into<String>,
+        cancellation: &CancellationToken,
+    ) -> LegacyMigrationResult<MigrationPlan> {
         if !source.readable || !source.supported {
             return Err(LegacyMigrationError::UnsupportedSource(
                 "legacy source is not readable and supported".to_string(),
@@ -215,9 +231,15 @@ impl MigrationEngine {
             conflicts.extend(scan.conflicts);
         }
 
+        let run_id = run_id.into();
+        if uuid::Uuid::parse_str(&run_id).is_err() {
+            return Err(LegacyMigrationError::InvalidRequest(
+                "migration run id must be a UUID".to_string(),
+            ));
+        }
         let mut plan = MigrationPlan {
             format_version: CURRENT_MIGRATION_FORMAT_VERSION,
-            run_id: uuid::Uuid::new_v4().to_string(),
+            run_id,
             source_fingerprint: source.source_fingerprint.clone(),
             selection,
             steps,
@@ -374,6 +396,15 @@ impl MigrationEngine {
                     let _ = record_cancelled(&layout, &mut report, &mut journal_sequence);
                     error
                 })?;
+                emit_progress(
+                    &mut progress,
+                    plan,
+                    step,
+                    MigrationPhase::ValidateStage,
+                    index,
+                    true,
+                    "validating_staged_domain",
+                );
                 transition(
                     &layout,
                     &mut report,
@@ -413,6 +444,15 @@ impl MigrationEngine {
                     let _ = record_cancelled(&layout, &mut report, &mut journal_sequence);
                     error
                 })?;
+                emit_progress(
+                    &mut progress,
+                    plan,
+                    step,
+                    MigrationPhase::Commit,
+                    index,
+                    false,
+                    "committing_domain",
+                );
                 transition(
                     &layout,
                     &mut report,
@@ -451,6 +491,15 @@ impl MigrationEngine {
             }
 
             if report.domain_results[result_index].state == MigrationDomainState::Committed {
+                emit_progress(
+                    &mut progress,
+                    plan,
+                    step,
+                    MigrationPhase::ValidateCommit,
+                    index,
+                    false,
+                    "validating_committed_domain",
+                );
                 transition(
                     &layout,
                     &mut report,
@@ -520,6 +569,15 @@ impl MigrationEngine {
                     crash_injector,
                     CrashPoint::AfterCommitValidated(step.domain),
                 )?;
+                emit_progress(
+                    &mut progress,
+                    plan,
+                    step,
+                    MigrationPhase::ValidateCommit,
+                    index + 1,
+                    true,
+                    "domain_verified",
+                );
             }
         }
 

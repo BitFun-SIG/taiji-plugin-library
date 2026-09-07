@@ -131,10 +131,24 @@ test('limits retired identity data to the one-time production migration boundary
     ),
     [],
   );
+  assert.deepEqual(
+    violationsFor(
+      `const sourceLabel = "${retiredName}";`,
+      'src/apps/data-migrator/ui/app.js',
+    ),
+    [],
+  );
   assert.equal(
     violationsFor(
       `const SOURCE_PRODUCT: &str = "${retiredLowerName}";`,
       'src/crates/services/example/src/source.rs',
+    ).length,
+    1,
+  );
+  assert.equal(
+    violationsFor(
+      `const sourceLabel = "${retiredName}";`,
+      'src/apps/desktop/src/example.rs',
     ).length,
     1,
   );

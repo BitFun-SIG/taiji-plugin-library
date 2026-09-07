@@ -15,7 +15,7 @@ vi.mock('@/infrastructure/i18n/core/I18nService', () => ({
 }));
 
 describe('settings information architecture', () => {
-  it('uses five ownership categories and twenty canonical pages', () => {
+  it('uses five ownership categories and twenty-one canonical pages', () => {
     expect(SETTINGS_CATEGORIES.map((category) => category.id)).toEqual([
       'application',
       'ai',
@@ -23,8 +23,8 @@ describe('settings information architecture', () => {
       'tools',
       'data',
     ]);
-    expect(SETTINGS_PAGE_MANIFESTS).toHaveLength(20);
-    expect(new Set(SETTINGS_PAGE_MANIFESTS.map((page) => page.id)).size).toBe(20);
+    expect(SETTINGS_PAGE_MANIFESTS).toHaveLength(21);
+    expect(new Set(SETTINGS_PAGE_MANIFESTS.map((page) => page.id)).size).toBe(21);
   });
 
   it('keeps memory with AI, pet with application, and review inside execution', () => {
@@ -142,10 +142,13 @@ describe('settings information architecture', () => {
     expect(dataPages?.map((page) => page.id)).toEqual([
       'data.usage',
       'data.archived',
+      'data.migration',
       'data.diagnostics',
     ]);
     expect(SETTINGS_PAGE_MANIFESTS.find((page) => page.id === 'data.usage')?.views).toBeUndefined();
     expect(SETTINGS_PAGE_MANIFESTS.find((page) => page.id === 'data.archived')?.views).toBeUndefined();
+    expect(SETTINGS_PAGE_MANIFESTS.find((page) => page.id === 'data.migration')?.namespaces)
+      .toEqual(['settings/legacy-migration']);
   });
 
   it('contains old links at the upgrade boundary and emits canonical destinations', () => {

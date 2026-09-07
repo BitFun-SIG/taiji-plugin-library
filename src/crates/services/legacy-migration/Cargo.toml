@@ -24,7 +24,7 @@ dirs = { workspace = true }
 fs2 = { workspace = true }
 hex = { workspace = true }
 openbitfun-product-domains = { path = "../../contracts/product-domains", features = ["legacy-migration"] }
-openbitfun-services-core = { path = "../services-core", features = ["product-identity"] }
+openbitfun-services-core = { path = "../services-core", features = ["process-runtime", "product-identity"] }
 rusqlite = { workspace = true, features = ["backup", "bundled"] }
 semver = { workspace = true }
 serde = { workspace = true }
@@ -34,7 +34,19 @@ thiserror = { workspace = true }
 uuid = { workspace = true }
 
 [target.'cfg(windows)'.dependencies]
-windows = { workspace = true, features = ["Win32_Storage_FileSystem"] }
+windows = { workspace = true, features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_Security_Authorization",
+    "Win32_Security_Cryptography",
+    "Win32_Security_WinTrust",
+    "Win32_Storage_FileSystem",
+    "Win32_System_Diagnostics_ToolHelp",
+    "Win32_System_Threading",
+] }
+
+[target.'cfg(unix)'.dependencies]
+libc = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
