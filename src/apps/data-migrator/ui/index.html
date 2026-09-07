@@ -31,7 +31,7 @@
         <p id="source-path" class="path"></p>
       </section>
 
-      <section id="choice-card" class="card" aria-labelledby="choice-title">
+      <section id="choice-card" class="card" aria-labelledby="choice-title" hidden>
         <p class="step" data-i18n="firstLaunch">First launch</p>
         <h2 id="choice-title" data-i18n="choiceTitle">What would you like to do?</h2>
         <p class="muted" data-i18n="choiceHelp">
@@ -94,7 +94,12 @@
         <p class="muted" data-i18n="reportPrivacy">
           This summary contains counts and result codes, not credentials or user content.
         </p>
+        <p id="dev-restart-help" class="muted" data-i18n="devRestartHelp" hidden>
+          Development build: close Data Migrator, then run pnpm run desktop:dev again.
+        </p>
+        <p id="diagnostics-path" class="path" role="status" aria-live="polite" hidden></p>
         <div class="actions">
+          <button id="export-diagnostics" data-i18n="exportDiagnostics" hidden>Export failure diagnostics</button>
           <button id="open-desktop" class="primary" data-i18n="openDesktop">Open OpenBitFun</button>
         </div>
       </section>

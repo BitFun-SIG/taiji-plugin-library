@@ -1,13 +1,14 @@
 use openbitfun_legacy_migration::{
-    atomic_write_json, probe_legacy_source, snapshot_sqlite_read_only, CancellationToken,
-    CrashInjector, CrashPoint, DomainContext, DomainScan, LegacyDomainAdapter,
+    atomic_write_json, export_failure_diagnostics, probe_legacy_source, snapshot_sqlite_read_only,
+    CancellationToken, CrashInjector, CrashPoint, DomainContext, DomainScan, LegacyDomainAdapter,
     LegacyMigrationError, LegacyMigrationResult, MigrationEngine, MigrationLayout, MigrationLock,
     MigrationRoots, NoCrashInjection, ProbeLimits,
 };
 use openbitfun_product_domains::legacy_migration::{
     FindingSeverity, MigrationDiagnostic, MigrationDomainId, MigrationDomainResult,
-    MigrationDomainState, MigrationGroupId, MigrationPhase, MigrationRunReport, MigrationRunStatus,
-    MigrationSelection, ScanFinding,
+    MigrationDomainState, MigrationGroupId, MigrationJournalEvent, MigrationPhase,
+    MigrationReleaseObservation, MigrationRunReport, MigrationRunStatus, MigrationSelection,
+    ScanFinding,
 };
 use rusqlite::Connection;
 use sha2::{Digest, Sha256};
@@ -40,6 +41,7 @@ struct FakeAdapter {
     domain: MigrationDomainId,
     calls: Arc<Mutex<BTreeMap<MigrationDomainId, CallCounts>>>,
     finalize_behavior: FinalizeBehavior,
+    stage_error: Option<std::io::ErrorKind>,
 }
 
 impl LegacyDomainAdapter for FakeAdapter {
@@ -67,6 +69,12 @@ impl LegacyDomainAdapter for FakeAdapter {
 
     fn stage(&self, context: &DomainContext<'_>) -> LegacyMigrationResult<MigrationDomainResult> {
         self.update(|counts| counts.stage += 1);
+        if let Some(kind) = self.stage_error {
+            return Err(LegacyMigrationError::Io {
+                path: PathBuf::from("C:/Users/private/session-state.json"),
+                source: std::io::Error::new(kind, "private storage detail"),
+            });
+        }
         atomic_write_json(
             &stage_path(context, self.domain),
             &serde_json::json!({"domain": format!("{:?}", self.domain), "entities": ["stable-id"]}),
@@ -170,6 +178,7 @@ fn engine_recovers_after_commit_before_journal_and_deduplicates_repeated_runs() 
     let temp = test_tempdir();
     let roots = fixture_roots(temp.path());
     seed_supported_source(&roots);
+    let source_before = legacy_source_snapshot(&roots);
     let source = probe_legacy_source(&roots, ProbeLimits::default())
         .expect("probe should succeed")
         .expect("source should be present");
@@ -219,7 +228,10 @@ fn engine_recovers_after_commit_before_journal_and_deduplicates_repeated_runs() 
         2,
         "the owner idempotently retries an ambiguous commit"
     );
-    assert!(roots.legacy_user_root.join("config/app.json").exists());
+    let observation = read_observation(&roots, &plan.run_id);
+    assert_eq!(observation.result_code, "migration_completed");
+    assert_eq!(observation.failure_phase, None);
+    assert_eq!(legacy_source_snapshot(&roots), source_before);
 }
 
 #[test]
@@ -269,6 +281,10 @@ fn engine_persists_owner_metadata_finalized_after_commit_validation() {
             .expect("settings calls")
             .finalize_result,
         1
+    );
+    assert_eq!(
+        read_observation(&roots, &plan.run_id).result_code,
+        "migration_completed_with_warnings"
     );
 
     let persisted: MigrationRunReport = serde_json::from_slice(
@@ -337,6 +353,7 @@ fn engine_rolls_back_unverified_commit_when_owner_finalization_fails() {
     let temp = test_tempdir();
     let roots = fixture_roots(temp.path());
     seed_supported_source(&roots);
+    let source_before = legacy_source_snapshot(&roots);
     let source = probe_legacy_source(&roots, ProbeLimits::default())
         .expect("probe should succeed")
         .expect("source should be present");
@@ -385,6 +402,259 @@ fn engine_rolls_back_unverified_commit_when_owner_finalization_fails() {
             .state,
         MigrationDomainState::Failed
     );
+    let observation = read_observation(&roots, &plan.run_id);
+    assert_eq!(observation.result_code, "domain_failed_recoverable");
+    assert_eq!(
+        observation.failure_phase,
+        Some(MigrationPhase::ValidateCommit)
+    );
+    assert_eq!(legacy_source_snapshot(&roots), source_before);
+}
+
+#[test]
+fn domain_failure_report_keeps_only_sanitized_storage_classification() {
+    let temp = test_tempdir();
+    let roots = fixture_roots(temp.path());
+    seed_supported_source(&roots);
+    let source = probe_legacy_source(&roots, ProbeLimits::default())
+        .expect("probe should succeed")
+        .expect("source should be present");
+    let calls = Arc::new(Mutex::new(BTreeMap::new()));
+    let engine =
+        fake_engine_with_stage_error(roots.clone(), calls, std::io::ErrorKind::PermissionDenied);
+    let plan = engine
+        .plan(
+            &source,
+            MigrationSelection {
+                groups: BTreeSet::from([MigrationGroupId::SettingsAndCredentials]),
+            },
+            &CancellationToken::default(),
+        )
+        .expect("plan should succeed");
+
+    assert!(matches!(
+        engine.execute(&plan, &CancellationToken::default(), &NoCrashInjection),
+        Err(LegacyMigrationError::Domain {
+            domain: MigrationDomainId::Settings,
+            ..
+        })
+    ));
+
+    let report_bytes = fs::read(MigrationLayout::new(&roots, &plan.run_id).report_path())
+        .expect("failed report should be persisted");
+    let report: MigrationRunReport =
+        serde_json::from_slice(&report_bytes).expect("failed report should be valid");
+    let diagnostic = report
+        .diagnostics
+        .last()
+        .expect("failed report should include a diagnostic");
+    assert_eq!(diagnostic.code, "domain_io_permission_denied");
+    assert_eq!(diagnostic.domain, Some(MigrationDomainId::Settings));
+    assert_eq!(diagnostic.severity, FindingSeverity::Blocking);
+    assert!(diagnostic.relative_path.is_none());
+    let serialized = String::from_utf8(report_bytes).unwrap();
+    assert!(!serialized.contains("private"));
+    assert!(!serialized.contains("session-state"));
+}
+
+#[test]
+fn cancellation_keeps_every_legacy_source_root_unchanged() {
+    let temp = test_tempdir();
+    let roots = fixture_roots(temp.path());
+    seed_supported_source(&roots);
+    fs::create_dir_all(&roots.legacy_home_root).expect("legacy home should be created");
+    fs::write(
+        roots.legacy_home_root.join("user-content.txt"),
+        "content that must remain untouched",
+    )
+    .expect("legacy content should be written");
+    let source_before = legacy_source_snapshot(&roots);
+    let source = probe_legacy_source(&roots, ProbeLimits::default())
+        .expect("probe should succeed")
+        .expect("source should be present");
+    let engine = fake_engine(roots.clone(), Arc::new(Mutex::new(BTreeMap::new())));
+    let plan = engine
+        .plan(
+            &source,
+            MigrationSelection {
+                groups: BTreeSet::from([MigrationGroupId::SettingsAndCredentials]),
+            },
+            &CancellationToken::default(),
+        )
+        .expect("plan should succeed");
+    let cancellation = CancellationToken::default();
+    let cancellation_from_progress = cancellation.clone();
+
+    let result =
+        engine.execute_with_progress(&plan, &cancellation, &NoCrashInjection, move |event| {
+            if event.phase == MigrationPhase::Stage {
+                cancellation_from_progress.cancel();
+            }
+        });
+
+    assert!(matches!(result, Err(LegacyMigrationError::Cancelled)));
+    assert_eq!(legacy_source_snapshot(&roots), source_before);
+    let layout = MigrationLayout::new(&roots, &plan.run_id);
+    let report: MigrationRunReport = serde_json::from_slice(
+        &fs::read(layout.report_path()).expect("cancelled report should be persisted"),
+    )
+    .expect("cancelled report should be valid");
+    assert_eq!(report.status, MigrationRunStatus::Cancelled);
+    let observation: MigrationReleaseObservation = serde_json::from_slice(
+        &fs::read(layout.release_observation_path())
+            .expect("cancelled observation should be persisted"),
+    )
+    .expect("cancelled observation should be valid");
+    assert_eq!(observation.result_code, "migration_cancelled");
+    assert_eq!(observation.failure_phase, None);
+}
+
+#[test]
+fn release_observation_and_failure_export_exclude_sensitive_content() {
+    let temp = test_tempdir();
+    let roots = fixture_roots(temp.path());
+    let layout = MigrationLayout::new(&roots, "diagnostics-run");
+    layout.initialize().expect("layout should initialize");
+    for event in [
+        MigrationJournalEvent {
+            format_version: 1,
+            sequence: 1,
+            recorded_at_ms: 1_100,
+            run_id: "private-run-id".to_string(),
+            status: MigrationRunStatus::Staging,
+            phase: MigrationPhase::Stage,
+            domain: Some(MigrationDomainId::Settings),
+            domain_state: Some(MigrationDomainState::Staged),
+            code: "journal-secret C:/Users/Alice".to_string(),
+        },
+        MigrationJournalEvent {
+            format_version: 1,
+            sequence: 2,
+            recorded_at_ms: 1_250,
+            run_id: "private-run-id".to_string(),
+            status: MigrationRunStatus::FailedRecoverable,
+            phase: MigrationPhase::ValidateStage,
+            domain: Some(MigrationDomainId::Settings),
+            domain_state: Some(MigrationDomainState::Failed),
+            code: "domain_failed_recoverable".to_string(),
+        },
+    ] {
+        layout
+            .append_journal(&event)
+            .expect("journal event should append");
+    }
+    fs::write(
+        layout.journal_path(),
+        [
+            fs::read(layout.journal_path()).expect("journal should be readable"),
+            b"{\"invalid\":\"message-body-secret\"\n".to_vec(),
+        ]
+        .concat(),
+    )
+    .expect("invalid diagnostic fixture should append");
+    let report = MigrationRunReport {
+        format_version: 1,
+        run_id: "private-run-id".to_string(),
+        source_fingerprint: "private-source-fingerprint".to_string(),
+        plan_hash: "private-plan-hash".to_string(),
+        status: MigrationRunStatus::FailedRecoverable,
+        started_at_ms: 1_000,
+        domain_results: vec![MigrationDomainResult {
+            domain: MigrationDomainId::Settings,
+            state: MigrationDomainState::Failed,
+            imported: 42,
+            warnings: vec![MigrationDiagnostic {
+                code: "settings_validation_failed".to_string(),
+                severity: FindingSeverity::Blocking,
+                domain: Some(MigrationDomainId::Settings),
+                relative_path: Some("C:/Users/Alice/secret.txt".to_string()),
+                message: "message-body-secret".to_string(),
+                action: Some("repair-account-secret".to_string()),
+            }],
+            requires_reauthentication: vec!["repair-account-secret".to_string()],
+            ..MigrationDomainResult::default()
+        }],
+        diagnostics: vec![MigrationDiagnostic {
+            code: "diagnostic secret token".to_string(),
+            severity: FindingSeverity::Warning,
+            domain: None,
+            relative_path: Some("../private-path".to_string()),
+            message: "another-private-message".to_string(),
+            action: Some("private-action".to_string()),
+        }],
+        ..MigrationRunReport::default()
+    };
+
+    let path =
+        export_failure_diagnostics(&layout, &report).expect("failure diagnostics should export");
+    assert_eq!(path, layout.failure_diagnostics_path());
+    let bytes = fs::read(&path).expect("failure diagnostics should be readable");
+    let serialized = String::from_utf8(bytes.clone()).expect("diagnostics should be UTF-8");
+    for forbidden in [
+        "private-run-id",
+        "private-source-fingerprint",
+        "private-plan-hash",
+        "Users/Alice",
+        "message-body-secret",
+        "repair-account-secret",
+        "another-private-message",
+        "private-action",
+        "private-path",
+        "journal-secret",
+        "42",
+    ] {
+        assert!(
+            !serialized.contains(forbidden),
+            "diagnostics exposed forbidden value: {forbidden}"
+        );
+    }
+    let value: serde_json::Value =
+        serde_json::from_slice(&bytes).expect("diagnostics should be valid JSON");
+    assert_object_keys(
+        &value,
+        &["diagnosticCodes", "formatVersion", "journal", "observation"],
+    );
+    assert_object_keys(
+        &value["observation"],
+        &["domainStates", "durationMs", "failurePhase", "resultCode"],
+    );
+    for domain_state in value["observation"]["domainStates"]
+        .as_array()
+        .expect("domain states should be an array")
+    {
+        assert_object_keys(domain_state, &["domain", "state"]);
+    }
+    for diagnostic in value["diagnosticCodes"]
+        .as_array()
+        .expect("diagnostic codes should be an array")
+    {
+        assert_object_keys(diagnostic, &["code", "domain", "severity"]);
+    }
+    for journal_entry in value["journal"]
+        .as_array()
+        .expect("journal should be an array")
+    {
+        assert_object_keys(
+            journal_entry,
+            &[
+                "code",
+                "domain",
+                "domainState",
+                "phase",
+                "sequence",
+                "status",
+            ],
+        );
+    }
+    assert_eq!(value["observation"]["durationMs"], 250);
+    assert_eq!(value["observation"]["failurePhase"], "validate_stage");
+    assert_eq!(
+        value["observation"]["resultCode"],
+        "domain_failed_recoverable"
+    );
+    assert!(serialized.contains("settings_validation_failed"));
+    assert!(serialized.contains("journal_entry_invalid"));
+    assert!(serialized.contains("redacted_code"));
 }
 
 #[test]
@@ -462,6 +732,28 @@ fn fake_engine_with_finalize(
     calls: Arc<Mutex<BTreeMap<MigrationDomainId, CallCounts>>>,
     settings_finalize_behavior: FinalizeBehavior,
 ) -> MigrationEngine {
+    fake_engine_with_behaviors(roots, calls, settings_finalize_behavior, None)
+}
+
+fn fake_engine_with_stage_error(
+    roots: MigrationRoots,
+    calls: Arc<Mutex<BTreeMap<MigrationDomainId, CallCounts>>>,
+    settings_stage_error: std::io::ErrorKind,
+) -> MigrationEngine {
+    fake_engine_with_behaviors(
+        roots,
+        calls,
+        FinalizeBehavior::PassThrough,
+        Some(settings_stage_error),
+    )
+}
+
+fn fake_engine_with_behaviors(
+    roots: MigrationRoots,
+    calls: Arc<Mutex<BTreeMap<MigrationDomainId, CallCounts>>>,
+    settings_finalize_behavior: FinalizeBehavior,
+    settings_stage_error: Option<std::io::ErrorKind>,
+) -> MigrationEngine {
     let adapters = [
         MigrationDomainId::Settings,
         MigrationDomainId::Credentials,
@@ -477,6 +769,9 @@ fn fake_engine_with_finalize(
             } else {
                 FinalizeBehavior::PassThrough
             },
+            stage_error: (domain == MigrationDomainId::Settings)
+                .then_some(settings_stage_error)
+                .flatten(),
         }) as Box<dyn LegacyDomainAdapter>
     });
     MigrationEngine::new(roots, adapters).expect("fake engine should be valid")
@@ -542,6 +837,72 @@ fn sqlite_family(database: &Path) -> Vec<PathBuf> {
 fn sha256_file(path: &Path) -> String {
     let bytes = fs::read(path).expect("fixture file should remain readable");
     hex::encode(Sha256::digest(bytes))
+}
+
+fn legacy_source_snapshot(roots: &MigrationRoots) -> BTreeMap<String, String> {
+    let mut snapshot = BTreeMap::new();
+    for (name, root) in [
+        ("user", &roots.legacy_user_root),
+        ("home", &roots.legacy_home_root),
+        ("skills", &roots.legacy_skills_root),
+        ("ssh", &roots.legacy_ssh_root),
+    ] {
+        collect_source_entries(name, root, root, &mut snapshot);
+    }
+    snapshot
+}
+
+fn collect_source_entries(
+    name: &str,
+    root: &Path,
+    current: &Path,
+    snapshot: &mut BTreeMap<String, String>,
+) {
+    if !current.exists() {
+        return;
+    }
+    let relative = current
+        .strip_prefix(root)
+        .expect("source entry should remain below its root")
+        .to_string_lossy()
+        .replace('\\', "/");
+    let key = if relative.is_empty() {
+        name.to_string()
+    } else {
+        format!("{name}/{relative}")
+    };
+    if current.is_dir() {
+        snapshot.insert(format!("{key}/"), "directory".to_string());
+        let mut entries = fs::read_dir(current)
+            .expect("source directory should remain readable")
+            .collect::<Result<Vec<_>, _>>()
+            .expect("source entries should remain readable");
+        entries.sort_by_key(std::fs::DirEntry::file_name);
+        for entry in entries {
+            collect_source_entries(name, root, &entry.path(), snapshot);
+        }
+    } else {
+        snapshot.insert(key, sha256_file(current));
+    }
+}
+
+fn assert_object_keys(value: &serde_json::Value, expected: &[&str]) {
+    let mut actual = value
+        .as_object()
+        .expect("value should be a JSON object")
+        .keys()
+        .map(String::as_str)
+        .collect::<Vec<_>>();
+    actual.sort_unstable();
+    assert_eq!(actual, expected);
+}
+
+fn read_observation(roots: &MigrationRoots, run_id: &str) -> MigrationReleaseObservation {
+    serde_json::from_slice(
+        &fs::read(MigrationLayout::new(roots, run_id).release_observation_path())
+            .expect("release observation should be persisted"),
+    )
+    .expect("release observation should be valid")
 }
 
 fn test_tempdir() -> tempfile::TempDir {

@@ -114,11 +114,18 @@ export interface MigrationRunReport {
   requiresRelocation: string[];
 }
 
+export interface LegacyMigrationStartupError {
+  code: string;
+  message: string;
+  recoverable: boolean;
+}
+
 export interface LegacyMigrationStatusView {
   source: LegacySourceDescriptor | null;
   onboarding: MigrationOnboardingState;
   latestReport: MigrationRunReport | null;
   startupReport: MigrationRunReport | null;
+  startupError?: LegacyMigrationStartupError | null;
 }
 
 export interface ScanFinding {

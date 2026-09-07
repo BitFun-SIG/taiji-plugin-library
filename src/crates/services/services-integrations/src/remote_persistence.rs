@@ -711,17 +711,18 @@ pub fn read_current_remote_workspaces(path: &Path) -> Result<Option<Vec<RemoteWo
 }
 
 pub fn read_legacy_remote_workspaces(path: &Path) -> Result<Option<Vec<RemoteWorkspaceRecord>>> {
-    #[derive(Deserialize)]
-    #[serde(untagged)]
-    enum LegacyShape {
-        One(RemoteWorkspaceRecord),
-        Many(Vec<RemoteWorkspaceRecord>),
-    }
-    let shape: Option<LegacyShape> = read_optional_json(path)?;
-    let values = shape.map(|shape| match shape {
-        LegacyShape::One(value) => vec![value],
-        LegacyShape::Many(values) => values,
-    });
+    let value: Option<serde_json::Value> = read_optional_json(path)?;
+    let values = value
+        .map(|value| match value {
+            serde_json::Value::Array(_) => {
+                serde_json::from_value(value).context("parse legacy remote workspace array")
+            }
+            serde_json::Value::Object(_) => serde_json::from_value(value)
+                .map(|value| vec![value])
+                .context("parse legacy remote workspace object"),
+            _ => bail!("legacy remote workspace must be a JSON object or array"),
+        })
+        .transpose()?;
     if let Some(values) = &values {
         validate_remote_workspaces(values)?;
     }
@@ -1198,6 +1199,21 @@ mod tests {
             Some("fixture-password")
         );
         assert!(!format!("{loaded:?}").contains("fixture-password"));
+    }
+
+    #[test]
+    fn ssh_owner_treats_an_empty_legacy_workspace_array_as_no_workspaces() {
+        let root = test_tempdir("ssh-empty-workspaces");
+        let workspace_path = root.path().join("remote_workspace.json");
+        std::fs::write(&workspace_path, "[]").unwrap();
+
+        assert_eq!(
+            read_legacy_remote_workspaces(&workspace_path).unwrap(),
+            Some(Vec::new())
+        );
+
+        std::fs::write(&workspace_path, "{}").unwrap();
+        assert!(read_legacy_remote_workspaces(&workspace_path).is_err());
     }
 
     fn write_legacy_session_fixture(

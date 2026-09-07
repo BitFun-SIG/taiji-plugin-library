@@ -333,6 +333,58 @@ pub struct MigrationRunReport {
     pub requires_relocation: Vec<String>,
 }
 
+/// Content-free projection that may be used for migration release observation.
+///
+/// Keep this shape limited to the result code, per-domain state, elapsed time,
+/// and failure phase. In particular, it must not grow run identifiers, source
+/// fingerprints, paths, counts, diagnostics, or user-authored content.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct MigrationReleaseObservation {
+    pub result_code: String,
+    pub domain_states: Vec<MigrationDomainObservation>,
+    pub duration_ms: u64,
+    pub failure_phase: Option<MigrationPhase>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct MigrationDomainObservation {
+    pub domain: MigrationDomainId,
+    pub state: MigrationDomainState,
+}
+
+/// A content-free diagnostic code included in an explicit failure export.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct MigrationFailureDiagnosticCode {
+    pub code: String,
+    pub severity: FindingSeverity,
+    pub domain: Option<MigrationDomainId>,
+}
+
+/// Sanitized journal evidence included in an explicit failure export.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct MigrationFailureJournalEntry {
+    pub sequence: u64,
+    pub status: MigrationRunStatus,
+    pub phase: MigrationPhase,
+    pub domain: Option<MigrationDomainId>,
+    pub domain_state: Option<MigrationDomainState>,
+    pub code: String,
+}
+
+/// Shareable failure evidence without source identity, paths, secrets, or text.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct MigrationFailureDiagnostics {
+    pub format_version: u32,
+    pub observation: MigrationReleaseObservation,
+    pub diagnostic_codes: Vec<MigrationFailureDiagnosticCode>,
+    pub journal: Vec<MigrationFailureJournalEntry>,
+}
+
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum MigrationPromptChoice {

@@ -117,6 +117,8 @@
   },
   "startupNotification": {
     "title": "BitFun data migration",
+    "launchFailed": "OpenBitFun continued to start, but the Data Migrator could not be launched. Existing OpenBitFun and BitFun data were not changed.",
+    "openSettings": "Open migration settings",
     "statuses": {
       "discovered": "The Data Migrator discovered old data but did not finish a migration.",
       "scanned": "The Data Migrator completed a read-only scan.",

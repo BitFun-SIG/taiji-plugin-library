@@ -46,6 +46,7 @@ pub fn run(run_id: &str) -> Result<(), RunError> {
             commands::retry_writer_check,
             commands::start_legacy_migration,
             commands::cancel_legacy_migration,
+            commands::export_migration_diagnostics,
             commands::finish_legacy_migration,
         ])
         .run(tauri::generate_context!())

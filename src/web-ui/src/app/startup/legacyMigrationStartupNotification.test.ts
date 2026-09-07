@@ -33,7 +33,10 @@ describe('legacy migration startup notification', () => {
   });
 
   it('loads the lazy namespace and shows a completed report once', async () => {
-    mocks.getStatus.mockResolvedValue({ startupReport: { runId: 'run-1', status: 'completed' } });
+    mocks.getStatus.mockResolvedValue({
+      startupError: null,
+      startupReport: { runId: 'run-1', status: 'completed' },
+    });
     const values = new Map<string, string>();
     const storage = {
       getItem: (key: string) => values.get(key) ?? null,
@@ -50,5 +53,35 @@ describe('legacy migration startup notification', () => {
       runId: 'run-1',
       status: 'completed',
     });
+  });
+
+  it('prioritizes a redacted startup launch error over an older report', async () => {
+    mocks.getStatus.mockResolvedValue({
+      startupError: {
+        code: 'data_migrator_launch_failed',
+        message: 'A redacted backend message',
+        recoverable: true,
+      },
+      startupReport: { runId: 'run-1', status: 'completed' },
+    });
+    const values = new Map<string, string>();
+    const storage = {
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => { values.set(key, value); },
+    };
+
+    await showLegacyMigrationStartupNotification(storage);
+    await showLegacyMigrationStartupNotification(storage);
+
+    expect(mocks.error).toHaveBeenCalledTimes(1);
+    expect(mocks.error.mock.calls[0][0]).toBe(
+      'settings/legacy-migration:startupNotification.launchFailed',
+    );
+    expect(mocks.error.mock.calls[0][1].metadata).toEqual({
+      source: 'legacy-migration-startup-error',
+      code: 'data_migrator_launch_failed',
+      recoverable: true,
+    });
+    expect(mocks.success).not.toHaveBeenCalled();
   });
 });

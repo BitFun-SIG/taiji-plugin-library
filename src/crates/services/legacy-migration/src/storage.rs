@@ -47,6 +47,14 @@ impl MigrationLayout {
         self.run_root().join("report.json")
     }
 
+    pub fn release_observation_path(&self) -> PathBuf {
+        self.run_root().join("release-observation.json")
+    }
+
+    pub fn failure_diagnostics_path(&self) -> PathBuf {
+        self.run_root().join("failure-diagnostics.json")
+    }
+
     pub fn stage_root(&self) -> PathBuf {
         self.run_root().join("stage")
     }
@@ -172,22 +180,15 @@ fn replace_file(source: &Path, target: &Path) -> LegacyMigrationResult<()> {
 
 #[cfg(windows)]
 fn replace_file(source: &Path, target: &Path) -> LegacyMigrationResult<()> {
-    use std::os::windows::ffi::OsStrExt;
     use windows::core::PCWSTR;
     use windows::Win32::Storage::FileSystem::{
         MoveFileExW, MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH,
     };
 
-    let source_wide = source
-        .as_os_str()
-        .encode_wide()
-        .chain(std::iter::once(0))
-        .collect::<Vec<_>>();
-    let target_wide = target
-        .as_os_str()
-        .encode_wide()
-        .chain(std::iter::once(0))
-        .collect::<Vec<_>>();
+    let source_wide =
+        windows_extended_path(source).map_err(|error| LegacyMigrationError::io(source, error))?;
+    let target_wide =
+        windows_extended_path(target).map_err(|error| LegacyMigrationError::io(target, error))?;
     unsafe {
         MoveFileExW(
             PCWSTR(source_wide.as_ptr()),
@@ -195,5 +196,60 @@ fn replace_file(source: &Path, target: &Path) -> LegacyMigrationResult<()> {
             MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
         )
         .map_err(|error| LegacyMigrationError::io(target, std::io::Error::other(error.to_string())))
+    }
+}
+
+#[cfg(windows)]
+fn windows_extended_path(path: &Path) -> std::io::Result<Vec<u16>> {
+    use std::os::windows::ffi::OsStrExt;
+
+    let absolute = std::path::absolute(path)?;
+    let path = absolute.as_os_str().encode_wide().collect::<Vec<_>>();
+    let slash = b'\\' as u16;
+    let mut extended = if path.starts_with(&[slash, slash, b'?' as u16, slash])
+        || path.starts_with(&[slash, slash, b'.' as u16, slash])
+    {
+        path
+    } else if path.starts_with(&[slash, slash]) {
+        r"\\?\UNC\"
+            .encode_utf16()
+            .chain(path.into_iter().skip(2))
+            .collect()
+    } else if path.len() >= 3 && path[1] == b':' as u16 && path[2] == slash {
+        r"\\?\".encode_utf16().chain(path).collect()
+    } else {
+        path
+    };
+    extended.push(0);
+    Ok(extended)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[cfg(windows)]
+    #[test]
+    fn atomic_write_supports_windows_paths_beyond_max_path() {
+        let temp = tempfile::Builder::new()
+            .prefix("openbitfun-legacy-migration-long-path-")
+            .tempdir()
+            .unwrap();
+        let mut parent = temp.path().to_path_buf();
+        while parent
+            .join("migration-owned-session-state.json")
+            .as_os_str()
+            .len()
+            < 270
+        {
+            parent.push("workspace-session-runtime-segment");
+        }
+        let target = parent.join("migration-owned-session-state.json");
+
+        atomic_write_bytes(&target, b"first").unwrap();
+        assert_eq!(fs::read(&target).unwrap(), b"first");
+
+        atomic_write_bytes(&target, b"second").unwrap();
+        assert_eq!(fs::read(&target).unwrap(), b"second");
     }
 }

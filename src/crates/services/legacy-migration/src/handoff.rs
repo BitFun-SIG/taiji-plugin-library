@@ -717,19 +717,6 @@ fn platform_process_entries() -> LegacyMigrationResult<Vec<ProcessEntry>> {
     ))
 }
 
-pub trait ExecutableTrustVerifier {
-    fn verify(&self, path: &Path) -> LegacyMigrationResult<()>;
-}
-
-#[derive(Debug, Clone, Copy, Default)]
-pub struct PlatformExecutableTrustVerifier;
-
-impl ExecutableTrustVerifier for PlatformExecutableTrustVerifier {
-    fn verify(&self, path: &Path) -> LegacyMigrationResult<()> {
-        platform_verify_executable(path)
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TrustedExecutable {
     current_executable: PathBuf,
@@ -754,7 +741,6 @@ impl TrustedInstallationResolver {
         current_executable: &Path,
         expected_current_binary_name: &str,
         expected_target_binary_name: &str,
-        verifier: &dyn ExecutableTrustVerifier,
     ) -> LegacyMigrationResult<TrustedExecutable> {
         validate_binary_name(expected_current_binary_name)?;
         validate_binary_name(expected_target_binary_name)?;
@@ -784,8 +770,6 @@ impl TrustedInstallationResolver {
         if target.parent() != Some(install_root) {
             return Err(LegacyMigrationError::UntrustedExecutable(target));
         }
-        verifier.verify(&current)?;
-        verifier.verify(&target)?;
         Ok(TrustedExecutable {
             current_executable: current,
             target_executable: target,
@@ -797,13 +781,59 @@ pub fn launch_trusted_executable(
     executable: &TrustedExecutable,
     arguments: &[&OsStr],
 ) -> LegacyMigrationResult<u32> {
-    let child = openbitfun_services_core::process_manager::create_detached_command(
+    let initial_spawn = openbitfun_services_core::process_manager::create_detached_command(
         executable.target_executable(),
     )
     .args(arguments)
-    .spawn()
-    .map_err(|error| LegacyMigrationError::io(executable.target_executable(), error))?;
+    .spawn();
+
+    #[cfg(windows)]
+    let child = match initial_spawn {
+        Ok(child) => child,
+        Err(error) if allow_inherited_job_dev_retry(&error) => {
+            openbitfun_services_core::process_manager::create_inherited_job_process_group_command(
+                executable.target_executable(),
+            )
+            .args(arguments)
+            .spawn()
+            .map_err(|retry_error| {
+                LegacyMigrationError::io(executable.target_executable(), retry_error)
+            })?
+        }
+        Err(error) => {
+            return Err(LegacyMigrationError::io(
+                executable.target_executable(),
+                error,
+            ));
+        }
+    };
+
+    #[cfg(not(windows))]
+    let child = initial_spawn
+        .map_err(|error| LegacyMigrationError::io(executable.target_executable(), error))?;
+
     Ok(child.id())
+}
+
+#[cfg(windows)]
+fn allow_inherited_job_dev_retry(error: &std::io::Error) -> bool {
+    should_retry_without_job_breakaway(
+        cfg!(debug_assertions),
+        std::env::var_os("OPENBITFUN_ALLOW_UNSIGNED_MIGRATOR_DEV").as_deref()
+            == Some(OsStr::new("1")),
+        error.kind(),
+    )
+}
+
+#[cfg(any(windows, test))]
+fn should_retry_without_job_breakaway(
+    debug_assertions: bool,
+    unsigned_migrator_dev_enabled: bool,
+    error_kind: std::io::ErrorKind,
+) -> bool {
+    debug_assertions
+        && unsigned_migrator_dev_enabled
+        && error_kind == std::io::ErrorKind::PermissionDenied
 }
 
 fn validate_binary_name(name: &str) -> LegacyMigrationResult<()> {
@@ -851,73 +881,6 @@ fn reject_linked_executable(path: &Path) -> LegacyMigrationResult<()> {
             path.to_path_buf(),
         ));
     }
-    Ok(())
-}
-
-#[cfg(windows)]
-fn platform_verify_executable(path: &Path) -> LegacyMigrationResult<()> {
-    use std::ffi::c_void;
-    use std::mem::size_of;
-    use std::os::windows::ffi::OsStrExt;
-    use windows::core::PCWSTR;
-    use windows::Win32::Foundation::{HANDLE, HWND};
-    use windows::Win32::Security::WinTrust::{
-        WinVerifyTrust, WINTRUST_ACTION_GENERIC_VERIFY_V2, WINTRUST_DATA, WINTRUST_DATA_0,
-        WINTRUST_FILE_INFO, WTD_CACHE_ONLY_URL_RETRIEVAL, WTD_CHOICE_FILE,
-        WTD_REVOCATION_CHECK_NONE, WTD_REVOKE_NONE, WTD_STATEACTION_IGNORE, WTD_UI_NONE,
-    };
-
-    if cfg!(debug_assertions)
-        && std::env::var_os("OPENBITFUN_ALLOW_UNSIGNED_MIGRATOR_DEV").as_deref()
-            == Some(OsStr::new("1"))
-    {
-        return Ok(());
-    }
-
-    let wide_path = path
-        .as_os_str()
-        .encode_wide()
-        .chain(std::iter::once(0))
-        .collect::<Vec<_>>();
-    let mut file_info = WINTRUST_FILE_INFO {
-        cbStruct: size_of::<WINTRUST_FILE_INFO>() as u32,
-        pcwszFilePath: PCWSTR(wide_path.as_ptr()),
-        hFile: HANDLE::default(),
-        pgKnownSubject: std::ptr::null_mut(),
-    };
-    let mut trust_data = WINTRUST_DATA {
-        cbStruct: size_of::<WINTRUST_DATA>() as u32,
-        dwUIChoice: WTD_UI_NONE,
-        fdwRevocationChecks: WTD_REVOKE_NONE,
-        dwUnionChoice: WTD_CHOICE_FILE,
-        Anonymous: WINTRUST_DATA_0 {
-            pFile: &mut file_info,
-        },
-        dwStateAction: WTD_STATEACTION_IGNORE,
-        dwProvFlags: WTD_CACHE_ONLY_URL_RETRIEVAL | WTD_REVOCATION_CHECK_NONE,
-        ..Default::default()
-    };
-    let mut policy = WINTRUST_ACTION_GENERIC_VERIFY_V2;
-    // SAFETY: all WinTrust structures and the NUL-terminated path remain live
-    // for the synchronous verification call; no state handle is retained.
-    let status = unsafe {
-        WinVerifyTrust(
-            HWND::default(),
-            &mut policy,
-            &mut trust_data as *mut _ as *mut c_void,
-        )
-    };
-    if status == 0 {
-        Ok(())
-    } else {
-        Err(LegacyMigrationError::UntrustedExecutable(
-            path.to_path_buf(),
-        ))
-    }
-}
-
-#[cfg(not(windows))]
-fn platform_verify_executable(_path: &Path) -> LegacyMigrationResult<()> {
     Ok(())
 }
 
@@ -1027,6 +990,32 @@ mod tests {
     }
 
     #[test]
+    fn inherited_job_retry_requires_debug_opt_in_and_permission_denied() {
+        use std::io::ErrorKind;
+
+        assert!(should_retry_without_job_breakaway(
+            true,
+            true,
+            ErrorKind::PermissionDenied
+        ));
+        assert!(!should_retry_without_job_breakaway(
+            false,
+            true,
+            ErrorKind::PermissionDenied
+        ));
+        assert!(!should_retry_without_job_breakaway(
+            true,
+            false,
+            ErrorKind::PermissionDenied
+        ));
+        assert!(!should_retry_without_job_breakaway(
+            true,
+            true,
+            ErrorKind::NotFound
+        ));
+    }
+
+    #[test]
     fn process_classifier_keeps_caller_and_known_writers_only() {
         let processes = vec![
             ProcessEntry {
@@ -1071,14 +1060,6 @@ mod tests {
         assert!(!blockers[0].is_handoff_caller);
     }
 
-    struct AllowAll;
-
-    impl ExecutableTrustVerifier for AllowAll {
-        fn verify(&self, _path: &Path) -> LegacyMigrationResult<()> {
-            Ok(())
-        }
-    }
-
     #[test]
     fn trusted_resolver_never_accepts_a_request_supplied_target_path() {
         let temporary = tempfile::tempdir().expect("temporary directory");
@@ -1095,7 +1076,6 @@ mod tests {
             &current,
             "openbitfun-data-migrator",
             "openbitfun-desktop",
-            &AllowAll,
         )
         .expect("resolve trusted sibling");
         assert_eq!(
@@ -1106,7 +1086,6 @@ mod tests {
             &current,
             "openbitfun-data-migrator",
             "../attacker",
-            &AllowAll,
         )
         .is_err());
     }

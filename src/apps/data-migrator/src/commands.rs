@@ -1,4 +1,4 @@
-use crate::app_state::{CommandError, MigratorCoordinator, MigratorView};
+use crate::app_state::{CommandError, DiagnosticsExportView, MigratorCoordinator, MigratorView};
 use openbitfun_product_domains::legacy_migration::{MigrationPromptChoice, MigrationSelection};
 use serde::Deserialize;
 use tauri::{AppHandle, State};
@@ -74,6 +74,15 @@ pub(crate) fn cancel_legacy_migration(
 ) -> MigratorView {
     let _ = request;
     state.cancel()
+}
+
+#[tauri::command]
+pub(crate) fn export_migration_diagnostics(
+    state: State<'_, MigratorCoordinator>,
+    request: EmptyRequest,
+) -> Result<DiagnosticsExportView, CommandError> {
+    let _ = request;
+    state.export_diagnostics()
 }
 
 #[tauri::command]

@@ -9,7 +9,7 @@ use openbitfun_core_types::product_identity::product_id;
 use openbitfun_legacy_migration::{
     launch_trusted_executable, probe_legacy_source, CancellationToken, HandoffStore,
     LegacyMigrationError, LegacyMigrationResult, MigrationEngine, MigrationOnboardingStore,
-    MigrationRoots, PlatformExecutableTrustVerifier, ProbeLimits, TrustedInstallationResolver,
+    MigrationRoots, ProbeLimits, TrustedInstallationResolver,
 };
 use openbitfun_product_domains::legacy_migration::{
     LegacySourceDescriptor, MigrationOnboardingState, MigrationPromptChoice, MigrationRunReport,
@@ -36,15 +36,24 @@ const DATA_MIGRATOR_BINARY_NAME: &str = match option_env!("OPENBITFUN_DATA_MIGRA
 };
 const HANDOFF_LIFETIME_MS: i64 = 10 * 60 * 1000;
 
-static STARTUP_HANDLED_RUN_ID: OnceLock<Option<String>> = OnceLock::new();
+static STARTUP_MIGRATION_STATE: OnceLock<StartupMigrationState> = OnceLock::new();
+
+#[derive(Debug, Clone, Default)]
+struct StartupMigrationState {
+    handled_run_id: Option<String>,
+    startup_error: Option<LegacyMigrationCommandError>,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum StartupProbeDisposition {
-    Continue { handled_run_id: Option<String> },
+    Continue {
+        handled_run_id: Option<String>,
+        startup_error: Option<LegacyMigrationCommandError>,
+    },
     MigratorLaunched,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LegacyMigrationCommandError {
     pub code: String,
@@ -78,7 +87,7 @@ impl LegacyMigrationCommandError {
             LegacyMigrationError::UntrustedExecutable(_)
             | LegacyMigrationError::TrustedInstallationUnavailable(_) => Self::new(
                 "data_migrator_unavailable",
-                "The signed Data Migrator sibling is missing or cannot be trusted. Repair or update this OpenBitFun installation.",
+                "The installed Data Migrator is missing or failed installation layout checks. Repair or update this OpenBitFun installation.",
                 false,
             ),
             LegacyMigrationError::LockUnavailable => Self::new(
@@ -112,6 +121,18 @@ impl LegacyMigrationCommandError {
             | LegacyMigrationError::Sqlite { .. } => Self::new(
                 "migration_operation_failed",
                 "OpenBitFun could not safely inspect or prepare the local migration state.",
+                true,
+            ),
+        }
+    }
+
+    fn from_startup_launch(error: &LegacyMigrationError) -> Self {
+        match error {
+            LegacyMigrationError::UntrustedExecutable(_)
+            | LegacyMigrationError::TrustedInstallationUnavailable(_) => Self::from_legacy(error),
+            _ => Self::new(
+                "data_migrator_launch_failed",
+                "The Data Migrator could not be started safely. OpenBitFun continued without changing legacy BitFun data.",
                 true,
             ),
         }
@@ -159,6 +180,7 @@ pub struct LegacyMigrationStatusView {
     pub onboarding: MigrationOnboardingState,
     pub latest_report: Option<MigrationRunReport>,
     pub startup_report: Option<MigrationRunReport>,
+    pub startup_error: Option<LegacyMigrationCommandError>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -185,6 +207,7 @@ pub(crate) fn run_startup_probe() -> LegacyMigrationResult<StartupProbeDispositi
         if onboarding.consume_handled_run_id(&run_id)? {
             return Ok(StartupProbeDisposition::Continue {
                 handled_run_id: Some(run_id),
+                startup_error: None,
             });
         }
     }
@@ -193,11 +216,13 @@ pub(crate) fn run_startup_probe() -> LegacyMigrationResult<StartupProbeDispositi
     let Some(source) = probe_legacy_source(&roots, ProbeLimits::default())? else {
         return Ok(StartupProbeDisposition::Continue {
             handled_run_id: None,
+            startup_error: None,
         });
     };
     if !should_offer_onboarding(&state, &source) {
         return Ok(StartupProbeDisposition::Continue {
             handled_run_id: None,
+            startup_error: None,
         });
     }
 
@@ -220,12 +245,27 @@ pub(crate) fn run_startup_probe() -> LegacyMigrationResult<StartupProbeDispositi
         state.run_id = Some(request.run_id.clone());
         state.handled_run_id = None;
     })?;
-    launch_data_migrator(&request.run_id)?;
-    Ok(StartupProbeDisposition::MigratorLaunched)
+    match launch_data_migrator(&request.run_id) {
+        Ok(_) => Ok(StartupProbeDisposition::MigratorLaunched),
+        Err(error) => Ok(continue_after_startup_launch_failure(error)),
+    }
 }
 
-pub(crate) fn set_startup_handled_run_id(run_id: Option<String>) {
-    let _ = STARTUP_HANDLED_RUN_ID.set(run_id);
+fn continue_after_startup_launch_failure(error: LegacyMigrationError) -> StartupProbeDisposition {
+    StartupProbeDisposition::Continue {
+        handled_run_id: None,
+        startup_error: Some(LegacyMigrationCommandError::from_startup_launch(&error)),
+    }
+}
+
+pub(crate) fn set_startup_migration_state(
+    handled_run_id: Option<String>,
+    startup_error: Option<LegacyMigrationCommandError>,
+) {
+    let _ = STARTUP_MIGRATION_STATE.set(StartupMigrationState {
+        handled_run_id,
+        startup_error,
+    });
 }
 
 #[tauri::command]
@@ -329,9 +369,9 @@ fn migration_status() -> LegacyMigrationResult<LegacyMigrationStatusView> {
         .load_last_report()?
         .as_ref()
         .map(redact_report_for_ui);
-    let startup_report = STARTUP_HANDLED_RUN_ID
+    let startup_report = STARTUP_MIGRATION_STATE
         .get()
-        .and_then(|run_id| run_id.as_deref())
+        .and_then(|state| state.handled_run_id.as_deref())
         .map(|run_id| onboarding_store.load_report(run_id))
         .transpose()?
         .flatten()
@@ -342,6 +382,9 @@ fn migration_status() -> LegacyMigrationResult<LegacyMigrationStatusView> {
         onboarding,
         latest_report,
         startup_report,
+        startup_error: STARTUP_MIGRATION_STATE
+            .get()
+            .and_then(|state| state.startup_error.clone()),
     })
 }
 
@@ -451,7 +494,6 @@ fn launch_data_migrator(run_id: &str) -> LegacyMigrationResult<u32> {
         &current,
         DESKTOP_BINARY_NAME,
         DATA_MIGRATOR_BINARY_NAME,
-        &PlatformExecutableTrustVerifier,
     )?;
     launch_trusted_executable(&executable, &[OsStr::new(run_id)])
 }
@@ -616,5 +658,28 @@ mod tests {
         assert!(redacted.diagnostics[0].relative_path.is_none());
         assert_eq!(redacted.diagnostics[0].message, "legacy item failed");
         assert!(redacted.diagnostics[0].action.is_none());
+    }
+
+    #[test]
+    fn startup_launch_failure_continues_with_redacted_error() {
+        let disposition = continue_after_startup_launch_failure(LegacyMigrationError::Io {
+            path: r"C:\private\openbitfun-data-migrator.exe".into(),
+            source: std::io::Error::new(
+                std::io::ErrorKind::PermissionDenied,
+                "private operating system detail",
+            ),
+        });
+
+        let StartupProbeDisposition::Continue {
+            handled_run_id,
+            startup_error: Some(error),
+        } = disposition
+        else {
+            panic!("launch failure must allow Desktop startup with a surfaced error");
+        };
+        assert!(handled_run_id.is_none());
+        assert_eq!(error.code, "data_migrator_launch_failed");
+        assert!(error.recoverable);
+        assert!(!error.message.contains("private"));
     }
 }

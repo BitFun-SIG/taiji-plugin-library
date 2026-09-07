@@ -13,27 +13,56 @@ export async function showLegacyMigrationStartupNotification(
   storage: Pick<Storage, 'getItem' | 'setItem'> = sessionStorage,
 ): Promise<void> {
   const status = await legacyMigrationAPI.getStatus();
+  const startupError = status.startupError;
   const report = status.startupReport;
+  if (!startupError && !report) return;
+
+  await i18nService.loadNamespace('settings/legacy-migration');
+  const namespace = 'settings/legacy-migration';
+  const openMigrationSettings = () => {
+    void import('@/shared/services/ide-control').then(({ quickActions }) => {
+      quickActions.openSettings({ pageId: 'data.migration' });
+    });
+  };
+
+  if (startupError) {
+    const noticeKey = `openbitfun:legacy-migration-startup-error:${startupError.code}`;
+    if (storage.getItem(noticeKey) === 'shown') return;
+
+    storage.setItem(noticeKey, 'shown');
+    notificationService.error(
+      i18nService.t(`${namespace}:startupNotification.launchFailed`),
+      {
+        title: i18nService.t(`${namespace}:startupNotification.title`),
+        duration: 0,
+        actions: [{
+          label: i18nService.t(`${namespace}:startupNotification.openSettings`),
+          variant: 'primary' as const,
+          onClick: openMigrationSettings,
+        }],
+        metadata: {
+          source: 'legacy-migration-startup-error',
+          code: startupError.code,
+          recoverable: startupError.recoverable,
+        },
+      },
+    );
+    return;
+  }
+
   if (!report) return;
 
   const noticeKey = `openbitfun:legacy-migration-notice:${report.runId}`;
   if (storage.getItem(noticeKey) === 'shown') return;
 
-  await i18nService.loadNamespace('settings/legacy-migration');
   storage.setItem(noticeKey, 'shown');
-  const namespace = 'settings/legacy-migration';
-  const openReport = () => {
-    void import('@/shared/services/ide-control').then(({ quickActions }) => {
-      quickActions.openSettings({ pageId: 'data.migration' });
-    });
-  };
   const options = {
     title: i18nService.t(`${namespace}:startupNotification.title`),
     duration: 0,
     actions: [{
       label: i18nService.t(`${namespace}:actions.viewReport`),
       variant: 'primary' as const,
-      onClick: openReport,
+      onClick: openMigrationSettings,
     }],
     metadata: {
       source: 'legacy-migration-startup-result',

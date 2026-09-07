@@ -3,11 +3,12 @@ use crate::infrastructure::PathManager;
 use crate::util::errors::{OpenBitFunError, OpenBitFunResult};
 use openbitfun_services_core::memory_store::{
     decode_memory_job, decode_memory_record, initialize_memory_schema, upsert_memory_record,
-    EXPECTED_JOBS_COLUMNS, EXPECTED_STAGE1_COLUMNS,
 };
 pub use openbitfun_services_core::memory_store::{
     MemoryJobRecord as MemoryJobRow, MemoryRecord as MemoryRow,
 };
+#[cfg(test)]
+use openbitfun_services_core::memory_store::{EXPECTED_JOBS_COLUMNS, EXPECTED_STAGE1_COLUMNS};
 use rusqlite::{params, Connection, OptionalExtension, Transaction, TransactionBehavior};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
@@ -1182,6 +1183,7 @@ fn initialize_schema(conn: &Connection) -> OpenBitFunResult<()> {
     })
 }
 
+#[cfg(test)]
 fn table_columns(conn: &Connection, table_name: &str) -> OpenBitFunResult<Vec<String>> {
     let mut stmt = conn
         .prepare(&format!("PRAGMA table_info({table_name})"))

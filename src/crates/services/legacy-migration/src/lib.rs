@@ -1,5 +1,6 @@
 //! Offline, source-read-only import primitives for legacy BitFun data.
 
+mod diagnostics;
 mod engine;
 mod error;
 mod handoff;
@@ -9,6 +10,7 @@ mod probe;
 mod sqlite;
 mod storage;
 
+pub use diagnostics::{export_failure_diagnostics, release_observation};
 pub use engine::{
     compute_plan_hash, CancellationToken, CrashInjector, CrashPoint, DomainContext, DomainScan,
     LegacyDomainAdapter, MigrationEngine, NoCrashInjection,
@@ -16,8 +18,8 @@ pub use engine::{
 pub use error::{LegacyMigrationError, LegacyMigrationResult};
 pub use handoff::{
     blocking_writer_processes, blocking_writer_processes_for_product, launch_trusted_executable,
-    ExecutableTrustVerifier, HandoffDisposition, HandoffStore, PlatformExecutableTrustVerifier,
-    TrustedExecutable, TrustedInstallationResolver, ValidatedHandoff, WriterProcess,
+    HandoffDisposition, HandoffStore, TrustedExecutable, TrustedInstallationResolver,
+    ValidatedHandoff, WriterProcess,
 };
 pub use onboarding::MigrationOnboardingStore;
 pub use paths::{MigrationRoots, LEGACY_PRODUCT_ID};

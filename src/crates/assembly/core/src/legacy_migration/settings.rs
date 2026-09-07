@@ -3,7 +3,7 @@ use super::common::{
     restore_unverified_file, stage_domain_dir,
 };
 use crate::service::config::manager::validate_current_config_value;
-use crate::service::config::types::{AIModelConfig, AgentProfileConfig, GlobalConfig};
+use crate::service::config::types::{AIModelConfig, GlobalConfig};
 use openbitfun_legacy_migration::{
     atomic_write_json, DomainContext, DomainScan, LegacyDomainAdapter, LegacyMigrationError,
     LegacyMigrationResult, MigrationRoots,
@@ -40,6 +40,7 @@ struct CredentialManifest {
     target_existed: bool,
     model_ids: Vec<String>,
     voice_call: bool,
+    mcp_servers: bool,
     unsupported_secret_fields: Vec<String>,
 }
 
@@ -159,7 +160,9 @@ impl LegacyDomainAdapter for CredentialsAdapter {
     fn scan(&self, roots: &MigrationRoots) -> LegacyMigrationResult<DomainScan> {
         let source = read_source_config(roots)?;
         let manifest = credential_manifest(&source, target_config_path(roots).exists());
-        let count = manifest.model_ids.len() as u64 + u64::from(manifest.voice_call);
+        let count = manifest.model_ids.len() as u64
+            + u64::from(manifest.voice_call)
+            + u64::from(manifest.mcp_servers);
         Ok(DomainScan {
             finding: ScanFinding {
                 domain: self.domain(),
@@ -206,7 +209,9 @@ impl LegacyDomainAdapter for CredentialsAdapter {
         Ok(MigrationDomainResult {
             domain: self.domain(),
             state: MigrationDomainState::Staged,
-            imported: manifest.model_ids.len() as u64 + u64::from(manifest.voice_call),
+            imported: manifest.model_ids.len() as u64
+                + u64::from(manifest.voice_call)
+                + u64::from(manifest.mcp_servers),
             skipped: manifest.unsupported_secret_fields.len() as u64,
             warnings,
             requires_reauthentication: manifest.unsupported_secret_fields.clone(),
@@ -260,13 +265,30 @@ impl LegacyDomainAdapter for CredentialsAdapter {
                 if !manifest.model_ids.iter().any(|candidate| candidate == id) {
                     continue;
                 }
-                let Some(secret) = source_model.get("api_key").and_then(Value::as_str) else {
-                    continue;
-                };
+                let source_model = serde_json::from_value::<AIModelConfig>(source_model.clone())
+                    .map_err(|error| {
+                        LegacyMigrationError::UnsupportedSource(format!(
+                            "legacy model credential owner record is invalid: {error}"
+                        ))
+                    })?;
                 if let Some(target_model) = target.ai.models.iter_mut().find(|model| model.id == id)
                 {
                     if target_model.api_key.is_empty() {
-                        target_model.api_key = secret.to_string();
+                        target_model.api_key = source_model.api_key;
+                    }
+                    if target_model
+                        .custom_headers
+                        .as_ref()
+                        .is_none_or(|headers| headers.is_empty())
+                    {
+                        target_model.custom_headers = source_model.custom_headers;
+                    }
+                    if target_model
+                        .custom_request_body
+                        .as_deref()
+                        .is_none_or(str::is_empty)
+                    {
+                        target_model.custom_request_body = source_model.custom_request_body;
                     }
                 }
             }
@@ -278,6 +300,12 @@ impl LegacyDomainAdapter for CredentialsAdapter {
             {
                 target.app.voice_call.api_key = secret.to_string();
             }
+        }
+        if manifest.mcp_servers && target.mcp_servers.is_none() {
+            target.mcp_servers = source
+                .get("mcp_servers")
+                .filter(|value| !value.is_null())
+                .cloned();
         }
         validate_current_config(&target, "credential migration target")?;
         atomic_write_json(&target_path, &target)
@@ -292,7 +320,7 @@ impl LegacyDomainAdapter for CredentialsAdapter {
         )?;
         validate_current_config(&target, "committed credential configuration")?;
         for id in &manifest.model_ids {
-            let source_secret = source
+            let source_model = source
                 .pointer("/ai/models")
                 .and_then(Value::as_array)
                 .and_then(|models| {
@@ -300,21 +328,59 @@ impl LegacyDomainAdapter for CredentialsAdapter {
                         .iter()
                         .find(|model| model.get("id").and_then(Value::as_str) == Some(id.as_str()))
                 })
-                .and_then(|model| model.get("api_key"))
-                .and_then(Value::as_str);
-            let target_secret = target
-                .ai
-                .models
-                .iter()
-                .find(|model| model.id == *id)
-                .map(|model| model.api_key.as_str());
-            if source_secret.is_some_and(|secret| !secret.is_empty())
-                && target_secret.is_none_or(str::is_empty)
-            {
+                .cloned()
+                .map(serde_json::from_value::<AIModelConfig>)
+                .transpose()
+                .map_err(|error| {
+                    LegacyMigrationError::UnsupportedSource(format!(
+                        "legacy model credential owner record is invalid: {error}"
+                    ))
+                })?;
+            let target_model = target.ai.models.iter().find(|model| model.id == *id);
+            let Some(source_model) = source_model else {
+                continue;
+            };
+            let Some(target_model) = target_model else {
+                return Err(LegacyMigrationError::InvalidRequest(format!(
+                    "credential owner model {id} was not committed"
+                )));
+            };
+            if !source_model.api_key.is_empty() && target_model.api_key.is_empty() {
                 return Err(LegacyMigrationError::InvalidRequest(format!(
                     "credential for model {id} was not committed"
                 )));
             }
+            if source_model
+                .custom_headers
+                .as_ref()
+                .is_some_and(|headers| !headers.is_empty())
+                && target_model
+                    .custom_headers
+                    .as_ref()
+                    .is_none_or(|headers| headers.is_empty())
+            {
+                return Err(LegacyMigrationError::InvalidRequest(format!(
+                    "custom headers for model {id} were not committed"
+                )));
+            }
+            if source_model
+                .custom_request_body
+                .as_deref()
+                .is_some_and(|body| !body.is_empty())
+                && target_model
+                    .custom_request_body
+                    .as_deref()
+                    .is_none_or(str::is_empty)
+            {
+                return Err(LegacyMigrationError::InvalidRequest(format!(
+                    "custom request body for model {id} was not committed"
+                )));
+            }
+        }
+        if manifest.mcp_servers && target.mcp_servers.is_none() {
+            return Err(LegacyMigrationError::InvalidRequest(
+                "MCP server configuration was not committed".to_string(),
+            ));
         }
         Ok(())
     }
@@ -358,118 +424,278 @@ fn read_target_config(roots: &MigrationRoots) -> LegacyMigrationResult<GlobalCon
 
 fn merge_settings(
     source: &Value,
-    mut target: GlobalConfig,
+    target: GlobalConfig,
 ) -> LegacyMigrationResult<(GlobalConfig, MergeOutcome)> {
-    validate_source_version(source)?;
+    let (mut source_config, mut source_value) = convert_source_config(source)?;
     let defaults = GlobalConfig::default();
     let mut outcome = MergeOutcome::default();
+    let source_models = std::mem::take(&mut source_config.ai.models);
+    let mut target_value = serde_json::to_value(&target)
+        .map_err(|error| LegacyMigrationError::InvalidRequest(error.to_string()))?;
+    let default_value = serde_json::to_value(&defaults)
+        .map_err(|error| LegacyMigrationError::InvalidRequest(error.to_string()))?;
+    if let Some(ai) = source_value.get_mut("ai").and_then(Value::as_object_mut) {
+        ai.remove("models");
+    }
+    merge_compatible_value(
+        "",
+        &source_value,
+        &mut target_value,
+        Some(&default_value),
+        &mut outcome,
+    );
+    let mut merged: GlobalConfig = serde_json::from_value(target_value).map_err(|error| {
+        LegacyMigrationError::InvalidRequest(format!(
+            "merged configuration does not match the current owner model: {error}"
+        ))
+    })?;
+    merge_models(source_models, &mut merged.ai.models, &mut outcome)?;
+    merged.product_id = defaults.product_id;
+    merged.schema_version = defaults.schema_version;
+    merged.version = defaults.version;
+    merged.last_modified = chrono::Utc::now();
+    Ok((merged, outcome))
+}
 
-    merge_scalar(
-        source.pointer("/app/language").and_then(Value::as_str),
-        &mut target.app.language,
-        &defaults.app.language,
-        "app.language",
-        &mut outcome,
-    );
-    merge_copy_scalar(
-        source.pointer("/app/auto_update").and_then(Value::as_bool),
-        &mut target.app.auto_update,
-        defaults.app.auto_update,
-        "app.auto_update",
-        &mut outcome,
-    );
-    merge_copy_scalar(
-        source.pointer("/app/telemetry").and_then(Value::as_bool),
-        &mut target.app.telemetry,
-        defaults.app.telemetry,
-        "app.telemetry",
-        &mut outcome,
-    );
-    if let Some(theme) = source
-        .pointer("/appearance/theme_id")
-        .and_then(Value::as_str)
-    {
-        let theme = canonical_product_id(theme);
-        merge_scalar(
-            Some(&theme),
-            &mut target.appearance.selection,
-            &defaults.appearance.selection,
-            "appearance.selection",
-            &mut outcome,
-        );
+fn convert_source_config(source: &Value) -> LegacyMigrationResult<(GlobalConfig, Value)> {
+    validate_source_version(source)?;
+    let defaults = GlobalConfig::default();
+    let mut normalized_source = source.clone();
+    normalize_legacy_config_value(&mut normalized_source);
+    strip_staged_credentials(&mut normalized_source);
+    let normalized_root = normalized_source.as_object_mut().ok_or_else(|| {
+        LegacyMigrationError::InvalidRequest(
+            "legacy configuration root is not an object".to_string(),
+        )
+    })?;
+    for field in ["product_id", "schema_version", "version", "last_modified"] {
+        normalized_root.remove(field);
     }
 
-    if let Some(profiles) = source
-        .pointer("/ai/agent_profiles")
-        .and_then(Value::as_object)
-    {
-        for (profile_id, profile) in profiles {
-            let enabled = profile
-                .get("enabled_skills")
-                .and_then(Value::as_array)
-                .map(|items| {
-                    items
-                        .iter()
-                        .filter_map(Value::as_str)
-                        .map(canonical_product_id)
-                        .collect::<Vec<_>>()
-                })
-                .unwrap_or_default();
-            if enabled.is_empty() {
-                continue;
-            }
-            let entry = target
-                .ai
-                .agent_profiles
-                .entry(profile_id.clone())
-                .or_insert_with(|| AgentProfileConfig {
-                    profile_id: profile_id.clone(),
-                    ..AgentProfileConfig::default()
-                });
-            if entry.enabled_user_skills.is_empty() {
-                entry.enabled_user_skills = enabled;
-                outcome.imported += 1;
-            } else {
-                record_target_wins(
-                    &format!("ai.agent_profiles.{profile_id}.enabled_user_skills"),
-                    &mut outcome,
-                );
+    let mut converted = serde_json::to_value(&defaults)
+        .map_err(|error| LegacyMigrationError::InvalidRequest(error.to_string()))?;
+    overlay_compatible_value(&mut converted, &normalized_source);
+    let root = converted.as_object_mut().ok_or_else(|| {
+        LegacyMigrationError::InvalidRequest(
+            "legacy configuration root is not an object".to_string(),
+        )
+    })?;
+    root.insert(
+        "product_id".to_string(),
+        Value::String(defaults.product_id.clone()),
+    );
+    root.insert(
+        "schema_version".to_string(),
+        Value::from(defaults.schema_version),
+    );
+    root.insert(
+        "version".to_string(),
+        Value::String(defaults.version.clone()),
+    );
+    root.insert(
+        "last_modified".to_string(),
+        Value::from(chrono::Utc::now().timestamp_millis()),
+    );
+    let config: GlobalConfig = serde_json::from_value(converted).map_err(|error| {
+        LegacyMigrationError::UnsupportedSource(format!(
+            "legacy configuration cannot be represented by the current owner model: {error}"
+        ))
+    })?;
+    let mut compatible_source = serde_json::to_value(&config)
+        .map_err(|error| LegacyMigrationError::InvalidRequest(error.to_string()))?;
+    retain_source_fields(&mut compatible_source, &normalized_source);
+    Ok((config, compatible_source))
+}
+
+fn overlay_compatible_value(target: &mut Value, source: &Value) {
+    match (target, source) {
+        (Value::Object(target_fields), Value::Object(source_fields)) => {
+            for (name, source_value) in source_fields {
+                if let Some(target_value) = target_fields.get_mut(name) {
+                    overlay_compatible_value(target_value, source_value);
+                } else {
+                    target_fields.insert(name.clone(), source_value.clone());
+                }
             }
         }
+        (target, source) => *target = source.clone(),
+    }
+}
+
+fn retain_source_fields(value: &mut Value, source: &Value) {
+    let (Value::Object(fields), Value::Object(source_fields)) = (value, source) else {
+        return;
+    };
+    fields.retain(|name, value| {
+        let Some(source_value) = source_fields.get(name) else {
+            return false;
+        };
+        retain_source_fields(value, source_value);
+        true
+    });
+}
+
+fn normalize_legacy_config_value(value: &mut Value) {
+    if let Some(appearance) = value.get_mut("appearance").and_then(Value::as_object_mut) {
+        let selection = appearance
+            .get("selection")
+            .or_else(|| appearance.get("theme_id"))
+            .and_then(Value::as_str)
+            .map(canonical_product_id);
+        if let Some(selection) = selection {
+            appearance.insert("selection".to_string(), Value::String(selection));
+        }
+        appearance.remove("theme_id");
     }
 
-    if let Some(models) = source.pointer("/ai/models").and_then(Value::as_array) {
-        for raw in models {
-            let Ok(mut model) = serde_json::from_value::<AIModelConfig>(raw.clone()) else {
-                outcome.skipped += 1;
+    let Some(ai) = value.get_mut("ai").and_then(Value::as_object_mut) else {
+        return;
+    };
+    if let Some(profiles) = ai.get_mut("agent_profiles").and_then(Value::as_object_mut) {
+        for (profile_id, profile) in profiles {
+            let Some(profile) = profile.as_object_mut() else {
                 continue;
             };
-            if model.id.trim().is_empty() {
-                outcome.skipped += 1;
-                continue;
-            }
-            model.api_key.clear();
-            model.custom_headers = None;
-            model.custom_request_body = None;
-            if target
-                .ai
-                .models
-                .iter()
-                .any(|existing| existing.id == model.id)
+            if profile
+                .get("profile_id")
+                .and_then(Value::as_str)
+                .is_none_or(str::is_empty)
             {
-                record_target_wins(&format!("ai.models.{}", model.id), &mut outcome);
-            } else {
-                target.ai.models.push(model);
-                outcome.imported += 1;
+                profile.insert("profile_id".to_string(), Value::String(profile_id.clone()));
             }
+            if let Some(enabled) = profile.remove("enabled_skills") {
+                profile
+                    .entry("enabled_user_skills".to_string())
+                    .or_insert(enabled);
+            }
+            canonicalize_string_list(profile.get_mut("enabled_user_skills"));
+            canonicalize_string_list(profile.get_mut("disabled_user_skills"));
         }
     }
+    if let Some(skill_settings) = ai.get_mut("skill_settings").and_then(Value::as_object_mut) {
+        canonicalize_string_list(skill_settings.get_mut("globally_disabled_user_skills"));
+    }
+}
 
-    target.product_id = defaults.product_id;
-    target.schema_version = defaults.schema_version;
-    target.version = defaults.version;
-    target.last_modified = chrono::Utc::now();
-    Ok((target, outcome))
+fn canonicalize_string_list(value: Option<&mut Value>) {
+    let Some(values) = value.and_then(Value::as_array_mut) else {
+        return;
+    };
+    for value in values {
+        if let Some(text) = value.as_str() {
+            *value = Value::String(canonical_product_id(text));
+        }
+    }
+}
+
+fn strip_staged_credentials(value: &mut Value) {
+    if let Some(root) = value.as_object_mut() {
+        root.remove("mcp_servers");
+    }
+    if let Some(models) = value
+        .pointer_mut("/ai/models")
+        .and_then(Value::as_array_mut)
+    {
+        for model in models {
+            let Some(model) = model.as_object_mut() else {
+                continue;
+            };
+            model.remove("api_key");
+            model.remove("custom_headers");
+            model.remove("custom_request_body");
+        }
+    }
+    if let Some(voice_call) = value
+        .pointer_mut("/app/voice_call")
+        .and_then(Value::as_object_mut)
+    {
+        voice_call.remove("api_key");
+    }
+}
+
+fn merge_compatible_value(
+    path: &str,
+    source: &Value,
+    target: &mut Value,
+    default: Option<&Value>,
+    outcome: &mut MergeOutcome,
+) {
+    if source == target {
+        return;
+    }
+    if let (Value::Object(source_fields), Value::Object(target_fields)) = (source, &mut *target) {
+        let default_fields = default.and_then(Value::as_object);
+        for (name, source_value) in source_fields {
+            let child_path = if path.is_empty() {
+                name.clone()
+            } else {
+                format!("{path}.{name}")
+            };
+            if let Some(target_value) = target_fields.get_mut(name) {
+                merge_compatible_value(
+                    &child_path,
+                    source_value,
+                    target_value,
+                    default_fields.and_then(|fields| fields.get(name)),
+                    outcome,
+                );
+            } else {
+                target_fields.insert(name.clone(), source_value.clone());
+                outcome.imported = outcome.imported.saturating_add(1);
+            }
+        }
+        return;
+    }
+
+    if default.is_some_and(|default| target == default) {
+        *target = source.clone();
+        outcome.imported = outcome.imported.saturating_add(1);
+    } else {
+        record_target_wins(path, outcome);
+    }
+}
+
+fn merge_models(
+    source_models: Vec<AIModelConfig>,
+    target_models: &mut Vec<AIModelConfig>,
+    outcome: &mut MergeOutcome,
+) -> LegacyMigrationResult<()> {
+    for model in source_models {
+        if model.id.trim().is_empty() {
+            outcome.skipped = outcome.skipped.saturating_add(1);
+            continue;
+        }
+        if let Some(existing) = target_models
+            .iter()
+            .find(|existing| existing.id == model.id)
+        {
+            let existing = settings_only_model_value(existing)?;
+            let source = settings_only_model_value(&model)?;
+            if existing != source {
+                record_target_wins(&format!("ai.models.{}", model.id), outcome);
+            }
+        } else {
+            target_models.push(model);
+            outcome.imported = outcome.imported.saturating_add(1);
+        }
+    }
+    Ok(())
+}
+
+fn settings_only_model_value(model: &AIModelConfig) -> LegacyMigrationResult<Value> {
+    let mut value = serde_json::to_value(model)
+        .map_err(|error| LegacyMigrationError::InvalidRequest(error.to_string()))?;
+    strip_model_credentials(&mut value);
+    Ok(value)
+}
+
+fn strip_model_credentials(value: &mut Value) {
+    let Some(model) = value.as_object_mut() else {
+        return;
+    };
+    model.remove("api_key");
+    model.remove("custom_headers");
+    model.remove("custom_request_body");
 }
 
 fn credential_manifest(source: &Value, target_existed: bool) -> CredentialManifest {
@@ -478,12 +704,7 @@ fn credential_manifest(source: &Value, target_existed: bool) -> CredentialManife
         .and_then(Value::as_array)
         .into_iter()
         .flatten()
-        .filter(|model| {
-            model
-                .get("api_key")
-                .and_then(Value::as_str)
-                .is_some_and(|secret| !secret.is_empty())
-        })
+        .filter(|model| model_has_portable_credentials(model))
         .filter_map(|model| model.get("id").and_then(Value::as_str))
         .filter(|id| !id.trim().is_empty())
         .map(str::to_string)
@@ -494,20 +715,46 @@ fn credential_manifest(source: &Value, target_existed: bool) -> CredentialManife
         .pointer("/app/voice_call/api_key")
         .and_then(Value::as_str)
         .is_some_and(|secret| !secret.is_empty());
+    let mcp_servers = source
+        .get("mcp_servers")
+        .is_some_and(|value| !value.is_null());
     let mut unsupported_secret_fields = Vec::new();
     collect_unsupported_secret_fields(source, "", &mut unsupported_secret_fields);
-    unsupported_secret_fields.retain(|path| {
-        path != "app.voice_call.api_key"
-            && !(path.starts_with("ai.models.") && path.ends_with(".api_key"))
-    });
+    unsupported_secret_fields.retain(|path| !is_portable_credential_path(path));
     unsupported_secret_fields.sort();
     unsupported_secret_fields.dedup();
     CredentialManifest {
         target_existed,
         model_ids,
         voice_call,
+        mcp_servers,
         unsupported_secret_fields,
     }
+}
+
+fn model_has_portable_credentials(model: &Value) -> bool {
+    model
+        .get("api_key")
+        .and_then(Value::as_str)
+        .is_some_and(|secret| !secret.is_empty())
+        || model
+            .get("custom_headers")
+            .and_then(Value::as_object)
+            .is_some_and(|headers| !headers.is_empty())
+        || model
+            .get("custom_request_body")
+            .and_then(Value::as_str)
+            .is_some_and(|body| !body.is_empty())
+}
+
+fn is_portable_credential_path(path: &str) -> bool {
+    path == "app.voice_call.api_key"
+        || path == "mcp_servers"
+        || path.starts_with("mcp_servers.")
+        || (path.starts_with("ai.models.")
+            && (path.ends_with(".api_key")
+                || path.contains(".custom_headers.")
+                || path.ends_with(".custom_request_body")))
 }
 
 fn collect_unsupported_secret_fields(value: &Value, path: &str, output: &mut Vec<String>) {
@@ -578,38 +825,6 @@ fn validate_current_config(config: &GlobalConfig, context: &str) -> LegacyMigrat
     serde_json::from_value::<GlobalConfig>(value)
         .map(|_| ())
         .map_err(|error| LegacyMigrationError::InvalidRequest(error.to_string()))
-}
-
-fn merge_scalar(
-    source: Option<&str>,
-    target: &mut String,
-    default: &str,
-    path: &str,
-    outcome: &mut MergeOutcome,
-) {
-    let Some(source) = source else { return };
-    if target == default {
-        *target = source.to_string();
-        outcome.imported += 1;
-    } else {
-        record_target_wins(path, outcome);
-    }
-}
-
-fn merge_copy_scalar<T: Copy + PartialEq>(
-    source: Option<T>,
-    target: &mut T,
-    default: T,
-    path: &str,
-    outcome: &mut MergeOutcome,
-) {
-    let Some(source) = source else { return };
-    if *target == default {
-        *target = source;
-        outcome.imported += 1;
-    } else {
-        record_target_wins(path, outcome);
-    }
 }
 
 fn record_target_wins(path: &str, outcome: &mut MergeOutcome) {
@@ -686,14 +901,96 @@ mod tests {
             .unwrap();
 
         let target = read_target_config(&roots).unwrap();
-        assert_eq!(target.app.language, "zh-CN");
+        assert_eq!(target.app.language, "en-US");
         assert!(!target.app.auto_update);
+        assert!(target.app.telemetry);
+        assert!(!target.app.confirm_on_exit);
+        assert!(!target.app.restore_windows);
+        assert!(target.app.prevent_sleep);
+        assert_eq!(target.app.zoom_level, 1.25);
+        assert_eq!(target.app.notifications.duration, 8123);
+        assert_eq!(target.editor.font_size, 17);
+        assert_eq!(target.editor.word_wrap, "on");
+        assert!(!target.editor.format_on_save);
+        assert_eq!(target.terminal.default_shell, "pwsh");
+        assert_eq!(target.terminal.terminal_panel_position, "bottom");
+        assert_eq!(target.terminal.font_size, 16);
+        assert_eq!(target.terminal.scrollback, 4321);
+        assert_eq!(target.workspace.max_file_size, 123_456);
+        assert_eq!(target.workspace.line_ending, "lf");
+        assert!(!target.workspace.insert_final_newline);
+        assert!(target.tool_permissions.interaction.auto_approve_ask);
         assert_eq!(target.appearance.selection, "openbitfun-dark");
         assert_eq!(
-            target.ai.agent_profiles["coding_shared"].enabled_user_skills,
+            target.ai.default_models.primary.as_deref(),
+            Some("legacy-model")
+        );
+        assert_eq!(
+            target.ai.default_models.fast.as_deref(),
+            Some("legacy-model")
+        );
+        assert_eq!(target.ai.agent_model_defaults.mode, "legacy-model");
+        assert_eq!(
+            target
+                .ai
+                .agent_model_defaults
+                .subagents
+                .default_selection
+                .fixed_model_id(),
+            Some("legacy-model")
+        );
+        let profile = &target.ai.agent_profiles["coding_shared"];
+        assert_eq!(profile.profile_id, "coding_shared");
+        assert_eq!(profile.added_tools, ["LegacyTool"]);
+        assert_eq!(profile.removed_tools, ["ReadFile"]);
+        assert_eq!(
+            profile.disabled_user_skills,
+            ["user::openbitfun::disabled-skill"]
+        );
+        assert_eq!(
+            profile.enabled_user_skills,
             ["user::openbitfun::user-skill"]
         );
-        assert_eq!(target.ai.models[0].api_key, "fixture-secret");
+        assert_eq!(
+            target.ai.skill_settings.globally_disabled_user_skills,
+            ["user::openbitfun::global-disabled-skill"]
+        );
+        assert_eq!(
+            target.ai.review_teams["default"].reviewer_timeout_seconds,
+            77
+        );
+        assert_eq!(target.ai.subagent_max_concurrency, 3);
+        assert_eq!(target.ai.stream_idle_timeout_secs, Some(321));
+        assert_eq!(target.ai.stream_ttft_timeout_secs, Some(123));
+        assert_eq!(target.ai.tool_execution_timeout_secs, Some(456));
+        assert!(!target.ai.enable_deferred_tool_loading);
+        assert_eq!(target.ai.browser_control_preferred_browser, "edge");
+        let model = target
+            .ai
+            .models
+            .iter()
+            .find(|model| model.id == "legacy-model")
+            .unwrap();
+        assert_eq!(model.api_key, "fixture-api-key");
+        assert_eq!(
+            model.custom_headers.as_ref().unwrap()["Authorization"],
+            "Bearer fixture-header-secret"
+        );
+        assert_eq!(
+            model.custom_request_body.as_deref(),
+            Some(r#"{"token":"fixture-body-secret"}"#)
+        );
+        assert_eq!(target.app.voice_call.api_key, "fixture-voice-secret");
+        assert_eq!(
+            target.mcp_servers,
+            Some(serde_json::json!({
+                "fixture": {
+                    "command": "fixture-mcp",
+                    "env": {"TOKEN": "fixture-mcp-secret"}
+                }
+            }))
+        );
+        assert_eq!(target.product_id, GlobalConfig::default().product_id);
         assert_eq!(sha256(&source_config_path(&roots)), source_before);
         assert!(report.requires_reauthentication.is_empty());
 
@@ -708,7 +1005,16 @@ mod tests {
         .flat_map(|entry| walk_files(&entry.unwrap().path()))
         .flat_map(|path| fs::read(path).unwrap())
         .collect::<Vec<_>>();
-        assert!(!String::from_utf8_lossy(&stage).contains("fixture-secret"));
+        let stage = String::from_utf8_lossy(&stage);
+        for secret in [
+            "fixture-api-key",
+            "fixture-header-secret",
+            "fixture-body-secret",
+            "fixture-voice-secret",
+            "fixture-mcp-secret",
+        ] {
+            assert!(!stage.contains(secret), "staging leaked {secret}");
+        }
     }
 
     #[test]
@@ -717,12 +1023,23 @@ mod tests {
         let roots = test_roots(temp.path());
         seed_source(&roots, true);
         let mut target = GlobalConfig::default();
-        target.app.language = "en-US".to_string();
-        target.ai.models.push(AIModelConfig {
-            id: "legacy-model".to_string(),
-            api_key: "target-secret".to_string(),
-            ..AIModelConfig::default()
-        });
+        target.app.language = "fr-FR".to_string();
+        target.app.close_button_behavior = "quit".to_string();
+        target.ai.default_models.primary = Some("target-model".to_string());
+        target.ai.models.extend([
+            AIModelConfig {
+                id: "target-model".to_string(),
+                name: "Target model".to_string(),
+                ..AIModelConfig::default()
+            },
+            AIModelConfig {
+                id: "legacy-model".to_string(),
+                api_key: "target-secret".to_string(),
+                custom_headers: Some(Default::default()),
+                custom_request_body: Some(String::new()),
+                ..AIModelConfig::default()
+            },
+        ]);
         atomic_write_json(&target_config_path(&roots), &target).unwrap();
         let source = probe_legacy_source(&roots, ProbeLimits::default())
             .unwrap()
@@ -742,24 +1059,131 @@ mod tests {
             .execute(&plan, &CancellationToken::default(), &NoCrashInjection)
             .unwrap();
         let target = read_target_config(&roots).unwrap();
-        assert_eq!(target.app.language, "en-US");
-        assert_eq!(target.ai.models[0].api_key, "target-secret");
+        assert_eq!(target.app.language, "fr-FR");
+        assert_eq!(target.app.close_button_behavior, "quit");
+        assert_eq!(
+            target.ai.default_models.primary.as_deref(),
+            Some("target-model")
+        );
+        assert_eq!(
+            target.ai.default_models.fast.as_deref(),
+            Some("legacy-model")
+        );
+        let legacy_model = target
+            .ai
+            .models
+            .iter()
+            .find(|model| model.id == "legacy-model")
+            .unwrap();
+        assert_eq!(legacy_model.api_key, "target-secret");
+        assert_eq!(
+            legacy_model.custom_headers.as_ref().unwrap()["Authorization"],
+            "Bearer fixture-header-secret"
+        );
+        assert_eq!(
+            legacy_model.custom_request_body.as_deref(),
+            Some(r#"{"token":"fixture-body-secret"}"#)
+        );
     }
 
     fn seed_source(roots: &MigrationRoots, with_secret: bool) {
         let source = serde_json::json!({
-            "app": {"language": "zh-CN", "auto_update": false, "telemetry": false},
+            "product_id": "bitfun",
+            "app": {
+                "language": "en-US",
+                "auto_update": false,
+                "telemetry": true,
+                "confirm_on_exit": false,
+                "restore_windows": false,
+                "prevent_sleep": true,
+                "zoom_level": 1.25,
+                "notifications": {"duration": 8123},
+                "voice_call": {
+                    "api_key": if with_secret { "fixture-voice-secret" } else { "" }
+                }
+            },
+            "editor": {
+                "font_size": 17,
+                "word_wrap": "on",
+                "format_on_save": false
+            },
+            "terminal": {
+                "default_shell": "pwsh",
+                "terminal_panel_position": "bottom",
+                "font_size": 16,
+                "scrollback": 4321
+            },
+            "workspace": {
+                "max_file_size": 123456,
+                "line_ending": "lf",
+                "insert_final_newline": false
+            },
+            "tool_permissions": {
+                "interaction": {"auto_approve_ask": true}
+            },
             "appearance": {"theme_id": "bitfun-dark"},
             "ai": {
-                "agent_profiles": {"coding_shared": {"enabled_skills": ["user::bitfun::user-skill"]}},
+                "default_models": {
+                    "primary": "legacy-model",
+                    "fast": "legacy-model"
+                },
+                "agent_model_defaults": {
+                    "mode": "legacy-model",
+                    "subagents": {
+                        "default": {"kind": "fixed", "model_id": "legacy-model"},
+                        "builtin": {},
+                        "fork": {"kind": "inherit"}
+                    }
+                },
+                "agent_profiles": {
+                    "coding_shared": {
+                        "added_tools": ["LegacyTool"],
+                        "removed_tools": ["ReadFile"],
+                        "disabled_user_skills": ["user::bitfun::disabled-skill"],
+                        "enabled_skills": ["user::bitfun::user-skill"]
+                    }
+                },
+                "skill_settings": {
+                    "globally_disabled_user_skills": ["user::bitfun::global-disabled-skill"]
+                },
+                "review_teams": {
+                    "default": {"reviewer_timeout_seconds": 77}
+                },
+                "subagent_max_concurrency": 3,
+                "stream_idle_timeout_secs": 321,
+                "stream_ttft_timeout_secs": 123,
+                "tool_execution_timeout_secs": 456,
+                "enable_deferred_tool_loading": false,
+                "browser_control_preferred_browser": "edge",
                 "models": [{
                     "id": "legacy-model",
                     "name": "Legacy model",
                     "provider": "openai",
                     "model_name": "legacy-model",
                     "base_url": "https://example.invalid/v1",
-                    "api_key": if with_secret { "fixture-secret" } else { "" }
+                    "enabled": true,
+                    "category": "general_chat",
+                    "capabilities": ["text_chat"],
+                    "api_key": if with_secret { "fixture-api-key" } else { "" },
+                    "custom_headers": if with_secret {
+                        serde_json::json!({"Authorization": "Bearer fixture-header-secret"})
+                    } else {
+                        serde_json::json!({})
+                    },
+                    "custom_headers_mode": "merge",
+                    "custom_request_body": if with_secret {
+                        r#"{"token":"fixture-body-secret"}"#
+                    } else {
+                        ""
+                    },
+                    "custom_request_body_mode": "merge"
                 }]
+            },
+            "mcp_servers": {
+                "fixture": {
+                    "command": "fixture-mcp",
+                    "env": {"TOKEN": if with_secret { "fixture-mcp-secret" } else { "" }}
+                }
             },
             "schema_version": 1,
             "version": "0.2.19",

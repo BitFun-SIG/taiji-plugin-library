@@ -15,13 +15,19 @@ const translations = {
     phase: 'Phase', domain: 'Domain', count: 'Completed steps',
     cancel: 'Cancel at a safe boundary', stepDone: 'Result', reportTitle: 'Migration report',
     reportPrivacy: 'This summary contains counts and result codes, not credentials or user content.',
+    exportDiagnostics: 'Export failure diagnostics',
+    diagnosticsExported: 'Sanitized diagnostics saved to {path}',
     openDesktop: 'Open OpenBitFun', ready: 'Ready', unsupported: 'Unsupported', missing: 'Not found',
+    closeMigrator: 'Close Data Migrator',
+    devRestartHelp: 'Development build: close Data Migrator, then run pnpm run desktop:dev again.',
+    bootstrapPending: 'Data Migrator is still loading. Please try again.',
+    bootstrapFailed: 'Data Migrator could not load its authenticated migration request.',
     sourceFound: 'BitFun {version} was found. The source stays read-only.',
     recovery: 'A previous migration journal was found and can be resumed.',
     blockers: '{count} data-writing process(es) must stop before migration can continue.',
     noBlockers: 'No data-writing processes are blocking migration.',
     steps: '{count} ordered domain step(s)', conflicts: '{count} visible conflict(s)',
-    imported: 'imported', skipped: 'skipped', warnings: 'warnings',
+    imported: 'imported', staged: 'staged', skipped: 'skipped', warnings: 'warnings',
   },
   'zh-CN': {
     eyebrow: 'OpenBitFun 数据维护', title: '从 BitFun 导入数据',
@@ -34,13 +40,19 @@ const translations = {
     planTitle: '确认迁移', retryWriters: '重新检查进程', start: '开始迁移',
     stepProgress: '第 5 步', progressTitle: '迁移进度', phase: '阶段', domain: '领域',
     count: '已完成步骤', cancel: '在安全边界取消', stepDone: '结果', reportTitle: '迁移报告',
-    reportPrivacy: '此摘要仅包含计数和结果码，不包含凭据或用户正文。', openDesktop: '打开 OpenBitFun',
+    reportPrivacy: '此摘要仅包含计数和结果码，不包含凭据或用户正文。',
+    exportDiagnostics: '导出失败诊断', diagnosticsExported: '去敏诊断已保存到 {path}',
+    openDesktop: '打开 OpenBitFun',
+    closeMigrator: '关闭数据迁移器',
+    devRestartHelp: '开发版本：关闭数据迁移器，然后重新运行 pnpm run desktop:dev。',
+    bootstrapPending: '数据迁移器仍在加载，请稍后重试。',
+    bootstrapFailed: '数据迁移器无法加载已认证的迁移请求。',
     ready: '可迁移', unsupported: '不受支持', missing: '未发现',
     sourceFound: '已发现 BitFun {version}。迁移期间来源保持只读。',
     recovery: '发现上次迁移日志，可以从安全状态继续。',
     blockers: '迁移前还需停止 {count} 个数据写入进程。', noBlockers: '没有进程阻止迁移。',
     steps: '{count} 个有序领域步骤', conflicts: '{count} 个可见冲突',
-    imported: '已导入', skipped: '已跳过', warnings: '警告',
+    imported: '已导入', staged: '已暂存', skipped: '已跳过', warnings: '警告',
   },
   'zh-TW': {
     eyebrow: 'OpenBitFun 資料維護', title: '從 BitFun 匯入資料',
@@ -53,13 +65,19 @@ const translations = {
     planTitle: '確認遷移', retryWriters: '重新檢查程序', start: '開始遷移',
     stepProgress: '第 5 步', progressTitle: '遷移進度', phase: '階段', domain: '領域',
     count: '已完成步驟', cancel: '在安全邊界取消', stepDone: '結果', reportTitle: '遷移報告',
-    reportPrivacy: '此摘要僅包含計數和結果碼，不包含憑據或使用者正文。', openDesktop: '開啟 OpenBitFun',
+    reportPrivacy: '此摘要僅包含計數和結果碼，不包含憑據或使用者正文。',
+    exportDiagnostics: '匯出失敗診斷', diagnosticsExported: '去敏診斷已儲存至 {path}',
+    openDesktop: '開啟 OpenBitFun',
+    closeMigrator: '關閉資料遷移器',
+    devRestartHelp: '開發版本：關閉資料遷移器，然後重新執行 pnpm run desktop:dev。',
+    bootstrapPending: '資料遷移器仍在載入，請稍後重試。',
+    bootstrapFailed: '資料遷移器無法載入已驗證的遷移請求。',
     ready: '可遷移', unsupported: '不支援', missing: '未發現',
     sourceFound: '已發現 BitFun {version}。遷移期間來源保持唯讀。',
     recovery: '發現上次遷移日誌，可以從安全狀態繼續。',
     blockers: '遷移前還需停止 {count} 個資料寫入程序。', noBlockers: '沒有程序阻止遷移。',
     steps: '{count} 個有序領域步驟', conflicts: '{count} 個可見衝突',
-    imported: '已匯入', skipped: '已略過', warnings: '警告',
+    imported: '已匯入', staged: '已暫存', skipped: '已略過', warnings: '警告',
   },
 };
 
@@ -122,6 +140,12 @@ function notice(message) {
   node.hidden = !message;
 }
 
+function requireBootstrap() {
+  if (current) return true;
+  notice(text.bootstrapPending);
+  return false;
+}
+
 function row(title, detail) {
   const item = document.createElement('div');
   item.className = 'result-row';
@@ -131,6 +155,10 @@ function row(title, detail) {
   small.textContent = detail;
   item.append(strong, small);
   return item;
+}
+
+function transferLabel(result) {
+  return result.state === 'verified' ? text.imported : text.staged;
 }
 
 function renderScopes(selection) {
@@ -209,9 +237,19 @@ function render(view) {
   const reportSummary = document.getElementById('report-summary');
   if (view.report) {
     reportSummary.replaceChildren(...view.report.domainResults.map((result) =>
-      row(result.domain, `${result.imported} ${text.imported}, ${result.skipped} ${text.skipped}, ${result.warnings.length} ${text.warnings}`)));
+      row(result.domain, `${result.imported} ${transferLabel(result)}, ${result.skipped} ${text.skipped}, ${result.warnings.length} ${text.warnings}`)));
   }
+  show('dev-restart-help', !view.restartDesktopOnFinish);
+  document.getElementById('open-desktop').textContent = view.restartDesktopOnFinish
+    ? text.openDesktop : text.closeMigrator;
   show('report-card', !view.running && (Boolean(view.report) || view.status === 'cancelled'));
+  const canExportDiagnostics = ['failed_recoverable', 'failed_manual_action_required'].includes(view.status);
+  show('export-diagnostics', canExportDiagnostics);
+  if (!canExportDiagnostics) {
+    const output = document.getElementById('diagnostics-path');
+    output.textContent = '';
+    output.hidden = true;
+  }
   document.getElementById('start').disabled = !view.canExecute;
 
   if (view.running && !pollTimer) {
@@ -240,13 +278,16 @@ async function call(command, request = {}) {
 async function refresh() {
   try {
     render(await invoke('get_migrator_bootstrap', { request: {} }));
-  } catch {
+  } catch (error) {
+    const message = error?.message || (typeof error === 'string' ? error : '');
+    notice(message || text.bootstrapFailed);
     if (pollTimer) window.clearInterval(pollTimer);
     pollTimer = undefined;
   }
 }
 
 document.getElementById('migrate-now').addEventListener('click', () => {
+  if (!requireBootstrap()) return;
   show('choice-card', false);
   show('scope-card');
   renderScopes(current.selection);
@@ -265,6 +306,20 @@ document.getElementById('start').addEventListener('click', () =>
   call('start_legacy_migration', { planHash: current.plan.planHash }));
 document.getElementById('cancel').addEventListener('click', () =>
   call('cancel_legacy_migration'));
+document.getElementById('export-diagnostics').addEventListener('click', async () => {
+  setBusy(true);
+  try {
+    const result = await invoke('export_migration_diagnostics', { request: {} });
+    const output = document.getElementById('diagnostics-path');
+    output.textContent = format(text.diagnosticsExported, { path: result.filePath });
+    output.hidden = false;
+  } catch (error) {
+    notice(error?.message || String(error));
+  } finally {
+    setBusy(false);
+    if (current) render(current);
+  }
+});
 document.getElementById('open-desktop').addEventListener('click', () =>
   call('finish_legacy_migration', { choice: current.report ? 'migrate_now' : 'remind_later' }));
 

@@ -21,9 +21,9 @@ must remain a separate executable and WebView identity from Desktop.
 - Cancellation is advisory and may be honored only at engine-declared safe
   boundaries. Closing during execution requests cancellation and keeps the
   window open until a safe boundary.
-- The migrator never updates itself. Resolve Desktop as a verified sibling
+- The migrator never updates itself. Resolve Desktop as a fixed-name sibling
   binary using product-definition projections and the trusted installation
-  resolver.
+  resolver; do not accept executable paths from handoff input.
 
 ## Verification
 

@@ -1757,6 +1757,71 @@ mod tests {
     }
 
     #[test]
+    fn orphaned_session_relationship_is_preserved_without_blocking_import() {
+        let temp = test_tempdir("orphaned-session-relationship");
+        let roots = fixture_roots(temp.path());
+        copy_fixture(&roots);
+        let metadata_path = roots
+            .legacy_home_root
+            .join("projects/c--fixture-workspace/sessions/session-1/metadata.json");
+        let mut metadata: serde_json::Value =
+            serde_json::from_slice(&fs::read(&metadata_path).unwrap()).unwrap();
+        metadata["relationship"] = serde_json::json!({
+            "kind": "subagent",
+            "parentSessionId": "missing-parent-session",
+            "parentDialogTurnId": "missing-parent-turn"
+        });
+        atomic_write_json(&metadata_path, &metadata).unwrap();
+        drop(materialize_coordination(&roots, false));
+        let source_hash = hash_source_roots(&roots);
+        let selection = session_selection();
+        let source = probe_legacy_source(&roots, ProbeLimits::default())
+            .unwrap()
+            .unwrap();
+        let engine = MigrationEngine::new(roots.clone(), adapters_for_groups(&selection)).unwrap();
+        let plan = engine
+            .plan(&source, selection, &CancellationToken::default())
+            .unwrap();
+
+        let report = engine
+            .execute(&plan, &CancellationToken::default(), &NoCrashInjection)
+            .unwrap();
+
+        assert_eq!(report.status, MigrationRunStatus::CompletedWithWarnings);
+        let sessions_result = report
+            .domain_results
+            .iter()
+            .find(|result| result.domain == MigrationDomainId::WorkspaceSessions)
+            .unwrap();
+        assert_eq!(sessions_result.state, MigrationDomainState::Verified);
+        assert!(sessions_result
+            .warnings
+            .iter()
+            .any(|warning| warning.code == "session_parent_not_present"));
+
+        let sessions_root = roots
+            .target_home_root
+            .join("projects/c--fixture-workspace/sessions");
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_time()
+            .build()
+            .unwrap();
+        let imported = runtime
+            .block_on(OfflineSessionImportStore::new(sessions_root).load_bundle("session-1"))
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            imported
+                .metadata
+                .relationship
+                .as_ref()
+                .and_then(|relationship| relationship.parent_session_id.as_deref()),
+            Some("missing-parent-session")
+        );
+        assert_eq!(hash_source_roots(&roots), source_hash);
+    }
+
+    #[test]
     fn missing_or_unknown_coordination_schema_blocks_the_session_plan() {
         let temp = test_tempdir("coordination-schema");
         let roots = fixture_roots(temp.path());

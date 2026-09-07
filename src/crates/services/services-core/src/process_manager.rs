@@ -165,11 +165,7 @@ pub fn create_tokio_command<S: AsRef<std::ffi::OsStr>>(program: S) -> TokioComma
 /// the executable from an authenticated installation boundary; this helper
 /// only supplies lifecycle and no-console-window behavior.
 pub fn create_detached_command<S: AsRef<std::ffi::OsStr>>(program: S) -> Command {
-    let mut command = Command::new(program.as_ref());
-    command
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null());
+    let mut command = create_handoff_command(program);
 
     #[cfg(windows)]
     command.creation_flags(detached_creation_flags());
@@ -177,9 +173,38 @@ pub fn create_detached_command<S: AsRef<std::ffi::OsStr>>(program: S) -> Command
     command
 }
 
+/// Create a hidden Windows handoff process group without requesting Job
+/// breakaway.
+///
+/// The child keeps the caller's Job association when one exists. This is a
+/// development-only fallback for hosts whose outer Job rejects explicit
+/// breakaway; callers must not treat it as equivalent to a detached handoff.
+#[cfg(windows)]
+pub fn create_inherited_job_process_group_command<S: AsRef<std::ffi::OsStr>>(
+    program: S,
+) -> Command {
+    let mut command = create_handoff_command(program);
+    command.creation_flags(inherited_job_process_group_creation_flags());
+    command
+}
+
+fn create_handoff_command<S: AsRef<std::ffi::OsStr>>(program: S) -> Command {
+    let mut command = Command::new(program.as_ref());
+    command
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+    command
+}
+
 #[cfg(windows)]
 const fn detached_creation_flags() -> u32 {
     CREATE_NO_WINDOW | CREATE_NEW_PROCESS_GROUP | CREATE_BREAKAWAY_FROM_JOB
+}
+
+#[cfg(windows)]
+const fn inherited_job_process_group_creation_flags() -> u32 {
+    CREATE_NO_WINDOW | CREATE_NEW_PROCESS_GROUP
 }
 
 #[cfg(target_os = "macos")]
@@ -257,5 +282,13 @@ mod tests {
         assert_ne!(flags & CREATE_NO_WINDOW, 0);
         assert_ne!(flags & CREATE_NEW_PROCESS_GROUP, 0);
         assert_ne!(flags & CREATE_BREAKAWAY_FROM_JOB, 0);
+    }
+
+    #[test]
+    fn inherited_job_handoff_is_hidden_without_requesting_breakaway() {
+        let flags = inherited_job_process_group_creation_flags();
+        assert_ne!(flags & CREATE_NO_WINDOW, 0);
+        assert_ne!(flags & CREATE_NEW_PROCESS_GROUP, 0);
+        assert_eq!(flags & CREATE_BREAKAWAY_FROM_JOB, 0);
     }
 }

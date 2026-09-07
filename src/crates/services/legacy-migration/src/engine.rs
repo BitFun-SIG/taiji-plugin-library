@@ -1,6 +1,7 @@
 use crate::{
-    atomic_write_json, probe_legacy_source, LegacyMigrationError, LegacyMigrationResult,
-    MigrationLayout, MigrationLock, MigrationRoots, ProbeLimits,
+    atomic_write_json, diagnostics::persist_release_observation, probe_legacy_source,
+    LegacyMigrationError, LegacyMigrationResult, MigrationLayout, MigrationLock, MigrationRoots,
+    ProbeLimits,
 };
 use openbitfun_product_domains::legacy_migration::{
     FindingSeverity, LegacySourceDescriptor, MigrationConflict, MigrationDiagnostic,
@@ -294,6 +295,17 @@ impl MigrationEngine {
             report.status,
             MigrationRunStatus::Completed | MigrationRunStatus::CompletedWithWarnings
         ) {
+            let result_code = match report.status {
+                MigrationRunStatus::CompletedWithWarnings => "migration_completed_with_warnings",
+                _ => "migration_completed",
+            };
+            persist_release_observation(
+                &layout,
+                &report,
+                result_code,
+                None,
+                report.finished_at_ms.unwrap_or_else(now_ms),
+            )?;
             return Ok(report);
         }
         normalize_report(plan, &mut report);
@@ -365,6 +377,7 @@ impl MigrationEngine {
                             result_index,
                             step.domain,
                             MigrationPhase::Stage,
+                            &error,
                         )?;
                         let _ = adapter.rollback_unverified(&context);
                         return Err(domain_error(step.domain, error));
@@ -423,6 +436,7 @@ impl MigrationEngine {
                         result_index,
                         step.domain,
                         MigrationPhase::ValidateStage,
+                        &error,
                     )?;
                     let _ = adapter.rollback_unverified(&context);
                     return Err(domain_error(step.domain, error));
@@ -472,6 +486,7 @@ impl MigrationEngine {
                         result_index,
                         step.domain,
                         MigrationPhase::Commit,
+                        &error,
                     )?;
                     let _ = adapter.rollback_unverified(&context);
                     return Err(domain_error(step.domain, error));
@@ -518,6 +533,7 @@ impl MigrationEngine {
                         result_index,
                         step.domain,
                         MigrationPhase::ValidateCommit,
+                        &error,
                     )?;
                     let _ = adapter.rollback_unverified(&context);
                     return Err(domain_error(step.domain, error));
@@ -533,12 +549,17 @@ impl MigrationEngine {
                                 result_index,
                                 step.domain,
                                 MigrationPhase::ValidateCommit,
+                                &error,
                             )?;
                             let _ = adapter.rollback_unverified(&context);
                             return Err(domain_error(step.domain, error));
                         }
                     };
                 if finalized.domain != step.domain {
+                    let error = LegacyMigrationError::InvalidPlan(format!(
+                        "adapter {:?} finalized a result for {:?}",
+                        step.domain, finalized.domain
+                    ));
                     record_domain_failure(
                         &layout,
                         &mut report,
@@ -546,12 +567,10 @@ impl MigrationEngine {
                         result_index,
                         step.domain,
                         MigrationPhase::ValidateCommit,
+                        &error,
                     )?;
                     let _ = adapter.rollback_unverified(&context);
-                    return Err(LegacyMigrationError::InvalidPlan(format!(
-                        "adapter {:?} finalized a result for {:?}",
-                        step.domain, finalized.domain
-                    )));
+                    return Err(error);
                 }
                 finalized.state = MigrationDomainState::Verified;
                 report.domain_results[result_index] = finalized;
@@ -611,6 +630,11 @@ impl MigrationEngine {
         } else {
             MigrationRunStatus::Completed
         };
+        let final_code = if has_warnings {
+            "migration_completed_with_warnings"
+        } else {
+            "migration_completed"
+        };
         transition(
             &layout,
             &mut report,
@@ -619,7 +643,7 @@ impl MigrationEngine {
             MigrationPhase::Finalize,
             None,
             None,
-            "migration_completed",
+            final_code,
         )?;
         emit_progress(
             &mut progress,
@@ -628,7 +652,7 @@ impl MigrationEngine {
             MigrationPhase::Finalize,
             plan.steps.len(),
             true,
-            "migration_completed",
+            final_code,
         );
         Ok(report)
     }
@@ -759,6 +783,13 @@ fn load_or_create_report(
         ..MigrationRunReport::default()
     };
     persist_report(layout, &report)?;
+    persist_release_observation(
+        layout,
+        &report,
+        "migration_planned",
+        None,
+        report.started_at_ms,
+    )?;
     Ok(report)
 }
 
@@ -811,7 +842,7 @@ fn journal(
     code: &str,
 ) -> LegacyMigrationResult<()> {
     *sequence = sequence.saturating_add(1);
-    layout.append_journal(&MigrationJournalEvent {
+    let event = MigrationJournalEvent {
         format_version: CURRENT_MIGRATION_FORMAT_VERSION,
         sequence: *sequence,
         recorded_at_ms: now_ms(),
@@ -821,7 +852,14 @@ fn journal(
         domain,
         domain_state,
         code: code.to_string(),
-    })
+    };
+    layout.append_journal(&event)?;
+    let failure_phase = matches!(
+        report.status,
+        MigrationRunStatus::FailedRecoverable | MigrationRunStatus::FailedManualActionRequired
+    )
+    .then_some(phase);
+    persist_release_observation(layout, report, code, failure_phase, event.recorded_at_ms)
 }
 
 fn record_domain_failure(
@@ -831,17 +869,13 @@ fn record_domain_failure(
     result_index: usize,
     domain: MigrationDomainId,
     phase: MigrationPhase,
+    error: &LegacyMigrationError,
 ) -> LegacyMigrationResult<()> {
     report.status = MigrationRunStatus::FailedRecoverable;
     report.domain_results[result_index].state = MigrationDomainState::Failed;
-    report.diagnostics.push(MigrationDiagnostic {
-        code: "domain_failed_recoverable".to_string(),
-        severity: FindingSeverity::Blocking,
-        domain: Some(domain),
-        message: "A migration domain failed and can be retried".to_string(),
-        action: Some("Retry from Data Migrator after resolving the reported condition".to_string()),
-        ..MigrationDiagnostic::default()
-    });
+    report
+        .diagnostics
+        .push(domain_failure_diagnostic(domain, error));
     persist_report(layout, report)?;
     journal(
         layout,
@@ -852,6 +886,109 @@ fn record_domain_failure(
         Some(MigrationDomainState::Failed),
         "domain_failed_recoverable",
     )
+}
+
+fn domain_failure_diagnostic(
+    domain: MigrationDomainId,
+    error: &LegacyMigrationError,
+) -> MigrationDiagnostic {
+    let (code, message, action) = match error {
+        LegacyMigrationError::UnsupportedSource(_) => (
+            "domain_source_unsupported",
+            "A migration source record does not match a supported legacy format.",
+            "Keep the legacy data unchanged and export diagnostics for review.",
+        ),
+        LegacyMigrationError::PathEscape(_) | LegacyMigrationError::LinkedPath(_) => (
+            "domain_path_unsafe",
+            "A migration path failed its safety checks.",
+            "Review linked or redirected paths before retrying the migration.",
+        ),
+        LegacyMigrationError::ResourceLimit(_) => (
+            "domain_resource_limit",
+            "A migration domain exceeded a configured safety limit.",
+            "Export diagnostics and review the size or shape of the legacy data.",
+        ),
+        LegacyMigrationError::Io { source, .. } => io_failure_diagnostic(source),
+        LegacyMigrationError::Json { .. } => (
+            "domain_json_invalid",
+            "A migration-owned JSON document is unreadable or has an unexpected shape.",
+            "Keep the legacy data unchanged and export diagnostics for review.",
+        ),
+        LegacyMigrationError::Sqlite { .. } => (
+            "domain_sqlite_failed",
+            "A migration-owned SQLite database could not be copied or validated.",
+            "Close processes using the database and retry the migration.",
+        ),
+        _ => (
+            "domain_validation_failed",
+            "A migration-owned record failed validation.",
+            "Keep the legacy data unchanged and export diagnostics for review.",
+        ),
+    };
+    MigrationDiagnostic {
+        code: code.to_string(),
+        severity: FindingSeverity::Blocking,
+        domain: Some(domain),
+        message: message.to_string(),
+        action: Some(action.to_string()),
+        ..MigrationDiagnostic::default()
+    }
+}
+
+fn io_failure_diagnostic(error: &std::io::Error) -> (&'static str, &'static str, &'static str) {
+    if is_path_too_long(error) {
+        return (
+            "domain_path_too_long",
+            "A migration-owned path exceeds the platform path limit.",
+            "Enable long-path support or use a shorter data root before retrying.",
+        );
+    }
+    if is_storage_full(error) {
+        return (
+            "domain_storage_full",
+            "The destination volume does not have enough free space.",
+            "Free destination disk space and retry the migration.",
+        );
+    }
+    match error.kind() {
+        std::io::ErrorKind::PermissionDenied => (
+            "domain_io_permission_denied",
+            "A migration-owned file or directory denied access.",
+            "Close programs using the data, check permissions, and retry.",
+        ),
+        std::io::ErrorKind::NotFound => (
+            "domain_io_not_found",
+            "A migration-owned source or staged file was not found.",
+            "Run a new scan and retry after confirming the legacy data is still present.",
+        ),
+        std::io::ErrorKind::AlreadyExists => (
+            "domain_io_conflict",
+            "A migration target changed after the plan was created.",
+            "Run a new scan and plan before retrying the migration.",
+        ),
+        std::io::ErrorKind::InvalidData | std::io::ErrorKind::InvalidInput => (
+            "domain_io_invalid_data",
+            "A migration-owned file could not be processed safely.",
+            "Keep the legacy data unchanged and export diagnostics for review.",
+        ),
+        _ => (
+            "domain_io_failed",
+            "A migration-owned file or directory could not be read or written.",
+            "Export diagnostics, check the destination storage, and retry.",
+        ),
+    }
+}
+
+fn is_path_too_long(error: &std::io::Error) -> bool {
+    cfg!(windows) && error.raw_os_error() == Some(206)
+}
+
+fn is_storage_full(error: &std::io::Error) -> bool {
+    match error.raw_os_error() {
+        Some(112) if cfg!(windows) => true,
+        Some(28) if cfg!(unix) => true,
+        _ => false,
+    }
 }
 
 fn record_cancelled(

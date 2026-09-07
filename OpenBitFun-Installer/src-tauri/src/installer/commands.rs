@@ -16,7 +16,7 @@ use openbitfun_core_types::{
 #[cfg(target_os = "windows")]
 use openbitfun_legacy_migration::{
     launch_trusted_executable, probe_legacy_source, HandoffStore, MigrationOnboardingStore,
-    MigrationRoots, PlatformExecutableTrustVerifier, ProbeLimits, TrustedInstallationResolver,
+    MigrationRoots, ProbeLimits, TrustedInstallationResolver,
 };
 #[cfg(target_os = "windows")]
 use openbitfun_product_domains::legacy_migration::{
@@ -938,10 +938,9 @@ pub(crate) fn launch_legacy_data_migrator(
             &desktop,
             MAIN_APP_EXE,
             DATA_MIGRATOR_EXE,
-            &PlatformExecutableTrustVerifier,
         )
         .map_err(|_| {
-            "The installed Data Migrator is missing or its signature cannot be trusted. Repair the OpenBitFun installation."
+            "The installed Data Migrator is missing or failed installation layout checks. Repair the OpenBitFun installation."
                 .to_string()
         })?;
         launch_trusted_executable(

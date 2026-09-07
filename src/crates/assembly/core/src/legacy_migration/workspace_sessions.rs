@@ -2,6 +2,7 @@ use super::common::{
     backup_domain_dir, backup_file_once, io_error, read_bounded_json, read_optional_bounded_json,
     relative_display, restore_unverified_file, stage_domain_dir, validate_regular_file,
 };
+use crate::infrastructure::app_paths::PathManager;
 use crate::service::session_projection_format::validate_runtime_event_log;
 use crate::service::workspace::persistence::{
     current_workspace_storage_id, validate_workspace_persistence_data, WorkspacePersistenceData,
@@ -19,8 +20,8 @@ use openbitfun_product_domains::legacy_migration::{
     MigrationDomainResult, MigrationDomainState, ScanFinding,
 };
 use openbitfun_services_core::session::{
-    OfflineSessionBundle, OfflineSessionImportStore, SessionRelationship, StoredDialogTurnFile,
-    StoredSessionMetadataFile, SESSION_STORAGE_SCHEMA_VERSION,
+    OfflineSessionBundle, OfflineSessionImportStore, SessionMetadata, SessionRelationship,
+    StoredDialogTurnFile, StoredSessionMetadataFile, SESSION_STORAGE_SCHEMA_VERSION,
 };
 use openbitfun_services_core::workspace_identity::{
     canonicalize_local_workspace_root, normalize_remote_workspace_path, LOCAL_WORKSPACE_SSH_HOST,
@@ -40,12 +41,12 @@ const MAX_RUNTIME_DEPTH: usize = 16;
 
 const SESSION_ROOT_FILES: &[&str] = &[
     "state.json",
-    "prompt_cache.json",
     "turn-catalog.json",
     "token-anchors.json",
     "session-revert.json",
     "evidence-ledger.json",
 ];
+const SESSION_REBUILDABLE_ROOT_FILES: &[&str] = &["prompt_cache.json"];
 const SESSION_OWNED_DIRECTORIES: &[&str] = &["snapshots", "artifacts", "tool-results"];
 
 pub(crate) struct WorkspaceSessionsAdapter;
@@ -80,8 +81,18 @@ pub(crate) struct RuntimeEventManifestEntry {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub(crate) struct AssistantWorkspaceManifestEntry {
+    pub(crate) relative_path: String,
+    pub(crate) action: SessionImportAction,
+    pub(crate) expected_hash: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub(crate) struct WorkspaceSessionsManifest {
     pub(crate) workspace_id_map: BTreeMap<String, String>,
+    #[serde(default)]
+    pub(crate) assistant_workspaces: Vec<AssistantWorkspaceManifestEntry>,
     pub(crate) sessions: Vec<SessionManifestEntry>,
     pub(crate) runtime_events: Vec<RuntimeEventManifestEntry>,
     pub(crate) target_workspace_existed: bool,
@@ -107,6 +118,7 @@ struct LegacyWorkspacePersistenceData {
 struct WorkspaceSessionsPlan {
     workspace_data: WorkspacePersistenceData,
     workspace_id_map: BTreeMap<String, String>,
+    assistant_workspaces: Vec<PlannedAssistantWorkspace>,
     sessions: Vec<PlannedSession>,
     runtime_events: Vec<PlannedRuntimeEvent>,
     conflicts: Vec<MigrationConflict>,
@@ -117,10 +129,19 @@ struct WorkspaceSessionsPlan {
     logical_bytes: u64,
 }
 
+struct PlannedAssistantWorkspace {
+    relative_path: PathBuf,
+    source_path: PathBuf,
+    action: SessionImportAction,
+    expected_hash: String,
+    logical_bytes: u64,
+}
+
 struct PlannedSession {
     runtime_relative: PathBuf,
     bundle: OfflineSessionBundle,
     auxiliary_files: Vec<(PathBuf, PathBuf)>,
+    state_bytes_override: Option<Vec<u8>>,
     action: SessionImportAction,
     expected_hash: String,
 }
@@ -150,14 +171,16 @@ impl LegacyDomainAdapter for WorkspaceSessionsAdapter {
                     FindingSeverity::Warning
                 },
                 entity_count: (plan.workspace_id_map.len()
+                    + plan.assistant_workspaces.len()
                     + plan.sessions.len()
                     + plan.runtime_events.len()) as u64,
                 logical_bytes: plan.logical_bytes,
                 source_schema: Some("bitfun.workspace-session.v1".to_string()),
                 migratable: true,
                 detail: format!(
-                    "{} workspaces, {} Sessions, and {} runtime event logs are owner-readable",
+                    "{} workspaces, {} personal assistant directories, {} Sessions, and {} runtime event logs are owner-readable",
                     plan.workspace_id_map.len(),
+                    plan.assistant_workspaces.len(),
                     plan.sessions.len(),
                     plan.runtime_events.len()
                 ),
@@ -176,6 +199,17 @@ impl LegacyDomainAdapter for WorkspaceSessionsAdapter {
             &plan.workspace_data,
         )?;
 
+        for workspace in &plan.assistant_workspaces {
+            if workspace.action != SessionImportAction::Import {
+                continue;
+            }
+            let staged = domain_root
+                .join("personal-assistant")
+                .join(&workspace.relative_path);
+            copy_tree(&workspace.source_path, &staged)?;
+            require_tree_hash(&staged, &workspace.expected_hash)?;
+        }
+
         let runtime = offline_runtime()?;
         for session in &plan.sessions {
             if session.action != SessionImportAction::Import {
@@ -188,8 +222,14 @@ impl LegacyDomainAdapter for WorkspaceSessionsAdapter {
                 .map_err(|error| owner_error("write staged Session", error))?;
             let staged_session = sessions_root.join(&session.bundle.metadata.session_id);
             for (relative, source) in &session.auxiliary_files {
-                let bytes = fs::read(source).map_err(|error| io_error(source, error))?;
-                atomic_write_bytes(&staged_session.join(relative), &bytes)?;
+                if relative == Path::new("state.json") {
+                    if let Some(bytes) = &session.state_bytes_override {
+                        atomic_write_bytes(&staged_session.join(relative), bytes)?;
+                        continue;
+                    }
+                }
+                let source_bytes = fs::read(source).map_err(|error| io_error(source, error))?;
+                atomic_write_bytes(&staged_session.join(relative), &source_bytes)?;
             }
             require_tree_hash(&staged_session, &session.expected_hash)?;
         }
@@ -210,6 +250,11 @@ impl LegacyDomainAdapter for WorkspaceSessionsAdapter {
 
         let manifest = WorkspaceSessionsManifest {
             workspace_id_map: plan.workspace_id_map,
+            assistant_workspaces: plan
+                .assistant_workspaces
+                .iter()
+                .map(assistant_workspace_manifest_entry)
+                .collect(),
             sessions: plan.sessions.iter().map(session_manifest_entry).collect(),
             runtime_events: plan
                 .runtime_events
@@ -237,7 +282,12 @@ impl LegacyDomainAdapter for WorkspaceSessionsAdapter {
                 .iter()
                 .filter(|entry| entry.action == SessionImportAction::Import)
                 .count()
-            + manifest.workspace_id_map.len();
+            + manifest.workspace_id_map.len()
+            + manifest
+                .assistant_workspaces
+                .iter()
+                .filter(|entry| entry.action == SessionImportAction::Import)
+                .count();
         let skipped = manifest
             .sessions
             .iter()
@@ -247,8 +297,13 @@ impl LegacyDomainAdapter for WorkspaceSessionsAdapter {
                 .runtime_events
                 .iter()
                 .filter(|entry| entry.action != SessionImportAction::Import)
+                .count()
+            + manifest
+                .assistant_workspaces
+                .iter()
+                .filter(|entry| entry.action != SessionImportAction::Import)
                 .count();
-        let warnings = manifest
+        let mut warnings = manifest
             .skipped_paths
             .iter()
             .map(|path| MigrationDiagnostic {
@@ -260,7 +315,23 @@ impl LegacyDomainAdapter for WorkspaceSessionsAdapter {
                     .to_string(),
                 action: Some("Review the migration report before removing legacy data".to_string()),
             })
-            .collect();
+            .collect::<Vec<_>>();
+        let orphaned_relationships = orphaned_session_relationship_count(&manifest);
+        if orphaned_relationships > 0 {
+            warnings.push(MigrationDiagnostic {
+                code: "session_parent_not_present".to_string(),
+                severity: FindingSeverity::Warning,
+                domain: Some(self.domain()),
+                relative_path: None,
+                message: format!(
+                    "{orphaned_relationships} imported Sessions reference a parent Session that is not present in the legacy source; the relationship metadata was preserved"
+                ),
+                action: Some(
+                    "No action is required; the affected Sessions remain available as standalone history"
+                        .to_string(),
+                ),
+            });
+        }
         Ok(MigrationDomainResult {
             domain: self.domain(),
             state: MigrationDomainState::Staged,
@@ -285,6 +356,13 @@ impl LegacyDomainAdapter for WorkspaceSessionsAdapter {
             &context.roots.target_user_root.join("data/miniapps"),
         )
         .map_err(|error| owner_error("validate staged Workspace registry", error))?;
+
+        for entry in imported_assistant_workspaces(&manifest) {
+            let path = domain_root
+                .join("personal-assistant")
+                .join(path_from_manifest(&entry.relative_path)?);
+            require_tree_hash(&path, &entry.expected_hash)?;
+        }
 
         let runtime = offline_runtime()?;
         for entry in imported_sessions(&manifest) {
@@ -314,7 +392,7 @@ impl LegacyDomainAdapter for WorkspaceSessionsAdapter {
                 .map_err(|error| owner_error("validate staged runtime event log", error))?;
             require_file_hash(&path, &entry.expected_hash)?;
         }
-        validate_session_relationship_closure(&manifest)
+        Ok(())
     }
 
     fn commit(&self, context: &DomainContext<'_>) -> LegacyMigrationResult<()> {
@@ -342,6 +420,20 @@ impl LegacyDomainAdapter for WorkspaceSessionsAdapter {
             let workspace_bytes =
                 fs::read(&staged_workspace).map_err(|error| io_error(&staged_workspace, error))?;
             atomic_write_bytes(&target_workspace, &workspace_bytes)?;
+        }
+
+        for entry in imported_assistant_workspaces(&manifest) {
+            let relative = path_from_manifest(&entry.relative_path)?;
+            install_directory_idempotent(
+                &domain_root.join("personal-assistant").join(&relative),
+                &context
+                    .roots
+                    .target_home_root
+                    .join("personal_assistant")
+                    .join(relative),
+                &entry.expected_hash,
+                &context.plan.run_id,
+            )?;
         }
 
         for entry in imported_sessions(&manifest) {
@@ -399,6 +491,15 @@ impl LegacyDomainAdapter for WorkspaceSessionsAdapter {
             ));
         }
 
+        for entry in imported_assistant_workspaces(&manifest) {
+            let path = context
+                .roots
+                .target_home_root
+                .join("personal_assistant")
+                .join(path_from_manifest(&entry.relative_path)?);
+            require_tree_hash(&path, &entry.expected_hash)?;
+        }
+
         let runtime = offline_runtime()?;
         for entry in imported_sessions(&manifest) {
             let relative = path_from_manifest(&entry.runtime_relative)?;
@@ -445,6 +546,17 @@ impl LegacyDomainAdapter for WorkspaceSessionsAdapter {
             manifest.target_workspace_existed,
         )?;
         let domain_root = stage_domain_dir(context, "workspace-sessions");
+        for entry in imported_assistant_workspaces(&manifest) {
+            let relative = path_from_manifest(&entry.relative_path)?;
+            remove_directory_if_matches(
+                &domain_root.join("personal-assistant").join(&relative),
+                &context
+                    .roots
+                    .target_home_root
+                    .join("personal_assistant")
+                    .join(relative),
+            )?;
+        }
         for entry in imported_sessions(&manifest) {
             let relative = path_from_manifest(&entry.runtime_relative)?;
             remove_directory_if_matches(
@@ -489,6 +601,19 @@ fn plan_workspace_sessions(roots: &MigrationRoots) -> LegacyMigrationResult<Work
             .map_err(|error| owner_error("read current Workspace registry", error))?;
     }
 
+    let mut conflicts = Vec::new();
+    let assistant_workspaces = plan_assistant_workspaces(roots, &mut conflicts)?;
+    let mut assistant_path_relocations = BTreeMap::new();
+    for workspace in &assistant_workspaces {
+        assistant_path_relocations.insert(
+            native_path_key(&workspace.source_path),
+            roots
+                .target_home_root
+                .join("personal_assistant")
+                .join(&workspace.relative_path),
+        );
+    }
+
     let mut workspace_id_map = BTreeMap::new();
     let mut converted = Vec::new();
     let mut source_workspace_ids = legacy.workspaces.keys().cloned().collect::<Vec<_>>();
@@ -496,18 +621,27 @@ fn plan_workspace_sessions(roots: &MigrationRoots) -> LegacyMigrationResult<Work
     let mut requires_relocation = Vec::new();
     for source_id in source_workspace_ids {
         let mut workspace = legacy.workspaces[&source_id].clone();
+        let relocated_assistant = (workspace.workspace_kind == WorkspaceKind::Assistant)
+            .then(|| assistant_path_relocations.get(&native_path_key(&workspace.root_path)))
+            .flatten()
+            .cloned();
+        if let Some(target_path) = &relocated_assistant {
+            workspace.root_path = target_path.clone();
+        }
         normalize_legacy_workspace_for_current(&mut workspace)?;
         let target_id = current_workspace_storage_id(&workspace)
             .map_err(|error| owner_error("convert legacy Workspace id", error))?;
         workspace.id = target_id.clone();
-        if workspace.workspace_kind != WorkspaceKind::Remote && !workspace.root_path.exists() {
+        if workspace.workspace_kind != WorkspaceKind::Remote
+            && relocated_assistant.is_none()
+            && !workspace.root_path.exists()
+        {
             requires_relocation.push(target_id.clone());
         }
         workspace_id_map.insert(source_id, target_id.clone());
         converted.push((target_id, workspace));
     }
 
-    let mut conflicts = Vec::new();
     let mut output_workspaces = target
         .as_ref()
         .map(|value| value.workspaces.clone())
@@ -589,7 +723,12 @@ fn plan_workspace_sessions(roots: &MigrationRoots) -> LegacyMigrationResult<Work
     .map_err(|error| owner_error("convert legacy Workspace registry", error))?;
 
     let target_sessions = index_target_sessions(roots)?;
-    let (sessions, mut skipped_paths) = plan_sessions(roots, &target_sessions, &mut conflicts)?;
+    let (sessions, mut skipped_paths) = plan_sessions(
+        roots,
+        &target_sessions,
+        &assistant_path_relocations,
+        &mut conflicts,
+    )?;
     let runtime_events = plan_runtime_events(roots, &sessions, &mut conflicts, &mut skipped_paths)?;
     let session_bytes = sessions.iter().try_fold(0u64, |total, session| {
         expected_session_bytes(session).map(|bytes| total.saturating_add(bytes))
@@ -610,9 +749,14 @@ fn plan_workspace_sessions(roots: &MigrationRoots) -> LegacyMigrationResult<Work
         .then(|| hash_file(&target_workspace_path))
         .transpose()?;
 
+    let assistant_bytes = assistant_workspaces
+        .iter()
+        .map(|workspace| workspace.logical_bytes)
+        .sum::<u64>();
     Ok(WorkspaceSessionsPlan {
         workspace_data,
         workspace_id_map,
+        assistant_workspaces,
         sessions,
         runtime_events,
         conflicts,
@@ -621,6 +765,7 @@ fn plan_workspace_sessions(roots: &MigrationRoots) -> LegacyMigrationResult<Work
         target_workspace_existed,
         target_workspace_hash,
         logical_bytes: workspace_bytes
+            .saturating_add(assistant_bytes)
             .saturating_add(session_bytes)
             .saturating_add(event_bytes),
     })
@@ -652,9 +797,153 @@ fn normalize_legacy_workspace_for_current(
     Ok(())
 }
 
+fn plan_assistant_workspaces(
+    roots: &MigrationRoots,
+    conflicts: &mut Vec<MigrationConflict>,
+) -> LegacyMigrationResult<Vec<PlannedAssistantWorkspace>> {
+    let source_root = roots.legacy_home_root.join("personal_assistant");
+    if !source_root.exists() {
+        return Ok(Vec::new());
+    }
+    let target_root = roots.target_home_root.join("personal_assistant");
+    let mut planned = Vec::new();
+    for source_path in child_directories(&source_root)? {
+        let relative_path = PathBuf::from(file_name(&source_path)?);
+        let (expected_hash, logical_bytes) = hash_tree_with_size(&source_path)?;
+        let target_path = target_root.join(&relative_path);
+        let action = if !target_path.exists() {
+            SessionImportAction::Import
+        } else if hash_tree(&target_path)? == expected_hash {
+            SessionImportAction::Duplicate
+        } else {
+            conflicts.push(MigrationConflict {
+                domain: MigrationDomainId::WorkspaceSessions,
+                code: "assistant_workspace_target_wins".to_string(),
+                source_summary: format!(
+                    "legacy personal assistant workspace {}",
+                    relative_path.display()
+                ),
+                target_summary: format!(
+                    "current personal assistant workspace {}",
+                    relative_path.display()
+                ),
+                resolution: ConflictResolution::TargetWins,
+            });
+            SessionImportAction::TargetWins
+        };
+        planned.push(PlannedAssistantWorkspace {
+            relative_path,
+            source_path,
+            action,
+            expected_hash,
+            logical_bytes,
+        });
+    }
+    Ok(planned)
+}
+
+fn relocate_assistant_session_metadata(
+    metadata: &mut SessionMetadata,
+    relocations: &BTreeMap<String, PathBuf>,
+) -> Option<PathBuf> {
+    let project_workspace =
+        relocate_session_path(&mut metadata.project_workspace_path, relocations);
+    let workspace = relocate_session_path(&mut metadata.workspace_path, relocations);
+    let execution = metadata.execution_target.as_mut().and_then(|target| {
+        let relocated = relocations.get(&native_path_key(Path::new(&target.root_path)))?;
+        target.root_path = relocated.to_string_lossy().into_owned();
+        Some(relocated.clone())
+    });
+    project_workspace.or(workspace).or(execution)
+}
+
+fn relocate_session_path(
+    value: &mut Option<String>,
+    relocations: &BTreeMap<String, PathBuf>,
+) -> Option<PathBuf> {
+    let relocated = relocations.get(&native_path_key(Path::new(value.as_deref()?)))?;
+    *value = Some(relocated.to_string_lossy().into_owned());
+    Some(relocated.clone())
+}
+
+fn relocate_assistant_session_state(
+    legacy_home_root: &Path,
+    state_path: &Path,
+    relocations: &BTreeMap<String, PathBuf>,
+) -> LegacyMigrationResult<Option<Vec<u8>>> {
+    if !state_path.is_file() {
+        return Ok(None);
+    }
+    let mut state: serde_json::Value = read_bounded_json(legacy_home_root, state_path)?;
+    let Some(config) = state
+        .get_mut("config")
+        .and_then(serde_json::Value::as_object_mut)
+    else {
+        return Ok(None);
+    };
+
+    let mut changed = false;
+    for key in ["workspace_path", "project_workspace_path"] {
+        if let Some(value) = config.get_mut(key) {
+            changed |= relocate_json_path(value, relocations);
+        }
+    }
+    if let Some(execution_target) = config
+        .get_mut("execution_target")
+        .and_then(serde_json::Value::as_object_mut)
+    {
+        for key in ["rootPath", "root_path"] {
+            if let Some(value) = execution_target.get_mut(key) {
+                changed |= relocate_json_path(value, relocations);
+            }
+        }
+    }
+
+    changed
+        .then(|| serde_json::to_vec(&state).map_err(json_error))
+        .transpose()
+}
+
+fn relocate_json_path(
+    value: &mut serde_json::Value,
+    relocations: &BTreeMap<String, PathBuf>,
+) -> bool {
+    let Some(source_path) = value.as_str() else {
+        return false;
+    };
+    let Some(target_path) = relocations.get(&native_path_key(Path::new(source_path))) else {
+        return false;
+    };
+    *value = serde_json::Value::String(target_path.to_string_lossy().into_owned());
+    true
+}
+
+fn assistant_session_runtime_relative(workspace_path: PathBuf) -> PathBuf {
+    let canonical = dunce::canonicalize(&workspace_path).unwrap_or(workspace_path);
+    let slug = PathManager::build_project_runtime_slug(&canonical.to_string_lossy());
+    PathBuf::from("projects").join(slug).join("sessions")
+}
+
+fn native_path_key(path: &Path) -> String {
+    let key = path
+        .to_string_lossy()
+        .replace('\\', "/")
+        .trim_end_matches('/')
+        .to_string();
+    #[cfg(windows)]
+    {
+        key.to_ascii_lowercase()
+    }
+    #[cfg(not(windows))]
+    {
+        key
+    }
+}
+
 fn plan_sessions(
     roots: &MigrationRoots,
     target_sessions: &HashMap<String, Vec<PathBuf>>,
+    assistant_path_relocations: &BTreeMap<String, PathBuf>,
     conflicts: &mut Vec<MigrationConflict>,
 ) -> LegacyMigrationResult<(Vec<PlannedSession>, Vec<String>)> {
     let session_roots = find_session_roots(&roots.legacy_home_root)?;
@@ -662,7 +951,7 @@ fn plan_sessions(
     let mut skipped_paths = Vec::new();
     let mut source_ids = HashMap::<String, String>::new();
     for sessions_root in session_roots {
-        let runtime_relative = sessions_root
+        let source_runtime_relative = sessions_root
             .strip_prefix(&roots.legacy_home_root)
             .map_err(|_| LegacyMigrationError::PathEscape(sessions_root.clone()))?
             .to_path_buf();
@@ -696,8 +985,17 @@ fn plan_sessions(
                 )));
             }
             let turns = read_session_turns(&roots.legacy_home_root, &session_dir, &session_id)?;
+            let mut session_metadata = metadata_file.metadata;
+            let relocated_assistant_path = relocate_assistant_session_metadata(
+                &mut session_metadata,
+                assistant_path_relocations,
+            );
+            let runtime_relative = relocated_assistant_path
+                .clone()
+                .map(assistant_session_runtime_relative)
+                .unwrap_or_else(|| source_runtime_relative.clone());
             let bundle = OfflineSessionBundle {
-                metadata: metadata_file.metadata,
+                metadata: session_metadata,
                 turns,
             };
             bundle
@@ -708,7 +1006,17 @@ fn plan_sessions(
                 &session_dir,
                 &mut skipped_paths,
             )?;
-            let expected_hash = expected_session_hash(&bundle, &auxiliary_files)?;
+            let state_bytes_override = if relocated_assistant_path.is_some() {
+                relocate_assistant_session_state(
+                    &roots.legacy_home_root,
+                    &session_dir.join("state.json"),
+                    assistant_path_relocations,
+                )?
+            } else {
+                None
+            };
+            let expected_hash =
+                expected_session_hash(&bundle, &auxiliary_files, state_bytes_override.as_deref())?;
             if auxiliary_files
                 .len()
                 .saturating_add(bundle.turns.len())
@@ -720,7 +1028,9 @@ fn plan_sessions(
                     session_dir.display()
                 )));
             }
-            if expected_bundle_bytes(&bundle, &auxiliary_files)? > MAX_SESSION_BYTES {
+            if expected_bundle_bytes(&bundle, &auxiliary_files, state_bytes_override.as_deref())?
+                > MAX_SESSION_BYTES
+            {
                 return Err(LegacyMigrationError::ResourceLimit(format!(
                     "Session exceeds {MAX_SESSION_BYTES} bytes: {}",
                     session_dir.display()
@@ -766,6 +1076,7 @@ fn plan_sessions(
                 runtime_relative: runtime_relative.clone(),
                 bundle,
                 auxiliary_files,
+                state_bytes_override,
                 action,
                 expected_hash,
             });
@@ -917,6 +1228,9 @@ fn collect_auxiliary_session_files(
         }
         if metadata.is_file() {
             if name == "metadata.json" {
+                continue;
+            }
+            if SESSION_REBUILDABLE_ROOT_FILES.contains(&name.as_str()) {
                 continue;
             }
             if SESSION_ROOT_FILES.contains(&name.as_str()) {
@@ -1144,6 +1458,7 @@ fn merge_reference_list(
 fn expected_session_hash(
     bundle: &OfflineSessionBundle,
     auxiliary_files: &[(PathBuf, PathBuf)],
+    state_bytes_override: Option<&[u8]>,
 ) -> LegacyMigrationResult<String> {
     let mut entries = Vec::new();
     entries.push((
@@ -1158,6 +1473,12 @@ fn expected_session_hash(
         ));
     }
     for (relative, source) in auxiliary_files {
+        if relative == Path::new("state.json") {
+            if let Some(bytes) = state_bytes_override {
+                entries.push((relative.clone(), bytes.to_vec()));
+                continue;
+            }
+        }
         entries.push((
             relative.clone(),
             fs::read(source).map_err(|error| io_error(source, error))?,
@@ -1167,12 +1488,17 @@ fn expected_session_hash(
 }
 
 fn expected_session_bytes(session: &PlannedSession) -> LegacyMigrationResult<u64> {
-    expected_bundle_bytes(&session.bundle, &session.auxiliary_files)
+    expected_bundle_bytes(
+        &session.bundle,
+        &session.auxiliary_files,
+        session.state_bytes_override.as_deref(),
+    )
 }
 
 fn expected_bundle_bytes(
     bundle: &OfflineSessionBundle,
     auxiliary_files: &[(PathBuf, PathBuf)],
+    state_bytes_override: Option<&[u8]>,
 ) -> LegacyMigrationResult<u64> {
     let metadata_bytes =
         serde_json::to_vec(&StoredSessionMetadataFile::new(bundle.metadata.clone()))
@@ -1185,7 +1511,12 @@ fn expected_bundle_bytes(
     })?;
     let auxiliary_bytes = auxiliary_files.iter().try_fold(
         0u64,
-        |total, (_, path)| -> LegacyMigrationResult<u64> {
+        |total, (relative, path)| -> LegacyMigrationResult<u64> {
+            if relative == Path::new("state.json") {
+                if let Some(bytes) = state_bytes_override {
+                    return Ok(total.saturating_add(bytes.len() as u64));
+                }
+            }
             let bytes = fs::metadata(path)
                 .map_err(|error| io_error(path, error))?
                 .len();
@@ -1220,10 +1551,18 @@ fn hash_entries(mut entries: Vec<(PathBuf, Vec<u8>)>) -> String {
     format!("sha256:{}", hex::encode(hasher.finalize()))
 }
 
-fn hash_tree(root: &Path) -> LegacyMigrationResult<String> {
+fn hash_tree_with_size(root: &Path) -> LegacyMigrationResult<(String, u64)> {
     let mut entries = Vec::new();
     collect_tree_entries(root, root, 0, &mut entries)?;
-    Ok(hash_entries(entries))
+    let logical_bytes = entries
+        .iter()
+        .map(|(_, bytes)| bytes.len() as u64)
+        .sum::<u64>();
+    Ok((hash_entries(entries), logical_bytes))
+}
+
+fn hash_tree(root: &Path) -> LegacyMigrationResult<String> {
+    hash_tree_with_size(root).map(|(hash, _)| hash)
 }
 
 fn collect_tree_entries(
@@ -1399,46 +1738,20 @@ fn verify_planned_file_state(
     Ok(())
 }
 
-fn validate_session_relationship_closure(
-    manifest: &WorkspaceSessionsManifest,
-) -> LegacyMigrationResult<()> {
+fn orphaned_session_relationship_count(manifest: &WorkspaceSessionsManifest) -> usize {
     let sessions = manifest
         .sessions
         .iter()
-        .map(|entry| (entry.session_id.as_str(), entry))
-        .collect::<HashMap<_, _>>();
-    let event_turns = manifest
-        .runtime_events
+        .map(|entry| entry.session_id.as_str())
+        .collect::<HashSet<_>>();
+    manifest
+        .sessions
         .iter()
-        .map(|entry| (entry.session_id.as_str(), &entry.turn_ids))
-        .collect::<HashMap<_, _>>();
-    for entry in &manifest.sessions {
-        let Some(relationship) = &entry.relationship else {
-            continue;
-        };
-        let Some(parent_session_id) = relationship.parent_session_id.as_deref() else {
-            continue;
-        };
-        let parent = sessions.get(parent_session_id).ok_or_else(|| {
-            LegacyMigrationError::UnsupportedSource(format!(
-                "Session {} references a missing parent Session",
-                entry.session_id
-            ))
-        })?;
-        if let Some(parent_turn_id) = relationship.parent_dialog_turn_id.as_deref() {
-            let in_persisted_turns = parent.turn_ids.contains(parent_turn_id);
-            let in_runtime_events = event_turns
-                .get(parent_session_id)
-                .is_some_and(|turns| turns.contains(parent_turn_id));
-            if !in_persisted_turns && !in_runtime_events {
-                return Err(LegacyMigrationError::UnsupportedSource(format!(
-                    "Session {} references a missing parent Turn",
-                    entry.session_id
-                )));
-            }
-        }
-    }
-    Ok(())
+        .filter(|entry| entry.action == SessionImportAction::Import)
+        .filter_map(|entry| entry.relationship.as_ref())
+        .filter_map(|relationship| relationship.parent_session_id.as_deref())
+        .filter(|parent_session_id| !sessions.contains(parent_session_id))
+        .count()
 }
 
 fn session_manifest_entry(session: &PlannedSession) -> SessionManifestEntry {
@@ -1458,6 +1771,25 @@ fn session_manifest_entry(session: &PlannedSession) -> SessionManifestEntry {
             .collect(),
         relationship: session.bundle.metadata.relationship.clone(),
     }
+}
+
+fn assistant_workspace_manifest_entry(
+    workspace: &PlannedAssistantWorkspace,
+) -> AssistantWorkspaceManifestEntry {
+    AssistantWorkspaceManifestEntry {
+        relative_path: workspace.relative_path.to_string_lossy().replace('\\', "/"),
+        action: workspace.action,
+        expected_hash: workspace.expected_hash.clone(),
+    }
+}
+
+fn imported_assistant_workspaces(
+    manifest: &WorkspaceSessionsManifest,
+) -> impl Iterator<Item = &AssistantWorkspaceManifestEntry> {
+    manifest
+        .assistant_workspaces
+        .iter()
+        .filter(|entry| entry.action == SessionImportAction::Import)
 }
 
 fn imported_sessions(
@@ -1562,6 +1894,7 @@ fn json_error(error: serde_json::Error) -> LegacyMigrationError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use openbitfun_core_types::SessionExecutionTarget;
 
     #[test]
     fn remote_workspace_paths_are_normalized_with_posix_semantics() {
@@ -1591,5 +1924,210 @@ mod tests {
         assert!(current_workspace_storage_id(&workspace)
             .unwrap()
             .starts_with("remote_"));
+    }
+
+    #[test]
+    fn personal_assistant_tree_and_session_paths_are_rehomed_together() {
+        let temp = test_tempdir("personal-assistant");
+        let roots = fixture_roots(temp.path());
+        let fixture = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../services/legacy-migration/tests/fixtures/v0.2.19");
+        copy_tree(&fixture.join("user-root"), &roots.legacy_user_root).unwrap();
+        copy_tree(&fixture.join("home"), &roots.legacy_home_root).unwrap();
+
+        let source_assistant = roots
+            .legacy_home_root
+            .join("personal_assistant/workspace-assistant");
+        atomic_write_bytes(&source_assistant.join("IDENTITY.md"), b"Assistant identity").unwrap();
+        atomic_write_bytes(
+            &source_assistant.join("user-content/page.html"),
+            b"<p>preserved</p>",
+        )
+        .unwrap();
+        let target_assistant = roots
+            .target_home_root
+            .join("personal_assistant/workspace-assistant");
+
+        let workspace_path = source_workspace_data_path(&roots);
+        let mut workspace_data: serde_json::Value =
+            serde_json::from_slice(&fs::read(&workspace_path).unwrap()).unwrap();
+        workspace_data["workspaces"]["assistant-legacy"] = serde_json::json!({
+            "id": "assistant-legacy",
+            "name": "Personal assistant",
+            "rootPath": source_assistant,
+            "workspaceType": "Other",
+            "workspaceKind": "assistant",
+            "status": "Inactive",
+            "languages": [],
+            "openedAt": "2026-01-01T00:00:00Z",
+            "lastAccessed": "2026-01-01T00:00:00Z",
+            "description": null,
+            "tags": [],
+            "statistics": null,
+            "relatedPaths": [],
+            "metadata": { "sshHost": "localhost" }
+        });
+        workspace_data["recent_assistant_workspaces"] = serde_json::json!(["assistant-legacy"]);
+        atomic_write_json(&workspace_path, &workspace_data).unwrap();
+
+        let metadata_path = roots
+            .legacy_home_root
+            .join("projects/c--fixture-workspace/sessions/session-1/metadata.json");
+        let mut metadata: StoredSessionMetadataFile =
+            serde_json::from_slice(&fs::read(&metadata_path).unwrap()).unwrap();
+        let source_display = source_assistant.to_string_lossy().into_owned();
+        metadata.metadata.workspace_path = Some(source_display.clone());
+        metadata.metadata.project_workspace_path = Some(source_display.clone());
+        metadata.metadata.execution_target =
+            Some(SessionExecutionTarget::local(source_display.clone()));
+        atomic_write_json(&metadata_path, &metadata).unwrap();
+        let session_dir = metadata_path.parent().unwrap();
+        atomic_write_json(
+            &session_dir.join("state.json"),
+            &serde_json::json!({
+                "schema_version": 1,
+                "config": {
+                    "workspace_path": source_display.clone(),
+                    "project_workspace_path": source_display.clone(),
+                    "execution_target": {
+                        "kind": "local",
+                        "rootPath": source_display.clone()
+                    },
+                    "unknown_future_field": "preserved"
+                },
+                "historical_tool_path": source_display.clone()
+            }),
+        )
+        .unwrap();
+        atomic_write_json(
+            &session_dir.join("prompt_cache.json"),
+            &serde_json::json!({
+                "schema_version": 1,
+                "user_context": {
+                    "content": format!("Current Working Directory: {source_display}")
+                }
+            }),
+        )
+        .unwrap();
+
+        let plan = plan_workspace_sessions(&roots).unwrap();
+        assert_eq!(plan.assistant_workspaces.len(), 1);
+        assert_eq!(plan.assistant_workspaces[0].source_path, source_assistant);
+        let assistant = plan
+            .workspace_data
+            .workspaces
+            .values()
+            .find(|workspace| workspace.workspace_kind == WorkspaceKind::Assistant)
+            .unwrap();
+        assert_eq!(assistant.root_path, target_assistant);
+        assert!(!plan.requires_relocation.contains(&assistant.id));
+
+        let session = plan
+            .sessions
+            .iter()
+            .find(|session| session.bundle.metadata.session_id == "session-1")
+            .unwrap();
+        let target_key = native_path_key(&target_assistant);
+        assert_eq!(
+            session
+                .bundle
+                .metadata
+                .workspace_path
+                .as_deref()
+                .map(Path::new)
+                .map(native_path_key),
+            Some(target_key.clone())
+        );
+        assert_eq!(
+            session
+                .bundle
+                .metadata
+                .project_workspace_path
+                .as_deref()
+                .map(Path::new)
+                .map(native_path_key),
+            Some(target_key.clone())
+        );
+        assert_eq!(
+            session
+                .bundle
+                .metadata
+                .execution_target
+                .as_ref()
+                .map(|target| native_path_key(Path::new(&target.root_path))),
+            Some(target_key)
+        );
+        assert_eq!(
+            session.runtime_relative,
+            assistant_session_runtime_relative(target_assistant.clone())
+        );
+        assert!(!session
+            .auxiliary_files
+            .iter()
+            .any(|(relative, _)| relative == Path::new("prompt_cache.json")));
+        assert!(!plan
+            .skipped_paths
+            .iter()
+            .any(|path| path.ends_with("prompt_cache.json")));
+
+        let migrated_state: serde_json::Value = serde_json::from_slice(
+            session
+                .state_bytes_override
+                .as_deref()
+                .expect("assistant Session state should be rewritten"),
+        )
+        .unwrap();
+        for pointer in [
+            "/config/workspace_path",
+            "/config/project_workspace_path",
+            "/config/execution_target/rootPath",
+        ] {
+            assert_eq!(
+                migrated_state
+                    .pointer(pointer)
+                    .and_then(serde_json::Value::as_str)
+                    .map(Path::new)
+                    .map(native_path_key),
+                Some(native_path_key(&target_assistant)),
+                "{pointer} should use the migrated assistant workspace"
+            );
+        }
+        assert_eq!(
+            migrated_state
+                .pointer("/config/unknown_future_field")
+                .and_then(serde_json::Value::as_str),
+            Some("preserved")
+        );
+        assert_eq!(
+            migrated_state
+                .pointer("/historical_tool_path")
+                .and_then(serde_json::Value::as_str),
+            Some(source_display.as_str())
+        );
+    }
+
+    fn fixture_roots(root: &Path) -> MigrationRoots {
+        let legacy_user_root = root.join("legacy-user");
+        MigrationRoots {
+            legacy_skills_root: legacy_user_root.join("skills"),
+            legacy_user_root,
+            legacy_home_root: root.join("legacy-home"),
+            legacy_ssh_root: root.join("legacy-ssh"),
+            target_user_root: root.join("target-user"),
+            target_home_root: root.join("target-home"),
+            target_skills_root: root.join("target-skills"),
+            target_ssh_root: root.join("target-ssh"),
+        }
+    }
+
+    fn test_tempdir(label: &str) -> tempfile::TempDir {
+        let root = std::env::var_os("OPENBITFUN_TEST_TMPDIR")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from("E:/tmp"));
+        fs::create_dir_all(&root).unwrap();
+        tempfile::Builder::new()
+            .prefix(&format!("openbitfun-migration-{label}-"))
+            .tempdir_in(root)
+            .unwrap()
     }
 }

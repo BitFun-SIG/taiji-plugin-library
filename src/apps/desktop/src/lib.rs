@@ -560,9 +560,10 @@ fn get_startup_native_trace(
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub async fn run() {
     match api::legacy_migration_api::run_startup_probe() {
-        Ok(api::legacy_migration_api::StartupProbeDisposition::Continue { handled_run_id }) => {
-            api::legacy_migration_api::set_startup_handled_run_id(handled_run_id)
-        }
+        Ok(api::legacy_migration_api::StartupProbeDisposition::Continue {
+            handled_run_id,
+            startup_error,
+        }) => api::legacy_migration_api::set_startup_migration_state(handled_run_id, startup_error),
         Ok(api::legacy_migration_api::StartupProbeDisposition::MigratorLaunched) => return,
         Err(error) => {
             show_fatal_startup_error(&format!(

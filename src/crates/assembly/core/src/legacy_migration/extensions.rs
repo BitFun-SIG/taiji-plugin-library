@@ -1,8 +1,5 @@
 use super::common::{read_bounded_json, stage_domain_dir};
-use openbitfun_agent_runtime::custom_agent::{
-    custom_agent_read_markdown_str, custom_agent_save_markdown_file, CustomAgentDefinition,
-    CustomAgentLevel,
-};
+use openbitfun_agent_runtime::custom_agent::{custom_agent_read_markdown_str, CustomAgentLevel};
 use openbitfun_agent_runtime::skills::{SkillData, SkillLocation, OPENBITFUN_SYSTEM_SKILL_DIR};
 use openbitfun_legacy_migration::{
     atomic_write_bytes, atomic_write_json, DomainContext, DomainScan, LegacyDomainAdapter,
@@ -14,9 +11,8 @@ use openbitfun_product_domains::legacy_migration::{
 };
 use openbitfun_product_domains::miniapp::builtin::{BUILTIN_APPS, BUILTIN_INSTALL_MARKER};
 use openbitfun_product_domains::miniapp::storage::{
-    build_import_bundle_plan, MiniAppImportBundleWriteRequest, MiniAppStorageLayout, COMPILED_HTML,
-    ESM_DEPS_JSON, INDEX_HTML, META_JSON, PACKAGE_JSON, REQUIRED_SOURCE_FILES, SOURCE_DIR,
-    STORAGE_JSON, STYLE_CSS, UI_JS, WORKER_JS,
+    build_import_bundle_plan, COMPILED_HTML, ESM_DEPS_JSON, META_JSON, PACKAGE_JSON,
+    REQUIRED_SOURCE_FILES, SOURCE_DIR, STORAGE_JSON,
 };
 use openbitfun_product_domains::miniapp::types::MiniAppMeta;
 use openbitfun_services_integrations::miniapp::storage::MiniAppStorage;
@@ -24,24 +20,11 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
+use std::io::{BufReader, Read};
 use std::path::{Path, PathBuf};
 
-const MAX_FILES_PER_EXTENSION: usize = 512;
-const MAX_FILE_BYTES: u64 = 16 * 1024 * 1024;
-const MAX_EXTENSION_BYTES: u64 = 64 * 1024 * 1024;
-const SKILL_ALLOWED_DIRECTORIES: &[&str] =
-    &["agents", "examples", "resources", "scripts", "templates"];
-const MINIAPP_ALLOWED_FILES: &[&str] = &[
-    META_JSON,
-    INDEX_HTML,
-    STYLE_CSS,
-    UI_JS,
-    WORKER_JS,
-    ESM_DEPS_JSON,
-    PACKAGE_JSON,
-    STORAGE_JSON,
-    BUILTIN_INSTALL_MARKER,
-];
+const MAX_FILES_PER_EXTENSION: usize = 32_768;
+const MAX_EXTENSION_BYTES: u64 = 4 * 1024 * 1024 * 1024;
 
 pub(crate) struct SkillsAdapter;
 pub(crate) struct MiniappsAdapter;
@@ -92,7 +75,12 @@ struct PlannedAgent {
     action: ImportAction,
     content_hash: String,
     source_path: PathBuf,
-    definition: CustomAgentDefinition,
+    staged_content: Vec<u8>,
+}
+
+enum PlannedMiniAppFile {
+    Source(PathBuf),
+    Generated(Vec<u8>),
 }
 
 impl LegacyDomainAdapter for SkillsAdapter {
@@ -220,34 +208,14 @@ impl LegacyDomainAdapter for MiniappsAdapter {
     fn stage(&self, context: &DomainContext<'_>) -> LegacyMigrationResult<MigrationDomainResult> {
         let planned = plan_miniapps(context.roots)?;
         let domain_root = stage_domain_dir(context, "miniapps");
-        let import_inputs = domain_root.join("import-inputs");
         let output = domain_root.join("output");
         let mut manifest = ImportManifest::default();
         for item in &planned {
             match item.action {
                 ImportAction::Import | ImportAction::Remap => {
-                    let input = import_inputs.join(&item.target_id);
-                    prepare_miniapp_import_input(item, &input)?;
-                    let meta = fs::read_to_string(input.join(META_JSON))
-                        .map_err(|error| io(&input.join(META_JSON), error))?;
-                    let plan =
-                        build_import_bundle_plan(&item.target_id, &meta, 0).map_err(|error| {
-                            LegacyMigrationError::InvalidRequest(format!(
-                                "legacy MiniApp {} failed current owner conversion: {error}",
-                                item.source_id
-                            ))
-                        })?;
-                    MiniAppStorage::new(output.clone())
-                        .write_import_bundle_offline(MiniAppImportBundleWriteRequest {
-                            source_path: input,
-                            app_id: item.target_id.clone(),
-                            meta_json: plan.meta_json,
-                            esm_dependencies_json: plan.esm_dependencies_json,
-                            package_json: plan.package_json,
-                            storage_json: plan.storage_json,
-                            compiled_html: plan.compiled_html,
-                        })
-                        .map_err(|error| LegacyMigrationError::InvalidRequest(error.to_string()))?;
+                    let staged = output.join(&item.target_id);
+                    write_miniapp_output(&item.source_path, &item.target_id, &staged)?;
+                    require_hash(&staged, &item.content_hash)?;
                 }
                 ImportAction::BuiltinStorage => {
                     let source = item.source_path.join(STORAGE_JSON);
@@ -291,6 +259,7 @@ impl LegacyDomainAdapter for MiniappsAdapter {
                     entry.target_id, parsed.id
                 )));
             }
+            require_hash(&root, &entry.content_hash)?;
         }
         for entry in manifest
             .entries
@@ -313,11 +282,10 @@ impl LegacyDomainAdapter for MiniappsAdapter {
             let staged = stage_domain_dir(context, "miniapps")
                 .join("output")
                 .join(&entry.target_id);
-            let staged_hash = hash_declared_current_miniapp(&staged)?;
             install_directory_idempotent(
                 &staged,
                 &target_root.join(&entry.target_id),
-                &staged_hash,
+                &entry.content_hash,
                 &context.plan.run_id,
             )?;
         }
@@ -367,6 +335,7 @@ impl LegacyDomainAdapter for MiniappsAdapter {
                     entry.target_id
                 )));
             }
+            require_hash(&root, &entry.content_hash)?;
         }
         for entry in manifest
             .entries
@@ -430,18 +399,12 @@ impl LegacyDomainAdapter for AgentsAdapter {
                 if let Some(parent) = path.parent() {
                     fs::create_dir_all(parent).map_err(|error| io(parent, error))?;
                 }
-                custom_agent_save_markdown_file(&path, &item.definition).map_err(|error| {
-                    LegacyMigrationError::InvalidRequest(format!(
-                        "failed to stage Agent {} through the current owner: {error}",
-                        item.target_id
-                    ))
-                })?;
-                let content = fs::read(&path).map_err(|error| io(&path, error))?;
+                atomic_write_bytes(&path, &item.staged_content)?;
                 manifest.entries.push(ImportEntry {
                     source_id: item.source_id,
                     target_id: item.target_id,
                     action: item.action,
-                    content_hash: hash_bytes(&content),
+                    content_hash: item.content_hash,
                 });
             } else {
                 manifest.entries.push(ImportEntry {
@@ -513,7 +476,9 @@ fn plan_skills(roots: &MigrationRoots) -> LegacyMigrationResult<Vec<PlannedTree>
                 "legacy Skill {source_id} failed current owner parsing: {error}"
             ))
         })?;
-        let (files, skipped_paths) = declared_skill_files(&source)?;
+        let mut files = Vec::new();
+        collect_regular_files(&source, &source, &mut files)?;
+        enforce_tree_limits(&source, &files)?;
         let content_hash = hash_file_set(&source, &files)?;
         let target = target_root.join(&source_id);
         let (target_id, action) = resolve_directory_conflict(&source_id, &content_hash, &target)?;
@@ -524,7 +489,7 @@ fn plan_skills(roots: &MigrationRoots) -> LegacyMigrationResult<Vec<PlannedTree>
             content_hash,
             source_path: source,
             files,
-            skipped_paths,
+            skipped_paths: Vec::new(),
         });
     }
     Ok(planned)
@@ -560,12 +525,14 @@ fn plan_miniapps(roots: &MigrationRoots) -> LegacyMigrationResult<Vec<PlannedTre
         };
         let is_builtin =
             current_builtin_id.is_some() || source.join(BUILTIN_INSTALL_MARKER).exists();
-        let (files, skipped_paths) = declared_flat_files(&source, MINIAPP_ALLOWED_FILES)?;
-        let content_hash = hash_file_set(&source, &files)?;
+        let mut files = Vec::new();
+        collect_regular_files(&source, &source, &mut files)?;
+        enforce_tree_limits(&source, &files)?;
+        let source_hash = hash_file_set(&source, &files)?;
         if is_builtin {
             let target_id = current_builtin_id
                 .clone()
-                .unwrap_or_else(|| remapped_id(&source_id, &content_hash));
+                .unwrap_or_else(|| remapped_id(&source_id, &source_hash));
             let target_storage = target_root.join(&target_id).join(STORAGE_JSON);
             planned.push(PlannedTree {
                 source_id,
@@ -577,10 +544,10 @@ fn plan_miniapps(roots: &MigrationRoots) -> LegacyMigrationResult<Vec<PlannedTre
                 } else {
                     ImportAction::BuiltinStorage
                 },
-                content_hash,
+                content_hash: source_hash,
                 source_path: source,
                 files,
-                skipped_paths,
+                skipped_paths: Vec::new(),
             });
             continue;
         }
@@ -594,10 +561,10 @@ fn plan_miniapps(roots: &MigrationRoots) -> LegacyMigrationResult<Vec<PlannedTre
                 "legacy MiniApp {source_id} failed current owner conversion: {error}"
             ))
         })?;
-        let (target_id, action) = if is_safe_component(&source_id) {
-            resolve_miniapp_conflict(&source, &source_id, &content_hash, &target_root)?
+        let (target_id, action, content_hash) = if is_safe_component(&source_id) {
+            resolve_miniapp_conflict(&source, &source_id, &source_hash, &target_root)?
         } else {
-            resolve_remapped_miniapp_conflict(&source, &source_id, &content_hash, &target_root)?
+            resolve_remapped_miniapp_conflict(&source, &source_id, &source_hash, &target_root)?
         };
         planned.push(PlannedTree {
             source_id,
@@ -606,7 +573,7 @@ fn plan_miniapps(roots: &MigrationRoots) -> LegacyMigrationResult<Vec<PlannedTre
             content_hash,
             source_path: source,
             files,
-            skipped_paths,
+            skipped_paths: Vec::new(),
         });
     }
     Ok(planned)
@@ -619,7 +586,10 @@ fn plan_agents(roots: &MigrationRoots) -> LegacyMigrationResult<Vec<PlannedAgent
     for path in direct_markdown_files(&target_root)? {
         let content = fs::read_to_string(&path).map_err(|error| io(&path, error))?;
         if let Ok(parsed) = custom_agent_read_markdown_str(&content, CustomAgentLevel::User) {
-            target_by_id.insert(parsed.definition.id.to_ascii_lowercase(), parsed.definition);
+            target_by_id.insert(
+                parsed.definition.id.to_ascii_lowercase(),
+                content.into_bytes(),
+            );
         }
     }
     let mut planned = Vec::new();
@@ -633,64 +603,234 @@ fn plan_agents(roots: &MigrationRoots) -> LegacyMigrationResult<Vec<PlannedAgent
                 ))
             })?;
         let source_id = parsed.definition.id.clone();
-        let content_hash = hash_bytes(content.as_bytes());
-        let (target_id, action, mut definition) =
+        let source_bytes = content.into_bytes();
+        let source_hash = hash_bytes(&source_bytes);
+        let (target_id, action, staged_content) =
             match target_by_id.get(&source_id.to_ascii_lowercase()) {
-                Some(existing) if existing == &parsed.definition => (
-                    source_id.clone(),
-                    ImportAction::Duplicate,
-                    parsed.definition,
-                ),
-                Some(_) => {
-                    let target_id = remapped_id(&source_id, &content_hash);
-                    let mut definition = parsed.definition;
-                    definition.id = target_id.clone();
-                    definition.name = format!("{} (from legacy product)", definition.name);
-                    (target_id, ImportAction::Remap, definition)
+                Some(existing) if existing == &source_bytes => {
+                    (source_id.clone(), ImportAction::Duplicate, source_bytes)
                 }
-                None => (source_id.clone(), ImportAction::Import, parsed.definition),
+                Some(_) => {
+                    let target_id = remapped_id(&source_id, &source_hash);
+                    let remapped = rewrite_agent_id(&source_bytes, &target_id)?;
+                    (target_id, ImportAction::Remap, remapped)
+                }
+                None => (source_id.clone(), ImportAction::Import, source_bytes),
             };
-        definition.level = CustomAgentLevel::User;
+        let content_hash = hash_bytes(&staged_content);
         planned.push(PlannedAgent {
             source_id,
             target_id,
             action,
             content_hash,
             source_path,
-            definition,
+            staged_content,
         });
     }
     Ok(planned)
 }
 
-fn prepare_miniapp_import_input(item: &PlannedTree, input: &Path) -> LegacyMigrationResult<()> {
-    fs::create_dir_all(input.join(SOURCE_DIR)).map_err(|error| io(input, error))?;
-    let meta = fs::read(&item.source_path.join(META_JSON))
-        .map_err(|error| io(&item.source_path.join(META_JSON), error))?;
-    atomic_write_bytes(&input.join(META_JSON), &meta)?;
-    for name in REQUIRED_SOURCE_FILES {
-        let source = item.source_path.join(name);
-        let target = input.join(SOURCE_DIR).join(name);
-        if source.exists() {
-            let bytes = fs::read(&source).map_err(|error| io(&source, error))?;
-            atomic_write_bytes(&target, &bytes)?;
-        } else {
-            atomic_write_bytes(&target, b"")?;
-        }
-    }
-    for name in [ESM_DEPS_JSON, PACKAGE_JSON, STORAGE_JSON] {
-        let source = item.source_path.join(name);
-        if source.exists() {
-            let bytes = fs::read(&source).map_err(|error| io(&source, error))?;
-            let target = if name == ESM_DEPS_JSON {
-                input.join(SOURCE_DIR).join(name)
-            } else {
-                input.join(name)
-            };
-            atomic_write_bytes(&target, &bytes)?;
+fn write_miniapp_output(
+    source: &Path,
+    target_id: &str,
+    output: &Path,
+) -> LegacyMigrationResult<()> {
+    for (relative, file) in miniapp_output_plan(source, target_id)? {
+        let target = output.join(relative);
+        match file {
+            PlannedMiniAppFile::Source(source) => copy_regular_file(&source, &target)?,
+            PlannedMiniAppFile::Generated(bytes) => atomic_write_bytes(&target, &bytes)?,
         }
     }
     Ok(())
+}
+
+fn miniapp_output_plan(
+    source: &Path,
+    target_id: &str,
+) -> LegacyMigrationResult<BTreeMap<PathBuf, PlannedMiniAppFile>> {
+    let raw_meta = fs::read_to_string(source.join(META_JSON))
+        .map_err(|error| io(&source.join(META_JSON), error))?;
+    let owner_plan = build_import_bundle_plan(target_id, &raw_meta, 0).map_err(|error| {
+        LegacyMigrationError::InvalidRequest(format!(
+            "legacy MiniApp {target_id} failed current owner conversion: {error}"
+        ))
+    })?;
+    let mut files = BTreeMap::new();
+    files.insert(
+        PathBuf::from(META_JSON),
+        PlannedMiniAppFile::Generated(merge_miniapp_meta(&raw_meta, &owner_plan.meta_json)?),
+    );
+    files.insert(
+        PathBuf::from(COMPILED_HTML),
+        PlannedMiniAppFile::Generated(owner_plan.compiled_html.into_bytes()),
+    );
+
+    for name in REQUIRED_SOURCE_FILES {
+        let destination = PathBuf::from(SOURCE_DIR).join(name);
+        if let Some(path) =
+            first_regular_file(&[source.join(SOURCE_DIR).join(name), source.join(name)])
+        {
+            files.insert(destination, PlannedMiniAppFile::Source(path));
+        } else {
+            files.insert(destination, PlannedMiniAppFile::Generated(Vec::new()));
+        }
+    }
+
+    let esm_destination = PathBuf::from(SOURCE_DIR).join(ESM_DEPS_JSON);
+    if let Some(path) = first_regular_file(&[
+        source.join(SOURCE_DIR).join(ESM_DEPS_JSON),
+        source.join(ESM_DEPS_JSON),
+    ]) {
+        files.insert(esm_destination, PlannedMiniAppFile::Source(path));
+    } else {
+        files.insert(
+            esm_destination,
+            PlannedMiniAppFile::Generated(owner_plan.esm_dependencies_json.into_bytes()),
+        );
+    }
+
+    for (name, fallback) in [
+        (PACKAGE_JSON, owner_plan.package_json.into_bytes()),
+        (STORAGE_JSON, owner_plan.storage_json.into_bytes()),
+    ] {
+        let path = source.join(name);
+        if path.is_file() {
+            files.insert(PathBuf::from(name), PlannedMiniAppFile::Source(path));
+        } else {
+            files.insert(PathBuf::from(name), PlannedMiniAppFile::Generated(fallback));
+        }
+    }
+
+    let mut source_files = Vec::new();
+    collect_regular_files(source, source, &mut source_files)?;
+    enforce_tree_limits(source, &source_files)?;
+    for path in source_files {
+        let relative = path
+            .strip_prefix(source)
+            .map_err(|_| LegacyMigrationError::PathEscape(path.clone()))?
+            .to_path_buf();
+        if miniapp_owner_path(&relative) {
+            continue;
+        }
+        files
+            .entry(relative)
+            .or_insert(PlannedMiniAppFile::Source(path));
+    }
+    Ok(files)
+}
+
+fn miniapp_owner_path(relative: &Path) -> bool {
+    if relative == Path::new(META_JSON)
+        || relative == Path::new(COMPILED_HTML)
+        || relative == Path::new(PACKAGE_JSON)
+        || relative == Path::new(STORAGE_JSON)
+        || relative == Path::new(BUILTIN_INSTALL_MARKER)
+        || relative == Path::new(ESM_DEPS_JSON)
+        || REQUIRED_SOURCE_FILES
+            .iter()
+            .any(|name| relative == Path::new(name))
+    {
+        return true;
+    }
+    REQUIRED_SOURCE_FILES
+        .iter()
+        .chain(std::iter::once(&ESM_DEPS_JSON))
+        .any(|name| relative == Path::new(SOURCE_DIR).join(name))
+}
+
+fn first_regular_file(candidates: &[PathBuf]) -> Option<PathBuf> {
+    candidates.iter().find(|path| path.is_file()).cloned()
+}
+
+fn merge_miniapp_meta(raw: &str, normalized: &str) -> LegacyMigrationResult<Vec<u8>> {
+    let mut raw_value: serde_json::Value = serde_json::from_str(raw).map_err(|error| {
+        LegacyMigrationError::InvalidRequest(format!("invalid legacy MiniApp meta: {error}"))
+    })?;
+    let normalized_value: serde_json::Value =
+        serde_json::from_str(normalized).map_err(|error| {
+            LegacyMigrationError::InvalidRequest(format!(
+                "invalid normalized MiniApp meta: {error}"
+            ))
+        })?;
+    overlay_current_fields(&mut raw_value, &normalized_value);
+    serde_json::to_vec_pretty(&raw_value).map_err(|error| {
+        LegacyMigrationError::InvalidRequest(format!(
+            "failed to serialize normalized MiniApp meta: {error}"
+        ))
+    })
+}
+
+fn overlay_current_fields(target: &mut serde_json::Value, current: &serde_json::Value) {
+    match (target, current) {
+        (serde_json::Value::Object(target), serde_json::Value::Object(current)) => {
+            for (name, current_value) in current {
+                if let Some(target_value) = target.get_mut(name) {
+                    overlay_current_fields(target_value, current_value);
+                } else {
+                    target.insert(name.clone(), current_value.clone());
+                }
+            }
+        }
+        (target, current) => *target = current.clone(),
+    }
+}
+
+fn rewrite_agent_id(content: &[u8], target_id: &str) -> LegacyMigrationResult<Vec<u8>> {
+    let text = std::str::from_utf8(content).map_err(|error| {
+        LegacyMigrationError::InvalidRequest(format!("legacy Agent is not UTF-8: {error}"))
+    })?;
+    let mut output = String::with_capacity(text.len() + target_id.len());
+    let mut in_frontmatter = false;
+    let mut replaced = false;
+    for (index, line) in text.split_inclusive('\n').enumerate() {
+        let newline = if line.ends_with("\r\n") {
+            "\r\n"
+        } else if line.ends_with('\n') {
+            "\n"
+        } else {
+            ""
+        };
+        let content = line.trim_end_matches(['\r', '\n']);
+        if index == 0 && content.trim() == "---" {
+            in_frontmatter = true;
+            output.push_str(line);
+            continue;
+        }
+        if in_frontmatter && content.trim() == "---" {
+            in_frontmatter = false;
+        }
+        if in_frontmatter && !replaced {
+            let trimmed = content.trim_start();
+            if trimmed.starts_with("id:") {
+                let indentation = &content[..content.len() - trimmed.len()];
+                output.push_str(indentation);
+                output.push_str("id: ");
+                output.push_str(target_id);
+                output.push_str(newline);
+                replaced = true;
+                continue;
+            }
+        }
+        output.push_str(line);
+    }
+    if !replaced {
+        return Err(LegacyMigrationError::InvalidRequest(
+            "legacy Agent frontmatter does not contain an id field".to_string(),
+        ));
+    }
+    let parsed =
+        custom_agent_read_markdown_str(&output, CustomAgentLevel::User).map_err(|error| {
+            LegacyMigrationError::InvalidRequest(format!(
+                "remapped Agent failed current owner parsing: {error}"
+            ))
+        })?;
+    if parsed.definition.id != target_id {
+        return Err(LegacyMigrationError::InvalidRequest(
+            "remapped Agent id was not applied".to_string(),
+        ));
+    }
+    Ok(output.into_bytes())
 }
 
 fn validate_agent_manifest(context: &DomainContext<'_>, staged: bool) -> LegacyMigrationResult<()> {
@@ -747,9 +887,8 @@ fn scan_from_trees(
                 .sum(),
             source_schema: Some(source_schema.to_string()),
             migratable: true,
-            detail:
-                "Only owner-approved files are staged; imported executable content remains inert."
-                    .to_string(),
+            detail: "Complete user extension trees are staged; only required current-format fields are normalized."
+                .to_string(),
         },
         conflicts: planned
             .iter()
@@ -941,59 +1080,6 @@ fn direct_markdown_files(root: &Path) -> LegacyMigrationResult<Vec<PathBuf>> {
     Ok(output)
 }
 
-fn declared_skill_files(root: &Path) -> LegacyMigrationResult<(Vec<PathBuf>, Vec<String>)> {
-    let mut files = Vec::new();
-    let mut skipped = Vec::new();
-    for entry in fs::read_dir(root).map_err(|error| io(root, error))? {
-        let entry = entry.map_err(|error| io(root, error))?;
-        let path = entry.path();
-        reject_link(&path)?;
-        let name = entry.file_name().to_string_lossy().to_string();
-        let kind = entry.file_type().map_err(|error| io(&path, error))?;
-        if kind.is_file() && name == "SKILL.md" {
-            files.push(path);
-        } else if kind.is_dir() && SKILL_ALLOWED_DIRECTORIES.contains(&name.as_str()) {
-            collect_regular_files(root, &path, &mut files)?;
-        } else {
-            skipped.push(name);
-        }
-    }
-    enforce_tree_limits(root, &files)?;
-    if !files.iter().any(|path| path == &root.join("SKILL.md")) {
-        return Err(LegacyMigrationError::InvalidRequest(format!(
-            "Skill {} does not contain SKILL.md",
-            root.display()
-        )));
-    }
-    Ok((files, skipped))
-}
-
-fn declared_flat_files(
-    root: &Path,
-    allowed: &[&str],
-) -> LegacyMigrationResult<(Vec<PathBuf>, Vec<String>)> {
-    let mut files = Vec::new();
-    let mut skipped = Vec::new();
-    for entry in fs::read_dir(root).map_err(|error| io(root, error))? {
-        let entry = entry.map_err(|error| io(root, error))?;
-        let path = entry.path();
-        reject_link(&path)?;
-        let name = entry.file_name().to_string_lossy().to_string();
-        if entry
-            .file_type()
-            .map_err(|error| io(&path, error))?
-            .is_file()
-            && allowed.contains(&name.as_str())
-        {
-            files.push(path);
-        } else {
-            skipped.push(name);
-        }
-    }
-    enforce_tree_limits(root, &files)?;
-    Ok((files, skipped))
-}
-
 fn collect_regular_files(
     declared_root: &Path,
     current: &Path,
@@ -1030,12 +1116,6 @@ fn enforce_tree_limits(root: &Path, files: &[PathBuf]) -> LegacyMigrationResult<
     let mut total = 0u64;
     for path in files {
         let bytes = fs::metadata(path).map_err(|error| io(path, error))?.len();
-        if bytes > MAX_FILE_BYTES {
-            return Err(LegacyMigrationError::ResourceLimit(format!(
-                "extension file exceeds {MAX_FILE_BYTES} bytes: {}",
-                path.display()
-            )));
-        }
         total = total.saturating_add(bytes);
     }
     if total > MAX_EXTENSION_BYTES {
@@ -1057,9 +1137,27 @@ fn copy_declared_tree(
             .strip_prefix(source_root)
             .map_err(|_| LegacyMigrationError::PathEscape(source.to_path_buf()))?;
         let target = target_root.join(relative);
-        let bytes = fs::read(source).map_err(|error| io(source, error))?;
-        atomic_write_bytes(&target, &bytes)?;
+        copy_regular_file(source, &target)?;
     }
+    Ok(())
+}
+
+fn copy_regular_file(source: &Path, target: &Path) -> LegacyMigrationResult<()> {
+    reject_link(source)?;
+    if !source.is_file() {
+        return Err(LegacyMigrationError::InvalidRequest(format!(
+            "expected a regular extension file: {}",
+            source.display()
+        )));
+    }
+    let parent = target.parent().ok_or_else(|| {
+        LegacyMigrationError::InvalidRequest(format!(
+            "extension target has no parent: {}",
+            target.display()
+        ))
+    })?;
+    fs::create_dir_all(parent).map_err(|error| io(parent, error))?;
+    fs::copy(source, target).map_err(|error| io(target, error))?;
     Ok(())
 }
 
@@ -1092,28 +1190,30 @@ fn resolve_miniapp_conflict(
     source_id: &str,
     source_hash: &str,
     target_root: &Path,
-) -> LegacyMigrationResult<(String, ImportAction)> {
+) -> LegacyMigrationResult<(String, ImportAction, String)> {
+    let content_hash = hash_miniapp_output(source, source_id)?;
     let target = target_root.join(source_id);
     if !target.exists() {
-        return Ok((source_id.to_string(), ImportAction::Import));
+        return Ok((source_id.to_string(), ImportAction::Import, content_hash));
     }
     reject_link(&target)?;
-    if current_miniapp_matches_legacy(source, &target, source_id)? {
-        return Ok((source_id.to_string(), ImportAction::Duplicate));
+    if hash_tree(&target)? == content_hash {
+        return Ok((source_id.to_string(), ImportAction::Duplicate, content_hash));
     }
     let remapped = remapped_id(source_id, source_hash);
+    let remapped_hash = hash_miniapp_output(source, &remapped)?;
     let remapped_target = target_root.join(&remapped);
     if remapped_target.exists() {
         reject_link(&remapped_target)?;
-        if current_miniapp_matches_legacy(source, &remapped_target, &remapped)? {
-            return Ok((remapped, ImportAction::Duplicate));
+        if hash_tree(&remapped_target)? == remapped_hash {
+            return Ok((remapped, ImportAction::Duplicate, remapped_hash));
         }
         return Err(LegacyMigrationError::InvalidRequest(format!(
             "remapped MiniApp target already contains different data: {}",
             remapped_target.display()
         )));
     }
-    Ok((remapped, ImportAction::Remap))
+    Ok((remapped, ImportAction::Remap, remapped_hash))
 }
 
 fn resolve_remapped_miniapp_conflict(
@@ -1121,15 +1221,16 @@ fn resolve_remapped_miniapp_conflict(
     source_id: &str,
     source_hash: &str,
     target_root: &Path,
-) -> LegacyMigrationResult<(String, ImportAction)> {
+) -> LegacyMigrationResult<(String, ImportAction, String)> {
     let remapped = remapped_id(source_id, source_hash);
+    let content_hash = hash_miniapp_output(source, &remapped)?;
     let target = target_root.join(&remapped);
     if !target.exists() {
-        return Ok((remapped, ImportAction::Remap));
+        return Ok((remapped, ImportAction::Remap, content_hash));
     }
     reject_link(&target)?;
-    if current_miniapp_matches_legacy(source, &target, &remapped)? {
-        Ok((remapped, ImportAction::Duplicate))
+    if hash_tree(&target)? == content_hash {
+        Ok((remapped, ImportAction::Duplicate, content_hash))
     } else {
         Err(LegacyMigrationError::InvalidRequest(format!(
             "remapped MiniApp target already contains different data: {}",
@@ -1138,70 +1239,8 @@ fn resolve_remapped_miniapp_conflict(
     }
 }
 
-fn current_miniapp_matches_legacy(
-    source: &Path,
-    target: &Path,
-    target_id: &str,
-) -> LegacyMigrationResult<bool> {
-    let source_meta = fs::read_to_string(source.join(META_JSON))
-        .map_err(|error| io(&source.join(META_JSON), error))?;
-    let plan = build_import_bundle_plan(target_id, &source_meta, 0).map_err(|error| {
-        LegacyMigrationError::InvalidRequest(format!(
-            "legacy MiniApp {target_id} failed current owner conversion: {error}"
-        ))
-    })?;
-    let expected_meta: serde_json::Value =
-        serde_json::from_str(&plan.meta_json).map_err(|error| {
-            LegacyMigrationError::InvalidRequest(format!("invalid converted MiniApp meta: {error}"))
-        })?;
-    let actual_meta: serde_json::Value = match read_bounded_json(target, &target.join(META_JSON)) {
-        Ok(value) => value,
-        Err(_) => return Ok(false),
-    };
-    if actual_meta != expected_meta {
-        return Ok(false);
-    }
-    for name in REQUIRED_SOURCE_FILES {
-        let source_path = source.join(name);
-        let expected = if source_path.exists() {
-            fs::read(&source_path).map_err(|error| io(&source_path, error))?
-        } else {
-            Vec::new()
-        };
-        let target_path = target.join(SOURCE_DIR).join(name);
-        if fs::read(&target_path).ok().as_deref() != Some(expected.as_slice()) {
-            return Ok(false);
-        }
-    }
-    let expected_esm = optional_bytes_or(
-        &source.join(ESM_DEPS_JSON),
-        plan.esm_dependencies_json.as_bytes(),
-    )?;
-    if fs::read(target.join(SOURCE_DIR).join(ESM_DEPS_JSON))
-        .ok()
-        .as_deref()
-        != Some(expected_esm.as_slice())
-    {
-        return Ok(false);
-    }
-    for (name, fallback) in [
-        (PACKAGE_JSON, plan.package_json.as_bytes()),
-        (STORAGE_JSON, plan.storage_json.as_bytes()),
-    ] {
-        let expected = optional_bytes_or(&source.join(name), fallback)?;
-        if fs::read(target.join(name)).ok().as_deref() != Some(expected.as_slice()) {
-            return Ok(false);
-        }
-    }
-    Ok(fs::read(target.join(COMPILED_HTML)).ok().as_deref() == Some(plan.compiled_html.as_bytes()))
-}
-
-fn optional_bytes_or(path: &Path, fallback: &[u8]) -> LegacyMigrationResult<Vec<u8>> {
-    match fs::read(path) {
-        Ok(bytes) => Ok(bytes),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(fallback.to_vec()),
-        Err(error) => Err(io(path, error)),
-    }
+fn hash_miniapp_output(source: &Path, target_id: &str) -> LegacyMigrationResult<String> {
+    hash_planned_files(&miniapp_output_plan(source, target_id)?)
 }
 
 fn install_directory_idempotent(
@@ -1266,15 +1305,7 @@ fn rollback_imported_directories(
     for entry in imported_entries(&manifest) {
         let target = target_root.join(&entry.target_id);
         if target.exists() {
-            let expected = if name == "miniapps" {
-                let staged = stage_domain_dir(context, name)
-                    .join("output")
-                    .join(&entry.target_id);
-                hash_declared_current_miniapp(&staged)?
-            } else {
-                entry.content_hash.clone()
-            };
-            if hash_tree(&target)? == expected {
+            if hash_tree(&target)? == entry.content_hash {
                 fs::remove_dir_all(&target).map_err(|error| io(&target, error))?;
             }
         }
@@ -1322,27 +1353,6 @@ fn require_hash(root: &Path, expected: &str) -> LegacyMigrationResult<()> {
     Ok(())
 }
 
-fn hash_declared_current_miniapp(root: &Path) -> LegacyMigrationResult<String> {
-    let layout = MiniAppStorageLayout::new(root.parent().unwrap_or(root), file_name(root)?);
-    let mut files = vec![
-        layout.meta_path(),
-        layout.package_json_path(),
-        layout.storage_path(),
-        layout.compiled_path(),
-    ];
-    files.extend(
-        REQUIRED_SOURCE_FILES
-            .iter()
-            .map(|name| layout.source_file_path(name)),
-    );
-    files.push(layout.source_file_path(ESM_DEPS_JSON));
-    let files = files
-        .into_iter()
-        .filter(|path| path.exists())
-        .collect::<Vec<_>>();
-    hash_file_set(root, &files)
-}
-
 fn hash_tree(root: &Path) -> LegacyMigrationResult<String> {
     let mut files = Vec::new();
     collect_regular_files(root, root, &mut files)?;
@@ -1364,16 +1374,46 @@ fn hash_file_set(root: &Path, files: &[PathBuf]) -> LegacyMigrationResult<String
     for (relative, path) in relative {
         hasher.update(relative.to_string_lossy().replace('\\', "/").as_bytes());
         hasher.update([0]);
-        hasher.update(fs::read(&path).map_err(|error| io(&path, error))?);
+        hash_file_contents(&path, &mut hasher)?;
         hasher.update([0]);
     }
     Ok(format!("sha256:{}", hex::encode(hasher.finalize())))
 }
 
 fn hash_file(path: &Path) -> LegacyMigrationResult<String> {
-    fs::read(path)
-        .map(|bytes| hash_bytes(&bytes))
-        .map_err(|error| io(path, error))
+    let mut hasher = Sha256::new();
+    hash_file_contents(path, &mut hasher)?;
+    Ok(format!("sha256:{}", hex::encode(hasher.finalize())))
+}
+
+fn hash_planned_files(
+    files: &BTreeMap<PathBuf, PlannedMiniAppFile>,
+) -> LegacyMigrationResult<String> {
+    let mut hasher = Sha256::new();
+    for (relative, file) in files {
+        hasher.update(relative.to_string_lossy().replace('\\', "/").as_bytes());
+        hasher.update([0]);
+        match file {
+            PlannedMiniAppFile::Source(path) => hash_file_contents(path, &mut hasher)?,
+            PlannedMiniAppFile::Generated(bytes) => hasher.update(bytes),
+        }
+        hasher.update([0]);
+    }
+    Ok(format!("sha256:{}", hex::encode(hasher.finalize())))
+}
+
+fn hash_file_contents(path: &Path, hasher: &mut Sha256) -> LegacyMigrationResult<()> {
+    let file = fs::File::open(path).map_err(|error| io(path, error))?;
+    let mut reader = BufReader::new(file);
+    let mut buffer = [0u8; 64 * 1024];
+    loop {
+        let read = reader.read(&mut buffer).map_err(|error| io(path, error))?;
+        if read == 0 {
+            break;
+        }
+        hasher.update(&buffer[..read]);
+    }
+    Ok(())
 }
 
 fn hash_bytes(bytes: &[u8]) -> String {
@@ -1493,7 +1533,7 @@ mod tests {
     use std::collections::BTreeSet;
 
     #[test]
-    fn extension_group_uses_owner_formats_and_excludes_builtins() {
+    fn extension_group_preserves_user_trees_and_excludes_builtin_code() {
         let temp = test_tempdir("extensions");
         let roots = fixture_roots(temp.path());
         copy_fixture(&roots);
@@ -1501,7 +1541,32 @@ mod tests {
             .legacy_skills_root
             .join("user-skill")
             .join("undeclared.txt");
-        atomic_write_bytes(&unknown, b"private fixture content that must stay excluded").unwrap();
+        atomic_write_bytes(&unknown, b"private fixture content that must be preserved").unwrap();
+        let skill_readme = roots.legacy_skills_root.join("user-skill/README.md");
+        atomic_write_bytes(&skill_readme, b"User-maintained Skill notes.").unwrap();
+        let skill_image = roots
+            .legacy_skills_root
+            .join("user-skill/assets/reference.bin");
+        atomic_write_bytes(&skill_image, b"fixture-image").unwrap();
+
+        let source_agent = roots.legacy_user_root.join("agents/researcher.md");
+        let agent_text = fs::read_to_string(&source_agent).unwrap().replace(
+            "schema_version: 1",
+            "schema_version: 1\nfuture_field: keep-me\n# user comment",
+        );
+        atomic_write_bytes(&source_agent, agent_text.as_bytes()).unwrap();
+
+        let custom_miniapp = roots.legacy_user_root.join("data/miniapps/custom-notes");
+        atomic_write_bytes(
+            &custom_miniapp.join("source/assets/icon.svg"),
+            b"<svg>preserved</svg>",
+        )
+        .unwrap();
+        atomic_write_bytes(&custom_miniapp.join("assets/legacy.bin"), b"legacy-asset").unwrap();
+        let mut meta_value: serde_json::Value =
+            serde_json::from_slice(&fs::read(custom_miniapp.join(META_JSON)).unwrap()).unwrap();
+        meta_value["futureField"] = serde_json::json!({"nested": true});
+        atomic_write_json(&custom_miniapp.join(META_JSON), &meta_value).unwrap();
         let source_hashes = [
             hash_tree(&roots.legacy_user_root).unwrap(),
             hash_tree(&roots.legacy_home_root).unwrap(),
@@ -1529,11 +1594,19 @@ mod tests {
             .target_skills_root
             .join(OPENBITFUN_SYSTEM_SKILL_DIR)
             .exists());
-        assert!(!roots
+        assert!(roots
             .target_skills_root
             .join("user-skill/undeclared.txt")
             .exists());
-        assert!(report
+        assert!(roots
+            .target_skills_root
+            .join("user-skill/README.md")
+            .exists());
+        assert!(roots
+            .target_skills_root
+            .join("user-skill/assets/reference.bin")
+            .exists());
+        assert!(!report
             .domain_results
             .iter()
             .flat_map(|result| &result.warnings)
@@ -1543,6 +1616,17 @@ mod tests {
             .contains("private fixture content"));
         let custom = target_miniapps_root(&roots).join("custom-notes");
         assert!(custom.join("source/index.html").exists());
+        assert_eq!(
+            fs::read(custom.join("source/assets/icon.svg")).unwrap(),
+            b"<svg>preserved</svg>"
+        );
+        assert_eq!(
+            fs::read(custom.join("assets/legacy.bin")).unwrap(),
+            b"legacy-asset"
+        );
+        let imported_meta: serde_json::Value =
+            serde_json::from_slice(&fs::read(custom.join(META_JSON)).unwrap()).unwrap();
+        assert_eq!(imported_meta["futureField"]["nested"], true);
         assert!(custom.join(COMPILED_HTML).exists());
         assert!(!target_miniapps_root(&roots)
             .join("builtin-gomoku/index.html")
@@ -1552,11 +1636,15 @@ mod tests {
             .exists());
         let agent_path = roots.target_user_root.join("agents/researcher.md");
         let agent = custom_agent_read_markdown_str(
-            &fs::read_to_string(agent_path).unwrap(),
+            &fs::read_to_string(&agent_path).unwrap(),
             CustomAgentLevel::User,
         )
         .unwrap();
         assert_eq!(agent.definition.id, "researcher");
+        assert_eq!(
+            fs::read(&agent_path).unwrap(),
+            fs::read(&source_agent).unwrap()
+        );
 
         let second_source = probe_legacy_source(&roots, ProbeLimits::default())
             .unwrap()
@@ -1568,6 +1656,10 @@ mod tests {
             .conflicts
             .iter()
             .any(|conflict| conflict.resolution == ConflictResolution::TargetWins));
+        assert!(second
+            .conflicts
+            .iter()
+            .any(|conflict| conflict.resolution == ConflictResolution::DuplicateSkipped));
         engine
             .execute(&second, &CancellationToken::default(), &NoCrashInjection)
             .unwrap();
@@ -1682,6 +1774,16 @@ mod tests {
         atomic_write_bytes(&target, br#"{"value":"target"}"#).unwrap();
         remove_file_if_matches(&staged, &target).unwrap();
         assert_eq!(fs::read(&target).unwrap(), br#"{"value":"target"}"#);
+    }
+
+    #[test]
+    fn remapping_agent_changes_only_the_frontmatter_id_line() {
+        let source = b"---\r\nid: researcher\r\nname: Researcher\r\ndescription: Test agent\r\nfuture_field: keep-me\r\n# user comment\r\nkind: subagent\r\ntools: []\r\nreadonly: true\r\nschema_version: 1\r\n---\r\n\r\nKeep this body byte-for-byte.\r\n";
+        let remapped = rewrite_agent_id(source, "researcher-from-legacy-deadbeef").unwrap();
+        let text = String::from_utf8(remapped).unwrap();
+        assert!(text.contains("id: researcher-from-legacy-deadbeef\r\n"));
+        assert!(text.contains("future_field: keep-me\r\n# user comment\r\n"));
+        assert!(text.ends_with("Keep this body byte-for-byte.\r\n"));
     }
 
     fn fixture_roots(root: &Path) -> MigrationRoots {

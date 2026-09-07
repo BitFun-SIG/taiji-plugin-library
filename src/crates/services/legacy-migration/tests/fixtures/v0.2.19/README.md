@@ -15,6 +15,13 @@ that resumable runtime work state is rebuilt instead of imported.
 
 Supported source range for V1 is `>=0.2.0,<1.0.0`. The fixture's canonical
 source revision is `845b4b4d2925f7c41e7e03a4a618606fbd0da8b6`.
+Additional canonical versions require evidence captured from a real retired
+BitFun build; synthetic version labels must not expand the support matrix.
+
+The source-retention contract is `never_delete_automatically`. Engine and
+owner-adapter tests compare source-root file hashes across successful, failed,
+and cancelled runs; uninstalling BitFun or deleting its data remains a separate
+explicit user action.
 
 All identities, paths, message text, tokens, host keys, and credentials are
 synthetic. Secret-bearing owners are represented only by metadata that forces

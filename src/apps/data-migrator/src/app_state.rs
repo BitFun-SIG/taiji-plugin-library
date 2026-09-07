@@ -1,15 +1,14 @@
 use openbitfun_core::legacy_migration::adapters_for_groups;
 use openbitfun_core_types::product_identity::product_id;
 use openbitfun_legacy_migration::{
-    blocking_writer_processes_for_product, launch_trusted_executable, probe_legacy_source,
-    CancellationToken, HandoffDisposition, HandoffStore, LegacyMigrationError,
+    blocking_writer_processes_for_product, export_failure_diagnostics, launch_trusted_executable,
+    probe_legacy_source, CancellationToken, HandoffDisposition, HandoffStore, LegacyMigrationError,
     LegacyMigrationResult, MigrationEngine, MigrationLayout, MigrationOnboardingStore,
-    MigrationRoots, NoCrashInjection, PlatformExecutableTrustVerifier, ProbeLimits,
-    TrustedInstallationResolver, WriterProcess,
+    MigrationRoots, NoCrashInjection, ProbeLimits, TrustedInstallationResolver, WriterProcess,
 };
 use openbitfun_product_capabilities::{product_assembly_plan_for_profile, DeliveryProfile};
 use openbitfun_product_domains::legacy_migration::{
-    LegacySourceDescriptor, MigrationPhase, MigrationPlan, MigrationProgressEvent,
+    FindingSeverity, LegacySourceDescriptor, MigrationPhase, MigrationPlan, MigrationProgressEvent,
     MigrationPromptChoice, MigrationRunReport, MigrationRunStatus, MigrationSelection,
     MigratorHandoffRequest, MigratorProtocolCapabilities, MigratorRequestMode, ScanFinding,
     CURRENT_MIGRATION_FORMAT_VERSION,
@@ -32,6 +31,24 @@ const DATA_MIGRATOR_BINARY_NAME: &str = match option_env!("OPENBITFUN_DATA_MIGRA
     Some(value) => value,
     None => "openbitfun-data-migrator",
 };
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FinishAction {
+    CloseForDevRestart,
+    RestartDesktop,
+}
+
+const fn finish_action() -> FinishAction {
+    finish_action_for_build(cfg!(debug_assertions))
+}
+
+const fn finish_action_for_build(is_debug_build: bool) -> FinishAction {
+    if is_debug_build {
+        FinishAction::CloseForDevRestart
+    } else {
+        FinishAction::RestartDesktop
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -143,12 +160,33 @@ impl CommandError {
             ),
         }
     }
+
+    fn from_report_failure(report: &MigrationRunReport) -> Option<Self> {
+        let diagnostic = report.diagnostics.iter().rev().find(|diagnostic| {
+            diagnostic.severity == FindingSeverity::Blocking
+                && diagnostic.domain.is_some()
+                && diagnostic.code.starts_with("domain_")
+        })?;
+        let mut message = diagnostic.message.clone();
+        if let Some(action) = diagnostic.action.as_deref() {
+            if !message.is_empty() && !message.ends_with(char::is_whitespace) {
+                message.push(' ');
+            }
+            message.push_str(action);
+        }
+        Some(Self {
+            code: diagnostic.code.clone(),
+            message,
+            recoverable: true,
+        })
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct MigratorView {
     pub delivery_profile: String,
+    pub restart_desktop_on_finish: bool,
     pub protocol: MigratorProtocolCapabilities,
     pub mode: MigratorRequestMode,
     pub source: Option<LegacySourceDescriptor>,
@@ -163,6 +201,12 @@ pub(crate) struct MigratorView {
     pub can_execute: bool,
     pub recovery: bool,
     pub error: Option<CommandError>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct DiagnosticsExportView {
+    pub file_path: String,
 }
 
 #[derive(Debug)]
@@ -268,6 +312,32 @@ impl MigratorCoordinator {
     pub(crate) fn snapshot(&self) -> MigratorView {
         let session = self.lock();
         snapshot(&session)
+    }
+
+    pub(crate) fn export_diagnostics(&self) -> Result<DiagnosticsExportView, CommandError> {
+        let session = self.lock();
+        if session.running {
+            return Err(CommandError::operation_in_progress());
+        }
+        let report = session.report.clone().ok_or_else(|| {
+            CommandError::new(
+                "diagnostics_unavailable",
+                "Failure diagnostics are available after a migration failure.",
+                false,
+            )
+        })?;
+        let layout = MigrationLayout::new(&session.roots, &report.run_id);
+        drop(session);
+        let path = export_failure_diagnostics(&layout, &report).map_err(|_| {
+            CommandError::new(
+                "diagnostics_export_failed",
+                "OpenBitFun could not write the sanitized migration diagnostics file.",
+                true,
+            )
+        })?;
+        Ok(DiagnosticsExportView {
+            file_path: path.to_string_lossy().to_string(),
+        })
     }
 
     pub(crate) fn scan(&self, selection: MigrationSelection) -> Result<MigratorView, CommandError> {
@@ -504,7 +574,10 @@ impl MigratorCoordinator {
 
         let result = (|| {
             self.persist_prompt_choice(choice)?;
-            self.restart_desktop()
+            match finish_action() {
+                FinishAction::CloseForDevRestart => Ok(()),
+                FinishAction::RestartDesktop => self.restart_desktop(),
+            }
         })();
         if let Err(error) = result {
             let mut session = self.lock();
@@ -707,7 +780,6 @@ impl MigratorCoordinator {
             &current,
             DATA_MIGRATOR_BINARY_NAME,
             DESKTOP_BINARY_NAME,
-            &PlatformExecutableTrustVerifier,
         )?;
         let arguments = [OsStr::new("--legacy-migration-run-id"), OsStr::new(&run_id)];
         launch_trusted_executable(&executable, &arguments)?;
@@ -727,7 +799,11 @@ impl MigratorCoordinator {
                 progress.code = "migration_cancelled".to_string();
             }
         }
-        let command_error = CommandError::from_legacy(error);
+        let command_error = session
+            .report
+            .as_ref()
+            .and_then(CommandError::from_report_failure)
+            .unwrap_or_else(|| CommandError::from_legacy(error));
         session.error = Some(command_error.clone());
         command_error
     }
@@ -803,6 +879,7 @@ fn snapshot(session: &MigratorSession) -> MigratorView {
     let report = session.report.as_ref().map(redact_report_for_ui);
     MigratorView {
         delivery_profile: DeliveryProfile::DataMigrator.id().to_string(),
+        restart_desktop_on_finish: finish_action() == FinishAction::RestartDesktop,
         protocol: MigratorProtocolCapabilities::current(),
         mode: session.request.mode,
         source: session.source.clone(),
@@ -955,6 +1032,7 @@ mod tests {
         let view = coordinator.snapshot();
 
         assert_eq!(view.delivery_profile, "data-migrator");
+        assert!(!view.restart_desktop_on_finish);
         assert_eq!(view.mode, MigratorRequestMode::Onboarding);
         assert!(view.source.is_some());
         assert!(!view.recovery);
@@ -1019,5 +1097,38 @@ mod tests {
         assert_eq!(command.code, "storage_failed");
         assert!(!serialized.contains("private"));
         assert!(!serialized.contains("secret"));
+    }
+
+    #[test]
+    fn report_failure_errors_use_sanitized_domain_diagnostics() {
+        let report = MigrationRunReport {
+            diagnostics: vec![
+                openbitfun_product_domains::legacy_migration::MigrationDiagnostic {
+                    code: "domain_io_permission_denied".to_string(),
+                    severity: FindingSeverity::Blocking,
+                    domain: Some(
+                        openbitfun_product_domains::legacy_migration::MigrationDomainId::WorkspaceSessions,
+                    ),
+                    relative_path: Some("C:/Users/private/session-state.json".to_string()),
+                    message: "A migration-owned file or directory denied access.".to_string(),
+                    action: Some("Close programs using the data, check permissions, and retry.".to_string()),
+                },
+            ],
+            ..MigrationRunReport::default()
+        };
+
+        let command = CommandError::from_report_failure(&report).unwrap();
+        let serialized = serde_json::to_string(&command).unwrap();
+
+        assert_eq!(command.code, "domain_io_permission_denied");
+        assert!(command.message.contains("check permissions"));
+        assert!(!serialized.contains("private"));
+        assert!(!serialized.contains("session-state"));
+    }
+
+    #[test]
+    fn finish_action_preserves_release_restart_and_closes_debug() {
+        assert_eq!(finish_action(), FinishAction::CloseForDevRestart);
+        assert_eq!(finish_action_for_build(false), FinishAction::RestartDesktop);
     }
 }

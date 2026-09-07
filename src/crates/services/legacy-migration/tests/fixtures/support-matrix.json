@@ -3,6 +3,7 @@
   "sourceProduct": "bitfun",
   "supportedVersions": ">=0.2.0,<1.0.0",
   "canonicalFixtureVersion": "0.2.19",
+  "sourceRetentionPolicy": "never_delete_automatically",
   "domains": [
     {
       "id": "settings_and_credentials",

@@ -61,6 +61,7 @@ test('Data Migrator dependency and command closure stays migration-only', () => 
   }
   assert.match(source, /product_assembly_plan_for_profile\(DeliveryProfile::DataMigrator\)/);
   assert.match(registration, /tauri::generate_handler!/);
+  assert.match(registration, /commands::export_migration_diagnostics/);
   assert.match(
     readFileSync(join(ROOT, 'scripts', 'data-migrator-tauri-build.mjs'), 'utf8'),
     /windowsHide:\s*true/,
@@ -68,4 +69,24 @@ test('Data Migrator dependency and command closure stays migration-only', () => 
   for (const forbidden of ['fs:', 'shell:', 'updater:', 'dialog:']) {
     assert.equal(capability.includes(forbidden), false, `capability must not include ${forbidden}`);
   }
+});
+
+test('Data Migrator gates onboarding actions on authenticated bootstrap', () => {
+  const html = readFileSync(join(APP, 'ui', 'index.html'), 'utf8');
+  const source = readFileSync(join(APP, 'ui', 'app.js'), 'utf8');
+
+  assert.match(html, /<section id="choice-card"[^>]+hidden>/);
+  assert.match(source, /function requireBootstrap\(\)/);
+  assert.match(source, /if \(!requireBootstrap\(\)\) return;/);
+  assert.match(source, /catch \(error\) \{\s+notice\(/);
+});
+
+test('Data Migrator labels unverified report counts as staged', () => {
+  const source = readFileSync(join(APP, 'ui', 'app.js'), 'utf8');
+
+  assert.match(
+    source,
+    /result\.state === 'verified' \? text\.imported : text\.staged/,
+  );
+  assert.match(source, /\$\{result\.imported\} \$\{transferLabel\(result\)\}/);
 });

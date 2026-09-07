@@ -105,6 +105,8 @@
   },
   "startupNotification": {
     "title": "BitFun 資料遷移",
+    "launchFailed": "OpenBitFun 已繼續啟動，但無法啟動 Data Migrator。現有 OpenBitFun 和 BitFun 資料均未變更。",
+    "openSettings": "開啟遷移設定",
     "statuses": {
       "discovered": "Data Migrator 發現了舊資料，但尚未完成遷移。",
       "scanned": "Data Migrator 已完成唯讀掃描。",
