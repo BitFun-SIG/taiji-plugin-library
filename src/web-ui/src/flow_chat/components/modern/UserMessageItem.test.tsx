@@ -109,7 +109,12 @@ vi.mock('../../services/flow-chat-manager/PeerSessionRefreshModule', () => ({
   installPeerSessionRefresh: vi.fn(() => () => {}),
 }));
 
+vi.mock('../../services/sessionNavStatusService', () => ({
+  installSessionNavStatusService: vi.fn(() => () => {}),
+}));
+
 const flowChatStoreMock = vi.hoisted(() => ({
+  registerPersistUnreadCompletionCallback: vi.fn(),
   getState: vi.fn(() => ({
     sessions: new Map(),
     activeSessionId: null,

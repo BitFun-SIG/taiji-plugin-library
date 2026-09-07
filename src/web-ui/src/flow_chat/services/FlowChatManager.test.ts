@@ -170,6 +170,7 @@ describe('FlowChatManager initialization', () => {
 
   it('creates one empty Claw session when reinitializing a reset workspace', async () => {
     storeMocks.store = {
+      registerPersistUnreadCompletionCallback: vi.fn(),
       removeSessionsForWorkspace: vi.fn(() => []),
       getState: () => ({ activeSessionId: null, sessions: new Map() }),
     };
