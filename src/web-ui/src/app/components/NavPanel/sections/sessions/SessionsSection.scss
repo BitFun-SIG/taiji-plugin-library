@@ -238,13 +238,25 @@
     white-space: nowrap;
   }
 
-  &__inline-item-status {
-    display: inline-flex;
+  // Status and the menu share one trailing cell, including when status is idle.
+  // Visibility changes never alter the title's available width.
+  &__inline-item-trailing {
+    display: grid;
     flex: 0 0 var(--openbitfun-space-5);
-    align-items: center;
-    justify-content: center;
+    place-items: center;
+    inline-size: var(--openbitfun-space-5);
     block-size: var(--openbitfun-space-5);
-    margin-inline-end: calc(var(--openbitfun-space-5) + var(--openbitfun-space-1));
+  }
+
+  &__inline-item-status {
+    grid-area: 1 / 1;
+    pointer-events: none;
+
+    .openbitfun-nav-panel__inline-item:hover &,
+    .openbitfun-nav-panel__inline-item:focus-within &,
+    .openbitfun-nav-panel__inline-item.is-menu-open & {
+      visibility: hidden;
+    }
   }
 
   &__inline-item-label {
@@ -408,23 +420,17 @@
   }
 
   &__inline-item-actions {
-    position: absolute;
-    top: 50%;
-    right: 4px;
-    transform: translateY(-50%);
+    grid-area: 1 / 1;
     display: flex;
     align-items: center;
-    gap: 4px;
-    visibility: hidden;
+    // Keep the menu button keyboard-reachable; focus-within reveals it before
+    // paint. Switch immediately so status and actions never overlap mid-fade.
     opacity: 0;
     pointer-events: none;
-    transition: opacity var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
-                visibility var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
 
     .openbitfun-nav-panel__inline-item:hover &,
     .openbitfun-nav-panel__inline-item:focus-within &,
     &.is-open {
-      visibility: visible;
       opacity: 1;
       pointer-events: auto;
     }
@@ -744,12 +750,6 @@
       background: var(--openbitfun-color-action-quiet-hover);
       box-shadow: none;
     }
-  }
-
-  &__inline-item-actions {
-    transition:
-      opacity 100ms ease,
-      visibility 100ms ease;
   }
 
   &__inline-item-action-btn,

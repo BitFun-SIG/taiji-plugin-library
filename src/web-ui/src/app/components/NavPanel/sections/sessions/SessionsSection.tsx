@@ -1834,23 +1834,28 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                       ) : null}
                     </span>
                   </span>
-                  <SessionStatusIndicator sessionId={session.sessionId} />
-                  <div
-                    className={`openbitfun-nav-panel__inline-item-actions${openMenuSessionId === session.sessionId ? ' is-open' : ''}`}
-                    data-openbitfun-component="sessions-section"
-                    data-openbitfun-part="actions"
-                    data-openbitfun-state={openMenuSessionId === session.sessionId ? 'menuOpen' : undefined}
-                  >
-                    <button
-                      type="button"
-                      ref={openMenuSessionId === session.sessionId ? sessionMenuAnchorRef : undefined}
-                      className={`openbitfun-nav-panel__inline-item-action-btn${openMenuSessionId === session.sessionId ? ' is-open' : ''}`}
-                      onClick={e => handleMenuOpen(e, session.sessionId)}
-                      data-testid="nav-session-menu-btn"
-                      data-session-id={session.sessionId}
+                  <div className="openbitfun-nav-panel__inline-item-trailing">
+                    <SessionStatusIndicator sessionId={session.sessionId} />
+                    <div
+                      className={`openbitfun-nav-panel__inline-item-actions${openMenuSessionId === session.sessionId ? ' is-open' : ''}`}
+                      data-openbitfun-component="sessions-section"
+                      data-openbitfun-part="actions"
+                      data-openbitfun-state={openMenuSessionId === session.sessionId ? 'menuOpen' : undefined}
                     >
-                      <Icon name="more" size="xs" />
-                    </button>
+                      <button
+                        type="button"
+                        ref={openMenuSessionId === session.sessionId ? sessionMenuAnchorRef : undefined}
+                        className={`openbitfun-nav-panel__inline-item-action-btn${openMenuSessionId === session.sessionId ? ' is-open' : ''}`}
+                        onClick={e => handleMenuOpen(e, session.sessionId)}
+                        aria-label={`${sessionTitle} · ${t('actions.more')}`}
+                        aria-haspopup="menu"
+                        aria-expanded={openMenuSessionId === session.sessionId}
+                        data-testid="nav-session-menu-btn"
+                        data-session-id={session.sessionId}
+                      >
+                        <Icon name="more" size="xs" />
+                      </button>
+                    </div>
                   </div>
                   {openMenuSessionId === session.sessionId && createPortal(
                     <Menu

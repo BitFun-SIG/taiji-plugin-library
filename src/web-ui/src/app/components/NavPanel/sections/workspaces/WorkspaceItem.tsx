@@ -122,6 +122,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
   );
   useGitBasicInfo(workspace.rootPath, gitBasicInfoOptions);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [menuContextPoint, setMenuContextPoint] = useState<{ x: number; y: number } | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [resetDialogOpen, setResetDialogOpen] = useState(false);
   const [relatedPathsDialogOpen, setRelatedPathsDialogOpen] = useState(false);
@@ -153,6 +154,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
   const menuPosition = useSideAnchoredPopoverPosition({
     open: menuOpen,
     anchorRef: menuAnchorRef,
+    anchorPoint: menuContextPoint,
     popoverRef: menuPopoverRef,
     layoutRevision: `${acpClientsLoading}:${acpClients.length}`,
   });
@@ -446,7 +448,17 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
   }, [tFiles, workspaceSearchIndex]);
 
   const handleMenuTriggerClick = useCallback(() => {
+    setMenuContextPoint(null);
     setMenuOpen(open => !open);
+  }, []);
+
+  const handleContextMenu = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    // Portalled menus bubble through the card without belonging to its DOM subtree.
+    if (!event.currentTarget.contains(event.target as Node)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    setMenuContextPoint({ x: event.clientX, y: event.clientY });
+    setMenuOpen(true);
   }, []);
 
   useEffect(() => {
@@ -826,6 +838,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
           onDragStart={onDragStart}
           onDragEnd={onDragEnd}
           onClick={handleCollapseToggle}
+          onContextMenu={handleContextMenu}
           style={{ cursor: 'pointer' }}
           data-testid="nav-workspace-card"
           data-workspace-id={workspace.id}
@@ -1114,6 +1127,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
         onDragStart={onDragStart}
         onDragEnd={onDragEnd}
         onClick={handleCollapseToggle}
+        onContextMenu={handleContextMenu}
         style={{ cursor: 'pointer' }}
         data-testid="nav-workspace-card"
         data-workspace-id={workspace.id}

@@ -8,11 +8,6 @@
   &[data-status='running'] > [data-openbitfun-component='icon'] {
     animation: session-status-running 1.4s linear infinite;
   }
-
-  &:focus-visible {
-    outline: var(--openbitfun-border-width-default) solid var(--openbitfun-color-accent-default);
-    outline-offset: 2px;
-  }
 }
 
 @keyframes session-status-running {

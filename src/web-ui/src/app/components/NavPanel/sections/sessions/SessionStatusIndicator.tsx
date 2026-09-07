@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import { Icon, Tooltip } from '@openbitfun/ui';
+import { Icon } from '@openbitfun/ui';
 import { CircleAlert, CircleCheck, CirclePause, CircleStop, CloudOff, Hand, Loader2, MessageCircleQuestion } from 'lucide-react';
 import { useI18n } from '@/infrastructure/i18n';
 import { useSessionNavStatus } from '@/flow_chat/hooks/useSessionNavStatus';
@@ -27,30 +27,23 @@ export const SessionStatusIndicator = memo(function SessionStatusIndicator({ ses
       : t(appearance.label)
     : '';
 
-  return (
-    <span className="openbitfun-nav-panel__inline-item-status">
-      {appearance ? (
-        <Tooltip content={label} placement="right">
-          <span
-            className="session-status-indicator"
-            data-openbitfun-component="sessions-section"
-            data-openbitfun-part="status"
-            data-status={status.kind}
-            role="img"
-            aria-label={label}
-            tabIndex={0}
-          >
-            <Icon
-              {...('glyph' in appearance
-                ? { glyph: appearance.glyph }
-                : { name: appearance.name })}
-              size="xs"
-              tone={appearance.tone}
-              aria-hidden="true"
-            />
-          </span>
-        </Tooltip>
-      ) : null}
+  return appearance ? (
+    <span
+      className="session-status-indicator openbitfun-nav-panel__inline-item-status"
+      data-openbitfun-component="sessions-section"
+      data-openbitfun-part="status"
+      data-status={status.kind}
+      role="img"
+      aria-label={label}
+    >
+      <Icon
+        {...('glyph' in appearance
+          ? { glyph: appearance.glyph }
+          : { name: appearance.name })}
+        size="xs"
+        tone={appearance.tone}
+        aria-hidden="true"
+      />
     </span>
-  );
+  ) : null;
 });
