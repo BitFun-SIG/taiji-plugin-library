@@ -1,6 +1,6 @@
 import { memo } from 'react';
 import { Icon, Tooltip } from '@openbitfun/ui';
-import { CircleAlert, CircleCheck, CirclePause, CircleStop, Clock3, CloudOff, Hand, Loader2, MessageCircleQuestion } from 'lucide-react';
+import { CircleAlert, CircleCheck, CirclePause, CircleStop, CloudOff, Hand, Loader2, MessageCircleQuestion } from 'lucide-react';
 import { useI18n } from '@/infrastructure/i18n';
 import { useSessionNavStatus } from '@/flow_chat/hooks/useSessionNavStatus';
 import './SessionStatusIndicator.scss';
@@ -13,7 +13,7 @@ const presentation = {
   unread: { glyph: CircleCheck, tone: 'success', label: 'nav.sessions.status.unread' },
   paused: { glyph: CirclePause, tone: 'secondary', label: 'nav.sessions.status.paused' },
   stopped: { glyph: CircleStop, tone: 'secondary', label: 'shared:statuses.cancelled' },
-  queued: { glyph: Clock3, tone: 'secondary', label: 'nav.sessions.status.queued' },
+  queued: { name: 'clock', tone: 'secondary', label: 'nav.sessions.status.queued' },
   syncing: { glyph: CloudOff, tone: 'secondary', label: 'nav.sessions.status.syncing' },
 } as const;
 
@@ -40,7 +40,14 @@ export const SessionStatusIndicator = memo(function SessionStatusIndicator({ ses
             aria-label={label}
             tabIndex={0}
           >
-            <Icon glyph={appearance.glyph} size="xs" tone={appearance.tone} aria-hidden="true" />
+            <Icon
+              {...('glyph' in appearance
+                ? { glyph: appearance.glyph }
+                : { name: appearance.name })}
+              size="xs"
+              tone={appearance.tone}
+              aria-hidden="true"
+            />
           </span>
         </Tooltip>
       ) : null}
