@@ -60,6 +60,11 @@
     "blocked": "Needs attention"
   },
   "report": {
+    "excludedPaths": "Non-core session files were left in the legacy source as intended. No action is required.",
+    "orphanedSessions": "Some parent sessions are absent from the legacy source. Relationships and session history were preserved; no action is required.",
+    "occurrences": "{{count}} records",
+    "reauthentication": "Some connections require authentication again. Review connection settings.",
+    "relocation": "Some paths require relocation. Review workspace settings.",
     "result": "Run result",
     "none": "No migration report is available yet.",
     "timeUnavailable": "Completion time unavailable",

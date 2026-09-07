@@ -382,7 +382,7 @@ export const SETTINGS_PAGE_MANIFESTS: readonly SettingsPageManifest[] = [
     categoryId: 'data',
     labelKey: 'navigation.pages.legacyMigration.label',
     descriptionKey: 'navigation.pages.legacyMigration.description',
-    keywords: ['legacy', 'migration', 'import', 'bitfun', 'upgrade', 'maintenance'],
+    keywords: ['legacy', 'migration', 'import', 'upgrade', 'maintenance'],
     namespaces: ['settings/legacy-migration'],
     searchPhrases: [
       phrase('settings/legacy-migration', 'title'),

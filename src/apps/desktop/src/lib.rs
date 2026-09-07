@@ -567,7 +567,7 @@ pub async fn run() {
         Ok(api::legacy_migration_api::StartupProbeDisposition::MigratorLaunched) => return,
         Err(error) => {
             show_fatal_startup_error(&format!(
-                "OpenBitFun could not safely inspect legacy BitFun migration state and cannot continue.\n\n{}\n\nRepair the installation or the migration state before retrying.",
+                "OpenBitFun could not safely inspect legacy migration state and cannot continue.\n\n{}\n\nRepair the installation or the migration state before retrying.",
                 api::legacy_migration_api::LegacyMigrationCommandError::from(error).message
             ));
             return;

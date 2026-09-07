@@ -817,23 +817,15 @@ pub fn launch_trusted_executable(
 
 #[cfg(windows)]
 fn allow_inherited_job_dev_retry(error: &std::io::Error) -> bool {
-    should_retry_without_job_breakaway(
-        cfg!(debug_assertions),
-        std::env::var_os("OPENBITFUN_ALLOW_UNSIGNED_MIGRATOR_DEV").as_deref()
-            == Some(OsStr::new("1")),
-        error.kind(),
-    )
+    should_retry_without_job_breakaway(cfg!(debug_assertions), error.kind())
 }
 
 #[cfg(any(windows, test))]
 fn should_retry_without_job_breakaway(
     debug_assertions: bool,
-    unsigned_migrator_dev_enabled: bool,
     error_kind: std::io::ErrorKind,
 ) -> bool {
-    debug_assertions
-        && unsigned_migrator_dev_enabled
-        && error_kind == std::io::ErrorKind::PermissionDenied
+    debug_assertions && error_kind == std::io::ErrorKind::PermissionDenied
 }
 
 fn validate_binary_name(name: &str) -> LegacyMigrationResult<()> {
@@ -990,26 +982,18 @@ mod tests {
     }
 
     #[test]
-    fn inherited_job_retry_requires_debug_opt_in_and_permission_denied() {
+    fn inherited_job_retry_requires_debug_and_permission_denied() {
         use std::io::ErrorKind;
 
         assert!(should_retry_without_job_breakaway(
             true,
-            true,
             ErrorKind::PermissionDenied
         ));
         assert!(!should_retry_without_job_breakaway(
             false,
-            true,
             ErrorKind::PermissionDenied
         ));
         assert!(!should_retry_without_job_breakaway(
-            true,
-            false,
-            ErrorKind::PermissionDenied
-        ));
-        assert!(!should_retry_without_job_breakaway(
-            true,
             true,
             ErrorKind::NotFound
         ));

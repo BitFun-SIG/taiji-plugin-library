@@ -621,10 +621,14 @@ impl MigrationEngine {
                 diagnostic.severity,
                 FindingSeverity::Warning | FindingSeverity::Blocking
             )
-        }) || report
-            .domain_results
-            .iter()
-            .any(|result| !result.warnings.is_empty());
+        }) || report.domain_results.iter().any(|result| {
+            result.warnings.iter().any(|diagnostic| {
+                matches!(
+                    diagnostic.severity,
+                    FindingSeverity::Warning | FindingSeverity::Blocking
+                )
+            })
+        });
         let final_status = if has_warnings {
             MigrationRunStatus::CompletedWithWarnings
         } else {

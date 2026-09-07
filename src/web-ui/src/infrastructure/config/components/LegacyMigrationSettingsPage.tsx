@@ -1,4 +1,4 @@
-import { Button, Checkbox, StatusPill, type StatusPillTone } from '@openbitfun/ui';
+import { Button, Checkbox, Dialog, DialogBody, DialogClose, DialogHeader, DialogHeading, DialogTitle, StatusPill, type StatusPillTone } from '@openbitfun/ui';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { confirmDialog } from '@/infrastructure/confirm-dialog';
 import { useI18n } from '@/infrastructure/i18n';
@@ -75,6 +75,7 @@ export default function LegacyMigrationSettingsPage() {
   const [status, setStatus] = useState<LegacyMigrationStatusView | null>(null);
   const [scan, setScan] = useState<LegacyMigrationScanView | null>(null);
   const [report, setReport] = useState<MigrationRunReport | null>(null);
+  const [reportOpen, setReportOpen] = useState(false);
   const [selectedGroups, setSelectedGroups] = useState<Set<MigrationGroupId>>(
     () => new Set(MIGRATION_GROUPS),
   );
@@ -176,6 +177,7 @@ export default function LegacyMigrationSettingsPage() {
     try {
       const next = await legacyMigrationAPI.getReport();
       setReport(next);
+      setReportOpen(next !== null);
       if (!next) notification.info(t('messages.noReport'));
     } catch (error) {
       log.error('Failed to load legacy migration report', error);
@@ -405,6 +407,37 @@ export default function LegacyMigrationSettingsPage() {
           )}
         </ConfigPageSection>
       </ConfigPageContent>
+      <Dialog open={reportOpen} onOpenChange={setReportOpen} size="lg">
+        <DialogHeader>
+          <DialogHeading><DialogTitle>{t('actions.viewReport')}</DialogTitle></DialogHeading>
+          <DialogClose />
+        </DialogHeader>
+        <DialogBody>
+          {report ? <>
+            <p>{t(`statuses.${report.status}`)}</p>
+            {report.domainResults.map((result) => (
+              <section key={result.domain}>
+                <h3>{t(`domains.${result.domain}`)} — {t(`domainStates.${result.state}`)}</h3>
+                <p>{t('report.domainCounts', {
+                  imported: formatNumber(result.imported), skipped: formatNumber(result.skipped),
+                  conflicts: formatNumber(result.conflicts),
+                })}</p>
+                <ul>{Array.from(new Map(result.warnings.map((item) => [item.code, item])).values()).map((item) => (
+                  <li key={item.code}>
+                    {item.code === 'session_path_not_migrated' ? t('report.excludedPaths')
+                      : item.code === 'session_parent_not_present' ? t('report.orphanedSessions') : item.message}
+                    {' '}{t('report.occurrences', { count: result.warnings.filter((entry) => entry.code === item.code).length })}
+                    {item.action ? <p>{item.action}</p> : null}
+                  </li>
+                ))}</ul>
+              </section>
+            ))}
+            {report.diagnostics.map((item, index) => <p key={`${item.code}:${index}`}>{item.message}</p>)}
+            {(report.requiresReauthentication ?? []).length > 0 ? <p>{t('report.reauthentication')}</p> : null}
+            {(report.requiresRelocation ?? []).length > 0 ? <p>{t('report.relocation')}</p> : null}
+          </> : null}
+        </DialogBody>
+      </Dialog>
     </ConfigPageLayout>
   );
 }

@@ -48,6 +48,11 @@
     "blocked": "需要處理"
   },
   "report": {
+    "excludedPaths": "依遷移範圍保留在舊資料中的非核心會話檔案，無須處理。",
+    "orphanedSessions": "部分會話的父會話在舊資料中不存在；已保留關係及會話歷史，無須處理。",
+    "occurrences": "共 {{count}} 筆記錄",
+    "reauthentication": "部分連線需要重新認證，請至連線設定處理。",
+    "relocation": "部分路徑需要重新定位，請檢查工作區設定。",
     "result": "執行結果",
     "none": "尚無遷移報告。",
     "timeUnavailable": "完成時間不可用",

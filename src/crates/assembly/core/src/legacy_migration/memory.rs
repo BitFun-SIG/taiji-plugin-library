@@ -2114,7 +2114,7 @@ mod tests {
     fn test_tempdir(label: &str) -> tempfile::TempDir {
         let root = std::env::var_os("OPENBITFUN_TEST_TMPDIR")
             .map(PathBuf::from)
-            .unwrap_or_else(|| PathBuf::from("E:/tmp"));
+            .unwrap_or_else(std::env::temp_dir);
         fs::create_dir_all(&root).unwrap();
         tempfile::Builder::new()
             .prefix(&format!("obfm-{}-", &label[..label.len().min(4)]))

@@ -13,7 +13,7 @@ const translations = {
     stepConfirm: 'Step 4', planTitle: 'Confirm migration', retryWriters: 'Check processes again',
     start: 'Start migration', stepProgress: 'Step 5', progressTitle: 'Migration progress',
     phase: 'Phase', domain: 'Domain', count: 'Completed steps',
-    cancel: 'Cancel at a safe boundary', stepDone: 'Result', reportTitle: 'Migration report',
+    cancel: 'Cancel', stepDone: 'Result', reportTitle: 'Migration report',
     reportPrivacy: 'This summary contains counts and result codes, not credentials or user content.',
     exportDiagnostics: 'Export failure diagnostics',
     diagnosticsExported: 'Sanitized diagnostics saved to {path}',
@@ -26,7 +26,7 @@ const translations = {
     recovery: 'A previous migration journal was found and can be resumed.',
     blockers: '{count} data-writing process(es) must stop before migration can continue.',
     noBlockers: 'No data-writing processes are blocking migration.',
-    steps: '{count} ordered domain step(s)', conflicts: '{count} visible conflict(s)',
+    steps: '{count} migration step(s)', conflicts: '{count} conflict(s)',
     imported: 'imported', staged: 'staged', skipped: 'skipped', warnings: 'warnings',
   },
   'zh-CN': {
@@ -39,7 +39,7 @@ const translations = {
     reviewTitle: '检查扫描结果', prepare: '运行迁移预检', stepConfirm: '第 4 步',
     planTitle: '确认迁移', retryWriters: '重新检查进程', start: '开始迁移',
     stepProgress: '第 5 步', progressTitle: '迁移进度', phase: '阶段', domain: '领域',
-    count: '已完成步骤', cancel: '在安全边界取消', stepDone: '结果', reportTitle: '迁移报告',
+    count: '已完成步骤', cancel: '取消', stepDone: '结果', reportTitle: '迁移报告',
     reportPrivacy: '此摘要仅包含计数和结果码，不包含凭据或用户正文。',
     exportDiagnostics: '导出失败诊断', diagnosticsExported: '去敏诊断已保存到 {path}',
     openDesktop: '打开 OpenBitFun',
@@ -51,7 +51,7 @@ const translations = {
     sourceFound: '已发现 BitFun {version}。迁移期间来源保持只读。',
     recovery: '发现上次迁移日志，可以从安全状态继续。',
     blockers: '迁移前还需停止 {count} 个数据写入进程。', noBlockers: '没有进程阻止迁移。',
-    steps: '{count} 个有序领域步骤', conflicts: '{count} 个可见冲突',
+    steps: '{count} 个迁移步骤', conflicts: '{count} 个冲突',
     imported: '已导入', staged: '已暂存', skipped: '已跳过', warnings: '警告',
   },
   'zh-TW': {
@@ -64,7 +64,7 @@ const translations = {
     reviewTitle: '檢查掃描結果', prepare: '執行遷移預檢', stepConfirm: '第 4 步',
     planTitle: '確認遷移', retryWriters: '重新檢查程序', start: '開始遷移',
     stepProgress: '第 5 步', progressTitle: '遷移進度', phase: '階段', domain: '領域',
-    count: '已完成步驟', cancel: '在安全邊界取消', stepDone: '結果', reportTitle: '遷移報告',
+    count: '已完成步驟', cancel: '取消', stepDone: '結果', reportTitle: '遷移報告',
     reportPrivacy: '此摘要僅包含計數和結果碼，不包含憑據或使用者正文。',
     exportDiagnostics: '匯出失敗診斷', diagnosticsExported: '去敏診斷已儲存至 {path}',
     openDesktop: '開啟 OpenBitFun',
@@ -76,7 +76,7 @@ const translations = {
     sourceFound: '已發現 BitFun {version}。遷移期間來源保持唯讀。',
     recovery: '發現上次遷移日誌，可以從安全狀態繼續。',
     blockers: '遷移前還需停止 {count} 個資料寫入程序。', noBlockers: '沒有程序阻止遷移。',
-    steps: '{count} 個有序領域步驟', conflicts: '{count} 個可見衝突',
+    steps: '{count} 個遷移步驟', conflicts: '{count} 個衝突',
     imported: '已匯入', staged: '已暫存', skipped: '已略過', warnings: '警告',
   },
 };
@@ -97,24 +97,24 @@ const groups = [
     'zh-TW': ['設定與服務憑據', '匯入設定；無法解密的憑據會標記為需要重新登入。'],
   }],
   ['agents_skills_and_miniapps', {
-    en: ['Agents, Skills, and MiniApps', 'User content is imported; system Skills and built-in MiniApps are excluded.'],
-    'zh-CN': ['Agents、Skills 与 MiniApps', '导入用户内容；排除系统 Skills 和内置 MiniApps。'],
-    'zh-TW': ['Agents、Skills 與 MiniApps', '匯入使用者內容；排除系統 Skills 和內建 MiniApps。'],
+    en: ['Agents, Skills, and MiniApps', 'Imports user extensions and saved data from built-in MiniApps. Built-in code is provided by OpenBitFun.'],
+    'zh-CN': ['Agents、Skills 与 MiniApps', '导入用户扩展和内置 MiniApps 的使用数据；内置代码由新版提供。'],
+    'zh-TW': ['Agents、Skills 與 MiniApps', '匯入使用者擴充與內建 MiniApps 的使用資料；內建程式碼由新版提供。'],
   }],
   ['workspaces_sessions_and_tasks', {
-    en: ['Workspaces, sessions, and tasks', 'Includes coordination.sqlite as a required atomic dependency.'],
-    'zh-CN': ['工作区、会话与 Agent 任务状态', '强制包含 coordination.sqlite 作为原子依赖。'],
-    'zh-TW': ['工作區、工作階段與 Agent 任務狀態', '強制包含 coordination.sqlite 作為原子相依項。'],
+    en: ['Workspaces, sessions, and tasks', 'Imports workspaces, conversation history, and Agent task status.'],
+    'zh-CN': ['工作区、会话与 Agent 任务状态', '导入工作区、会话历史与 Agent 任务状态。'],
+    'zh-TW': ['工作區、工作階段與 Agent 任務狀態', '匯入工作區、會話歷史與 Agent 任務狀態。'],
   }],
   ['memory', {
-    en: ['Memory', 'Imports structured and file-backed memory without user-content telemetry.'],
-    'zh-CN': ['记忆', '导入结构化与文件记忆，不发送用户正文遥测。'],
-    'zh-TW': ['記憶', '匯入結構化與檔案記憶，不傳送使用者正文遙測。'],
+    en: ['Memory', 'Imports memory databases and memory files.'],
+    'zh-CN': ['记忆', '导入记忆数据库与记忆文件。'],
+    'zh-TW': ['記憶', '匯入記憶資料庫與記憶檔案。'],
   }],
   ['remote_connections_and_devices', {
-    en: ['Remote connections and devices', 'Non-portable identities and secrets are marked for repair or sign-in.'],
-    'zh-CN': ['远程连接与设备', '不可移植的身份和秘密会标记为需要修复或重新登录。'],
-    'zh-TW': ['遠端連線與裝置', '不可移植的身分和秘密會標記為需要修復或重新登入。'],
+    en: ['Remote connections and devices', 'Imports remote connections and device settings. Some connections may require signing in again.'],
+    'zh-CN': ['远程连接与设备', '导入远程连接与设备设置；部分连接可能需要重新登录。'],
+    'zh-TW': ['遠端連線與裝置', '匯入遠端連線與裝置設定；部分連線可能需要重新登入。'],
   }],
 ];
 
@@ -237,7 +237,7 @@ function render(view) {
   const reportSummary = document.getElementById('report-summary');
   if (view.report) {
     reportSummary.replaceChildren(...view.report.domainResults.map((result) =>
-      row(result.domain, `${result.imported} ${transferLabel(result)}, ${result.skipped} ${text.skipped}, ${result.warnings.length} ${text.warnings}`)));
+      row(result.domain, `${result.imported} ${transferLabel(result)}, ${result.skipped} ${text.skipped}, ${result.warnings.filter((item) => item.severity !== 'info').length} ${text.warnings}`)));
   }
   show('dev-restart-help', !view.restartDesktopOnFinish);
   document.getElementById('open-desktop').textContent = view.restartDesktopOnFinish

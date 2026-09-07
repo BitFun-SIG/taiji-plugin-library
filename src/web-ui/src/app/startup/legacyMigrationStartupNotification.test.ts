@@ -75,8 +75,11 @@ describe('legacy migration startup notification', () => {
 
     expect(mocks.error).toHaveBeenCalledTimes(1);
     expect(mocks.error.mock.calls[0][0]).toBe(
-      'settings/legacy-migration:startupNotification.launchFailed',
+      'startupNotification.launchFailed',
     );
+    expect(mocks.t).toHaveBeenCalledWith('startupNotification.launchFailed', {
+      ns: 'settings/legacy-migration',
+    });
     expect(mocks.error.mock.calls[0][1].metadata).toEqual({
       source: 'legacy-migration-startup-error',
       code: 'data_migrator_launch_failed',

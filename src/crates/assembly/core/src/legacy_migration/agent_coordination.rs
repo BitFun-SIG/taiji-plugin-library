@@ -1652,7 +1652,7 @@ mod tests {
         let report = engine
             .execute(&plan, &CancellationToken::default(), &NoCrashInjection)
             .unwrap();
-        assert_eq!(report.status, MigrationRunStatus::CompletedWithWarnings);
+        assert_eq!(report.status, MigrationRunStatus::Completed);
         assert!(report
             .domain_results
             .iter()
@@ -1787,7 +1787,7 @@ mod tests {
             .execute(&plan, &CancellationToken::default(), &NoCrashInjection)
             .unwrap();
 
-        assert_eq!(report.status, MigrationRunStatus::CompletedWithWarnings);
+        assert_eq!(report.status, MigrationRunStatus::Completed);
         let sessions_result = report
             .domain_results
             .iter()
@@ -1797,7 +1797,8 @@ mod tests {
         assert!(sessions_result
             .warnings
             .iter()
-            .any(|warning| warning.code == "session_parent_not_present"));
+            .any(|warning| warning.code == "session_parent_not_present"
+                && warning.severity == FindingSeverity::Info));
 
         let sessions_root = roots
             .target_home_root
@@ -2086,6 +2087,14 @@ mod tests {
         copy_directory(&fixture.join("user-root"), &roots.legacy_user_root).unwrap();
         copy_directory(&fixture.join("home"), &roots.legacy_home_root).unwrap();
         copy_directory(&fixture.join("ssh"), &roots.legacy_ssh_root).unwrap();
+        // The archived fixture uses a Windows path; identity validation needs
+        // an absolute path in the platform running this test.
+        let workspace_path = roots.legacy_user_root.join("data/workspace_data.json");
+        let mut workspace_data: serde_json::Value =
+            serde_json::from_slice(&fs::read(&workspace_path).unwrap()).unwrap();
+        workspace_data["workspaces"]["workspace-1"]["rootPath"] =
+            serde_json::json!(roots.legacy_home_root.join("fixture-workspace"));
+        atomic_write_json(&workspace_path, &workspace_data).unwrap();
     }
 
     fn materialize_coordination(roots: &MigrationRoots, with_wal_row: bool) -> Connection {
@@ -2177,7 +2186,7 @@ mod tests {
     fn test_tempdir(label: &str) -> tempfile::TempDir {
         let root = std::env::var_os("OPENBITFUN_TEST_TMPDIR")
             .map(PathBuf::from)
-            .unwrap_or_else(|| PathBuf::from("E:/tmp"));
+            .unwrap_or_else(std::env::temp_dir);
         fs::create_dir_all(&root).unwrap();
         tempfile::Builder::new()
             .prefix(&format!("openbitfun-migration-{label}-"))

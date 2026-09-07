@@ -308,19 +308,19 @@ impl LegacyDomainAdapter for WorkspaceSessionsAdapter {
             .iter()
             .map(|path| MigrationDiagnostic {
                 code: "session_path_not_migrated".to_string(),
-                severity: FindingSeverity::Warning,
+                severity: FindingSeverity::Info,
                 domain: Some(self.domain()),
                 relative_path: Some(path.clone()),
                 message: "A non-owned or rebuildable Session path was left in the legacy source"
                     .to_string(),
-                action: Some("Review the migration report before removing legacy data".to_string()),
+                action: None,
             })
             .collect::<Vec<_>>();
         let orphaned_relationships = orphaned_session_relationship_count(&manifest);
         if orphaned_relationships > 0 {
             warnings.push(MigrationDiagnostic {
                 code: "session_parent_not_present".to_string(),
-                severity: FindingSeverity::Warning,
+                severity: FindingSeverity::Info,
                 domain: Some(self.domain()),
                 relative_path: None,
                 message: format!(
@@ -1951,6 +1951,9 @@ mod tests {
         let workspace_path = source_workspace_data_path(&roots);
         let mut workspace_data: serde_json::Value =
             serde_json::from_slice(&fs::read(&workspace_path).unwrap()).unwrap();
+        // Use a native absolute path instead of the archived Windows path.
+        workspace_data["workspaces"]["workspace-1"]["rootPath"] =
+            serde_json::json!(roots.legacy_home_root.join("fixture-workspace"));
         workspace_data["workspaces"]["assistant-legacy"] = serde_json::json!({
             "id": "assistant-legacy",
             "name": "Personal assistant",
@@ -2123,7 +2126,7 @@ mod tests {
     fn test_tempdir(label: &str) -> tempfile::TempDir {
         let root = std::env::var_os("OPENBITFUN_TEST_TMPDIR")
             .map(PathBuf::from)
-            .unwrap_or_else(|| PathBuf::from("E:/tmp"));
+            .unwrap_or_else(std::env::temp_dir);
         fs::create_dir_all(&root).unwrap();
         tempfile::Builder::new()
             .prefix(&format!("openbitfun-migration-{label}-"))

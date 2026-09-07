@@ -31,12 +31,12 @@ export async function showLegacyMigrationStartupNotification(
 
     storage.setItem(noticeKey, 'shown');
     notificationService.error(
-      i18nService.t(`${namespace}:startupNotification.launchFailed`),
+      i18nService.t('startupNotification.launchFailed', { ns: namespace }),
       {
-        title: i18nService.t(`${namespace}:startupNotification.title`),
+        title: i18nService.t('startupNotification.title', { ns: namespace }),
         duration: 0,
         actions: [{
-          label: i18nService.t(`${namespace}:startupNotification.openSettings`),
+          label: i18nService.t('startupNotification.openSettings', { ns: namespace }),
           variant: 'primary' as const,
           onClick: openMigrationSettings,
         }],
@@ -57,10 +57,10 @@ export async function showLegacyMigrationStartupNotification(
 
   storage.setItem(noticeKey, 'shown');
   const options = {
-    title: i18nService.t(`${namespace}:startupNotification.title`),
+    title: i18nService.t('startupNotification.title', { ns: namespace }),
     duration: 0,
     actions: [{
-      label: i18nService.t(`${namespace}:actions.viewReport`),
+      label: i18nService.t('actions.viewReport', { ns: namespace }),
       variant: 'primary' as const,
       onClick: openMigrationSettings,
     }],
@@ -70,6 +70,6 @@ export async function showLegacyMigrationStartupNotification(
       status: report.status,
     },
   };
-  const message = i18nService.t(`${namespace}:startupNotification.statuses.${report.status}`);
+  const message = i18nService.t(`startupNotification.statuses.${report.status}`, { ns: namespace });
   notificationService[notificationKind(report.status)](message, options);
 }

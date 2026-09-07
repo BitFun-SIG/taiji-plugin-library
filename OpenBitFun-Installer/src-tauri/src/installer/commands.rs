@@ -872,7 +872,7 @@ pub(crate) fn launch_legacy_data_migrator(
     {
         let _ = request;
         return Err(
-            "Legacy BitFun data migration is not supported by this Installer platform.".to_string(),
+            "Legacy data migration is not supported by this Installer platform.".to_string(),
         );
     }
 
@@ -882,13 +882,13 @@ pub(crate) fn launch_legacy_data_migrator(
         let roots = MigrationRoots::resolve_current_user()
             .map_err(|_| "Could not resolve the current-user migration storage.".to_string())?;
         let Some(source) = probe_legacy_source(&roots, ProbeLimits::default())
-            .map_err(|_| "Could not safely inspect older BitFun data.".to_string())?
+            .map_err(|_| "Could not safely inspect older data.".to_string())?
         else {
             return Ok(false);
         };
         if !source.supported {
             return Err(
-                "The discovered BitFun data format is not supported by this Data Migrator."
+                "The discovered legacy data format is not supported by this Data Migrator."
                     .to_string(),
             );
         }

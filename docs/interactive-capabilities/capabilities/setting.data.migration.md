@@ -11,14 +11,14 @@ title_en: "Legacy data migration"
 
 > 设置 / Setting
 
-从本机旧版 BitFun 安装扫描并导入受支持的数据，查看去敏报告，同时保持旧来源不变。
+从本机旧版 安装扫描并导入受支持的数据，查看去敏报告，同时保持旧来源不变。
 
-Scan and import supported data from a local legacy BitFun installation, inspect redacted reports, and leave the legacy source unchanged.
+Scan and import supported data from a local legacy installation, inspect redacted reports, and leave the legacy source unchanged.
 
 ## 完整功能清单 / Everything included
 
-- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 只读扫描本机旧版 BitFun 来源及所选数据组
-  - Read-only scan the local legacy BitFun source and selected data groups
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 只读扫描本机旧版数据来源及所选数据组
+  - Read-only scan the local legacy source and selected data groups
 - **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 选择设置、扩展、会话、记忆和远程连接迁移范围
   - Choose settings, extensions, sessions, memory, and remote-connection migration scope
 - **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 确认关闭影响后启动独立 Data Migrator
@@ -55,8 +55,8 @@ Scan and import supported data from a local legacy BitFun installation, inspect 
 
 - “打开旧版数据迁移”
   - “Open legacy data migration”
-- “带我查看 BitFun 迁移报告”
-  - “Show me the BitFun migration report”
+- “带我查看数据迁移报告”
+  - “Show me the data migration report”
 
 Agent 会先查找相关功能或设置，确认目标后再替你打开、执行或修改。完整能力目录不会预先塞进对话上下文。
 
