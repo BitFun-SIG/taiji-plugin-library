@@ -1,3 +1,4 @@
+import Foundation
 import OpenBitFunMobileCore
 import SwiftUI
 import UIKit
@@ -37,9 +38,25 @@ struct ChatTimelineView: View {
             }
             .simultaneousGesture(
                 DragGesture(minimumDistance: 8).onChanged { value in
-                    if value.translation.height < -8 { userScrolledUp = true }
+                    if value.translation.height > 8 { userScrolledUp = true }
                 }
             )
+            .scrollDismissesKeyboard(.interactively)
+            .onChange(of: model.selectedSessionID) { _ in
+                userScrolledUp = false
+                Task { @MainActor in
+                    await Task.yield()
+                    proxy.scrollTo("timeline-bottom", anchor: .bottom)
+                }
+            }
+            .onChange(of: model.isSending) { sending in
+                guard sending else { return }
+                userScrolledUp = false
+                Task { @MainActor in
+                    await Task.yield()
+                    proxy.scrollTo("timeline-bottom", anchor: .bottom)
+                }
+            }
             .onChange(of: model.timelineRows) { _ in
                 guard !userScrolledUp else { return }
                 Task { @MainActor in
@@ -342,15 +359,11 @@ struct MarkdownMessageView: View {
     let text: String
     @ObservedObject var model: MobileAppModel
 
-    private var blocks: [MarkdownBlock] { MarkdownParser.shared.parse(text: text) }
-    private var references: [MessageFileReference] {
-        MessageFileReferenceProjector.shared.project(source: text)
-    }
-
     var body: some View {
+        let projection = MarkdownProjectionCache.shared.projection(for: text)
         VStack(alignment: .leading, spacing: 9) {
-            ForEach(blocks, id: \.id) { MarkdownBlockView(block: $0) }
-            ForEach(references, id: \.id) { FileReferenceCard(reference: $0, model: model) }
+            ForEach(projection.blocks, id: \.id) { MarkdownBlockView(block: $0) }
+            ForEach(projection.references, id: \.id) { FileReferenceCard(reference: $0, model: model) }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .environment(\.openURL, OpenURLAction { url in
@@ -360,6 +373,43 @@ struct MarkdownMessageView: View {
             }
             return .systemAction
         })
+    }
+}
+
+@MainActor
+private final class MarkdownProjectionCache {
+    struct Projection {
+        let blocks: [MarkdownBlock]
+        let references: [MessageFileReference]
+    }
+
+    private final class Entry: NSObject {
+        let projection: Projection
+
+        init(_ projection: Projection) {
+            self.projection = projection
+        }
+    }
+
+    static let shared = MarkdownProjectionCache()
+    private let entries = NSCache<NSString, Entry>()
+
+    private init() {
+        entries.countLimit = 48
+        entries.totalCostLimit = 4 * 1_024 * 1_024
+    }
+
+    func projection(for text: String) -> Projection {
+        let key = text as NSString
+        if let cached = entries.object(forKey: key) {
+            return cached.projection
+        }
+        let projection = Projection(
+            blocks: MarkdownParser.shared.parse(text: text),
+            references: MessageFileReferenceProjector.shared.project(source: text)
+        )
+        entries.setObject(Entry(projection), forKey: key, cost: text.utf8.count)
+        return projection
     }
 }
 
@@ -766,10 +816,7 @@ private struct ToolStatusList: View {
             pending.removeAll()
         }
         for tool in tools {
-            let collapsible = tool.actions.isEmpty
-                && ["COMPLETED", "CANCELLED"].contains(tool.phase)
-                && ["DOCUMENT", "FOLDER", "SEARCH"].contains(tool.kind)
-            if collapsible { pending.append(tool) } else { flush(); result.append(.tool(tool)) }
+            if tool.foldIntoSummary { pending.append(tool) } else { flush(); result.append(.tool(tool)) }
         }
         flush()
         return result
@@ -788,7 +835,7 @@ private struct CollapsedToolsRow: View {
                     Image(systemName: "doc.on.doc").font(.system(size: 12, weight: .medium))
                         .frame(width: 20, height: 20).background(OpenBitFunTheme.soft)
                         .clipShape(RoundedRectangle(cornerRadius: 6))
-                    Text(model.localizedFormat("已完成 %lld 项读取与搜索", Int64(tools.count)))
+                    Text(model.localizedFormat("已完成 %lld 项操作", Int64(tools.count)))
                         .font(MobileDesignTypography.bodySmall.font)
                     Spacer()
                     Image(systemName: expanded ? "chevron.up" : "chevron.down")
@@ -797,7 +844,11 @@ private struct CollapsedToolsRow: View {
                 .foregroundStyle(OpenBitFunTheme.muted).frame(minHeight: 32)
             }
             .buttonStyle(.plain)
-            if expanded { ForEach(tools) { ToolStatusRow(tool: $0, model: model) } }
+            if expanded {
+                VStack(alignment: .leading, spacing: 3) {
+                    ForEach(tools) { ToolStatusRow(tool: $0, model: model) }
+                }
+            }
         }
     }
 }

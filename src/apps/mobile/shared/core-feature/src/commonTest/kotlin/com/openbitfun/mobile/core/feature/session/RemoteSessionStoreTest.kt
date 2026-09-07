@@ -1130,6 +1130,30 @@ class RemoteSessionStoreTest {
     }
 
     @Test
+    fun rapidCacheMissesIssueOnlyTheFirstAndLatestTranscriptRequests() = runTest {
+        val transport = FakeSessionTransport()
+        transport.nonCancellableCommands += "get_session_messages"
+        val store = RemoteSessionStore.create(this, transport)
+
+        store.dispatch(RemoteSessionIntent.Open("s-code"))
+        runCurrent()
+        val firstRequest = transport.lateCommandContinuations.remove("get_session_messages")!!
+        store.dispatch(RemoteSessionIntent.Open("s-cowork"))
+        runCurrent()
+        store.dispatch(RemoteSessionIntent.Open("s-agentic"))
+        runCurrent()
+
+        assertEquals(1, transport.commands.count { it.cmd == "get_session_messages" })
+        firstRequest.resume(Unit)
+        runCurrent()
+
+        val transcriptRequests = transport.commands.filter { it.cmd == "get_session_messages" }
+        assertEquals(2, transcriptRequests.size)
+        assertEquals("s-agentic", transcriptRequests.last().sessionId)
+        store.stop()
+    }
+
+    @Test
     fun refreshRetriesThePermissionModeAlone() = runTest {
         val transport = FakeSessionTransport()
         transport.permissionFailure = RelayFailure.Timeout

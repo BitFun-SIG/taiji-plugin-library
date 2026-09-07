@@ -30,7 +30,9 @@ import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertTrue
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class RemoteSessionPersistenceTest {
@@ -222,6 +224,113 @@ class RemoteSessionPersistenceTest {
     }
 
     @Test
+    fun completeCachedTranscriptResumesFromCountWithoutFullFetch() = runTest {
+        val stores = MemoryPersistence()
+        stores.transcripts.rows["device-a::server"] = listOf(
+            PersistedRemoteMessage(
+                messageId = "m-1", sessionId = "server", role = "assistant", text = "cached",
+                payloadJson = "{}",
+            ),
+        )
+        stores.transcripts.cursors["device-a::server"] = PersistedRemoteCursor("9", 1, "3")
+        val transport = PersistenceTransport()
+        val store = RemoteSessionStore.create(this, transport, "device-a", stores.stores)
+
+        store.dispatch(RemoteSessionIntent.Open("server"))
+        runCurrent()
+
+        val ready = assertIs<RemoteSessionUiState.Ready>(store.state.value)
+        assertEquals("cached", ready.timeline?.persistedMessages?.single()?.text)
+        assertFalse(ready.busy)
+        assertTrue(transport.commands.none { it.cmd == "get_session_messages" })
+        assertEquals(listOf(0), transport.sinceVersions)
+        assertEquals(listOf(1), transport.knownMessageCounts)
+        store.stop()
+    }
+
+    @Test
+    fun hollowCachedAssistantFallsBackToAuthoritativeFetch() = runTest {
+        val stores = MemoryPersistence()
+        stores.transcripts.rows["device-a::server"] = listOf(
+            PersistedRemoteMessage(
+                messageId = "m-1", sessionId = "server", role = "assistant", text = "",
+                payloadJson = "{}",
+            ),
+        )
+        stores.transcripts.cursors["device-a::server"] = PersistedRemoteCursor("9", 1, "3")
+        val transport = PersistenceTransport().apply {
+            messagesJson = """[{"id":"m-1","role":"assistant","content":"restored body"}]"""
+        }
+        val store = RemoteSessionStore.create(this, transport, "device-a", stores.stores)
+
+        store.dispatch(RemoteSessionIntent.Open("server"))
+        runCurrent()
+
+        assertTrue(transport.commands.any { it.cmd == "get_session_messages" })
+        assertEquals(
+            "restored body",
+            assertIs<RemoteSessionUiState.Ready>(store.state.value).timeline
+                ?.persistedMessages?.single()?.text,
+        )
+        store.stop()
+    }
+
+    @Test
+    fun pollSnapshotReplacesRewrittenCachedHistory() = runTest {
+        val stores = MemoryPersistence()
+        stores.transcripts.rows["device-a::server"] = listOf(
+            PersistedRemoteMessage("old-1", "server", "user", "old one", payloadJson = "{}"),
+            PersistedRemoteMessage("old-2", "server", "assistant", "old two", payloadJson = "{}"),
+        )
+        stores.transcripts.cursors["device-a::server"] = PersistedRemoteCursor("7", 2, "0")
+        val transport = PersistenceTransport().apply {
+            polls = listOf(
+                """{"resp":"ok","version":8,"changed":true,"session_state":"idle","total_msg_count":1,"message_snapshot":[{"id":"new-1","role":"assistant","content":"replacement"}]}""",
+            )
+        }
+        val store = RemoteSessionStore.create(this, transport, "device-a", stores.stores)
+
+        store.dispatch(RemoteSessionIntent.Open("server"))
+        runCurrent()
+
+        val rows = assertIs<RemoteSessionUiState.Ready>(store.state.value)
+            .timeline?.persistedMessages.orEmpty()
+        assertEquals(listOf("new-1"), rows.map { it.id })
+        assertEquals(listOf("new-1"), stores.transcripts.rows.getValue("device-a::server").map { it.messageId })
+        assertTrue(transport.commands.none { it.cmd == "get_session_messages" })
+        store.stop()
+    }
+
+    @Test
+    fun shorterLegacyPollWithoutSnapshotFallsBackToFullReplacement() = runTest {
+        val stores = MemoryPersistence()
+        stores.transcripts.rows["device-a::server"] = listOf(
+            PersistedRemoteMessage("old-1", "server", "user", "old one", payloadJson = "{}"),
+            PersistedRemoteMessage("old-2", "server", "assistant", "old two", payloadJson = "{}"),
+        )
+        stores.transcripts.cursors["device-a::server"] = PersistedRemoteCursor("7", 2, "0")
+        val transport = PersistenceTransport().apply {
+            messagesJson = """[{"id":"new-1","role":"assistant","content":"replacement"}]"""
+            polls = listOf(
+                """{"resp":"ok","version":8,"changed":true,"session_state":"idle","total_msg_count":1}""",
+            )
+        }
+        val store = RemoteSessionStore.create(this, transport, "device-a", stores.stores)
+
+        store.dispatch(RemoteSessionIntent.Open("server"))
+        runCurrent()
+
+        assertEquals(
+            listOf("new-1"),
+            assertIs<RemoteSessionUiState.Ready>(store.state.value)
+                .timeline?.persistedMessages.orEmpty().map { it.id },
+        )
+        assertEquals(1, transport.commands.count { it.cmd == "get_session_messages" })
+        assertEquals(listOf("new-1"), stores.transcripts.rows.getValue("device-a::server").map { it.messageId })
+        store.stop()
+    }
+
+    @Test
     fun deleteRemovesPersistedListDraftTranscriptAndCursor() = runTest {
         val stores = MemoryPersistence()
         stores.sessions.byDevice["device-a"] = listOf(
@@ -397,14 +506,18 @@ private class PersistenceTransport : RemoteCommandTransport {
     var polls: List<String> = listOf("""{"resp":"ok","version":1,"changed":false,"session_state":"idle"}""")
     private var pollIndex = 0
     var pollFailure: RelayFailure? = null
+    val commands = mutableListOf<RemoteCommand>()
     val sinceVersions = mutableListOf<Int>()
+    val knownMessageCounts = mutableListOf<Int>()
     override suspend fun <T : CommandStatus> send(deserializer: DeserializationStrategy<T>, command: RemoteCommand, timeoutMs: Long): T {
+        commands += command
         commandGates[command.cmd]?.await()
         if (nonCancellableCommands.remove(command.cmd)) {
             suspendCoroutine { continuation -> lateCommandContinuations[command.cmd] = continuation }
         }
         if (command.cmd == "poll_session") {
             sinceVersions += command.sinceVersion ?: 0
+            knownMessageCounts += command.knownMessageCount ?: 0
             pollFailure?.let { throw RelayTransportException(it) }
         }
         val json = when (command.cmd) {

@@ -16,6 +16,8 @@ final class MobileCoreAdapter {
     private var remoteTargetKey: String?
     private var remoteTargetEpoch: UInt64 = 0
     private var desiredRemoteTarget: DesiredRemoteTarget?
+    /** Fresh account login/restore stays directory-only until the user opens a target. */
+    private var hydrateAccountTargetOnBind = false
     private var initialRemoteTargetSelectionOpen = true
     private var directoryGeneration: UInt64 = 0
     private var accountGeneration: UInt64 = 0
@@ -142,6 +144,7 @@ final class MobileCoreAdapter {
 
     func loginAccount() {
         desiredRemoteTarget = .accountRestore
+        hydrateAccountTargetOnBind = false
         initialRemoteTargetSelectionOpen = false
         account.dispatch(intent: AccountIntentLogin.shared)
     }
@@ -149,6 +152,7 @@ final class MobileCoreAdapter {
     func selectAccountDevice(id: String) {
         pendingDirectoryReconciles.removeAll()
         desiredRemoteTarget = .account(deviceID: id)
+        hydrateAccountTargetOnBind = true
         initialRemoteTargetSelectionOpen = false
         account.dispatch(intent: AccountIntentSelectDevice(deviceId: id))
         let state = SkieSwiftStateFlow<AccountUiState>(account.state).value
@@ -458,6 +462,7 @@ final class MobileCoreAdapter {
 
     private func startAccountRemoteSessionIfNeeded(ready: AccountUiStateReady, generation: UInt64) {
         guard generation == accountGeneration,
+              hydrateAccountTargetOnBind,
               let deviceID = ready.selectedDeviceId else { return }
         let desiredTarget = DesiredRemoteTarget.account(deviceID: deviceID)
         let targetKey = "account:\(deviceID)"

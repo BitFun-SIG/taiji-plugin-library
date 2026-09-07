@@ -493,6 +493,24 @@ struct RemoteAuthorityGateTests {
         let accountSource = readSource(
             iosDirectory.appendingPathComponent("OpenBitFun/Infrastructure/MobileAppModel+Account.swift")
         )
+        let adapterSource = readSource(
+            iosDirectory.appendingPathComponent("OpenBitFun/Infrastructure/MobileCoreAdapter.swift")
+        )
+        let accountRemoteStart = functionBody(
+            in: adapterSource,
+            startingAt: "private func startAccountRemoteSessionIfNeeded(ready:"
+        )
+        expect(
+            accountRemoteStart.contains("hydrateAccountTargetOnBind"),
+            "account login and restore keep remote session hydration lazy"
+        )
+        expectCallBeforeMutation(
+            in: adapterSource,
+            function: "func selectAccountDevice(id: String)",
+            call: "hydrateAccountTargetOnBind = true",
+            mutation: "account.dispatch(intent: AccountIntentSelectDevice",
+            message: "explicit device selection enables hydration before account selection emits"
+        )
         expectInvalidationBeforeMutation(
             in: accountSource,
             function: "func selectRemoteDevice(_ device: MobileAccountDevice, preserveDrawer: Bool = false)",

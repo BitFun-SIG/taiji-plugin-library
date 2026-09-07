@@ -98,7 +98,8 @@ extension MobileAppModel {
                     multiSelect: question.multiSelect
                 )
             },
-            actions: Set(tool.actions.map(\.name))
+            actions: Set(tool.actions.map(\.name)),
+            foldIntoSummary: tool.foldIntoSummary
         )
     }
 
