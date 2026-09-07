@@ -1207,7 +1207,10 @@ describe('SessionModule historical session coordination', () => {
     expect(persistenceMocks.cleanupSaveState).toHaveBeenCalledWith(context, 'active-1');
   });
 
-  it('cancels a speculative history-open transition when deleting its target', async () => {
+  it.each([
+    ['deleting', deleteChatSession],
+    ['archiving', archiveChatSession],
+  ] as const)('cancels a speculative history-open transition when %s its target', async (_action, removeSession) => {
     const historicalSession = createSession({
       sessionId: 'history-delete',
       isHistorical: true,
@@ -1223,7 +1226,7 @@ describe('SessionModule historical session coordination', () => {
       sessionId: historicalSession.sessionId,
     });
 
-    await deleteChatSession(context, historicalSession.sessionId);
+    await removeSession(context, historicalSession.sessionId);
 
     expect(getHistorySessionOpenTransitionSnapshot()).toBeNull();
   });
