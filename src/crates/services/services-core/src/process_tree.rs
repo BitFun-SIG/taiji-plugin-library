@@ -420,7 +420,11 @@ mod tests {
         let mut command = Command::new("sh");
         command
             .arg("-c")
-            .arg("\"$OPENBITFUN_PROCESS_TREE_TEST_EXE\" --exact process_tree::tests::unix_detached_fixture_process --nocapture")
+            // Keep the shell as the managed process-group leader. Some shells
+            // replace themselves with their final foreground command, which
+            // would make the fixture a process-group leader and cause setsid()
+            // to fail on macOS before it can publish its PID.
+            .arg("\"$OPENBITFUN_PROCESS_TREE_TEST_EXE\" --exact process_tree::tests::unix_detached_fixture_process --nocapture & wait")
             .env("OPENBITFUN_PROCESS_TREE_TEST_EXE", executable)
             .env("OPENBITFUN_DETACHED_FIXTURE", "1")
             .env("OPENBITFUN_DESCENDANT_PID_FILE", &pid_file)
