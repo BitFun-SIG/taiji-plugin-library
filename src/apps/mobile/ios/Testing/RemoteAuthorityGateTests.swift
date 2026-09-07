@@ -347,7 +347,10 @@ struct RemoteAuthorityGateTests {
                 clearProjection.contains("remoteInitialWorkspaceReady = false"),
             "target switch clears both readiness projections"
         )
-        expect(source.contains("busy = ready.busy"), "session state keeps its original busy authority")
+        expect(
+            source.contains("setPublishedIfChanged(\\.busy, to: ready.busy)"),
+            "session state keeps its original busy authority without republishing an unchanged value"
+        )
         expect(
             source.contains("remoteInitialSessionReady = remoteInitialSessionReady || !ready.busy"),
             "cached busy session state does not claim the first authoritative load has completed"

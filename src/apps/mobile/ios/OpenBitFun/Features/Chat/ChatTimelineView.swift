@@ -42,7 +42,9 @@ struct ChatTimelineView: View {
             )
             .onChange(of: model.timelineRows) { _ in
                 guard !userScrolledUp else { return }
-                withAnimation(.easeOut(duration: 0.18)) {
+                Task { @MainActor in
+                    await Task.yield()
+                    guard !userScrolledUp else { return }
                     proxy.scrollTo("timeline-bottom", anchor: .bottom)
                 }
             }

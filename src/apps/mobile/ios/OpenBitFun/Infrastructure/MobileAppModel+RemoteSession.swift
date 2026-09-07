@@ -756,7 +756,7 @@ extension MobileAppModel {
             lastApplied: remoteLastAppliedAuthority
         )
         remoteInitialSessionReady = remoteInitialSessionReady || !ready.busy
-        surface = .remote
+        setPublishedIfChanged(\.surface, to: .remote)
         let committed = committedRemoteCreate
         let projectionDecision = RemoteAuthorityGate.committedProjectionDecision(
             readyTargetKey: targetKey,
@@ -772,7 +772,7 @@ extension MobileAppModel {
         if !projectionDecision.retainMarker {
             committedRemoteCreate = nil
         }
-        remoteSessions = ready.sessions.map { session in
+        var projectedSessions = ready.sessions.map { session in
             ChatSession(
                 id: session.id,
                 title: session.title.isEmpty ? localized("未命名会话") : session.title,
@@ -786,31 +786,32 @@ extension MobileAppModel {
             )
         }
         if let committed, projectionDecision.protectCommittedRowAndSelection {
-            remoteSessions.removeAll { $0.id == committed.session.id }
-            remoteSessions.insert(committed.session, at: 0)
+            projectedSessions.removeAll { $0.id == committed.session.id }
+            projectedSessions.insert(committed.session, at: 0)
         }
+        setPublishedIfChanged(\.remoteSessions, to: projectedSessions)
         rebuildRemoteWorkspaceGroups()
         if let protected = committedRemoteCreate,
            protected.targetKey == targetKey,
            protected.epoch == epoch {
-            selectedSessionID = protected.session.id
-            remoteSessionSelected = true
+            setPublishedIfChanged(\.selectedSessionID, to: protected.session.id)
+            setPublishedIfChanged(\.remoteSessionSelected, to: true)
         } else {
             if let selected = ready.selectedSessionId {
-                selectedSessionID = selected
+                setPublishedIfChanged(\.selectedSessionID, to: selected)
             }
-            remoteSessionSelected = ready.selectedSessionId != nil
+            setPublishedIfChanged(\.remoteSessionSelected, to: ready.selectedSessionId != nil)
         }
-        busy = ready.busy
-        remoteQuery = ready.query
-        remoteAgentFilter = ready.agentFilter.name
-        remoteHasMore = ready.hasMore
-        remoteHasMoreMessages = ready.hasMoreMessages
-        remotePermissionMode = ready.permissionMode?.name ?? remotePermissionMode
-        remotePermissionFailure = ready.permissionModeFailure?.name
+        setPublishedIfChanged(\.busy, to: ready.busy)
+        setPublishedIfChanged(\.remoteQuery, to: ready.query)
+        setPublishedIfChanged(\.remoteAgentFilter, to: ready.agentFilter.name)
+        setPublishedIfChanged(\.remoteHasMore, to: ready.hasMore)
+        setPublishedIfChanged(\.remoteHasMoreMessages, to: ready.hasMoreMessages)
+        setPublishedIfChanged(\.remotePermissionMode, to: ready.permissionMode?.name ?? remotePermissionMode)
+        setPublishedIfChanged(\.remotePermissionFailure, to: ready.permissionModeFailure?.name)
         activeTurnID = ready.timeline?.activeTurn?.turnId
-        isSending = ready.timeline?.activeTurn != nil
-        modelOptions = ready.createModelOptions(fallbackLabel: localized("模型")).map { option in
+        setPublishedIfChanged(\.isSending, to: ready.timeline?.activeTurn != nil)
+        let projectedModelOptions = ready.createModelOptions(fallbackLabel: localized("模型")).map { option in
             ComposerModelOption(
                 id: option.id,
                 primaryLabel: option.primaryLabel,
@@ -819,19 +820,23 @@ extension MobileAppModel {
                 selected: option.selected
             )
         }
+        setPublishedIfChanged(\.modelOptions, to: projectedModelOptions)
         if let timeline = ready.timeline {
-            timelineRows = timeline.conversationRows().map(Self.mapConversationRow)
-            messages = timelineRows.compactMap { row in
-                guard row.kind != "EMPTY" else { return nil }
-                return ChatMessage(
-                    id: UUID(uuidString: row.id) ?? UUID(),
-                    role: row.kind == "USER" ? .user : .assistant,
-                    text: row.text
-                )
+            let projectedRows = timeline.conversationRows().map(Self.mapConversationRow)
+            if timelineRows != projectedRows {
+                timelineRows = projectedRows
+                messages = projectedRows.compactMap { row in
+                    guard row.kind != "EMPTY" else { return nil }
+                    return ChatMessage(
+                        id: UUID(uuidString: row.id) ?? UUID(),
+                        role: row.kind == "USER" ? .user : .assistant,
+                        text: row.text
+                    )
+                }
             }
         } else {
-            timelineRows = []
-            messages = []
+            setPublishedIfChanged(\.timelineRows, to: [])
+            setPublishedIfChanged(\.messages, to: [])
         }
         if let pending = pendingDirectoryWorkspace,
            remoteExpectedDeviceKey == directoryTargetKey(forRawDeviceKey: pending.deviceKey),
@@ -956,7 +961,7 @@ extension MobileAppModel {
 
     func rebuildRemoteWorkspaceGroups() {
         let selectedPath = workspaceCatalog.first(where: { $0.selected })?.path
-        remoteWorkspaces = workspaceCatalog.map { workspace in
+        let projectedWorkspaces = workspaceCatalog.map { workspace in
             MobileWorkspaceGroup(
                 path: workspace.path,
                 name: workspace.name.isEmpty ? workspace.path : workspace.name,
@@ -967,6 +972,15 @@ extension MobileAppModel {
                 }
             )
         }
+        setPublishedIfChanged(\.remoteWorkspaces, to: projectedWorkspaces)
+    }
+
+    private func setPublishedIfChanged<Value: Equatable>(
+        _ keyPath: ReferenceWritableKeyPath<MobileAppModel, Value>,
+        to value: Value
+    ) {
+        guard self[keyPath: keyPath] != value else { return }
+        self[keyPath: keyPath] = value
     }
 }
 
