@@ -17,7 +17,7 @@ function reference(
   };
 }
 
-describe('workspaceReferenceItems', () => {
+describe('workspaceReferenceItems catalog', () => {
   it('preserves native-first catalog order and distinct aliases for one path', () => {
     const items = workspaceReferenceItems([
       reference('native', 'native', 'D:/shared/native'),

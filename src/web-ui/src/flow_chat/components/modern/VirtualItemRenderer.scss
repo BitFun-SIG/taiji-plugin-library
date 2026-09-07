@@ -40,11 +40,6 @@
       margin-bottom: 0;
     }
 
-    > .user-message-item-shell--with-timestamp {
-      /* Preserve the timestamp line; the next Turn owns the trailing gap. */
-      margin-bottom: 1rem;
-    }
-
     > .model-round-item > :is(
       .flow-text-block,
       .flow-thinking-item,

@@ -1,7 +1,7 @@
 import React from 'react';
 import { Bot, Wrench, Cpu, UsersRound } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Icon, StatusPill } from '@openbitfun/ui';
+import { OverflowText, Icon, StatusPill } from '@openbitfun/ui';
 import type { AgentWithCapabilities } from '../agentsStore';
 import { AGENT_ICON_MAP } from '../agentsIcons';
 import { getAgentDescription } from '../utils';
@@ -42,7 +42,7 @@ const CoreAgentCard: React.FC<CoreAgentCardProps> = ({
   const statusLabel = disabledReason ?? t('agentCard.status.connected');
 
   return (
-    <div data-openbitfun-component="core-agent-card" data-openbitfun-part="root"
+    <div data-overflow-trigger data-openbitfun-component="core-agent-card" data-openbitfun-part="root"
       className="core-agent-card"
       style={{
         '--surface-stagger-index': index,
@@ -72,7 +72,7 @@ const CoreAgentCard: React.FC<CoreAgentCardProps> = ({
       <div className="core-agent-card__content">
         <div className="core-agent-card__top" data-openbitfun-component="core-agent-card" data-openbitfun-part="header">
           <div className="core-agent-card__top-info" data-openbitfun-component="core-agent-card" data-openbitfun-part="headerInfo">
-            <span className="core-agent-card__name" data-openbitfun-component="core-agent-card" data-openbitfun-part="name" data-testid="agent-list-item-title">{agent.name}</span>
+            <OverflowText className="core-agent-card__name" data-openbitfun-component="core-agent-card" data-openbitfun-part="name" data-testid="agent-list-item-title">{agent.name}</OverflowText>
             <span data-openbitfun-component="core-agent-card" data-openbitfun-part="role">
               <StatusPill tone="neutral" className="core-agent-card__role">
                 {meta.role}
@@ -87,7 +87,7 @@ const CoreAgentCard: React.FC<CoreAgentCardProps> = ({
             title={statusLabel}
           >
             <Icon className="core-agent-card__status-icon" name="unselected" size="2xs" />
-            <span>{statusLabel}</span>
+            <OverflowText>{statusLabel}</OverflowText>
           </span>
         </div>
 
@@ -101,30 +101,30 @@ const CoreAgentCard: React.FC<CoreAgentCardProps> = ({
           <div className="core-agent-card__meta" data-openbitfun-component="core-agent-card" data-openbitfun-part="meta">
             <span className="core-agent-card__meta-item">
               <span className="core-agent-card__meta-icon"><Icon glyph={Wrench} size="xs" /></span>
-              <span className="core-agent-card__meta-label">{t('agentCard.metrics.tools')}</span>
-              <strong>{totalTools}</strong>
+              <OverflowText className="core-agent-card__meta-label">{t('agentCard.metrics.tools')}</OverflowText>
+              <strong><OverflowText>{totalTools}</OverflowText></strong>
             </span>
             {agent.agentKind === 'mode' ? (
               <>
                 <span className="core-agent-card__meta-item">
                   <span className="core-agent-card__meta-icon"><Icon name="extension" size="xs" /></span>
-                  <span className="core-agent-card__meta-label">{t('agentCard.metrics.skills')}</span>
-                  <strong>{skillCount}</strong>
+                  <OverflowText className="core-agent-card__meta-label">{t('agentCard.metrics.skills')}</OverflowText>
+                  <strong><OverflowText>{skillCount}</OverflowText></strong>
                 </span>
                 <span className="core-agent-card__meta-item">
                   <span className="core-agent-card__meta-icon"><Icon glyph={UsersRound} size="xs" /></span>
-                  <span className="core-agent-card__meta-label">{t('agentCard.metrics.collaboration')}</span>
-                  <strong>{subagentCount}</strong>
+                  <OverflowText className="core-agent-card__meta-label">{t('agentCard.metrics.collaboration')}</OverflowText>
+                  <strong><OverflowText>{subagentCount}</OverflowText></strong>
                 </span>
               </>
             ) : null}
             {agent.agentKind === 'subagent' && agent.subagentModelDisplayName ? (
               <span className="core-agent-card__meta-item">
                 <span className="core-agent-card__meta-icon"><Icon glyph={Cpu} size="xs" /></span>
-                <span className="core-agent-card__meta-label">{t('agentCard.metrics.model')}</span>
-                <strong className="core-agent-card__meta-value--text" title={agent.subagentModelDisplayName}>
+                <OverflowText className="core-agent-card__meta-label">{t('agentCard.metrics.model')}</OverflowText>
+                <strong className="core-agent-card__meta-value--text" title={agent.subagentModelDisplayName}><OverflowText>
                   {agent.subagentModelDisplayName}
-                </strong>
+                </OverflowText></strong>
               </span>
             ) : null}
           </div>

@@ -10,7 +10,7 @@
  * Closing the wizard cancels any in-progress remote task.
  */
 
-import {
+import { OverflowText,
   Alert,
   Button,
   Field,
@@ -763,7 +763,7 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
                 {t('empty.noResults')}
               </div>
             ) : filteredSavedConnections.map((conn) => (
-              <div
+              <div data-overflow-trigger
                 key={conn.id}
                 className="relay-deploy-wizard__server-item"
                 onClick={() => !connecting && handleQuickConnect(conn)}
@@ -773,7 +773,7 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
               >
                 <div className="relay-deploy-wizard__server-icon"><Server size={16} /></div>
                 <div className="relay-deploy-wizard__server-info">
-                  <span className="relay-deploy-wizard__server-name">{conn.name}</span>
+                  <OverflowText className="relay-deploy-wizard__server-name">{conn.name}</OverflowText>
                   <span className="relay-deploy-wizard__server-detail">
                     {conn.username}@{conn.host}:{conn.port}
                   </span>
@@ -807,7 +807,7 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
                 {t('empty.noResults')}
               </div>
             ) : filteredSSHConfigHosts.map((entry) => (
-              <div
+              <div data-overflow-trigger
                 key={entry.host}
                 className="relay-deploy-wizard__server-item relay-deploy-wizard__server-item--config"
                 onClick={() => handleFillFromConfig(entry)}
@@ -817,7 +817,7 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
               >
                 <div className="relay-deploy-wizard__server-icon"><Server size={16} /></div>
                 <div className="relay-deploy-wizard__server-info">
-                  <span className="relay-deploy-wizard__server-name">{entry.host}</span>
+                  <OverflowText className="relay-deploy-wizard__server-name">{entry.host}</OverflowText>
                   <span className="relay-deploy-wizard__server-detail">
                     {entry.user || ''}@{entry.hostname || entry.host}:{entry.port || 22}
                   </span>
@@ -968,7 +968,7 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
       {ok === 'warn' && <AlertTriangle size={15} className="relay-deploy-wizard__check-icon relay-deploy-wizard__check-icon--warn" />}
       {ok === false && <Icon name="xmark" size="sm" className="relay-deploy-wizard__check-icon relay-deploy-wizard__check-icon--fail" />}
       <span className="relay-deploy-wizard__check-label">{label}</span>
-      <span className="relay-deploy-wizard__check-detail">{detail}</span>
+      <OverflowText className="relay-deploy-wizard__check-detail">{detail}</OverflowText>
     </div>
   );
 

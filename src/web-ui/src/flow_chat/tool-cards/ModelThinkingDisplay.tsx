@@ -10,7 +10,7 @@
  */
 
 import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from 'react';
-import { Icon } from '@openbitfun/ui';
+import { OverflowText, Icon } from '@openbitfun/ui';
 import { useTranslation } from 'react-i18next';
 import type { FlowThinkingItem } from '../types/flow-chat';
 import { useTypewriter } from '../hooks/useTypewriter';
@@ -337,7 +337,7 @@ export const ModelThinkingDisplay: React.FC<ModelThinkingDisplayProps> = ({
       data-reasoning-kind={thinkingItem.reasoningKind ?? 'reasoning'}
       className={wrapperClassName}
      data-openbitfun-component="model-thinking-display" data-openbitfun-part="root" data-openbitfun-context={displayContext} data-openbitfun-state={[isExpanded && 'expanded', isVisuallyStreaming && 'streaming'].filter(Boolean).join(' ')}>
-      <div
+      <div data-overflow-trigger
         data-openbitfun-component="model-thinking-display"
         data-openbitfun-part="header"
         data-testid="chat-thinking-toggle"
@@ -354,14 +354,14 @@ export const ModelThinkingDisplay: React.FC<ModelThinkingDisplayProps> = ({
           <Icon name="chevron-right" size="sm" className="thinking-leading-icon__collapsed-hover" />
           <Icon name="chevron-down" size="sm" className="thinking-leading-icon__expanded" />
         </span>
-        <span
+        <OverflowText
           data-openbitfun-component="model-thinking-display"
           data-openbitfun-part="label"
           className="thinking-label"
           title={isSummary && !isExpanded ? headerLabel : undefined}
         >
           {headerLabel}
-        </span>
+        </OverflowText>
       </div>
 
       <div

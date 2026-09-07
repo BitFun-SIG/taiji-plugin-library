@@ -1,7 +1,7 @@
 import React from 'react';
 
 import { useTranslation } from 'react-i18next';
-import { IconButton, Tooltip, Icon } from '@openbitfun/ui';
+import { IconButton, Tooltip, Icon, OverflowText } from '@openbitfun/ui';
 import { useCopyTextAction } from '../hooks/useCopyTextAction';
 import './CopyableTextPreview.scss';
 
@@ -40,11 +40,11 @@ export const CopyableTextPreview = React.forwardRef<HTMLElement, CopyableTextPre
   const copyTooltip = copied ? t('toolCards.common.copied') : t('toolCards.common.copy');
   const node = as === 'code' ? (
     <code ref={ref} className={resolvedClassName} {...restProps} data-openbitfun-component="copyable-text-preview" data-openbitfun-part="root">
-      {content}
+      <OverflowText title={tooltipContent ? '' : undefined}>{content}</OverflowText>
     </code>
   ) : (
     <span ref={ref} className={resolvedClassName} {...restProps} data-openbitfun-component="copyable-text-preview" data-openbitfun-part="root">
-      {content}
+      <OverflowText title={tooltipContent ? '' : undefined}>{content}</OverflowText>
     </span>
   );
 

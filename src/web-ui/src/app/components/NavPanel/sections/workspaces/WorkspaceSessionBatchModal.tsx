@@ -1,4 +1,4 @@
-import {
+import { OverflowText,
   Button,
   Checkbox,
   Icon,
@@ -330,9 +330,9 @@ const WorkspaceSessionBatchModal: React.FC<WorkspaceSessionBatchModalProps> = ({
         <div data-openbitfun-component="workspace-session-batch-modal" data-openbitfun-part="root" className="workspace-session-batch-modal">
           <div data-openbitfun-component="workspace-session-batch-modal" data-openbitfun-part="hero" className="workspace-session-batch-modal__context">
             <Icon name="folder" size="sm" />
-            <span className="workspace-session-batch-modal__workspace" title={workspacePath}>
+            <OverflowText className="workspace-session-batch-modal__workspace" title={workspacePath}>
               {workspaceLabel}
-            </span>
+            </OverflowText>
           </div>
 
           <div data-openbitfun-component="workspace-session-batch-modal" data-openbitfun-part="toolbar" className="workspace-session-batch-modal__toolbar">
@@ -423,9 +423,9 @@ const WorkspaceSessionBatchModal: React.FC<WorkspaceSessionBatchModalProps> = ({
                                   : <Icon name="session" size="sm" />}
                               </span>
                               <span className="workspace-session-batch-modal__row-head">
-                                <span className="workspace-session-batch-modal__row-title" title={sessionName}>
+                                <OverflowText className="workspace-session-batch-modal__row-title" title={sessionName}>
                                   {sessionName}
-                                </span>
+                                </OverflowText>
                                 {displayAsChild && (
                                   <span className="workspace-session-batch-modal__row-meta">
                                     {t('nav.sessions.batchChildSession')}

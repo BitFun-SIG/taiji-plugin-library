@@ -7,7 +7,7 @@ import {
 } from '@/infrastructure/peer-device/deviceSurface';
 
 const storeMocks = vi.hoisted(() => ({
-  store: {} as any,
+  store: { registerPersistUnreadCompletionCallback: vi.fn() } as any,
   initializeEventListeners: vi.fn(),
   switchChatSession: vi.fn(),
   eventBatchers: [] as Array<{
@@ -28,6 +28,10 @@ vi.mock('./flow-chat-manager/PeerSessionRefreshModule', () => ({
 
 vi.mock('@/features/dispatch/DispatchJobObserver', () => ({
   installDispatchJobObserver: vi.fn(() => () => {}),
+}));
+
+vi.mock('./sessionNavStatusService', () => ({
+  installSessionNavStatusService: vi.fn(() => () => {}),
 }));
 
 vi.mock('../store/FlowChatStore', () => ({
@@ -150,7 +154,7 @@ describe('FlowChatManager initialization', () => {
   });
 
   it('flushes and destroys the batcher when the singleton is disposed', () => {
-    storeMocks.store = {};
+    storeMocks.store = { registerPersistUnreadCompletionCallback: vi.fn() };
 
     const manager = FlowChatManager.getInstance();
     const batcher = storeMocks.eventBatchers[0];
@@ -166,6 +170,7 @@ describe('FlowChatManager initialization', () => {
 
   it('creates one empty Claw session when reinitializing a reset workspace', async () => {
     storeMocks.store = {
+      registerPersistUnreadCompletionCallback: vi.fn(),
       removeSessionsForWorkspace: vi.fn(() => []),
       getState: () => ({ activeSessionId: null, sessions: new Map() }),
     };
@@ -287,7 +292,7 @@ describe('FlowChatManager initialization', () => {
   });
 
   it('runs listener cleanup if disposal wins the initialization race', async () => {
-    storeMocks.store = {};
+    storeMocks.store = { registerPersistUnreadCompletionCallback: vi.fn() };
     const listenerInitialization = createDeferred<() => void>();
     const cleanup = vi.fn();
     storeMocks.initializeEventListeners.mockReturnValue(listenerInitialization.promise);
@@ -328,7 +333,7 @@ describe('FlowChatManager initialization', () => {
     listenerInitialization.resolve(vi.fn());
 
     await expect(initialize).resolves.toBe(false);
-    expect(storeMocks.store.registerPersistUnreadCompletionCallback).not.toHaveBeenCalled();
+    expect(storeMocks.store.registerPersistUnreadCompletionCallback).toHaveBeenCalledTimes(1);
     expect(storeMocks.store.loadSessionMetadataPage).not.toHaveBeenCalled();
   });
 
@@ -736,7 +741,7 @@ describe('FlowChatManager live subscription self-healing', () => {
     (FlowChatManager as any).instance = undefined;
     vi.clearAllMocks();
     storeMocks.eventBatchers.length = 0;
-    storeMocks.store = {};
+    storeMocks.store = { registerPersistUnreadCompletionCallback: vi.fn() };
     storeMocks.initializeEventListeners.mockResolvedValue(() => {});
   });
 

@@ -1,4 +1,4 @@
-import { Button, Combobox, Icon, IconButton, SearchField, Select, StatusPill, Tooltip, ScrollArea, type IconSource } from '@openbitfun/ui';
+import { OverflowText, Button, Combobox, Icon, IconButton, SearchField, Select, StatusPill, Tooltip, ScrollArea, type IconSource } from '@openbitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import type { TFunction } from 'i18next';
 import { Bot, Cpu, FileText, MessageSquareText, RotateCcw, Wrench } from 'lucide-react';
@@ -864,31 +864,31 @@ const AgentsHomeView: React.FC = () => {
         {selectedAgent ? (
           <div className="agent-card__configuration" data-testid="agent-detail-configuration">
                 <nav className="agent-card__config-nav" aria-label={t('agentsOverview.detail.configuration')}>
-                  <button
+                  <button data-overflow-trigger
                     type="button"
                     className={`agent-card__config-nav-item${activeDetailSection === 'basic' ? ' is-active' : ''}`}
                     aria-current={activeDetailSection === 'basic' ? 'page' : undefined}
                     onClick={() => setActiveDetailSection('basic')}
                   >
                     <Icon glyph={FileText} size="sm" />
-                    <span>{t('agentsOverview.detail.basicInfo')}</span>
+                    <OverflowText>{t('agentsOverview.detail.basicInfo')}</OverflowText>
                   </button>
-                  <button
+                  <button data-overflow-trigger
                     type="button"
                     className={`agent-card__config-nav-item${activeDetailSection === 'behavior' ? ' is-active' : ''}`}
                     aria-current={activeDetailSection === 'behavior' ? 'page' : undefined}
                     onClick={() => setActiveDetailSection('behavior')}
                   >
                     <Icon glyph={MessageSquareText} size="sm" />
-                    <span>{t('agentsOverview.detail.behaviorContext')}</span>
-                    <span className="agent-card__config-nav-count">{selectedAgent.capabilities.length}</span>
+                    <OverflowText>{t('agentsOverview.detail.behaviorContext')}</OverflowText>
+                    <OverflowText className="agent-card__config-nav-count">{selectedAgent.capabilities.length}</OverflowText>
                   </button>
                   <div className="agent-card__config-nav-divider" />
                   {selectedAgentCapabilityTabs.map((tab) => {
                     const tabIcon = tab.icon;
                     const isActive = activeDetailSection === tab.key;
                     return (
-                      <button
+                      <button data-overflow-trigger
                         key={tab.key}
                         type="button"
                         className={`agent-card__config-nav-item${isActive ? ' is-active' : ''}`}
@@ -897,8 +897,8 @@ const AgentsHomeView: React.FC = () => {
                         onClick={() => setActiveDetailSection(tab.key)}
                       >
                         <Icon {...tabIcon} size="sm" />
-                        <span>{tab.label}</span>
-                        {tab.count ? <span className="agent-card__config-nav-count">{tab.count}</span> : null}
+                        <OverflowText>{tab.label}</OverflowText>
+                        {tab.count ? <OverflowText className="agent-card__config-nav-count">{tab.count}</OverflowText> : null}
                       </button>
                     );
                   })}
@@ -915,27 +915,27 @@ const AgentsHomeView: React.FC = () => {
                       </div>
                       <div className="agent-card__field-grid">
                         <div className="agent-card__field">
-                          <span>{t('agentsOverview.detail.name')}</span>
-                          <strong>{selectedAgent.name}</strong>
+                          <OverflowText>{t('agentsOverview.detail.name')}</OverflowText>
+                          <strong><OverflowText>{selectedAgent.name}</OverflowText></strong>
                         </div>
                         <div className="agent-card__field">
-                          <span>{t('agentsOverview.detail.source')}</span>
-                          <strong>{selectedAgentSourceLabel}</strong>
+                          <OverflowText>{t('agentsOverview.detail.source')}</OverflowText>
+                          <strong><OverflowText>{selectedAgentSourceLabel}</OverflowText></strong>
                         </div>
                         <div className="agent-card__field">
-                          <span>{t('agentsOverview.detail.type')}</span>
-                          <strong>{selectedAgentBadge?.label}</strong>
+                          <OverflowText>{t('agentsOverview.detail.type')}</OverflowText>
+                          <strong><OverflowText>{selectedAgentBadge?.label}</OverflowText></strong>
                         </div>
                         <div className="agent-card__field">
-                          <span>{t('agentsOverview.detail.followUp')}</span>
-                          <strong>
+                          <OverflowText>{t('agentsOverview.detail.followUp')}</OverflowText>
+                          <strong><OverflowText>
                             {selectedAgent.supportsFollowUp === false
                               ? t('agentsOverview.detail.unsupported')
                               : t('agentsOverview.detail.supported')}
-                          </strong>
+                          </OverflowText></strong>
                         </div>
                         <div className="agent-card__field agent-card__field--wide">
-                          <span>{t('agentsOverview.detail.description')}</span>
+                          <OverflowText>{t('agentsOverview.detail.description')}</OverflowText>
                           <p>{getAgentDescription(t, selectedAgent)}</p>
                         </div>
                       </div>
@@ -965,12 +965,12 @@ const AgentsHomeView: React.FC = () => {
               <div className="agent-card__cap-grid">
                 {selectedAgent.capabilities.map((cap) => (
                   <div key={cap.category} className="agent-card__cap-row">
-                    <span
+                    <OverflowText
                       className="agent-card__cap-label"
                       style={{ color: CAPABILITY_ACCENT[cap.category] }}
                     >
                       {getCapabilityLabel(t, cap.category)}
-                    </span>
+                    </OverflowText>
                     <div className="agent-card__cap-bar">
                       {Array.from({ length: 5 }).map((_, i) => (
                         <span
@@ -994,9 +994,9 @@ const AgentsHomeView: React.FC = () => {
                   </div>
                 </div>
                 <div className="agent-card__chip-grid">
-                  <span className="agent-card__chip">
+                  <span className="agent-card__chip"><OverflowText>
                     {selectedAgentModeProfile?.profileLabel ?? t('agentsOverview.sharedProfileDefaultLabel')}
-                  </span>
+                  </OverflowText></span>
                 </div>
                 <p className="agent-card__section-note">
                   {t('agentsOverview.sharedProfileDescription', {
@@ -1282,7 +1282,7 @@ const AgentsHomeView: React.FC = () => {
                             fields={tooltipFields}
                           >
                             <span className="agent-card__tooltip-trigger">
-                              <button
+                              <button data-overflow-trigger
                                 type="button"
                                 className={`agent-card__token${isOn ? ' is-on' : ''}${isExternal ? ' is-readonly' : ''}`}
                                 disabled={isExternal}
@@ -1300,9 +1300,9 @@ const AgentsHomeView: React.FC = () => {
                                   });
                                 }}
                               >
-                                <span className="agent-card__token-name">
+                                <OverflowText className="agent-card__token-name">
                                   {subagent.name}{isExternal ? ` · ${t('filters.external')}` : ''}
-                                </span>
+                                </OverflowText>
                               </button>
                             </span>
                           </AgentCapabilityTooltip>
@@ -1329,7 +1329,7 @@ const AgentsHomeView: React.FC = () => {
                               description={subagent.description}
                               fields={tooltipFields}
                             >
-                              <span className="agent-card__chip">{subagent.name}</span>
+                              <span className="agent-card__chip"><OverflowText>{subagent.name}</OverflowText></span>
                             </AgentCapabilityTooltip>
                           );
                         })

@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-use-before-define */
-import { Button, Card, CardBody, ConfirmDialog, Field, Icon, IconButton, Input, SearchField, Select, Tooltip } from '@openbitfun/ui';
+import { OverflowText, Button, Card, CardBody, ConfirmDialog, Field, Icon, IconButton, Input, SearchField, Select, Tooltip } from '@openbitfun/ui';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FolderOpen, TrendingUp } from 'lucide-react';
@@ -471,14 +471,14 @@ const SkillsConfig: React.FC = () => {
                     {skill.source ? (
                       sourceLabel !== skill.source ? (
                         <Tooltip content={skill.source}>
-                          <span className="openbitfun-skills-config__market-item-chip openbitfun-skills-config__market-item-source">
+                          <span className="openbitfun-skills-config__market-item-chip openbitfun-skills-config__market-item-source"><OverflowText>
                             {t('market.item.sourceLabel')}{sourceLabel}
-                          </span>
+                          </OverflowText></span>
                         </Tooltip>
                       ) : (
-                        <span className="openbitfun-skills-config__market-item-chip openbitfun-skills-config__market-item-source">
+                        <span className="openbitfun-skills-config__market-item-chip openbitfun-skills-config__market-item-source"><OverflowText>
                           {t('market.item.sourceLabel')}{sourceLabel}
-                        </span>
+                        </OverflowText></span>
                       )
                     ) : null}
                   </div>

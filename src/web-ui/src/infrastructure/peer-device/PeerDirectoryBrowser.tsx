@@ -3,7 +3,7 @@
  * Lists directories on the peer via HostInvoke FS APIs.
  */
 
-import { Button, Icon, IconButton, Input, ScrollArea } from '@openbitfun/ui';
+import { OverflowText, Button, Icon, IconButton, Input, ScrollArea } from '@openbitfun/ui';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
@@ -296,16 +296,16 @@ export const PeerDirectoryBrowser: React.FC<PeerDirectoryBrowserProps> = ({
                 />
               </span>
             ) : (
-              <button
+              <button data-overflow-trigger
                 type="button"
                 className="peer-directory-browser__path-display"
                 onClick={() => setIsEditingPath(true)}
                 title={currentPath}
                 data-openbitfun-component="peer-device"
                 data-openbitfun-part="pathDisplay"
-              >
+              ><OverflowText>
                 {currentPath}
-              </button>
+              </OverflowText></button>
             )}
           </div>
         </div>
@@ -381,9 +381,9 @@ export const PeerDirectoryBrowser: React.FC<PeerDirectoryBrowserProps> = ({
             title={selectedPath || currentPath}
             data-openbitfun-component="peer-device"
             data-openbitfun-part="selection"
-          >
+          ><OverflowText>
             {t('peerDirectoryPicker.selected', { path: selectedPath || currentPath })}
-          </div>
+          </OverflowText></div>
           <div
             className="peer-directory-browser__actions"
             data-openbitfun-component="peer-device"

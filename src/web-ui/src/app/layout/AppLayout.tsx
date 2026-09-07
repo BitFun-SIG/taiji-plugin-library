@@ -1,3 +1,4 @@
+import { OverflowText } from '@openbitfun/ui';
 /**
  * Main application layout.
  *
@@ -744,7 +745,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
             aria-live="polite"
           >
             <span className="openbitfun-window-mode-hint__title" data-openbitfun-component="app-layout" data-openbitfun-part="windowModeTitle">{windowModeHint.title}</span>
-            <span className="openbitfun-window-mode-hint__detail" data-openbitfun-component="app-layout" data-openbitfun-part="windowModeDetail">{windowModeHint.detail}</span>
+            <OverflowText className="openbitfun-window-mode-hint__detail" data-openbitfun-component="app-layout" data-openbitfun-part="windowModeDetail">{windowModeHint.detail}</OverflowText>
           </div>
         )}
 
