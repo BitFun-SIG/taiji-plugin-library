@@ -102,6 +102,7 @@ final class MobileAppModel: ObservableObject {
     var remoteLastAppliedAuthority: RemoteAuthorityScope?
     var workspaceCatalog: [(path: String, name: String, selected: Bool)] = []
     var pendingRemoteWorkspaceCreate: (path: String, agentType: String)?
+    var pendingRemoteSessionRefreshWorkspacePath: String?
     var pendingDirectoryWorkspace: (deviceKey: String, path: String, epoch: UInt64)?
     var pendingDirectoryRemoteDraft: PendingDirectoryRemoteDraft?
     var pendingRemoteAssistantCreate = false
@@ -124,6 +125,9 @@ final class MobileAppModel: ObservableObject {
             },
             onRemoteState: { [weak self] state, targetKey, epoch in
                 self?.apply(remoteState: state, targetKey: targetKey, epoch: epoch)
+            },
+            onRemoteConnectionPhase: { [weak self] phase, targetKey, epoch in
+                self?.apply(remoteConnectionPhase: phase, targetKey: targetKey, epoch: epoch)
             },
             onWorkspaceState: { [weak self] state, targetKey, epoch in
                 self?.apply(workspaceState: state, targetKey: targetKey, epoch: epoch)
@@ -244,6 +248,7 @@ final class MobileAppModel: ObservableObject {
         workspaceSelectionBusy = false
         remoteCreateWorkspacePhase = .unavailable
         pendingRemoteWorkspaceCreate = nil
+        pendingRemoteSessionRefreshWorkspacePath = nil
         pendingDirectoryRemoteDraft = nil
         pendingRemoteAssistantCreate = false
         selectedRemoteWorkspaceKind = ""
@@ -338,6 +343,7 @@ final class MobileAppModel: ObservableObject {
         pendingDirectoryWorkspace = nil
         pendingDirectoryRemoteDraft = nil
         pendingRemoteWorkspaceCreate = nil
+        pendingRemoteSessionRefreshWorkspacePath = nil
         pendingRemoteAssistantCreate = false
         selectedRemoteWorkspaceKind = ""
         selectedSessionID = ""

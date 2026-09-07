@@ -312,7 +312,7 @@ struct RemoteAuthorityGateTests {
         // part of this gate.
         let workspaceApply = functionBody(in: source, startingAt: "func apply(workspaceState state:")
         expect(
-            workspaceApply.contains("remoteInitialWorkspaceReady = true") &&
+            workspaceApply.contains("remoteInitialWorkspaceReady = !ready.busy && !ready.loadFailure") &&
                 workspaceApply.contains("advancePendingDirectoryRemoteDraftIfReady()"),
             "workspace-first applies authoritative catalog and advances workspace navigation"
         )
@@ -337,7 +337,7 @@ struct RemoteAuthorityGateTests {
         // Failure and target switch: neither readiness bit can survive an
         // invalid state or a changed target/epoch.
         expect(
-            source.contains("if !(state is RemoteWorkspaceUiStateReady) {\n            remoteInitialWorkspaceReady = false") &&
+            source.contains("if !(state is RemoteWorkspaceUiStateReady) || readyState?.busy == true || readyState?.loadFailure == true {\n            remoteInitialWorkspaceReady = false") &&
                 source.contains("remoteInitialSessionReady = false"),
             "workspace/session failure paths revoke readiness"
         )
@@ -348,6 +348,16 @@ struct RemoteAuthorityGateTests {
             "target switch clears both readiness projections"
         )
         expect(source.contains("busy = ready.busy"), "session state keeps its original busy authority")
+        expect(
+            source.contains("remoteInitialSessionReady = remoteInitialSessionReady || !ready.busy"),
+            "cached busy session state does not claim the first authoritative load has completed"
+        )
+        expect(
+            source.contains("func apply(\n        remoteConnectionPhase phase:") &&
+                source.contains("case \"CONNECTING\", \"RECONNECTING\":") &&
+                source.contains("connectionPhase = .reconnecting"),
+            "shared connection phase remains authoritative after cached content is projected"
+        )
 
         let modelSource = readSource(
             iosDirectory.appendingPathComponent("OpenBitFun/Infrastructure/MobileAppModel.swift")
@@ -482,7 +492,7 @@ struct RemoteAuthorityGateTests {
         )
         expectInvalidationBeforeMutation(
             in: accountSource,
-            function: "func selectRemoteDevice(_ device: MobileAccountDevice)",
+            function: "func selectRemoteDevice(_ device: MobileAccountDevice, preserveDrawer: Bool = false)",
             mutation: "coreAdapter?.selectAccountDevice(id: device.id)",
             message: "device switch invalidates transfers before adapter target selection"
         )

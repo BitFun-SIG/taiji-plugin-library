@@ -48,6 +48,22 @@ class RemoteSessionPersistenceTest {
     }
 
     @Test
+    fun unavailableSessionCacheDoesNotOverrideRemoteList() = runTest {
+        val stores = MemoryPersistence()
+        stores.sessions.failLoad = true
+        stores.sessions.failSave = true
+        val store = RemoteSessionStore.create(this, PersistenceTransport(), "device-a", stores.stores)
+
+        store.dispatch(RemoteSessionIntent.Load)
+        advanceUntilIdle()
+
+        val ready = assertIs<RemoteSessionUiState.Ready>(store.state.value)
+        assertEquals(listOf("server"), ready.sessions.map { it.id })
+        assertEquals(false, ready.busy)
+        store.stop()
+    }
+
+    @Test
     fun confirmedCreateReconcilePersistsByDeviceAndRebuildRestoresIt() = runTest {
         val stores = MemoryPersistence()
         stores.sessions.byDevice["device-b"] = listOf(PersistedRemoteSession(sessionId = "other", title = "Other"))
@@ -206,6 +222,76 @@ class RemoteSessionPersistenceTest {
     }
 
     @Test
+    fun deleteRemovesPersistedListDraftTranscriptAndCursor() = runTest {
+        val stores = MemoryPersistence()
+        stores.sessions.byDevice["device-a"] = listOf(
+            PersistedRemoteSession(sessionId = "server", title = "Server"),
+            PersistedRemoteSession(sessionId = "keep", title = "Keep"),
+        )
+        stores.sessions.more = true
+        stores.drafts.values["remote-composer:device-a:server"] = "draft"
+        stores.transcripts.rows["device-a::server"] = listOf(
+            PersistedRemoteMessage(messageId = "m-1", sessionId = "server", text = "cached"),
+        )
+        stores.transcripts.cursors["device-a::server"] = PersistedRemoteCursor("7", 1, "2")
+        val transport = PersistenceTransport().apply {
+            sessionsJson = """[{"id":"server","title":"Server"},{"id":"keep","title":"Keep"}]"""
+        }
+        val store = RemoteSessionStore.create(this, transport, "device-a", stores.stores)
+        store.dispatch(RemoteSessionIntent.Load)
+        advanceUntilIdle()
+        val expectedHasMore = stores.sessions.more
+
+        store.dispatch(RemoteSessionIntent.DeleteSession("server"))
+        advanceUntilIdle()
+
+        assertEquals(listOf("keep"), stores.sessions.byDevice.getValue("device-a").map { it.sessionId })
+        assertEquals(expectedHasMore, stores.sessions.more)
+        assertEquals(null, stores.drafts.values["remote-composer:device-a:server"])
+        assertEquals(null, stores.transcripts.rows["device-a::server"])
+        assertEquals(null, stores.transcripts.cursors["device-a::server"])
+        store.stop()
+    }
+
+    @Test
+    fun deleteKeepsServerResultWhenSessionListCacheWriteFails() = runTest {
+        val stores = MemoryPersistence()
+        stores.drafts.values["remote-composer:device-a:server"] = "draft"
+        stores.transcripts.rows["device-a::server"] = listOf(
+            PersistedRemoteMessage(messageId = "m-1", sessionId = "server", text = "cached"),
+        )
+        val store = RemoteSessionStore.create(this, PersistenceTransport(), "device-a", stores.stores)
+        store.dispatch(RemoteSessionIntent.Load)
+        advanceUntilIdle()
+        stores.sessions.failSave = true
+
+        store.dispatch(RemoteSessionIntent.DeleteSession("server"))
+        advanceUntilIdle()
+
+        val ready = assertIs<RemoteSessionUiState.Ready>(store.state.value)
+        assertEquals(emptyList(), ready.sessions)
+        assertEquals(false, ready.busy)
+        assertEquals(null, stores.drafts.values["remote-composer:device-a:server"])
+        assertEquals(null, stores.transcripts.rows["device-a::server"])
+        store.stop()
+    }
+
+    @Test
+    fun renameUpdatesPersistedListForOfflineRestore() = runTest {
+        val stores = MemoryPersistence()
+        val transport = PersistenceTransport()
+        val store = RemoteSessionStore.create(this, transport, "device-a", stores.stores)
+        store.dispatch(RemoteSessionIntent.Load)
+        advanceUntilIdle()
+
+        store.dispatch(RemoteSessionIntent.RenameSession("server", "Renamed"))
+        advanceUntilIdle()
+
+        assertEquals("Renamed", stores.sessions.byDevice.getValue("device-a").single().title)
+        store.stop()
+    }
+
+    @Test
     fun staleLoadMoreDoesNotWriteSessionPersistence() = runTest {
         val stores = MemoryPersistence()
         val transport = PersistenceTransport().apply { hasMore = true }
@@ -271,8 +357,14 @@ private class MemorySessions : RemoteSessionListStore {
     val byDevice = mutableMapOf<String, List<PersistedRemoteSession>>()
     var more = false
     var saveCount = 0
-    override fun load(deviceKey: String): List<PersistedRemoteSession> = byDevice[deviceKey] ?: rows
+    var failLoad = false
+    var failSave = false
+    override fun load(deviceKey: String): List<PersistedRemoteSession> {
+        if (failLoad) error("session cache read failed")
+        return byDevice[deviceKey] ?: rows
+    }
     override fun save(deviceKey: String, sessions: List<PersistedRemoteSession>, hasMore: Boolean) {
+        if (failSave) error("session cache write failed")
         saveCount += 1
         rows = sessions
         byDevice[deviceKey] = sessions
@@ -289,6 +381,10 @@ private class MemoryTranscripts : RemoteTranscriptStore {
     override fun replace(deviceKey: String, sessionId: String, messages: List<PersistedRemoteMessage>) { rows["$deviceKey::$sessionId"] = messages }
     override fun loadCursor(deviceKey: String, sessionId: String) = cursors["$deviceKey::$sessionId"]
     override fun saveCursor(deviceKey: String, sessionId: String, cursor: PersistedRemoteCursor) { cursors["$deviceKey::$sessionId"] = cursor }
+    override fun delete(deviceKey: String, sessionId: String) {
+        rows.remove("$deviceKey::$sessionId")
+        cursors.remove("$deviceKey::$sessionId")
+    }
 }
 
 private class PersistenceTransport : RemoteCommandTransport {

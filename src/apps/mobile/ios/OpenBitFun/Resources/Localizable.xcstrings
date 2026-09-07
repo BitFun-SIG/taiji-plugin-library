@@ -941,6 +941,16 @@
         }
       }
     },
+    "这台电脑暂时无法读取": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This computer cannot be read right now"
+          }
+        }
+      }
+    },
     "工作区助手": {
       "localizations": {
         "en": {

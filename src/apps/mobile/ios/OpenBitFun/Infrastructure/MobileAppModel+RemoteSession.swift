@@ -85,6 +85,7 @@ extension MobileAppModel {
             pendingDirectoryRemoteDraft = nil
         }
         pendingRemoteWorkspaceCreate = nil
+        pendingRemoteSessionRefreshWorkspacePath = nil
         pendingRemoteAssistantCreate = false
 
         committedRemoteCreate = nil
@@ -118,13 +119,16 @@ extension MobileAppModel {
                 )
             }
             let workspaces = entry.workspaces.map { workspace in
-                MobileWorkspaceGroup(
+                let directory = entry.workspace(path: workspace.path)
+                return MobileWorkspaceGroup(
                     path: workspace.path,
                     name: workspace.name.isEmpty ? workspace.path : workspace.name,
                     selected: remoteExpectedDeviceKey == deviceKey &&
                         normalizedSessionWorkspacePath(workspace.path) == normalizedSessionWorkspacePath(workspaceCatalog.first(where: { $0.selected })?.path ?? ""),
                     sessions: sessions.filter { normalizedSessionWorkspacePath($0.workspacePath ?? "") == normalizedSessionWorkspacePath(workspace.path) },
-                    deviceKey: deviceKey
+                    deviceKey: deviceKey,
+                    directoryExpanded: directory?.expanded ?? false,
+                    directoryStatus: directory?.status.name ?? "IDLE"
                 )
             }
             return MobileDeviceDirectoryEntry(
@@ -148,6 +152,28 @@ extension MobileAppModel {
     func retryDeviceDirectory(_ device: MobileDeviceDirectoryEntry) {
 
         coreAdapter?.retryDeviceDirectory(device.id)
+    }
+
+    func refreshDirectoryWorkspacesForPicker(_ device: MobileDeviceDirectoryEntry) {
+        guard device.online else { return }
+        coreAdapter?.retryDeviceDirectory(device.id)
+    }
+
+    func setDirectoryWorkspaceExpanded(
+        device: MobileDeviceDirectoryEntry,
+        workspace: MobileWorkspaceGroup,
+        expanded: Bool
+    ) {
+        guard device.online else { return }
+        coreAdapter?.setDirectoryWorkspaceExpanded(device.id, path: workspace.path, expanded: expanded)
+    }
+
+    func retryDirectoryWorkspace(
+        device: MobileDeviceDirectoryEntry,
+        workspace: MobileWorkspaceGroup
+    ) {
+        guard device.online else { return }
+        coreAdapter?.retryDirectoryWorkspace(device.id, path: workspace.path)
     }
 
     private func directoryTargetKey(forRawDeviceKey rawDeviceKey: String) -> String {
@@ -339,6 +365,7 @@ extension MobileAppModel {
         surface = .remote
         drawerOpen = false
         workspaceSelectionBusy = true
+        pendingRemoteSessionRefreshWorkspacePath = normalizedSessionWorkspacePath(workspace.path)
         coreAdapter?.selectRemoteWorkspace(path: workspace.path)
     }
 
@@ -728,10 +755,8 @@ extension MobileAppModel {
             revision: ready.revision,
             lastApplied: remoteLastAppliedAuthority
         )
-        remoteInitialSessionReady = true
-        remoteConnected = true
+        remoteInitialSessionReady = remoteInitialSessionReady || !ready.busy
         surface = .remote
-        connectionPhase = .connected
         let committed = committedRemoteCreate
         let projectionDecision = RemoteAuthorityGate.committedProjectionDecision(
             readyTargetKey: targetKey,
@@ -765,7 +790,6 @@ extension MobileAppModel {
             remoteSessions.insert(committed.session, at: 0)
         }
         rebuildRemoteWorkspaceGroups()
-
         if let protected = committedRemoteCreate,
            protected.targetKey == targetKey,
            protected.epoch == epoch {
@@ -815,10 +839,39 @@ extension MobileAppModel {
            remoteConnected,
            remoteInitialWorkspaceReady {
             pendingDirectoryWorkspace = nil
+            pendingRemoteSessionRefreshWorkspacePath = normalizedSessionWorkspacePath(pending.path)
             coreAdapter?.selectRemoteWorkspace(path: pending.path)
         }
         openPendingDirectorySessionIfReady()
         advancePendingDirectoryRemoteDraftIfReady()
+    }
+
+    func apply(
+        remoteConnectionPhase phase: OpenBitFunMobileCore.ConnectionPhase,
+        targetKey: String,
+        epoch: UInt64
+    ) {
+        guard !localActionPreview, !accountLoginPreview, !remoteCreatePreview,
+              RemoteAuthorityGate.callbackMatchesAuthority(
+                targetKey: targetKey,
+                epoch: epoch,
+                expectedTargetKey: remoteExpectedDeviceKey,
+                expectedEpoch: remoteTargetEpoch
+              ) else { return }
+        switch phase.name {
+        case "CONNECTED":
+            remoteConnected = true
+            connectionPhase = .connected
+        case "CONNECTING", "RECONNECTING":
+            remoteConnected = true
+            connectionPhase = .reconnecting
+        default:
+            remoteConnected = false
+            connectionPhase = .disconnected
+        }
+        if phase.name == "CONNECTED" || phase.name == "RECONNECTING" {
+            promoteLiveAccountTargetPresence(targetKey: targetKey)
+        }
     }
 
     func apply(workspaceState state: RemoteWorkspaceUiState, targetKey: String, epoch: UInt64) {
@@ -829,18 +882,20 @@ extension MobileAppModel {
                 expectedTargetKey: remoteExpectedDeviceKey,
                 expectedEpoch: remoteTargetEpoch
               ) else { return }
-        workspaceLoading = state is RemoteWorkspaceUiStateLoading
-        workspaceLoadFailed = state is RemoteWorkspaceUiStateFailed
+        let readyState = state as? RemoteWorkspaceUiStateReady
+        workspaceLoading = state is RemoteWorkspaceUiStateLoading || readyState?.busy == true
+        workspaceLoadFailed = state is RemoteWorkspaceUiStateFailed || readyState?.loadFailure == true
         workspaceSelectionBusy = (state as? RemoteWorkspaceUiStateReady)?.busy ?? false
-        if state is RemoteWorkspaceUiStateLoading {
+        if state is RemoteWorkspaceUiStateLoading || readyState?.busy == true {
             remoteCreateWorkspacePhase = .loading
-        } else if state is RemoteWorkspaceUiStateFailed {
+        } else if state is RemoteWorkspaceUiStateFailed || readyState?.loadFailure == true {
             remoteCreateWorkspacePhase = .failed
         }
-        if !(state is RemoteWorkspaceUiStateReady) {
+        if !(state is RemoteWorkspaceUiStateReady) || readyState?.busy == true || readyState?.loadFailure == true {
             remoteInitialWorkspaceReady = false
         }
-        if state is RemoteWorkspaceUiStateFailed {
+        if state is RemoteWorkspaceUiStateFailed || readyState?.loadFailure == true {
+            pendingRemoteSessionRefreshWorkspacePath = nil
             if pendingRemoteWorkspaceCreate != nil || pendingRemoteAssistantCreate ||
                 pendingDirectoryRemoteDraft != nil {
                 pendingRemoteWorkspaceCreate = nil
@@ -852,11 +907,11 @@ extension MobileAppModel {
         }
         guard let ready = state as? RemoteWorkspaceUiStateReady else { return }
 
-        workspaceLoading = false
-        workspaceLoadFailed = false
+        workspaceLoading = ready.busy
+        workspaceLoadFailed = ready.loadFailure
         workspaceSelectionBusy = ready.busy
-        remoteCreateWorkspacePhase = .ready
-        remoteInitialWorkspaceReady = true
+        remoteCreateWorkspacePhase = ready.loadFailure ? .failed : (ready.busy ? .loading : .ready)
+        remoteInitialWorkspaceReady = !ready.busy && !ready.loadFailure
         selectedRemoteWorkspaceKind = ready.selected?.kind ?? ""
         var seen = Set<String>()
         var catalog: [(path: String, name: String, selected: Bool)] = []
@@ -889,6 +944,12 @@ extension MobileAppModel {
            ready.selected?.kind.lowercased() == "assistant" {
             pendingRemoteAssistantCreate = false
             createRemoteSession(agentType: "Claw", title: "", instruction: "")
+        }
+        if !ready.busy, let pendingPath = pendingRemoteSessionRefreshWorkspacePath {
+            pendingRemoteSessionRefreshWorkspacePath = nil
+            if normalizedSessionWorkspacePath(ready.selected?.path ?? "") == pendingPath {
+                coreAdapter?.refreshRemoteSessions()
+            }
         }
         advancePendingDirectoryRemoteDraftIfReady()
     }

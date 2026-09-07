@@ -64,6 +64,31 @@ class RemoteSessionStoreTest {
     }
 
     @Test
+    fun workspaceDirectoryIntentLoadsOnlyTheRequestedBranchWithoutChangingActiveState() = runTest {
+        val transport = FakeSessionTransport().apply {
+            listSessionsOverride = { _ ->
+                """{"resp":"ok","has_more":false,"sessions":[{"id":"branch","title":"Branch","agent_type":"code"}]}"""
+            }
+        }
+        val store = RemoteSessionStore.create(this, transport)
+
+        store.dispatch(RemoteSessionIntent.LoadWorkspaceSessions("/other/repo/"))
+        store.dispatch(RemoteSessionIntent.LoadWorkspaceSessions("/other/repo"))
+        advanceUntilIdle()
+
+        assertIs<RemoteSessionUiState.Idle>(store.state.value)
+        val branch = store.workspaceDirectory.value.workspace("/other/repo")!!
+        assertEquals(WorkspaceSessionDirectoryStatus.READY, branch.status)
+        assertEquals(listOf("branch"), branch.sessions.map { it.id })
+        assertEquals("/other/repo", branch.sessions.single().workspacePath)
+        val requests = transport.commands.filter { it.cmd == "list_sessions" }
+        assertEquals(1, requests.size)
+        assertEquals("/other/repo", requests.single().workspacePath)
+        assertEquals(50, requests.single().limit)
+        assertTrue(transport.commands.none { it.cmd == "get_workspace_info" })
+    }
+
+    @Test
     fun initialListingAndCatalogRequestsOverlapWithoutChangingReadyOrdering() = runTest {
         val transport = FakeSessionTransport()
         val listGate = CompletableDeferred<Unit>()

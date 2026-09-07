@@ -229,6 +229,8 @@ struct MobileWorkspaceGroup: Identifiable, Equatable {
     let selected: Bool
     let sessions: [ChatSession]
     var deviceKey: String? = nil
+    var directoryExpanded = false
+    var directoryStatus = "IDLE"
 }
 
 enum MobileSessionListSectionKind: Equatable {

@@ -62,11 +62,7 @@ struct SidebarView: View {
     private var directoryEntries: [MobileDeviceDirectoryEntry] { model.deviceDirectory }
 
     private var selectedDirectoryEntry: MobileDeviceDirectoryEntry? {
-        if let selectedID = model.accountSelectedDeviceID,
-           let selected = directoryEntries.first(where: { $0.id == selectedID }) {
-            return selected
-        }
-        return directoryEntries.first(where: \.online) ?? directoryEntries.first
+        directoryEntries.first(where: \.expanded)
     }
 
     var body: some View {
@@ -119,7 +115,8 @@ struct SidebarView: View {
                 surface
             }
         }
-        .sheet(item: $workspacePickerDevice) { device in
+        .sheet(item: $workspacePickerDevice) { requestedDevice in
+            let device = directoryEntries.first(where: { $0.id == requestedDevice.id }) ?? requestedDevice
             SidebarWorkspacePickerSheet(
                 device: device,
                 onClose: { workspacePickerDevice = nil },
@@ -311,7 +308,10 @@ struct SidebarView: View {
                         .font(.system(size: 14, weight: .medium))
                         .foregroundStyle(OpenBitFunTheme.muted)
                     Spacer(minLength: 0)
-                    Button { workspacePickerDevice = selectedDirectoryEntry } label: {
+                    Button {
+                        workspacePickerDevice = selectedDirectoryEntry
+                        model.refreshDirectoryWorkspacesForPicker(selectedDirectoryEntry)
+                    } label: {
                         Image(systemName: "plus")
                             .font(.system(size: 18, weight: .regular))
                             .foregroundStyle(selectedDirectoryEntry.online ? OpenBitFunTheme.ink : OpenBitFunTheme.muted)
@@ -359,7 +359,7 @@ struct SidebarView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .disabled(!device.online || selected)
+        .disabled(!device.online)
         .opacity(device.online ? 1 : 0.58)
         .accessibilityIdentifier("sidebar.device.\(device.id)")
         .accessibilityLabel(Text(device.name))
@@ -367,9 +367,17 @@ struct SidebarView: View {
     }
 
     private func selectDirectoryDevice(_ device: MobileDeviceDirectoryEntry) {
-        guard device.online, selectedDirectoryEntry?.id != device.id else { return }
+        guard device.online else { return }
+        if device.expanded {
+            model.toggleDeviceDirectory(device)
+            return
+        }
+        if let selected = selectedDirectoryEntry, selected.id != device.id {
+            model.toggleDeviceDirectory(selected)
+        }
+        model.toggleDeviceDirectory(device)
         guard let accountDevice = model.accountDevices.first(where: { $0.id == device.id }) else { return }
-        model.selectRemoteDevice(accountDevice)
+        model.selectRemoteDevice(accountDevice, preserveDrawer: true)
     }
 
     @ViewBuilder
@@ -400,14 +408,22 @@ struct SidebarView: View {
                     scopedSession.deviceKey = device.id
                     return scopedSession
                 },
-                deviceKey: device.id
+                deviceKey: device.id,
+                directoryExpanded: workspace.directoryExpanded,
+                directoryStatus: workspace.directoryStatus
             )
             SidebarWorkspaceRow(
                 workspace: scopedWorkspace,
-                expanded: expandedWorkspacePaths.contains(workspace.id),
+                expanded: workspace.directoryExpanded,
                 selectedSessionID: model.surface == .remote ? model.selectedSessionID : nil,
                 metadata: { _ in nil },
-                onToggle: { if expandedWorkspacePaths.contains(workspace.id) { expandedWorkspacePaths.remove(workspace.id) } else { expandedWorkspacePaths.insert(workspace.id) } },
+                onToggle: {
+                    model.setDirectoryWorkspaceExpanded(
+                        device: device,
+                        workspace: scopedWorkspace,
+                        expanded: !workspace.directoryExpanded
+                    )
+                },
                 onToggleCreate: {
                     model.openDirectoryRemoteDraft(device: device, workspace: scopedWorkspace)
                 },
@@ -415,10 +431,20 @@ struct SidebarView: View {
                 onOpenSession: { model.selectDirectorySession($0) }, onActions: { session in
                     if permanent { onPermanentActions?(session) } else { compactActionSession = session }
                 },
-                sessionLimit: expandedWorkspacePaths.contains(workspace.id) ? workspace.sessions.count : 3,
+                sessionLimit: workspace.directoryExpanded ? workspace.sessions.count : 3,
                 selectedDeviceKey: model.accountSelectedDeviceID,
                 selectedWorkspacePath: model.workspaceCatalog.first(where: { $0.selected })?.path,
-                onShowMore: { expandedWorkspacePaths.insert(workspace.id) }
+                onShowMore: {
+                    model.setDirectoryWorkspaceExpanded(
+                        device: device,
+                        workspace: scopedWorkspace,
+                        expanded: true
+                    )
+                },
+                directoryLoadStatus: workspace.directoryStatus,
+                onRetryDirectoryLoad: {
+                    model.retryDirectoryWorkspace(device: device, workspace: scopedWorkspace)
+                }
             )
             .padding(.leading, 20)
         }
@@ -869,6 +895,8 @@ private struct SidebarWorkspaceRow: View {
     var selectedDeviceKey: String? = nil
     var selectedWorkspacePath: String? = nil
     var onShowMore: (() -> Void)? = nil
+    var directoryLoadStatus = "READY"
+    var onRetryDirectoryLoad: (() -> Void)? = nil
 
     private func isSelected(_ session: ChatSession) -> Bool {
         guard selectedSessionID == session.id,
@@ -934,7 +962,31 @@ private struct SidebarWorkspaceRow: View {
             .clipShape(RoundedRectangle(cornerRadius: 10))
 
             if expanded {
-                if workspace.sessions.isEmpty {
+                if directoryLoadStatus == "LOADING" {
+                    HStack(spacing: 8) {
+                        ProgressView().controlSize(.small)
+                        Text(MobileLocalization.text("正在加载"))
+                            .font(.system(size: 13))
+                            .foregroundStyle(OpenBitFunTheme.muted)
+                    }
+                    .padding(.leading, 42)
+                    .frame(height: 40, alignment: .leading)
+                } else if directoryLoadStatus == "FAILED" {
+                    Button(action: { onRetryDirectoryLoad?() }) {
+                        HStack(spacing: 8) {
+                            Text(MobileLocalization.text("这台电脑暂时无法读取"))
+                                .foregroundStyle(OpenBitFunTheme.muted)
+                            Spacer(minLength: 0)
+                            Text(MobileLocalization.text("重试"))
+                                .foregroundStyle(OpenBitFunTheme.ink)
+                        }
+                        .font(.system(size: 13))
+                        .padding(.leading, 42)
+                        .padding(.trailing, 10)
+                        .frame(height: 40)
+                    }
+                    .buttonStyle(.plain)
+                } else if workspace.sessions.isEmpty && directoryLoadStatus == "READY" {
                     Text(MobileLocalization.text("此工作区暂无会话"))
                         .font(.system(size: 13))
                         .foregroundStyle(OpenBitFunTheme.muted)
