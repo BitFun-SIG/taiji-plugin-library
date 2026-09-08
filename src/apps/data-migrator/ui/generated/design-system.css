@@ -93,6 +93,8 @@
     --openbitfun-control-icon-size-md: 16px;
     --openbitfun-control-icon-size-sm: 14px;
     --openbitfun-control-icon-size-xs: 12px;
+    --openbitfun-control-icon-button-standard-icon-size: 16px;
+    --openbitfun-control-icon-button-standard-size: 30px;
     --openbitfun-control-icon-button-xs-icon-size: 14px;
     --openbitfun-control-icon-button-xs-size: 22px;
     --openbitfun-control-launcher-button-block-size: var(--openbitfun-control-height-md);
@@ -318,6 +320,7 @@
     --openbitfun-motion-easing-exit: cubic-bezier(0.3, 0, 1, 1);
     --openbitfun-motion-easing-smooth: cubic-bezier(0.77, 0, 0.175, 1);
     --openbitfun-motion-easing-standard: cubic-bezier(0.23, 1, 0.32, 1);
+    --openbitfun-opacity-icon-artwork: 0.8;
     --openbitfun-overlay-dialog-backdrop-blur: blur(20px);
     --openbitfun-overlay-dialog-content-padding-lg: var(--openbitfun-space-6);
     --openbitfun-overlay-dialog-content-padding-md: var(--openbitfun-space-4);

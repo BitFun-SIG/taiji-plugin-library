@@ -1,5 +1,8 @@
 {
   "$description": "Theme-independent system scales.",
+  "opacity": {
+    "iconArtwork": { "$type": "number", "$value": 0.8 }
+  },
   "space": {
     "$type": "dimension",
     "0": { "$value": "0px" },
@@ -620,7 +623,9 @@
     "iconButton": {
       "$type": "dimension",
       "xsSize": { "$value": "22px" },
-      "xsIconSize": { "$value": "14px" }
+      "xsIconSize": { "$value": "14px" },
+      "standardSize": { "$value": "30px" },
+      "standardIconSize": { "$value": "16px" }
     },
     "button": {
       "$type": "dimension",

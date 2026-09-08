@@ -153,7 +153,8 @@ type PageHeaderAlign = "center" | "start";
 type PageHeaderSize = "display" | "lg" | "md" | "sm";
 
 const buttonVariants = ["outline", "fill", "secondary", "primary", "text"] as const;
-const iconButtonVariants = ["quiet", "fill", "primary"] as const;
+const iconButtonVariants = ["quiet", "outline", "fill", "primary"] as const;
+const iconButtonSizes = ["xs", "standard", "sm", "md", "lg"] as const;
 const buttonInspectorStates = ["default", "hover", "active"] as const;
 const fieldOrientations = ["vertical", "horizontal"] as const;
 const pageHeaderAlignments = ["start", "center"] as const;
@@ -309,6 +310,8 @@ export function ComponentDetailPage({
   const { t } = useI18n();
   const stateLabel = (state: string) => optionLabelKeys[state] ? t(optionLabelKeys[state]) : state;
   const [variant, setVariant] = useState<(typeof buttonVariants)[number]>("fill");
+  const [iconButtonSize, setIconButtonSize] = useState<(typeof iconButtonSizes)[number]>("xs");
+  const [iconButtonShape, setIconButtonShape] = useState<"square" | "circle">("square");
   const [iconButtonVariant, setIconButtonVariant] = useState<(typeof iconButtonVariants)[number]>("quiet");
   const [iconName, setIconName] = useState<IconName>("search");
   const [numberBadgeValue, setNumberBadgeValue] = useState("18");
@@ -519,7 +522,7 @@ export function ComponentDetailPage({
 
     if (component.name === "IconButton") {
       const stateProps = `${inspectorDisabled ? " disabled" : ""}${inspectorLoading ? " loading" : ""}`;
-      return `import { IconButton } from "@openbitfun/ui";\nimport { List } from "lucide-react";\n\n<IconButton\n  aria-label="${t("components.preview.listView")}"\n  icon={<List />}\n  variant="${iconButtonVariant}"${stateProps}\n/>`;
+      return `import { IconButton } from "@openbitfun/ui";\nimport { List } from "lucide-react";\n\n<IconButton\n  aria-label="${t("components.preview.listView")}"\n  icon={<List />}\n  variant="${iconButtonVariant}"\n  size="${iconButtonSize}"\n  shape="${iconButtonShape}"${stateProps}\n/>`;
     }
     if (component.name === "Field") {
       const labelAction = fieldShowLabelAction
@@ -633,6 +636,8 @@ export function ComponentDetailPage({
     fieldShowLabelAction,
     flowChatPreview,
     iconButtonVariant,
+    iconButtonSize,
+    iconButtonShape,
     iconName,
     iconSize,
     iconTone,
@@ -854,7 +859,8 @@ export function ComponentDetailPage({
         disabled={state === "disabled" || applyInspectorControls && inspectorDisabled}
         icon={<List aria-hidden="true" />}
         loading={state === "loading" || applyInspectorControls && inspectorLoading}
-        size={size}
+        size={iconButtonSize}
+        shape={iconButtonShape}
         variant={previewVariant}
       />
     );
@@ -2393,6 +2399,12 @@ export function ComponentDetailPage({
                       value={iconButtonVariant}
                     />
                   )}
+                  {component.name === "IconButton" && (
+                    <>
+                      <InspectorSelect label={t("detail.size")} options={iconButtonSizes} value={iconButtonSize} onChange={(value) => setIconButtonSize(value as (typeof iconButtonSizes)[number])} translateOptions={false} />
+                      <InspectorSelect label="shape" options={["square", "circle"]} value={iconButtonShape} onChange={(value) => setIconButtonShape(value as "square" | "circle")} translateOptions={false} />
+                    </>
+                  )}
                   {component.name === "Field" && (
                     <InspectorSelect
                       label={t("detail.orientation")}
@@ -2486,7 +2498,7 @@ export function ComponentDetailPage({
                       value={scrollAreaOrientation}
                     />
                   )}
-                  {(component.name === "Button" || component.name === "IconButton") && (
+                  {component.name === "Button" && (
                     <InspectorSelect
                       label={t("detail.size")}
                       onChange={(value) => setSize(value as PreviewSize)}

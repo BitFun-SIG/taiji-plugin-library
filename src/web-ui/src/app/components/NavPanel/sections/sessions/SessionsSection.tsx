@@ -1864,7 +1864,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                         <>
                           <MenuItem
                             type="button"
-                            leading={<Icon name="chevron-left" size="lg" style={{ width: 13, height: 13 }} />}
+                            leading={<Icon name="chevron-left" />}
                             onClick={e => {
                               e.stopPropagation();
                               setIsExportScopeMenu(false);

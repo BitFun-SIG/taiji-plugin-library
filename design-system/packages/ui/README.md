@@ -198,6 +198,20 @@ focus ring. Use it for toolbar, dialog, and row utilities. `fill` and `primary`
 keep an opaque backing surface for persistent emphasis. Disabled quiet actions
 remain transparent and do not show hover or pressed feedback.
 
+Use `size="xs"` for 22px square controls with 14px glyphs and a 4px radius.
+`size="standard" shape="circle" variant="outline"` provides the 30px outlined
+circle with a 16px glyph. Quiet and outline controls use the shared neutral
+hover surface for both hover and pressed states; outline keeps its border when
+disabled. Existing sm/md/lg sizes and the default sm size remain available.
+
+The 62 reviewed single-path, single-tone masks have opaque paths.
+`Icon` and `SessionIcon` retain their original 80% artwork opacity standalone;
+Button, IconButton, ActionItem and TabGroup slots own this opacity in controls
+through the public `--openbitfun-opacity-icon-artwork` contract. Button trailing
+slots use half the content opacity and restore full disabled content opacity.
+The progress-25 and legacy turn assets retain their internal transparency.
+Product callers should not add opacity or dimensions inside these owned slots.
+
 The catalog uses exported vectors, including their view boxes and per-path
 opacity. Theme colors remain caller-owned through `currentColor`. Asset
 fingerprints are reviewed with intentional resource updates so replacing a

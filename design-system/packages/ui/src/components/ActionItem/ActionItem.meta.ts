@@ -17,6 +17,7 @@ export const actionItemMeta = {
   ],
   states: ["default", "hover", "active", "focus-visible", "disabled", "danger"],
   tokens: [
+    "opacity.iconArtwork",
     "color.action.neutral.content",
     "color.action.neutral.contentDisabled",
     "color.action.neutral.surface",

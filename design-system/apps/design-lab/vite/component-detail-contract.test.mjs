@@ -280,11 +280,13 @@ test("IconButton preview exposes its icon-only presentation contract", async () 
   assert.ok(declaration);
   assert.deepEqual(
     [...declaration[1].matchAll(/"([^"]+)"/g)].map((match) => match[1]),
-    ["quiet", "fill", "primary"],
+    ["quiet", "outline", "fill", "primary"],
   );
   assert.match(source, /data-component="icon-button"/);
   assert.match(source, /aria-label=\{t\("components\.preview\.listView"\)\}/);
   assert.match(source, /icon=\{<List aria-hidden="true" \/>\}/);
+  assert.match(source, /size=\{iconButtonSize\}/);
+  assert.match(source, /shape=\{iconButtonShape\}/);
 });
 
 test("Icon preview exposes the complete named catalog and semantic controls", async () => {

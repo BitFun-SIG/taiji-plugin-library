@@ -3911,6 +3911,17 @@ input.lab-force-focus {
   font-size: var(--openbitfun-type-body-xs-font-size);
 }
 
+.component-icon-composition__surface {
+  display: grid;
+  gap: var(--openbitfun-space-4);
+  padding: var(--openbitfun-space-4);
+  background: var(--openbitfun-color-surface-panel);
+}
+
+.component-icon-composition__surface[data-surface="tertiary"] {
+  background: var(--openbitfun-color-surface-tertiary);
+}
+
 .component-icon-catalog__item {
   display: grid;
   min-block-size: 88px;
