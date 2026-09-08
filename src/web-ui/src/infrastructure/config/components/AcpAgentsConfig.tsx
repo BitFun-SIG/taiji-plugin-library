@@ -253,7 +253,7 @@ function normalizeEnvObject(value: unknown): Record<string, string> {
 }
 
 function normalizePermissionMode(value: unknown): AcpClientPermissionMode {
-  return value === 'allow_once' || value === 'reject_once' ? value : 'ask';
+  return value === 'allow_once' ? value : 'ask';
 }
 
 function normalizeSubagentConfig(value: unknown): AcpClientSubagentConfig {
@@ -1056,7 +1056,6 @@ const AcpAgentsConfig: React.FC<AcpAgentsConfigProps> = ({
   const permissionOptions = useMemo(() => [
     { value: 'ask', label: t('permissionMode.ask') },
     { value: 'allow_once', label: t('permissionMode.allowOnce') },
-    { value: 'reject_once', label: t('permissionMode.rejectOnce') },
   ], [t]);
 
   const registryFilterOptions = useMemo(() => [
