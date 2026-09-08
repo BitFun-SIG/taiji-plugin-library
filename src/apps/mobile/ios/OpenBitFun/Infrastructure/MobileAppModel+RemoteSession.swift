@@ -1,5 +1,11 @@
 import Foundation
 import OpenBitFunMobileCore
+import OSLog
+
+private let mobilePerformanceLog = Logger(
+    subsystem: "com.openbitfun.mobile.ios",
+    category: "performance"
+)
 
 extension MobileAppModel {
     func apply(remoteTargetBound targetKey: String, epoch: UInt64, accountGeneration generation: UInt64) {
@@ -328,6 +334,8 @@ extension MobileAppModel {
         remoteConversationLoadGeneration &+= 1
         let generation = remoteConversationLoadGeneration
         remoteConversationOpeningSessionID = sessionID
+        remoteConversationOpenStartedAt = ProcessInfo.processInfo.systemUptime
+        mobilePerformanceLog.info("Remote session open started generation=\(generation, privacy: .public)")
         remoteConversationLoading = false
         selectedSessionID = sessionID
         timelineRows = []
@@ -351,6 +359,12 @@ extension MobileAppModel {
 
     func finishRemoteConversationOpenIfReady(timelineSessionID: String) {
         guard remoteConversationOpeningSessionID == timelineSessionID else { return }
+        if let startedAt = remoteConversationOpenStartedAt {
+            let elapsedMS = Int((ProcessInfo.processInfo.systemUptime - startedAt) * 1_000)
+            mobilePerformanceLog.info(
+                "Remote session timeline ready elapsed_ms=\(elapsedMS, privacy: .public) generation=\(self.remoteConversationLoadGeneration, privacy: .public)"
+            )
+        }
         resetRemoteConversationOpen()
     }
 
@@ -359,6 +373,7 @@ extension MobileAppModel {
         remoteConversationLoadTask = nil
         remoteConversationLoadGeneration &+= 1
         remoteConversationOpeningSessionID = nil
+        remoteConversationOpenStartedAt = nil
         remoteConversationLoading = false
     }
 

@@ -111,6 +111,7 @@ final class MobileAppModel: ObservableObject {
     var remoteConversationLoadTask: Task<Void, Never>?
     var remoteConversationLoadGeneration: UInt64 = 0
     var remoteConversationOpeningSessionID: String?
+    var remoteConversationOpenStartedAt: TimeInterval?
 
     var coreAdapter: MobileCoreAdapter?
 
