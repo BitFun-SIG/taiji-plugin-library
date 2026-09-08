@@ -567,13 +567,7 @@ pub fn create_main_window(
     );
 
     let main_url = if use_development_frontend() {
-        match "http://localhost:1422".parse() {
-            Ok(url) => WebviewUrl::External(url),
-            Err(e) => {
-                error!("Invalid dev URL, fallback to app URL: {}", e);
-                WebviewUrl::App("index.html".into())
-            }
-        }
+        app_url(app_handle, "")
     } else {
         frontend_workbench.active_frontend_url()
     };
@@ -755,10 +749,24 @@ fn show_main_window_for_startup(
     }
 }
 
-fn app_url(path: &str) -> WebviewUrl {
+fn development_frontend_url(
+    dev_url: Option<&tauri::Url>,
+    path: &str,
+) -> Result<tauri::Url, String> {
+    let base = dev_url.ok_or_else(|| "Tauri build.devUrl is not configured".to_string())?;
+    if path.is_empty() {
+        return Ok(base.clone());
+    }
+    base.join(path).map_err(|error| error.to_string())
+}
+
+fn app_url(app: &tauri::AppHandle, path: &str) -> WebviewUrl {
     if use_development_frontend() {
-        match format!("http://localhost:1422/{}", path).parse() {
-            Ok(url) => WebviewUrl::External(url),
+        match development_frontend_url(app.config().build.dev_url.as_ref(), path) {
+            Ok(url) => {
+                debug!("Development frontend URL resolved: {}", url);
+                WebviewUrl::External(url)
+            }
             Err(e) => {
                 error!("Invalid dev URL, fallback to app URL: {}", e);
                 WebviewUrl::App(path.into())
@@ -937,7 +945,7 @@ pub async fn show_agent_companion_desktop_pet(app: tauri::AppHandle) -> Result<(
         return Ok(());
     }
 
-    let url = app_url("?openbitfunWindow=agent-companion");
+    let url = app_url(&app, "?openbitfunWindow=agent-companion");
     let mut builder = tauri::WebviewWindowBuilder::new(&app, AGENT_COMPANION_WINDOW_LABEL, url)
         .title("OpenBitFun Agent Companion")
         .inner_size(
@@ -1084,4 +1092,34 @@ pub async fn show_main_window(app: tauri::AppHandle) -> Result<(), String> {
         total_started_at.elapsed().as_millis()
     );
     Ok(())
+}
+
+#[cfg(test)]
+mod development_frontend_tests {
+    use super::development_frontend_url;
+
+    #[test]
+    fn windows_use_the_configured_development_origin() {
+        for origin in [
+            "http://localhost:1422/",
+            "http://localhost:1432/",
+            "http://127.0.0.1:15432/app/",
+        ] {
+            let base = origin.parse().unwrap();
+            assert_eq!(development_frontend_url(Some(&base), "").unwrap(), base);
+            assert_eq!(
+                development_frontend_url(Some(&base), "?openbitfunWindow=agent-companion")
+                    .unwrap()
+                    .as_str(),
+                format!("{origin}?openbitfunWindow=agent-companion")
+            );
+        }
+    }
+
+    #[test]
+    fn missing_development_url_does_not_choose_another_instance() {
+        assert!(development_frontend_url(None, "")
+            .unwrap_err()
+            .contains("build.devUrl"));
+    }
 }

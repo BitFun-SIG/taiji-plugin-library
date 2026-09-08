@@ -8401,7 +8401,7 @@
       "rustPath": "search_build_index",
       "sourceFile": "src/apps/desktop/src/api/search_api.rs",
       "signature": "fn search_build_index( state: State<'_, AppState>, request: SearchRepoIndexRequest, ) -> Result<serde_json::Value, String>",
-      "remoteWorkspacePolicy": "RemoteRouted"
+      "remoteWorkspacePolicy": "RemoteUnsupported"
     },
     {
       "id": "search_file_contents",
@@ -8465,7 +8465,7 @@
       "rustPath": "search_get_repo_status",
       "sourceFile": "src/apps/desktop/src/api/search_api.rs",
       "signature": "fn search_get_repo_status( state: State<'_, AppState>, request: SearchRepoIndexRequest, ) -> Result<serde_json::Value, String>",
-      "remoteWorkspacePolicy": "RemoteRouted"
+      "remoteWorkspacePolicy": "RemoteUnsupported"
     },
     {
       "id": "search_rebuild_index",
@@ -8483,7 +8483,7 @@
       "rustPath": "search_rebuild_index",
       "sourceFile": "src/apps/desktop/src/api/search_api.rs",
       "signature": "fn search_rebuild_index( state: State<'_, AppState>, request: SearchRepoIndexRequest, ) -> Result<serde_json::Value, String>",
-      "remoteWorkspacePolicy": "RemoteRouted"
+      "remoteWorkspacePolicy": "RemoteUnsupported"
     },
     {
       "id": "search_referenceable_sessions",

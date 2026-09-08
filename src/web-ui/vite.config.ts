@@ -14,7 +14,10 @@ import {
   verifyHarmonyFontSources,
 } from "../../scripts/web-font-profile.mjs";
 
+import { resolveDevServerPorts } from '../../scripts/dev-server-ports.mjs';
+
 const host = process.env.TAURI_DEV_HOST;
+const { port: devPort, hmrPort } = resolveDevServerPorts();
 const designSystemUiSourceDirectory = path.resolve(
   __dirname,
   '../../design-system/packages/ui/src',
@@ -192,8 +195,8 @@ export default defineConfig(({ mode, command }) => {
   clearScreen: false,
   // 2. tauri expects a fixed port, fail if that port is not available
   server: {
-    port: 1422,
-    // Tauri devUrl is fixed to http://localhost:1422.
+    port: devPort,
+    // The desktop launcher uses the same configured development port.
     // If Vite silently falls back to another port, the desktop webview stays blank.
     strictPort: true,
     host: host || "localhost",
@@ -201,7 +204,7 @@ export default defineConfig(({ mode, command }) => {
     hmr: {
       protocol: "ws",
       host: host || "localhost",
-      port: 1421,
+      port: hmrPort,
     },
     // Allow access to workspace root for dependencies like monaco-editor
     fs: {

@@ -59,6 +59,8 @@ import type {
 } from '../types';
 import { GlobalPermissionRulesDialog } from './GlobalPermissionRulesDialog';
 import SessionTitleConfig from './SessionTitleConfig';
+import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
+import { isRemoteWorkspace } from '@/shared/types/global-state';
 import { WORKSPACE_SEARCH_AVAILABLE } from '@/infrastructure/config/workspaceSearchAvailability';
 import ReviewCapacitySection from './ReviewCapacitySection';
 import ToolJsonRepairSection from './ToolJsonRepairSection';
@@ -945,6 +947,7 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({
   const appearanceView = page;
   const showsExecutionSettings = page === 'execution';
 
+  const { workspace } = useCurrentWorkspace();
   const requiresExperienceSettings = page === 'pet' || page === 'session-workspace';
   if (loadError) {
     return (
@@ -1118,8 +1121,8 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({
         {page === 'session-workspace' && settings ? (
           <>
 
-        {/* Flashgrep entry stays hidden while its binaries are not distributed. */}
-        {WORKSPACE_SEARCH_AVAILABLE && (
+        {/* Accelerated search is available for local workspaces only. */}
+        {WORKSPACE_SEARCH_AVAILABLE && !isRemoteWorkspace(workspace) && (
           <ConfigPageSection
             title={t('features.workspaceSearch.title')}
             description={t('features.workspaceSearch.subtitle')}
