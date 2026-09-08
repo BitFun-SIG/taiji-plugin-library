@@ -948,7 +948,7 @@
     "redeploy": "重新部署",
     "startDeploy": "開始部署",
     "deployingTitle": "正在部署 relay server…",
-    "deployingHint": "一鍵部署會在需要時安裝 Docker，再透過所選線路拉取已簽署的 Relay 映像並啟動。若提示 sudo，請在下方終端機輸入密碼；關閉本視窗會停止遠端部署。",
+    "deployingHint": "部署會自動安裝所需依賴，優先使用已發佈的 Relay 映像；無法使用時自動從目前原始碼建置，耗時會更長。進度會顯示在下方終端機，若提示 sudo，請輸入密碼；關閉本視窗會取消部署。",
     "waitingRemoteOutput": "正在等待遠端輸出…",
     "deploySucceeded": "部署成功",
     "deployFailed": "部署失敗",

@@ -948,7 +948,7 @@
     "redeploy": "Redeploy",
     "startDeploy": "Start Deployment",
     "deployingTitle": "Deploying relay server…",
-    "deployingHint": "One-click deploy installs Docker when needed, pulls the signed Relay image through the selected route, and starts it. Use the terminal for sudo prompts. Closing this window stops the remote deploy.",
+    "deployingHint": "Deployment installs missing dependencies and tries the published Relay image first. If unavailable, it automatically builds from current source, which takes longer. Follow progress and enter sudo passwords in the terminal. Closing this window cancels deployment.",
     "waitingRemoteOutput": "Waiting for remote output…",
     "deploySucceeded": "Deployment succeeded",
     "deployFailed": "Deployment failed",
