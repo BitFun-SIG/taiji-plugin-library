@@ -26,13 +26,6 @@ struct SessionActionSurface: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            if presentation == .bottomSheet {
-                Capsule()
-                    .fill(OpenBitFunTheme.line)
-                    .frame(width: 36, height: 4)
-                    .padding(.bottom, 10)
-            }
-
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(model.localized("会话操作"))
