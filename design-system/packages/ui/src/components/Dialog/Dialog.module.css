@@ -127,8 +127,6 @@
     flex: 1 1 auto;
     flex-direction: column;
     overflow: auto;
-    scrollbar-color: var(--openbitfun-color-scrollbar-thumb) transparent;
-    scrollbar-width: thin;
   }
 
   .body[data-inset="standard"] {

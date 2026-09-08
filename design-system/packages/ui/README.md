@@ -35,6 +35,27 @@ text buttons keep those hit targets while omitting the visible pill background
 and radius. Use native hover, pressed, focus, disabled, and loading behavior in
 addition to Design Lab's state specimens.
 
+## Native scrollbars
+
+`styles.css` owns scrollbar presentation inside `ThemeRoot` (or
+`data-openbitfun-design-system-root`) and standalone `ScrollArea` viewports.
+Native file trees, virtualized transcripts, navigation, menus, and dialogs use
+the same policy without wrappers, scroll listeners, or timers.
+
+On mouse/trackpad surfaces, the thumb appears while its own viewport is hovered
+or contains visible keyboard focus. Leaving the viewport hides it; scrolling
+from streaming output does not reveal an unattended panel. Touch surfaces retain
+visible native thumbs, and forced colors retains system accessibility colors.
+Tracks stay transparent. Only color changes, so hover never changes viewport
+width, overflow, or scrollbar gutters.
+
+`ScrollArea` keeps `scrollbarVisibility="auto"` as the default. `always` keeps
+the thumb visible and reserves a scrolling track; `hidden` deliberately hides
+the native scrollbar while preserving scrolling. `Menu`, `Listbox`, and
+`NavigationPanelBody` forward the same contract. Product styles own layout and
+`scrollbar-gutter`, not local scrollbar colors or show/hide handlers. Monaco
+and terminal renderers keep their own scrollbar APIs.
+
 ## Text overflow
 
 
@@ -275,14 +296,18 @@ Escape or selection restores the trigger, and Tab continues from its position
 in the form. Search, typed values, and multiple selection remain component-owned.
 `SearchField variant="embedded"` removes its standalone pill surface for these
 compositions; its container must supply padding, height, and visible focus
-treatment. The default SearchField appearance is unchanged.
+treatment. Standalone SearchField pills use a subtle neutral border, increasing
+to the default neutral border on hover and focus while preserving validation
+and forced-color states. This search-specific treatment does not change Input.
 
 `SearchField variant="panel"` provides a joined frosted surface with a rounded
 input row and an optional `footer` slot for result status and actions. It reuses
 the same input node when switching from the default pill, preserves input-row
 height, and provides a divider, metadata typography, and a single focus outline.
-The surface uses semantic tint and blur tokens, with an opaque fallback for
-unsupported blur or reduced transparency. Callers own the query, localized
+The whole panel combines the raised semantic surface at 80% opacity with the
+medium backdrop blur and overlay shadow; its input and footer remain transparent.
+The panel uses the same quiet focus border, with an opaque fallback for
+unsupported blur, reduced transparency, or high contrast. Callers own the query, localized
 counts, navigation callbacks, and disabled action states; use `IconButton` for
 the actions. The panel stays in normal flow by default. A toolbar that needs
 downward expansion without reflow should reserve the input height and position

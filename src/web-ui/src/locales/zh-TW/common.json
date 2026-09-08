@@ -1516,6 +1516,7 @@
   },
   "loading": {
     "app": "正在啟動 OpenBitFun...",
+    "companion": "正在載入助手...",
     "scenes": "正在載入場景",
     "workspace": "正在載入工作區..."
   },

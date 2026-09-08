@@ -9,6 +9,15 @@
     border-radius: var(--openbitfun-radius-pill);
   }
 
+  /* Search owns a quiet focus treatment without changing general-purpose Input. */
+  .root[data-variant="default"] .field:where(:not([data-invalid="true"])) {
+    border-color: var(--openbitfun-color-border-subtle);
+  }
+
+  .root[data-variant="default"] .field:where(:not([data-invalid="true"], [data-disabled="true"])):is(:hover, :focus-within) {
+    border-color: var(--openbitfun-color-border-default);
+  }
+
   .root .clear {
     /* The clear action is already composited inside Input's field surface. */
     --_icon-button-background: transparent;
@@ -35,10 +44,11 @@
     outline-offset: calc(-1 * var(--openbitfun-border-width-default));
     color: var(--openbitfun-color-content-primary);
     background: var(--openbitfun-color-surface-raised);
+    box-shadow: var(--openbitfun-shadow-overlay);
   }
 
   .root[data-variant="panel"]:focus-within {
-    outline-color: var(--openbitfun-color-field-border-focus);
+    outline-color: var(--openbitfun-color-border-default);
   }
 
   .root[data-variant="panel"]:has(.field[data-invalid="true"]) {
@@ -73,13 +83,20 @@
 
   @supports (backdrop-filter: none) or (-webkit-backdrop-filter: none) {
     .root[data-variant="panel"] {
-      background: var(--openbitfun-color-surface-subtle);
+      /* Surface tokens may be opaque; composite the whole panel before blurring. */
+      background: color-mix(in srgb, var(--openbitfun-color-surface-raised) 80%, transparent);
       -webkit-backdrop-filter: var(--openbitfun-effect-blur-medium);
       backdrop-filter: var(--openbitfun-effect-blur-medium);
     }
   }
 
-  @media (prefers-reduced-transparency: reduce) {
+  :where(:global([data-contrast="high"])) .root[data-variant="panel"] {
+    background: var(--openbitfun-color-surface-raised);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  @media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
     .root[data-variant="panel"] {
       background: var(--openbitfun-color-surface-raised);
       -webkit-backdrop-filter: none;
@@ -88,14 +105,26 @@
   }
 
   @media (forced-colors: active) {
-    .root[data-variant="panel"] {
+    .root[data-variant="default"] .field,
+    .root[data-variant="default"] .field:is(:hover, :focus-within) {
+      border-color: ButtonText;
+    }
+
+    .root[data-variant="default"] .field:focus-within {
+      border-color: Highlight;
+    }
+
+    .root[data-variant="panel"],
+    .root[data-variant="panel"]:has(.field[data-invalid="true"]) {
       outline-color: ButtonText;
       background: Canvas;
+      box-shadow: none;
       -webkit-backdrop-filter: none;
       backdrop-filter: none;
     }
 
-    .root[data-variant="panel"]:focus-within {
+    .root[data-variant="panel"]:focus-within,
+    .root[data-variant="panel"]:has(.field[data-invalid="true"]):focus-within {
       outline-color: Highlight;
     }
   }

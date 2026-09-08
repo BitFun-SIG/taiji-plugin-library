@@ -1516,6 +1516,7 @@
   },
   "loading": {
     "app": "Starting OpenBitFun...",
+    "companion": "Loading companion...",
     "scenes": "Loading scene",
     "workspace": "Loading workspace..."
   },

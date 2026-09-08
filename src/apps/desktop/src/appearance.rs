@@ -307,36 +307,6 @@ impl AppearanceConfig {
         appearance_id
     }
 
-    fn startup_messages_json(locale: &str) -> String {
-        let messages = match locale {
-            "en-US" | "en" => serde_json::json!({
-                "loadingApp": "Starting OpenBitFun...",
-                "minimize": "Minimize",
-                "maximize": "Maximize",
-                "restore": "Restore",
-                "close": "Close",
-                "petLoading": "Loading companion..."
-            }),
-            "zh-TW" | "zh-Hant-TW" => serde_json::json!({
-                "loadingApp": "正在啟動 OpenBitFun...",
-                "minimize": "最小化",
-                "maximize": "最大化",
-                "restore": "還原",
-                "close": "關閉",
-                "petLoading": "正在載入助手..."
-            }),
-            _ => serde_json::json!({
-                "loadingApp": "正在启动 OpenBitFun...",
-                "minimize": "最小化",
-                "maximize": "最大化",
-                "restore": "还原",
-                "close": "关闭",
-                "petLoading": "正在加载助手..."
-            }),
-        };
-        messages.to_string()
-    }
-
     fn generate_init_script(
         &self,
         startup_trace_id: &str,
@@ -347,7 +317,6 @@ impl AppearanceConfig {
         let startup_locale = &bootstrap_config.locale;
         let startup_locale_json =
             serde_json::to_string(&startup_locale).unwrap_or_else(|_| "\"zh-CN\"".to_string());
-        let startup_messages_json = Self::startup_messages_json(startup_locale);
         let show_startup_window_controls = !cfg!(target_os = "macos");
         let startup_trace_id_json = serde_json::to_string(startup_trace_id)
             .unwrap_or_else(|_| "\"desktop-unknown\"".to_string());
@@ -386,7 +355,6 @@ impl AppearanceConfig {
                 window.__OPENBITFUN_PERF_TRACE_ENABLED__ = {perf_trace_enabled};
                 window.__OPENBITFUN_BOOTSTRAP_LOG_LEVEL__ = {bootstrap_log_level_json};
                 window.__OPENBITFUN_BOOTSTRAP_LOCALE__ = {startup_locale_json};
-                window.__OPENBITFUN_BOOTSTRAP_MESSAGES__ = {startup_messages_json};
                 window.__OPENBITFUN_SHOW_STARTUP_WINDOW_CONTROLS__ = {show_startup_window_controls};
                 window.__OPENBITFUN_BOOTSTRAP_APPEARANCE_ID__ = {bootstrap_appearance_id_json};
                 window.__OPENBITFUN_BOOTSTRAP_APPEARANCE_SELECTION__ = {bootstrap_appearance_selection_json};
@@ -446,7 +414,6 @@ impl AppearanceConfig {
             perf_trace_enabled = perf_trace_enabled,
             bootstrap_log_level_json = bootstrap_log_level_json,
             startup_locale_json = startup_locale_json,
-            startup_messages_json = startup_messages_json,
             show_startup_window_controls = show_startup_window_controls,
             bootstrap_keybindings_assignment = bootstrap_keybindings_assignment,
             bootstrap_workspace_startup_state_assignment =

@@ -116,6 +116,17 @@ Stable virtual-item keys and projection identity are required. Do not split one
 `ModelRound` into multiple virtual items, and do not reclassify projection from
 a timer.
 
+Search matches retain their concrete text source and occurrence, grouped once
+by virtual-item index. Row containers receive no search background or outline.
+`useFlowChatSearchPresentation` owns mounted text highlights and one passive
+line overlay for the current occurrence: a neutral line tint with a short gutter
+marker. The overlay uses the first painted text fragment in row-local coordinates,
+so it follows outer scrolling without a viewport write. Resize, content changes,
+and nested scrolling refresh its geometry; clipped or unmounted sources produce
+no marker. Each row releases only its own CSS highlight ranges. Search states
+change no row geometry, spacing, or mount animation. Navigation and expansion
+remain in `VirtualMessageList`, separate from presentation.
+
 `getVirtualItemStableKey` keys on type, Turn and content id — never on an index.
 That is what lets a prepend renumber every row without React unmounting any of
 them, and it is what the measurement cache is keyed on underneath.

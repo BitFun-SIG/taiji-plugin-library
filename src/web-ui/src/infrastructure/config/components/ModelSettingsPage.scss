@@ -1891,10 +1891,6 @@
       padding: 0;
       gap: 2px;
       overflow-x: auto;
-      
-      &::-webkit-scrollbar {
-        height: 2px;
-      }
     }
 
     &__tab {

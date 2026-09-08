@@ -54,19 +54,6 @@
     -webkit-backdrop-filter: var(--openbitfun-effect-blur-base);
   }
 
-  .content::-webkit-scrollbar {
-    inline-size: 4px;
-  }
-
-  .content::-webkit-scrollbar-track {
-    background: transparent;
-  }
-
-  .content::-webkit-scrollbar-thumb {
-    background: var(--openbitfun-color-border-default);
-    border-radius: 2px;
-  }
-
   .arrow {
     position: absolute;
     z-index: 0;
