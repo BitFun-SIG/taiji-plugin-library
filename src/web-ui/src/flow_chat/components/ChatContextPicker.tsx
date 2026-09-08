@@ -735,7 +735,7 @@ export const ChatContextPicker: React.FC<ChatContextPickerProps> = ({
       ].filter(Boolean).join(' ') || undefined}
       data-openbitfun-placement={isOverlay ? overlayLayout?.placement ?? 'top' : undefined}
       ref={containerRef}
-      className={`chat-context-picker${isOverlay ? ' chat-context-picker--overlay' : ''}`}
+      className={`chat-context-picker${isOverlay ? ' chat-context-picker--overlay' : ''}${displayItems.some(item => item.kind === 'skill') ? ' chat-context-picker--skills' : ''}`}
       style={style}
       onMouseDown={event => event.preventDefault()}
     >
@@ -875,7 +875,7 @@ export const ChatContextPicker: React.FC<ChatContextPickerProps> = ({
                   onMouseEnter={() => setSelectedIndex(index)}
                   value={key}
                 >
-                  {label}
+                  {skill ? <span className="chat-context-picker__skill-name">{label}</span> : label}
                 </ListboxOption>
               );
             })}

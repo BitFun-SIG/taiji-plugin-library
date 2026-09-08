@@ -251,7 +251,7 @@ describe('ChatContextPicker overlay', () => {
   it('enters the Skill source and returns the selected Skill', async () => {
     const skill = {
       key: 'pdf-skill',
-      name: 'pdf',
+      name: 'pdf-document-extraction-and-accessibility-review',
       description: 'Work with PDFs',
       argumentHint: '<file>',
     };
@@ -283,7 +283,11 @@ describe('ChatContextPicker overlay', () => {
       '[data-openbitfun-context-kind="skill"]',
     );
     expect(skillOptions[0]?.querySelector('[data-openbitfun-part="label"]')?.textContent)
-      .toBe('pdf');
+      .toBe(skill.name);
+    expect(skillOptions[0]?.querySelector('[data-openbitfun-part="label"]')
+      ?.getAttribute('data-overflow-behavior')).toBe('fade');
+    expect(skillOptions[0]?.querySelector('[data-openbitfun-part="label"] [data-overflow-content]'))
+      .toBeNull();
     expect(skillOptions[0]?.querySelector('[data-openbitfun-part="metadata"]')?.textContent)
       .toBe('Work with PDFs');
     expect(skillOptions[0]?.querySelector('[data-overflow-behavior="marquee"][data-marquee-active="true"]')
