@@ -263,10 +263,10 @@
       },
       "dialog": {
         "fontFamily": { "$value": "{font.family.sans}" },
-        "fontSize": { "$value": "{font.size.3xl}" },
-        "fontWeight": { "$value": "{font.weight.semibold}" },
-        "lineHeight": { "$value": "{lineHeight.tight}" },
-        "letterSpacing": { "$value": "{letterSpacing.tight}" }
+        "fontSize": { "$value": "{font.size.3xl-plus}" },
+        "fontWeight": { "$value": "{font.weight.bold}" },
+        "lineHeight": { "$value": 1.2083333333 },
+        "letterSpacing": { "$value": "{letterSpacing.normal}" }
       },
       "display": {
         "fontFamily": { "$value": "{font.family.sans}" },
