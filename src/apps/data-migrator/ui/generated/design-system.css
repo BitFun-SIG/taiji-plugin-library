@@ -261,6 +261,12 @@
     --openbitfun-layout-navigation-panel-section-gap: var(--openbitfun-space-1);
     --openbitfun-layout-navigation-panel-surface-padding: var(--openbitfun-space-2);
     --openbitfun-layout-overflow-text-fade-extent: var(--openbitfun-space-4);
+    --openbitfun-layout-search-dialog-height: 460px;
+    --openbitfun-layout-search-dialog-padding: var(--openbitfun-space-5);
+    --openbitfun-layout-search-dialog-query-height: 30px;
+    --openbitfun-layout-search-dialog-results-gap: 30px;
+    --openbitfun-layout-search-dialog-scope-gap: var(--openbitfun-space-5);
+    --openbitfun-layout-search-dialog-width: var(--openbitfun-overlay-dialog-max-inline-size-xlarge);
     --openbitfun-layout-spinner-matrix-cell-lg: 8px;
     --openbitfun-layout-spinner-matrix-cell-md: 6px;
     --openbitfun-layout-spinner-matrix-cell-sm: 4px;

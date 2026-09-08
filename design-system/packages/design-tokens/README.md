@@ -64,3 +64,8 @@ its established role. `type.overline.*` owns extra-small uppercase annotations;
 these modifiers keep product styles semantic without changing their resolved
 metrics during migration. `type.modifier.leading.support` provides the compact
 1.45 supporting-text rhythm used when an 11px role must align to a 16px line.
+
+`layout.searchDialog` owns the shared Lab/product search composition: 800 × 460
+when space permits, 20px inset and query-to-scope gap, and a 30px query row.
+Only the query shell scopes `control.height.sm`; general Input and Button sizes
+retain their defaults. Results scroll within the available viewport.
