@@ -2,15 +2,18 @@
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { BrowserDesktopControlSettingsPage, ExecutionSettingsPage } from './RuntimeSettingsPages';
+import { BrowserDesktopControlSettingsPage, ExecutionSettingsPage, SessionWorkspaceSettingsPage } from './RuntimeSettingsPages';
 
 const mocks = vi.hoisted(() => {
   Object.defineProperty(window, '__TAURI__', { configurable: true, value: {} });
   return {
     invoke: vi.fn(), setConfig: vi.fn(), setEnabled: vi.fn(), getConfig: vi.fn(), error: vi.fn(),
     t: (key: string) => key,
+    workspace: null as { workspaceKind: string } | null,
   };
 });
+vi.mock('@/infrastructure/api', () => ({ globalAPI: {}, workspaceAPI: {} }));
+vi.mock('@/infrastructure/contexts/WorkspaceContext', () => ({ useCurrentWorkspace: () => ({ workspace: mocks.workspace }) }));
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: mocks.t }) }));
 vi.mock('@/infrastructure/i18n', () => ({ i18nService: { formatNumber: String } }));
 vi.mock('@/infrastructure/api/service-api/ApiClient', () => ({ api: { invoke: mocks.invoke } }));
@@ -19,7 +22,7 @@ vi.mock('../services/ConfigManager', () => ({ configManager: {
   getConfig: mocks.getConfig, getOptionalConfig: async () => true, setConfig: mocks.setConfig,
 } }));
 vi.mock('../hooks/useComputerUseEnabled', () => ({ useComputerUseEnabled: () => ({ computerUseEnabled: false, setComputerUseEnabled: mocks.setEnabled }) }));
-vi.mock('../services/AIExperienceConfigService', () => ({ aiExperienceConfigService: {} }));
+vi.mock('../services/AIExperienceConfigService', () => ({ aiExperienceConfigService: { getSettingsAsync: async () => ({ enable_workspace_search: true }) } }));
 vi.mock('../services/AgentCompanionPetService', () => ({ DEFAULT_AGENT_COMPANION_PET: 'default' }));
 vi.mock('../services/PermissionConfigService', async (original) => ({
   ...await original<typeof import('../services/PermissionConfigService')>(),
@@ -47,6 +50,7 @@ const button = (label: string) => Array.from(container.querySelectorAll('button'
 const render = async () => { await act(async () => root.render(<BrowserDesktopControlSettingsPage />)); };
 
 beforeEach(() => {
+  mocks.workspace = null;
   (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   status = { ...readyStatus };
   mocks.getConfig.mockReset().mockResolvedValue(null);
@@ -160,5 +164,14 @@ describe('Browser and desktop control settings', () => {
     expect(container.textContent).toContain('computerUse.peerUnsupported');
     expect(container.textContent).toContain('browserControl.peerUnsupported');
     expect(container.querySelector('select')).toBeNull();
+  });
+});
+
+
+describe('Flashgrep settings availability', () => {
+  it.each(['normal', 'remote'])('only exposes indexing for local workspaces (%s)', async (workspaceKind) => {
+    mocks.workspace = { workspaceKind };
+    await act(async () => root.render(<SessionWorkspaceSettingsPage />));
+    expect(container.textContent?.includes('features.workspaceSearch.enable')).toBe(workspaceKind === 'normal');
   });
 });
