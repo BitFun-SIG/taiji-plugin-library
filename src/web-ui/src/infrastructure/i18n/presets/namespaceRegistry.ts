@@ -32,7 +32,6 @@ export const ALL_NAMESPACES = [
   'settings/editor',
   'settings/external-apps',
   'settings/hooks',
-  'settings/legacy-migration',
   'settings/mcp',
   'settings/mcp-tools',
   'settings/memory',

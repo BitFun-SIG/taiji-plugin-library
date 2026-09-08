@@ -15,7 +15,7 @@ const ROOT_FIELDS = new Set([
   'localeRoot',
   'members',
 ]);
-const MEMBERS_FIELDS = new Set(['desktop', 'dataMigrator', 'cli']);
+const MEMBERS_FIELDS = new Set(['desktop', 'cli']);
 const COMMON_MEMBER_FIELDS = new Set(['displayNameKey', 'binaryName']);
 const BUNDLED_MEMBER_FIELDS = new Set([...COMMON_MEMBER_FIELDS, 'bundleId']);
 
@@ -192,7 +192,7 @@ function ownedLocaleFile(localeRoot, locale) {
 function validateMember(raw, member) {
   const owner = `members.${member}`;
   const value = requireObject(raw, owner);
-  const bundled = member === 'desktop' || member === 'dataMigrator';
+  const bundled = member === 'desktop';
   rejectUnknownFields(value, bundled ? BUNDLED_MEMBER_FIELDS : COMMON_MEMBER_FIELDS, owner);
   const result = {
     displayNameKey: requiredString(value.displayNameKey, `${owner}.displayNameKey`),
@@ -235,8 +235,8 @@ function loadProductNames(rootDir, localeRoot, displayNameKeys) {
 }
 
 export function resolveProductDefinition({ rootDir, productConfig, member }) {
-  if (!['desktop', 'dataMigrator', 'cli'].includes(member)) {
-    fail('invalid_member', `Unsupported product member: ${member}`, 'Use desktop, dataMigrator, or cli.');
+  if (!['desktop', 'cli'].includes(member)) {
+    fail('invalid_member', `Unsupported product member: ${member}`, 'Use desktop or cli.');
   }
   const canonicalRoot = realpathSync.native(resolve(rootDir));
   const defaultPath = realpathSync.native(join(canonicalRoot, 'products', 'openbitfun', 'product.jsonc'));
@@ -262,7 +262,6 @@ export function resolveProductDefinition({ rootDir, productConfig, member }) {
   rejectUnknownFields(members, MEMBERS_FIELDS, 'members');
   const normalizedMembers = {
     desktop: validateMember(members.desktop, 'desktop'),
-    dataMigrator: validateMember(members.dataMigrator, 'dataMigrator'),
     cli: validateMember(members.cli, 'cli'),
   };
   const locales = loadProductNames(
@@ -270,7 +269,6 @@ export function resolveProductDefinition({ rootDir, productConfig, member }) {
     localeRoot,
     [
       normalizedMembers.desktop.displayNameKey,
-      normalizedMembers.dataMigrator.displayNameKey,
       normalizedMembers.cli.displayNameKey,
     ],
   );
@@ -281,10 +279,6 @@ export function resolveProductDefinition({ rootDir, productConfig, member }) {
     productId,
     dataNamespace,
     member,
-    memberBinaryNames: {
-      desktop: normalizedMembers.desktop.binaryName,
-      dataMigrator: normalizedMembers.dataMigrator.binaryName,
-    },
     displayNameKey: selected.displayNameKey,
     binaryName: selected.binaryName,
     localeDigest: locales.digest,

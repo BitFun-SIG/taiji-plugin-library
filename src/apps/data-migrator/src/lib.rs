@@ -1,5 +1,6 @@
 mod app_state;
 mod commands;
+mod locations;
 
 use app_state::MigratorCoordinator;
 use std::fmt;
@@ -22,10 +23,14 @@ impl fmt::Display for RunError {
 
 impl std::error::Error for RunError {}
 
-pub fn run(run_id: &str) -> Result<(), RunError> {
-    let coordinator = MigratorCoordinator::bootstrap(run_id).map_err(|_| RunError::Bootstrap)?;
+pub fn run() -> Result<(), RunError> {
     tauri::Builder::default()
-        .manage(coordinator)
+        .setup(|app| {
+            let settings = app.path().app_config_dir()?.join("locations.json");
+            let coordinator = MigratorCoordinator::bootstrap(settings)?;
+            app.manage(coordinator);
+            Ok(())
+        })
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 let coordinator = window.app_handle().state::<MigratorCoordinator>();
@@ -34,13 +39,16 @@ pub fn run(run_id: &str) -> Result<(), RunError> {
                     coordinator.cancel();
                     return;
                 }
-                if coordinator.close_and_restart().is_ok() {
+                if coordinator.finish().is_ok() {
                     window.app_handle().exit(0);
                 }
             }
         })
         .invoke_handler(tauri::generate_handler![
             commands::get_migrator_bootstrap,
+            commands::set_migration_locations,
+            commands::new_migration_task,
+            commands::resume_migration_task,
             commands::scan_legacy_migration,
             commands::prepare_legacy_migration,
             commands::retry_writer_check,

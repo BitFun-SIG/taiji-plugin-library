@@ -557,31 +557,30 @@ async function startDesktopPreview() {
 
   printInfo(`Launching debug desktop binary: ${desktopBinary}`);
 
-  const { runDesktopWithMigrationRestart } = await import(
-    pathToFileURL(path.join(__dirname, 'desktop-dev-migration.mjs')).href
-  );
-  try {
-    await runDesktopWithMigrationRestart((restartArgs, migrationEnv) => new Promise((resolve, reject) => {
-      appProcess = spawnBackgroundCommand(desktopBinary, restartArgs, ROOT_DIR, {
-        ...process.env,
-        ...migrationEnv,
-        // Upload the current workspace mobile bundle instead of the staged copy.
-        OPENBITFUN_MOBILE_WEB_DIR: path.join(ROOT_DIR, 'src/mobile-web/dist'),
-      });
-      appProcess.on('error', reject);
-      appProcess.on('close', (code, signal) => {
-        appProcess = null;
-        if (code === 0) resolve();
-        else reject(new Error(`Desktop preview exited (code=${code}, signal=${signal})`));
-      });
-      printSuccess('Desktop preview is running');
-      printInfo('Front-end edits continue to use Vite HMR; rebuild Rust only when desktop-side code changes');
-    }), { info: printInfo });
-    await shutdown(0);
-  } catch (error) {
-    printError(error.message || String(error));
-    await shutdown(1);
-  }
+  appProcess = spawnBackgroundCommand(desktopBinary, [], ROOT_DIR, {
+    ...process.env,
+    // Debug previews must upload the current workspace build. The adjacent
+    // target/debug resource tree is only a build-time copy and can lag behind
+    // mobile-web edits made while the desktop binary is being reused.
+    OPENBITFUN_MOBILE_WEB_DIR: path.join(ROOT_DIR, 'src/mobile-web/dist'),
+  });
+
+  appProcess.on('error', (error) => {
+    printError(`Desktop preview failed to start: ${error.message || String(error)}`);
+    void shutdown(1);
+  });
+
+  appProcess.on('exit', (code, signal) => {
+    if (!shuttingDown) {
+      printInfo(`Desktop preview exited (code=${code ?? 'null'}, signal=${signal ?? 'null'})`);
+    }
+    void shutdown(code ?? 0);
+  });
+
+  printSuccess('Desktop preview is running');
+  printInfo('Front-end edits continue to use Vite HMR; rebuild Rust only when desktop-side code changes');
+
+  await new Promise(() => {});
 }
 
 /**
@@ -677,22 +676,6 @@ async function main() {
     process.exit(1);
   }
 
-  // Build after version generation and before Desktop starts. Cargo checks
-  // freshness so an existing but stale Migrator is rebuilt as well.
-  if (desktopMode) {
-    printInfo('Preparing Data Migrator (incremental Debug build)');
-    const migratorBuild = await runCommandPrefixed(
-      'data-migrator',
-      'cargo',
-      ['build', '-p', 'openbitfun-data-migrator', '--bin', 'openbitfun-data-migrator'],
-    );
-    if (!migratorBuild.ok) {
-      printError('Data Migrator build failed; Desktop was not started');
-      if (migratorBuild.error?.message) printError(migratorBuild.error.message);
-      process.exit(1);
-    }
-  }
-
   if (desktopMode) {
     const baselineHelperUrl = pathToFileURL(
       path.join(__dirname, 'frontend-workbench-dev-baseline.mjs')
@@ -751,26 +734,19 @@ async function main() {
         OPENBITFUN_MOBILE_WEB_DIR: path.join(ROOT_DIR, 'src/mobile-web/dist'),
       };
       try {
-        const { runDesktopWithMigrationRestart } = await import(
-          pathToFileURL(path.join(__dirname, 'desktop-dev-migration.mjs')).href
-        );
-        await runDesktopWithMigrationRestart(async (restartArgs, migrationEnv) => {
-          const args = ['dev', '--config', tauriConfig, ...(restartArgs.length ? ['--', '--', ...restartArgs] : [])];
-          if (process.platform === 'win32') {
-            // Running the generated .cmd shim directly via spawn is flaky on Windows.
-            // Use cmd.exe with an explicit args array so the desktop app directory
-            // stays the Tauri project root without pnpm workspace path rewriting.
-            const tauriBin = path.join(ROOT_DIR, 'node_modules', '.bin', 'tauri.cmd');
-            await runWindowsCommandArgs(tauriBin, args, desktopDir, { ...tauriDevEnv, ...migrationEnv });
-          } else {
-            const tauriBin = path.join(ROOT_DIR, 'node_modules', '.bin', 'tauri');
-            await spawnCommand(tauriBin, args, desktopDir, {
-              CARGO_PROFILE_DEV_CODEGEN_UNITS: tauriDevEnv.CARGO_PROFILE_DEV_CODEGEN_UNITS,
-              OPENBITFUN_MOBILE_WEB_DIR: tauriDevEnv.OPENBITFUN_MOBILE_WEB_DIR,
-              ...migrationEnv,
-            });
-          }
-        }, { info: printInfo });
+        if (process.platform === 'win32') {
+          // Running the generated .cmd shim directly via spawn is flaky on Windows.
+          // Use cmd.exe with an explicit args array so the desktop app directory
+          // stays the Tauri project root without pnpm workspace path rewriting.
+          const tauriBin = path.join(ROOT_DIR, 'node_modules', '.bin', 'tauri.cmd');
+          await runWindowsCommandArgs(tauriBin, ['dev', '--config', tauriConfig], desktopDir, tauriDevEnv);
+        } else {
+          const tauriBin = path.join(ROOT_DIR, 'node_modules', '.bin', 'tauri');
+          await spawnCommand(tauriBin, ['dev', '--config', tauriConfig], desktopDir, {
+            CARGO_PROFILE_DEV_CODEGEN_UNITS: tauriDevEnv.CARGO_PROFILE_DEV_CODEGEN_UNITS,
+            OPENBITFUN_MOBILE_WEB_DIR: tauriDevEnv.OPENBITFUN_MOBILE_WEB_DIR,
+          });
+        }
       } finally {
         // Option B: prune only when the desktop:dev session ends, not on each rebuild.
         await runDesktopTargetGc('debug');

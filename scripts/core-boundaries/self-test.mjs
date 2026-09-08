@@ -544,6 +544,7 @@ export function runManifestParserSelfTest({
         'openbitfun-services-core/workspace-identity',
         'openbitfun-services-core/workspace-instructions',
         'openbitfun-services-core/workspace-runtime',
+        'openbitfun-services-core/workspace-persistence',
       ],
     ],
     [coreManifest, 'workspace-watch', ['workspace-runtime', 'dep:notify']],

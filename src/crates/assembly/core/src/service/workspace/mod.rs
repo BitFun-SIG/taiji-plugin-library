@@ -32,9 +32,9 @@ pub use identity_watch::WorkspaceIdentityWatchService;
 #[cfg(feature = "workspace-runtime")]
 pub use manager::{
     GitInfo, PrimaryAssistantKey, RelatedPath, ScanOptions, WorkspaceIdentity, WorkspaceInfo,
-    WorkspaceKind, WorkspaceManager, WorkspaceManagerConfig, WorkspaceManagerStatistics,
-    WorkspaceOpenOptions, WorkspaceStatistics, WorkspaceStatus, WorkspaceSummary, WorkspaceType,
-    WorkspaceWorktreeInfo,
+    WorkspaceInfoRuntimeExt, WorkspaceKind, WorkspaceManager, WorkspaceManagerConfig,
+    WorkspaceManagerStatistics, WorkspaceOpenOptions, WorkspaceStatistics, WorkspaceStatus,
+    WorkspaceSummary, WorkspaceType, WorkspaceWorktreeInfo,
 };
 #[cfg(feature = "workspace-runtime")]
 pub use provider::{WorkspaceCleanupResult, WorkspaceProvider, WorkspaceSystemSummary};
@@ -45,7 +45,5 @@ pub use service::{
     WorkspaceHealthStatus, WorkspaceIdentityChangedEvent, WorkspaceImportResult,
     WorkspaceInfoUpdates, WorkspaceQuickSummary, WorkspaceService,
 };
-#[cfg(all(feature = "legacy-migration", not(feature = "workspace-runtime")))]
-pub(crate) use types::{PrimaryAssistantKey, WorkspaceInfo, WorkspaceKind};
 #[cfg(feature = "git")]
 pub use worktree_topology::{global_worktree_topology_service, WorktreeTopologyService};

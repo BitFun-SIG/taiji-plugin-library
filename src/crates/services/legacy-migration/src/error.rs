@@ -11,6 +11,8 @@ pub enum LegacyMigrationError {
     SourceEqualsTarget(PathBuf),
     #[error("legacy source format is unsupported: {0}")]
     UnsupportedSource(String),
+    #[error("unsupported migration destination: {0}")]
+    UnsupportedTarget(String),
     #[error("legacy migration request is invalid: {0}")]
     InvalidRequest(String),
     #[error("legacy migration plan is invalid: {0}")]

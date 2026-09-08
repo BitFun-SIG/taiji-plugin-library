@@ -6,7 +6,8 @@ use std::path::{Path, PathBuf};
 pub const LEGACY_PRODUCT_ID: &str = "bitfun";
 const LEGACY_HIDDEN_DATA_DIRECTORY: &str = ".bitfun";
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct MigrationRoots {
     pub legacy_user_root: PathBuf,
     pub legacy_home_root: PathBuf,
@@ -20,6 +21,13 @@ pub struct MigrationRoots {
 
 impl MigrationRoots {
     pub fn resolve_current_user() -> LegacyMigrationResult<Self> {
+        let roots = Self::current_user_locations()?;
+        roots.validate_distinct()?;
+        Ok(roots)
+    }
+
+    /// Resolve locations without rejecting editable user overrides at UI startup.
+    pub fn current_user_locations() -> LegacyMigrationResult<Self> {
         let config_root = dirs::config_dir().ok_or_else(|| {
             LegacyMigrationError::PathUnavailable("platform config directory".to_string())
         })?;
@@ -62,7 +70,6 @@ impl MigrationRoots {
             target_skills_root,
             target_ssh_root,
         };
-        roots.validate_distinct()?;
         Ok(roots)
     }
 

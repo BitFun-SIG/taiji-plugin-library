@@ -5,27 +5,19 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { extractProductConfigArg } from './product-customization/cli.mjs';
-import { productBuildEnvironment } from './product-customization/projections.mjs';
-import { resolveProductDefinition } from './product-customization/resolver.mjs';
+import { generateDataMigratorTheme } from './generate-data-migrator-theme.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const APP_DIR = join(ROOT, 'src', 'apps', 'data-migrator');
 
 export function prepareDataMigratorTauriConfig(
   baseConfigPath,
-  resolution,
   outputDirectory = join(APP_DIR, 'gen'),
 ) {
-  if (resolution.assembly.member !== 'dataMigrator') {
-    throw new Error('Data Migrator packaging requires the dataMigrator product member.');
-  }
   const config = JSON.parse(readFileSync(baseConfigPath, 'utf8'));
-  const productName = resolution.productNames[resolution.assembly.fallbackLocale]
-    ?? resolution.productNames[resolution.assembly.defaultLocale];
-  config.productName = productName;
-  config.mainBinaryName = resolution.assembly.binaryName;
-  config.identifier = resolution.assembly.bundleId;
+  const manifest = readFileSync(join(APP_DIR, 'Cargo.toml'), 'utf8');
+  const version = manifest.match(/^version = "([^"]+)"/m)?.[1];
+  if (!version || config.version !== version) throw new Error('Migrator Cargo and Tauri versions must match.');
   config.build = {
     frontendDist: config.build?.frontendDist || 'ui',
   };
@@ -38,10 +30,26 @@ export function prepareDataMigratorTauriConfig(
   mkdirSync(outputDirectory, { recursive: true });
   const output = join(
     outputDirectory,
-    `tauri.${resolution.assembly.assemblyDigest}.generated.conf.json`,
+    'tauri.generated.conf.json',
   );
   writeFileSync(output, `${JSON.stringify(config, null, 2)}\n`, 'utf8');
   return output;
+}
+
+// The tool identity and the format destination are separate. Never inherit a
+// branded Desktop build's data namespace or sibling-executable projections.
+export function dataMigratorEnvironment(environment = process.env) {
+  const result = { ...environment };
+  for (const key of ['OPENBITFUN_DESKTOP_BINARY_NAME', 'OPENBITFUN_DATA_MIGRATOR_BINARY_NAME']) delete result[key];
+  return {
+    ...result,
+    CI: 'true',
+    OPENBITFUN_PRODUCT_ID: 'openbitfun',
+    OPENBITFUN_DATA_NAMESPACE: 'openbitfun',
+    OPENBITFUN_HIDDEN_DATA_DIRECTORY: '.openbitfun',
+    OPENBITFUN_PRODUCT_BINARY_NAME: 'openbitfun-data-migrator',
+    OPENBITFUN_PRODUCT_DISPLAY_NAME: 'OpenBitFun Data Migrator',
+  };
 }
 
 function tauriArguments(raw) {
@@ -51,26 +59,19 @@ function tauriArguments(raw) {
 }
 
 async function main() {
-  const { productConfig, forwardArgs } = extractProductConfigArg(
-    tauriArguments(process.argv.slice(2)),
-  );
-  const resolution = resolveProductDefinition({
-    rootDir: ROOT,
-    productConfig,
-    member: 'dataMigrator',
-  });
-  Object.assign(process.env, productBuildEnvironment(resolution));
-  process.env.CI = 'true';
+  await generateDataMigratorTheme();
+  const forwardArgs = tauriArguments(process.argv.slice(2));
+  if (forwardArgs.some((arg) => arg.startsWith('--product-config'))) {
+    throw new Error('The standalone migrator has its own identity and supports OpenBitFun data only.');
+  }
   const generated = prepareDataMigratorTauriConfig(
     join(APP_DIR, 'tauri.conf.json'),
-    resolution,
   );
-  console.log(`[product] dataMigrator ${resolution.assembly.assemblyDigest}`);
 
   const tauriBin = join(ROOT, 'node_modules', '.bin', 'tauri');
   const result = spawnSync(tauriBin, ['build', '--config', generated, ...forwardArgs], {
     cwd: APP_DIR,
-    env: process.env,
+    env: dataMigratorEnvironment(),
     stdio: 'inherit',
     shell: true,
     windowsHide: true,

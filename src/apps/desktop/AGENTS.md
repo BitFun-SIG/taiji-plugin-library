@@ -56,10 +56,9 @@ pnpm run desktop:preview:debug
 pnpm run prepare:dsh-profile   # optional: local DeepSeek Harness sessions
 ```
 
-Both development launchers supervise legacy Data Migrator handoffs. Dismissing
-or finishing migration reopens Desktop automatically; `desktop:dev` restores
-Vite and the Rust watcher. Verify this orchestration with
-`node --test scripts/desktop-dev-migration.test.mjs`.
+Data Migrator runs independently. Desktop development launchers do not build,
+launch, or supervise the migrator; use its own development and release entry
+points under `src/apps/data-migrator`.
 
 ## Fast builds
 

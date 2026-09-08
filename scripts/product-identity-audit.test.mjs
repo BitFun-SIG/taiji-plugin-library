@@ -106,10 +106,6 @@ test('allows only the exact legacy data-directory ignore entry', () => {
 
 test('limits retired identity data to the one-time production migration boundary', () => {
   for (const file of [
-    'src/apps/desktop/src/api/legacy_migration_api.rs',
-    'src/web-ui/src/locales/en-US/settings/legacy-migration.json',
-    'src/web-ui/src/locales/zh-CN/settings/legacy-migration.json',
-    'src/web-ui/src/locales/zh-TW/settings/legacy-migration.json',
   ]) {
     assert.deepEqual(violationsFor(retiredName, file), []);
   }

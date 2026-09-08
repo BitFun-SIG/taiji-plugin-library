@@ -48,6 +48,7 @@ function buildFileNodeContext(node: FileSystemNode, workspacePath?: string): Fil
 export const FileExplorer: React.FC<FileExplorerProps> = ({
   fileTree,
   selectedFile,
+  revealTarget,
   onFileSelect,
   className = '',
   showFileSize = false,
@@ -359,6 +360,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
       <VirtualFileTree
         flatNodes={flatNodes}
         selectedFile={selectedFile}
+        revealTarget={revealTarget}
         expandedFolders={expandedFolders}
         onNodeSelect={(node: FlatFileNode) => emitFileSelect(node.path, node.name)}
         onToggleExpand={toggleExpandedState}

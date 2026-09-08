@@ -1,11 +1,13 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-openbitfun-design-system-root data-color-scheme="light" data-contrast="normal" data-density="comfortable">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>OpenBitFun Data Migrator</title>
+    <script src="theme.js"></script>
+    <link rel="stylesheet" href="generated/design-system.css" />
     <link rel="stylesheet" href="styles.css" />
-    <script src="app.js" defer></script>
+    <script src="app.js" type="module"></script>
   </head>
   <body>
     <main class="shell">
@@ -15,6 +17,11 @@
         <p class="lead" data-i18n="intro">
           Choose what to bring forward. Your original BitFun data will not be deleted.
         </p>
+        <div class="actions">
+          <label for="language" data-i18n="language">Language</label>
+          <select id="language"><option value="en">English</option><option value="zh-CN">简体中文</option><option value="zh-TW">繁體中文</option></select>
+          <span id="tool-version" class="muted"></span>
+        </div>
       </header>
 
       <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
@@ -25,23 +32,19 @@
             <p class="step" data-i18n="stepSource">Step 1</p>
             <h2 id="source-title" data-i18n="sourceTitle">Legacy source</h2>
           </div>
-          <span id="source-badge" class="badge">Checking</span>
+          <span id="source-badge" class="badge" data-tone="neutral">Checking</span>
         </div>
         <p id="source-summary" class="muted"></p>
-        <p id="source-path" class="path"></p>
+        <p class="muted" data-i18n="localOnly"></p>
+        <div class="locations-grid" id="locations"></div>
+        <div class="actions"><button id="apply-locations" data-i18n="applyLocations"></button></div>
       </section>
 
-      <section id="choice-card" class="card" aria-labelledby="choice-title" hidden>
-        <p class="step" data-i18n="firstLaunch">First launch</p>
-        <h2 id="choice-title" data-i18n="choiceTitle">What would you like to do?</h2>
-        <p class="muted" data-i18n="choiceHelp">
-          Migration runs only after OpenBitFun and other data writers have stopped.
-        </p>
-        <div class="actions">
-          <button id="migrate-now" class="primary" data-i18n="migrateNow">Migrate now</button>
-          <button id="remind-later" data-i18n="remindLater">Remind me later</button>
-          <button id="do-not-remind" class="quiet" data-i18n="doNotRemind">Do not remind me</button>
-        </div>
+      <section id="history-card" class="card" aria-labelledby="history-title" hidden>
+        <h2 id="history-title" data-i18n="historyTitle"></h2>
+        <label for="saved-task" data-i18n="savedTask"></label>
+        <select id="saved-task"></select>
+        <div class="actions"><button id="resume-task" data-i18n="resumeTask"></button></div>
       </section>
 
       <section id="scope-card" class="card" aria-labelledby="scope-title" hidden>
@@ -94,15 +97,13 @@
         <p class="muted" data-i18n="reportPrivacy">
           This summary contains counts and result codes, not credentials or user content.
         </p>
-        <p id="dev-restart-help" class="muted" data-i18n="devRestartHelp" hidden>
-          Development build: close Data Migrator, then run pnpm run desktop:dev again.
-        </p>
         <p id="diagnostics-path" class="path" role="status" aria-live="polite" hidden></p>
         <div class="actions">
           <button id="export-diagnostics" data-i18n="exportDiagnostics" hidden>Export failure diagnostics</button>
-          <button id="open-desktop" class="primary" data-i18n="openDesktop">Open OpenBitFun</button>
+          <button id="finish" class="primary" data-i18n="closeMigrator">Close Data Migrator</button>
         </div>
       </section>
+      <div class="actions"><button id="new-task" data-i18n="newTask"></button><button id="close" class="quiet" data-i18n="closeMigrator"></button></div>
     </main>
   </body>
 </html>
