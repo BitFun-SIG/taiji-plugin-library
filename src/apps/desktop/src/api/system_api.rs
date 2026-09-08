@@ -238,6 +238,8 @@ pub struct SystemInfoResponse {
     pub platform: String,
     pub arch: String,
     pub os_version: Option<String>,
+    #[serde(default)]
+    pub home_dir: Option<String>,
 }
 
 #[tauri::command]
@@ -248,6 +250,7 @@ pub async fn get_system_info() -> Result<SystemInfoResponse, String> {
         platform: info.platform,
         arch: info.arch,
         os_version: info.os_version,
+        home_dir: info.home_dir,
     })
 }
 
@@ -1031,6 +1034,25 @@ fn activate_main_window_from_notification(app: &tauri::AppHandle) {
 
 #[cfg(test)]
 mod tests {
+    #[tokio::test]
+    async fn system_info_home_contract_accepts_legacy_and_reports_serving_host() {
+        let legacy =
+            serde_json::json!({"platform": "windows", "arch": "x86_64", "osVersion": null});
+        let old: super::SystemInfoResponse = serde_json::from_value(legacy).unwrap();
+        assert!(old.home_dir.is_none());
+        let round_trip: super::SystemInfoResponse =
+            serde_json::from_value(serde_json::to_value(old).unwrap()).unwrap();
+        assert_eq!(round_trip.platform, "windows");
+        assert!(round_trip.home_dir.is_none());
+
+        let response = serde_json::to_value(super::get_system_info().await.unwrap()).unwrap();
+        assert_eq!(
+            response["homeDir"],
+            serde_json::json!(super::system::get_system_info().home_dir)
+        );
+        assert!(response.get("home_dir").is_none());
+    }
+
     #[test]
     fn startup_window_control_contract_exposes_the_native_maximize_state() {
         let request: super::StartupWindowControlRequest =

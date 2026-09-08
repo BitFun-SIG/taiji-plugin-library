@@ -99,6 +99,8 @@ cargo check -p openbitfun-desktop && cargo test -p openbitfun-desktop
 
 For staged application-update cache and signature behavior, use
 `cargo test -p openbitfun-desktop --lib api::update_api::tests`.
+For peer system-info response compatibility, run
+`cargo test -p openbitfun-desktop --lib system_info_home_contract`.
 After changing updater command registration, also run
 `cargo test -p openbitfun-desktop --lib remote_workspace_policy`.
 

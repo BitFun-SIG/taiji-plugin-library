@@ -83,6 +83,7 @@ target. Representative stable entry points are:
 
 ```bash
 cargo check -p openbitfun-services-core --no-default-features
+cargo test -p openbitfun-services-core --no-default-features --features process-runtime --lib system::info::tests
 cargo test -p openbitfun-services-core --no-default-features --features credential-vault --lib credential_vault::tests::
 cargo check -p openbitfun-services-core --no-default-features --features filesystem
 cargo test -p openbitfun-services-core --no-default-features --features diagnostics --lib diagnostics::contract_tests::

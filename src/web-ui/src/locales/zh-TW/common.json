@@ -718,11 +718,17 @@
     "errorEnterName": "請輸入工作區名稱",
     "errorCreateFailed": "建立工作區失敗"
   },
+  "peerConnection": {
+    "reconnecting": "正在重新連線至「{{name}}」。內容可能尚未更新。"
+  },
   "peerDirectoryPicker": {
     "loading": "正在載入遠端目錄…",
     "empty": "此目錄下沒有子資料夾",
     "parent": "上層目錄",
-    "home": "起始目錄",
+    "home": "使用者目錄",
+    "path": "目錄路徑",
+    "pathHint": "輸入路徑後按 Enter",
+    "homeUnavailable": "此裝置未提供使用者目錄。請手動輸入路徑，或更新該裝置上的 OpenBitFun。",
     "refresh": "重新整理",
     "selected": "已選：{{path}}",
     "cancel": "取消",
