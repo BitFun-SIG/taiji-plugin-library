@@ -771,6 +771,19 @@
     --openbitfun-color-surface-subtle: rgba(16, 26, 39, 0.03);
     --openbitfun-color-surface-tertiary: #f7f7f7;
     --openbitfun-color-surface-workbench: #f3f3f5;
+    --openbitfun-component-button-content: rgba(0, 0, 0, 0.80);
+    --openbitfun-component-button-fill-background: rgba(0, 0, 0, 0.08);
+    --openbitfun-component-button-fill-background-hover: rgba(0, 0, 0, 0.08);
+    --openbitfun-component-button-fill-background-pressed: rgba(0, 0, 0, 0.08);
+    --openbitfun-component-button-outline-border: rgba(0, 0, 0, 0.08);
+    --openbitfun-component-button-outline-border-interactive: transparent;
+    --openbitfun-component-button-primary-background: rgba(0, 0, 0, 0.80);
+    --openbitfun-component-button-primary-background-hover: rgba(0, 0, 0, 0.60);
+    --openbitfun-component-button-primary-background-pressed: rgba(0, 0, 0, 0.90);
+    --openbitfun-component-button-primary-content-disabled: rgba(0, 0, 0, 0.20);
+    --openbitfun-component-button-text-content: #059cb0;
+    --openbitfun-component-button-text-content-disabled: rgba(5, 156, 176, 0.30);
+    --openbitfun-component-button-text-content-hover: #059cb0;
     --openbitfun-effect-blur-base: blur(8px) saturate(1.05);
     --openbitfun-effect-blur-medium: blur(12px) saturate(1.2);
     --openbitfun-effect-blur-subtle: blur(4px) saturate(1.02);
@@ -903,6 +916,19 @@
     --openbitfun-color-surface-subtle: rgba(255, 255, 255, 0.06);
     --openbitfun-color-surface-tertiary: #0e0e10;
     --openbitfun-color-surface-workbench: #0e0e10;
+    --openbitfun-component-button-content: #b0b0b0;
+    --openbitfun-component-button-fill-background: rgba(255, 255, 255, 0.1);
+    --openbitfun-component-button-fill-background-hover: rgba(255, 255, 255, 0.12);
+    --openbitfun-component-button-fill-background-pressed: rgba(255, 255, 255, 0.15);
+    --openbitfun-component-button-outline-border: rgba(255, 255, 255, 0.18);
+    --openbitfun-component-button-outline-border-interactive: rgba(255, 255, 255, 0.18);
+    --openbitfun-component-button-primary-background: rgba(255, 255, 255, 0.16);
+    --openbitfun-component-button-primary-background-hover: rgba(255, 255, 255, 0.24);
+    --openbitfun-component-button-primary-background-pressed: rgba(255, 255, 255, 0.2);
+    --openbitfun-component-button-primary-content-disabled: #555555;
+    --openbitfun-component-button-text-content: #60a5fa;
+    --openbitfun-component-button-text-content-disabled: rgba(96, 165, 250, 0.30);
+    --openbitfun-component-button-text-content-hover: #3b82f6;
     --openbitfun-effect-blur-base: blur(8px) saturate(1.1);
     --openbitfun-effect-blur-medium: blur(12px) saturate(1.2);
     --openbitfun-effect-blur-subtle: blur(4px) saturate(1.05);
@@ -971,6 +997,16 @@
     --openbitfun-color-status-warning-content: #663800;
     --openbitfun-color-status-warning-surface: rgba(255, 140, 0, 0.04);
     --openbitfun-color-surface-canvas: #ffffff;
+    --openbitfun-component-button-content: #000000;
+    --openbitfun-component-button-fill-background: #e6e6e6;
+    --openbitfun-component-button-fill-background-hover: #cccccc;
+    --openbitfun-component-button-fill-background-pressed: #b3b3b3;
+    --openbitfun-component-button-outline-border: #000000;
+    --openbitfun-component-button-outline-border-interactive: #000000;
+    --openbitfun-component-button-primary-background: #000000;
+    --openbitfun-component-button-primary-background-hover: #262626;
+    --openbitfun-component-button-primary-background-pressed: #000000;
+    --openbitfun-component-button-primary-content-disabled: #343434;
   }
 }
 
@@ -1025,5 +1061,15 @@
     --openbitfun-color-surface-scene: #090909;
     --openbitfun-color-surface-tertiary: #000000;
     --openbitfun-color-surface-workbench: #000000;
+    --openbitfun-component-button-content: #ffffff;
+    --openbitfun-component-button-fill-background: #343434;
+    --openbitfun-component-button-fill-background-hover: #505050;
+    --openbitfun-component-button-fill-background-pressed: #6b6b6b;
+    --openbitfun-component-button-outline-border: #ffffff;
+    --openbitfun-component-button-outline-border-interactive: #ffffff;
+    --openbitfun-component-button-primary-background: #ffffff;
+    --openbitfun-component-button-primary-background-hover: #e6e6e6;
+    --openbitfun-component-button-primary-background-pressed: #ffffff;
+    --openbitfun-component-button-primary-content-disabled: #d0d0d0;
   }
 }

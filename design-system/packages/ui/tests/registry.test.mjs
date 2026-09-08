@@ -123,6 +123,7 @@ test("every registered component declares states and owned tokens", () => {
         (token) =>
           token.startsWith("border.") ||
           token.startsWith("color.") ||
+          (component.name === "Button" && token.startsWith("component.button.")) ||
           token.startsWith("control.") ||
           token.startsWith("effect.") ||
           token.startsWith("font.") ||

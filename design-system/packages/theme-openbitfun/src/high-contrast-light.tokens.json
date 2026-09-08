@@ -1,5 +1,23 @@
 {
   "$description": "High-contrast overrides for the light scheme.",
+  "component": {
+    "button": {
+      "$description": "Button-specific state colors. Keep shared action colors stable for other controls and preserve contrast-mode feedback.",
+      "content": { "$type": "color", "$value": "{color.action.neutral.content}" },
+      "textContent": { "$type": "color", "$value": "{color.accent.default}" },
+      "textContentHover": { "$type": "color", "$value": "{color.accent.hover}" },
+      "textContentDisabled": { "$type": "color", "$value": "{color.accent.disabled}" },
+      "outlineBorder": { "$type": "color", "$value": "{color.action.neutral.border}" },
+      "outlineBorderInteractive": { "$type": "color", "$value": "{color.action.neutral.border}" },
+      "fillBackground": { "$type": "color", "$value": "{color.action.neutral.surface}" },
+      "fillBackgroundHover": { "$type": "color", "$value": "{color.action.neutral.surfaceHover}" },
+      "fillBackgroundPressed": { "$type": "color", "$value": "{color.action.neutral.surfacePressed}" },
+      "primaryBackground": { "$type": "color", "$value": "{color.action.primary.background}" },
+      "primaryBackgroundHover": { "$type": "color", "$value": "{color.action.primary.hover}" },
+      "primaryBackgroundPressed": { "$type": "color", "$value": "{color.action.primary.pressed}" },
+      "primaryContentDisabled": { "$type": "color", "$value": "{color.action.neutral.contentDisabled}" }
+    }
+  },
   "color": {
     "surface": {
       "canvas": { "$type": "color", "$value": "{ref.color.gray.0}" },

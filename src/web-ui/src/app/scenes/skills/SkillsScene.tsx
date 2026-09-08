@@ -275,7 +275,7 @@ const SkillsScene: React.FC = () => {
         subtitle={t('page.subtitle')}
         actions={desktopConfigAvailable && activeTab === 'installed' && installedFilter !== 'suite' ? (
           <Button
-            variant="fill"
+            variant="primary"
             size="sm"
             leadingIcon={<Icon name="plus" size="sm" />}
             onClick={toggleAddForm}
@@ -894,7 +894,7 @@ const SkillsScene: React.FC = () => {
               <>
                 {!market.isRemoteWorkspace && (
                   <Button
-                    variant="fill"
+                    variant="primary"
                     size="sm"
                     onClick={() => void market.handleDownload(selectedMarketSkill, 'project')}
                     disabled={market.downloadingPackage === selectedMarketSkill.installId || !market.hasWorkspace}
@@ -903,7 +903,7 @@ const SkillsScene: React.FC = () => {
                   </Button>
                 )}
                 <Button
-                  variant={market.isRemoteWorkspace ? 'fill' : 'outline'}
+                  variant={market.isRemoteWorkspace ? 'primary' : 'outline'}
                   size="sm"
                   onClick={() => void market.handleDownload(selectedMarketSkill, 'user')}
                   disabled={market.downloadingPackage === selectedMarketSkill.installId}
@@ -1073,7 +1073,7 @@ const SkillsScene: React.FC = () => {
 
           <div className="openbitfun-skills-scene__modal-form-actions">
             <Button
-              variant="outline"
+              variant="fill"
               size="sm"
               onClick={() => {
                 installed.resetForm();
@@ -1083,7 +1083,7 @@ const SkillsScene: React.FC = () => {
               {t('form.actions.cancel')}
             </Button>
             <Button
-              variant="fill"
+              variant="primary"
               size="sm"
               onClick={handleAddSkill}
               disabled={!installed.validationResult?.valid || installed.isAdding}

@@ -112,7 +112,7 @@ const AssistantCard: React.FC<AssistantCardProps> = ({
         <span className="assistant-card__session-actions">
           {onNewSession ? (
             <Button
-              variant="fill"
+              variant="primary"
               size="sm"
               leadingIcon={<Icon name="side-chat" size="sm" />}
               loading={isStartingSession}

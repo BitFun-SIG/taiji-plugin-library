@@ -16,7 +16,24 @@ import {
 } from './appearancePayload';
 
 const CANONICAL_THEME_VARIABLE_NAMES = Object.values(themeCssVariables);
-const CANONICAL_THEME_VARIABLE_NAMES_HASH = 'e80ebcdf9452a0b5f8ab26d9b41cb81c4e74d75451e4402f99afc68af3c13f42';
+const SHARED_THEME_VARIABLE_NAMES_HASH = 'e80ebcdf9452a0b5f8ab26d9b41cb81c4e74d75451e4402f99afc68af3c13f42';
+// Button owns these state colors independently of the existing shared actions.
+// Keep the original shared contract intact and enumerate this addition exactly.
+const BUTTON_THEME_VARIABLE_NAMES = [
+  '--openbitfun-component-button-content',
+  '--openbitfun-component-button-fill-background',
+  '--openbitfun-component-button-fill-background-hover',
+  '--openbitfun-component-button-fill-background-pressed',
+  '--openbitfun-component-button-outline-border',
+  '--openbitfun-component-button-outline-border-interactive',
+  '--openbitfun-component-button-primary-background',
+  '--openbitfun-component-button-primary-background-hover',
+  '--openbitfun-component-button-primary-background-pressed',
+  '--openbitfun-component-button-primary-content-disabled',
+  '--openbitfun-component-button-text-content',
+  '--openbitfun-component-button-text-content-disabled',
+  '--openbitfun-component-button-text-content-hover',
+] as const;
 const RETIRED_WIDGET_VARIABLE_NAMES = [
   '--background-primary',
   '--bg-primary',
@@ -59,14 +76,17 @@ describe('generated widget appearance payload contract', () => {
   it('derives its complete host payload allowlist from the canonical theme package', () => {
     expect(WIDGET_APPEARANCE_VAR_NAMES).toEqual(CANONICAL_THEME_VARIABLE_NAMES);
     expect(new Set(WIDGET_APPEARANCE_VAR_NAMES).size).toBe(WIDGET_APPEARANCE_VAR_NAMES.length);
+    const buttonNames = WIDGET_APPEARANCE_VAR_NAMES.filter(name => name.startsWith('--openbitfun-component-button-'));
+    const sharedNames = WIDGET_APPEARANCE_VAR_NAMES.filter(name => !name.startsWith('--openbitfun-component-button-'));
+    expect(buttonNames).toEqual(BUTTON_THEME_VARIABLE_NAMES);
     expect({
-      count: WIDGET_APPEARANCE_VAR_NAMES.length,
-      hash: hashNames(WIDGET_APPEARANCE_VAR_NAMES),
-      first: WIDGET_APPEARANCE_VAR_NAMES[0],
-      last: WIDGET_APPEARANCE_VAR_NAMES[WIDGET_APPEARANCE_VAR_NAMES.length - 1],
+      count: sharedNames.length,
+      hash: hashNames(sharedNames),
+      first: sharedNames[0],
+      last: sharedNames[sharedNames.length - 1],
     }).toEqual({
       count: 127,
-      hash: CANONICAL_THEME_VARIABLE_NAMES_HASH,
+      hash: SHARED_THEME_VARIABLE_NAMES_HASH,
       first: '--openbitfun-color-accent-border',
       last: '--openbitfun-shadow-xs',
     });
@@ -115,6 +135,8 @@ describe('generated widget appearance payload contract', () => {
       '--openbitfun-color-action-primary-content': '#101010',
       '--openbitfun-color-action-primary-hover': 'linear-gradient(test-hover)',
       '--openbitfun-color-action-primary-pressed': '#202020',
+      '--openbitfun-component-button-primary-background': '#303030',
+      '--openbitfun-component-button-fill-background': 'rgba(0, 0, 0, 0.08)',
       '--openbitfun-color-status-danger-surface': 'rgba(200, 0, 0, 0.12)',
       '--openbitfun-color-status-danger-border': '#303030',
       '--openbitfun-shadow-raised': '0 1px 2px #404040',

@@ -578,7 +578,7 @@ const HooksConfig: React.FC<HooksConfigProps> = ({ embedded = false }) => {
               </p>
             ))}
             <Button
-              variant="outline"
+              variant="fill"
               disabled={busyKey === 'apply'}
               onClick={() => {
                 setReviewPlan(null);
@@ -587,7 +587,7 @@ const HooksConfig: React.FC<HooksConfigProps> = ({ embedded = false }) => {
             >
               {t('imports.cancel')}
             </Button>
-            <Button variant="fill"
+            <Button variant="primary"
               loading={busyKey === 'apply'}
               disabled={reviewPlan.handlers.length === 0}
               onClick={() => void applyReviewedPlan()}

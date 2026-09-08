@@ -41,8 +41,8 @@ export function ProviderConfigurationPattern() {
   const [revision, setRevision] = useState(0);
   const [saved, setSaved] = useState(false);
   const footer = (close: () => void) => <CardFooter align="center">
-    <Button variant="outline" onClick={close}>{t("components.preview.modalCancel")}</Button>
-    <Button variant="fill" onClick={() => { setSaved(true); setOpen(false); }}>{t("components.preview.modalSave")}</Button>
+    <Button variant="fill" onClick={close}>{t("components.preview.modalCancel")}</Button>
+    <Button variant="primary" onClick={() => { setSaved(true); setOpen(false); }}>{t("components.preview.modalSave")}</Button>
   </CardFooter>;
 
   return <div className="pattern-provider" data-openbitfun-pattern="provider-configuration">

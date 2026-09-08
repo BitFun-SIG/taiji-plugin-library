@@ -4140,6 +4140,22 @@ input.lab-force-focus {
   min-width: 112px;
 }
 
+.button-state-surface {
+  width: 100%;
+  background: var(--openbitfun-color-surface-panel);
+}
+
+.button-state-surface[data-surface="subtle"] {
+  background: var(--openbitfun-color-surface-tertiary);
+}
+
+.button-state-surface > h3 {
+  margin: 0;
+  padding: var(--openbitfun-space-4);
+  color: var(--openbitfun-color-content-primary);
+  font-size: var(--openbitfun-type-body-sm-font-size);
+}
+
 .component-code-panel--standalone {
   border-top: 1px solid var(--openbitfun-color-border-subtle);
   background: var(--openbitfun-color-surface-panel);

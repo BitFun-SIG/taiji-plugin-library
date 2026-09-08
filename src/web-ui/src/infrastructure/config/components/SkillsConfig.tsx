@@ -288,11 +288,11 @@ const SkillsConfig: React.FC = () => {
           )}
         </div>
         <div className="openbitfun-collection-form__footer">
-          <Button variant="outline" size="sm" onClick={resetForm}>
+          <Button variant="fill" size="sm" onClick={resetForm}>
             {t('form.actions.cancel')}
           </Button>
           <Button
-            variant="fill"
+            variant="primary"
             size="sm"
             onClick={handleAdd}
             disabled={!validationResult?.valid || isAdding}
@@ -507,7 +507,7 @@ const SkillsConfig: React.FC = () => {
                           <span>
                             <Button
                               className="openbitfun-skills-config__market-action-button"
-                              variant="fill"
+                              variant="primary"
                               size="sm"
                               onClick={() => handleDownload(skill, 'project')}
                               disabled={isDownloading || !hasWorkspace}
@@ -523,7 +523,7 @@ const SkillsConfig: React.FC = () => {
                         <span>
                           <Button
                             className="openbitfun-skills-config__market-action-button"
-                            variant={isRemote ? 'fill' : 'outline'}
+                            variant={isRemote ? 'primary' : 'outline'}
                             size="sm"
                             onClick={() => handleDownload(skill, 'user')}
                             disabled={isDownloading}
@@ -681,7 +681,7 @@ const SkillsConfig: React.FC = () => {
               onClear={marketKeyword ? () => setMarketKeyword('') : undefined}
               size="sm"
             />
-            <Button size="sm" variant="fill" onClick={handleMarketSearch}>
+            <Button size="sm" variant="primary" onClick={handleMarketSearch}>
               {tShared('common:actions.search')}
             </Button>
           </div>

@@ -292,7 +292,7 @@ const MiniAppDetailModal: React.FC<MiniAppDetailModalProps> = ({
               </Button>
             ) : null}
             <Button
-              variant="fill"
+              variant="primary"
               size="md"
               className="miniapp-detail-modal__primary"
               onClick={() => onOpen(displayedApp.id)}

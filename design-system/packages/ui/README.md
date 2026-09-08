@@ -18,7 +18,25 @@ export function Example() {
 
 The package owns component anatomy, behavior, accessibility, and stable variants. It does not own theme selection persistence, product state, routes, locale resources, or platform APIs.
 
+## Buttons
+
+Choose variants by action role: use `primary` for the main save, submit, create,
+or confirm action, and `fill` for cancel, dismiss, or discard alongside it.
+Keep `outline` for ordinary toolbar utilities and secondary choices. A neutral
+`fill` button is a low-emphasis surface, not an alias for `primary`. Preserve
+`tone="danger"` for destructive actions. Disabled and loading states belong to
+the same variant; do not switch a primary action to outline when it is disabled.
+
+Button outline and text variants have transparent resting surfaces. Fill and
+primary state colors come from the theme's `component.button.*` contract, with
+variant-specific disabled content. The secondary variant keeps its opaque
+tertiary surface. All variants retain the existing xs/sm/md/lg dimensions;
+text buttons keep those hit targets while omitting the visible pill background
+and radius. Use native hover, pressed, focus, disabled, and loading behavior in
+addition to Design Lab's state specimens.
+
 ## Text overflow
+
 
 Use `OverflowText` for single-line, non-editable labels instead of local
 `text-overflow: ellipsis` rules or shortening the underlying string. Plain text

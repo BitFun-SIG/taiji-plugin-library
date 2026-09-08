@@ -557,7 +557,7 @@ export function ComponentDetailPage({
       return `import { Icon, Menu, MenuItem, MenuSection, MenuSeparator } from "@openbitfun/ui";\n\n<Menu\n  aria-label="${t("components.preview.menuLabel")}"\n  scrollbarVisibility="${menuShowScrollbar ? "auto" : "hidden"}"\n>\n  <MenuSection title="${t("components.preview.menuSectionTitle")}">\n    <MenuItem leading={<Icon name="session" />}>${t("components.preview.menuItemOne")}</MenuItem>\n    <MenuItem leading={<Icon name="session" />}>${t("components.preview.menuItemTwo")}</MenuItem>\n  </MenuSection>\n  <MenuSeparator />\n  <MenuSection aria-label="${t("components.preview.menuMoreSection")}">\n    <MenuItem disabled>${t("components.preview.menuDisabledItem")}</MenuItem>\n  </MenuSection>\n</Menu>`;
     }
     if (component.name === "Dialog") {
-      return `import { Button, Dialog, DialogBody, DialogClose, DialogFooter, DialogHeader, DialogHeading, DialogTitle } from "@openbitfun/ui";\n\n<Dialog onOpenChange={() => setOpen(false)} open={open} size="xl">\n  <DialogHeader>\n    <DialogHeading><DialogTitle>${t("components.preview.modalTitle")}</DialogTitle></DialogHeading>\n    <DialogClose />\n  </DialogHeader>\n  <DialogBody><ProviderConfigurationFields /></DialogBody>\n  <DialogFooter appearance="floating">\n    <Button onClick={() => setOpen(false)} variant="secondary">${t("components.preview.modalCancel")}</Button>\n    <Button onClick={() => setOpen(false)} variant="primary">${t("components.preview.modalSave")}</Button>\n  </DialogFooter>\n</Dialog>`;
+      return `import { Button, Dialog, DialogBody, DialogClose, DialogFooter, DialogHeader, DialogHeading, DialogTitle } from "@openbitfun/ui";\n\n<Dialog onOpenChange={() => setOpen(false)} open={open} size="xl">\n  <DialogHeader>\n    <DialogHeading><DialogTitle>${t("components.preview.modalTitle")}</DialogTitle></DialogHeading>\n    <DialogClose />\n  </DialogHeader>\n  <DialogBody><ProviderConfigurationFields /></DialogBody>\n  <DialogFooter appearance="floating">\n    <Button onClick={() => setOpen(false)} variant="fill">${t("components.preview.modalCancel")}</Button>\n    <Button onClick={() => setOpen(false)} variant="primary">${t("components.preview.modalSave")}</Button>\n  </DialogFooter>\n</Dialog>`;
     }
     if (component.name === "Sheet") {
       return `import { Button, DialogBody, DialogClose, DialogFooter, DialogHeader, DialogHeading, DialogTitle, Sheet } from "@openbitfun/ui";\n\n<Sheet onOpenChange={() => setOpen(false)} open={open} placement="right" size="lg">\n  <DialogHeader>\n    <DialogHeading><DialogTitle>${t("components.preview.modalTitle")}</DialogTitle></DialogHeading>\n    <DialogClose />\n  </DialogHeader>\n  <DialogBody><ProviderConfigurationFields /></DialogBody>\n  <DialogFooter>\n    <Button onClick={() => setOpen(false)} variant="fill">${t("components.preview.modalCancel")}</Button>\n    <Button onClick={() => setOpen(false)} variant="primary">${t("components.preview.modalSave")}</Button>\n  </DialogFooter>\n</Sheet>`;
@@ -793,7 +793,7 @@ export function ComponentDetailPage({
           </DialogHeader>
           <DialogBody className="component-dialog-example__body">{renderDialogConfigurationContent()}</DialogBody>
           <DialogFooter appearance="floating">
-            <Button onClick={closePreview} variant="secondary">
+            <Button onClick={closePreview} variant="fill">
               {t("components.preview.modalCancel")}
             </Button>
             <Button onClick={closePreview} variant="primary">
@@ -2115,38 +2115,43 @@ export function ComponentDetailPage({
                   ))}
                 </div>
               ) : component.name === "Button" ? (
-                <div
-                  className="component-preview-matrix"
-                  data-component="button"
-                  data-state-count={states.length}
-                >
-                  <span className="component-preview-matrix__corner" />
-                  {states.map((state, index) => (
-                    <span
-                      className="component-preview-matrix__column-label"
-                      data-last={index === states.length - 1 || undefined}
-                      key={state}
+                (["plain", "subtle"] as const).map((surface) => (
+                  <section className="button-state-surface" data-surface={surface} key={surface}>
+                    <h3>{t(surface === "plain" ? "detail.option.plain" : "detail.option.subtle")}</h3>
+                    <div
+                      className="component-preview-matrix"
+                      data-component="button"
+                      data-state-count={states.length}
                     >
-                      {stateLabel(state)}
-                    </span>
-                  ))}
-                  {buttonVariants.map((matrixVariant) => (
-                    <Fragment key={matrixVariant}>
-                      <span className="component-preview-matrix__row-label">
-                        {stateLabel(matrixVariant)}
-                      </span>
-                      {states.map((state) => (
-                        <div
-                          className="component-preview-matrix__cell"
-                          data-active={matrixVariant === variant && state === previewState || undefined}
-                          key={`${matrixVariant}-${state}`}
+                      <span className="component-preview-matrix__corner" />
+                      {states.map((state, index) => (
+                        <span
+                          className="component-preview-matrix__column-label"
+                          data-last={index === states.length - 1 || undefined}
+                          key={state}
                         >
-                          {renderPreview(state, matrixVariant)}
-                        </div>
+                          {stateLabel(state)}
+                        </span>
                       ))}
-                    </Fragment>
-                  ))}
-                </div>
+                      {buttonVariants.map((matrixVariant) => (
+                        <Fragment key={matrixVariant}>
+                          <span className="component-preview-matrix__row-label">
+                            {stateLabel(matrixVariant)}
+                          </span>
+                          {states.map((state) => (
+                            <div
+                              className="component-preview-matrix__cell"
+                              data-active={matrixVariant === variant && state === previewState || undefined}
+                              key={`${matrixVariant}-${state}`}
+                            >
+                              {renderPreview(state, matrixVariant)}
+                            </div>
+                          ))}
+                        </Fragment>
+                      ))}
+                    </div>
+                  </section>
+                ))
               ) : component.name === "Icon" ? (
                 <>
                   <IconCompositionPreview />
