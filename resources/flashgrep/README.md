@@ -28,7 +28,7 @@ Publish the six standalone binaries and SHA256SUMS to the public binary reposito
 as Release assets, without publishing private source or MCP bundles. Verify the
 release, then update VERSION.json with its tag and asset checksums/sizes. Do not use
 `latest` or replace assets of an already consumed release; publish a new version.
-BitFun builds only need public download access, with no private-repository token.
+OpenBitFun builds only need public download access, with no private-repository token.
 
 ## Focused verification
 
