@@ -21,12 +21,12 @@
     --openbitfun-control-activity-item-inline-gap: var(--openbitfun-space-1);
     --openbitfun-control-activity-item-inline-icon-size: 12px;
     --openbitfun-control-activity-item-surface-gap: var(--openbitfun-space-2);
-    --openbitfun-control-activity-item-surface-height: 30px;
+    --openbitfun-control-activity-item-surface-height: 40px;
     --openbitfun-control-activity-item-surface-icon-size: 14px;
-    --openbitfun-control-activity-item-surface-padding-block: var(--openbitfun-space-1);
-    --openbitfun-control-activity-item-surface-padding-inline-end: 3px;
-    --openbitfun-control-activity-item-surface-padding-inline-start: var(--openbitfun-space-2);
-    --openbitfun-control-activity-item-surface-radius: var(--openbitfun-radius-base);
+    --openbitfun-control-activity-item-surface-padding-block: 9px;
+    --openbitfun-control-activity-item-surface-padding-inline-end: 9px;
+    --openbitfun-control-activity-item-surface-padding-inline-start: var(--openbitfun-space-3);
+    --openbitfun-control-activity-item-surface-radius: var(--openbitfun-radius-lg);
     --openbitfun-control-ask-user-body-gap: var(--openbitfun-space-3);
     --openbitfun-control-ask-user-body-padding: var(--openbitfun-space-4);
     --openbitfun-control-ask-user-description-max-width: 500px;
