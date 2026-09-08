@@ -440,3 +440,11 @@ long description while metadata and sibling actions retain their own slots.
 Lab Patterns includes long paths, large change counts, expandable detail and
 disabled actions. The current Web UI has no direct ActivityItem consumer;
 FlowChat ambient tool cards keep their separate presentation contract.
+
+Ambient FlowChat summaries, product thinking/explore headers and runtime status
+share a 14px icon column followed by a 4px gap. The icon column starts at the
+transcript body edge; heading text starts 18px after that edge. Loading, tool
+and disclosure glyphs occupy that same column. Expanded thinking prose remains
+aligned with the body edge; bordered tool detail retains its own content inset.
+The 12px/4px Figma inline trace is a smaller typography scene; the existing
+product 14px glyph size is retained when applying its gap to these summaries.

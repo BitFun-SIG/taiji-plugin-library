@@ -22,9 +22,7 @@
   /* Match `.flow-text-block` and the tool wrappers so flow items share one visual gap. */
   margin: 0 0 var(--openbitfun-control-flow-chat-flow-item-gap) 0;
   background: transparent;
-  /* Transparent border to match the box-sizing of bordered cards so that thinking
-   * items and card content share the same left edge. */
-  border: 1px solid transparent;
+  border: 0;
   box-sizing: border-box;
   /* Collapsed summary line: match `.explore-region--collapsible` (e.g. command count). */
   font-size: var(--openbitfun-type-flow-control-font-size);
@@ -35,7 +33,7 @@
 .thinking-collapsed-header {
   display: flex;
   align-items: center;
-  gap: var(--openbitfun-control-flow-chat-inline-gap);
+  gap: var(--openbitfun-control-flow-chat-row-icon-gap);
   padding: 0;
   border-radius: 4px;
   cursor: pointer;
@@ -64,11 +62,10 @@
 
   .thinking-leading-icon {
     position: relative;
-    width: var(--openbitfun-control-icon-size-sm);
-    height: var(--openbitfun-control-icon-size-sm);
+    width: var(--openbitfun-control-flow-chat-row-icon-size);
+    height: var(--openbitfun-control-flow-chat-row-icon-size);
     flex-shrink: 0;
-    color: var(--openbitfun-color-content-muted);
-    opacity: 0.6;
+    color: var(--openbitfun-color-content-caption);
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -94,8 +91,7 @@
     min-width: 0;
     font-size: var(--openbitfun-type-flow-control-font-size);
     font-weight: var(--openbitfun-type-body-sm-font-weight);
-    color: var(--openbitfun-color-content-muted);
-    opacity: 0.8;
+    color: var(--openbitfun-color-content-secondary);
     line-height: var(--openbitfun-type-flow-support-line-height);
   }
 }
@@ -114,7 +110,6 @@
 
 .flow-thinking-item.summary .thinking-label {
   color: var(--openbitfun-color-content-secondary);
-  opacity: 0.9;
 }
 
 .flow-thinking-item.expanded {

@@ -186,3 +186,17 @@ package.
 - `virtualMessageListLayout.ts`
 - `VirtualItemRenderer.tsx` + `.scss`
 - `VirtualMessageList.tsx`
+
+## Transcript row columns
+
+Thinking, Explore, ambient tool summaries and the runtime-status footer use
+`control.flowChat.rowIconSize` (14px) and `rowIconGap` (4px). The outer content
+column owns its responsive inset. Borderless rows add no leading padding or
+transparent border; text-only replies and expanded thinking begin at that same
+body edge. A summary with an icon starts its label 18px later. Tool/arrow/status
+layers keep their slot during state changes. Native SVG artwork may contain
+internal whitespace; do not compensate for it with per-tool margins.
+
+Thinking/Explore labels use secondary content directly and their icons use the
+caption role, avoiding a second opacity multiplier. These layout rules do not
+change virtual-item identity, measurement ownership or viewport writes.

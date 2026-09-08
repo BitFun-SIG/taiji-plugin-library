@@ -10,6 +10,18 @@
   margin-top: 42px;
 }
 
+.flow-chat-tool-sequence {
+  display: grid;
+  min-inline-size: 0;
+  gap: var(--openbitfun-space-5);
+}
+
+.flow-chat-tool-sequence__rows {
+  display: grid;
+  min-inline-size: 0;
+  gap: var(--openbitfun-control-flow-chat-flow-item-gap);
+}
+
 .flow-chat-tool-gallery > .component-catalog-section-heading {
   margin-block: 0 -8px;
   padding-top: 34px;

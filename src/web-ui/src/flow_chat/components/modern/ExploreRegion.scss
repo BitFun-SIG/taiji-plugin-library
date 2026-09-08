@@ -25,7 +25,7 @@
   .explore-region__header {
     display: flex;
     align-items: center;
-    gap: var(--openbitfun-control-flow-chat-inline-gap);
+    gap: var(--openbitfun-control-flow-chat-row-icon-gap);
     padding: 0;
     background: transparent;
     color: var(--openbitfun-color-content-muted);
@@ -58,14 +58,13 @@
 
   .explore-region__leading-icon {
     position: relative;
-    width: var(--openbitfun-control-icon-size-sm);
-    height: var(--openbitfun-control-icon-size-sm);
+    width: var(--openbitfun-control-flow-chat-row-icon-size);
+    height: var(--openbitfun-control-flow-chat-row-icon-size);
     flex-shrink: 0;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    color: var(--openbitfun-color-content-muted);
-    opacity: 0.6;
+    color: var(--openbitfun-color-content-caption);
     transition: opacity 0.15s ease;
 
     > [data-openbitfun-component='icon'] {
@@ -87,7 +86,7 @@
   .explore-region__summary {
     font-size: var(--openbitfun-type-flow-control-font-size);
     line-height: var(--openbitfun-type-flow-support-line-height);
-    opacity: 0.8;
+    color: var(--openbitfun-color-content-secondary);
   }
 
   // Inner div must have min-height: 0 for height animation clipping to work.

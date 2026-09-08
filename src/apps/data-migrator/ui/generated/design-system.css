@@ -84,6 +84,8 @@
     --openbitfun-control-flow-chat-control-padding-inline: 0.75rem;
     --openbitfun-control-flow-chat-flow-item-gap: 0.42rem;
     --openbitfun-control-flow-chat-inline-gap: 0.35rem;
+    --openbitfun-control-flow-chat-row-icon-gap: var(--openbitfun-space-1);
+    --openbitfun-control-flow-chat-row-icon-size: var(--openbitfun-control-icon-size-sm);
     --openbitfun-control-flow-chat-turn-gap: var(--openbitfun-space-4);
     --openbitfun-control-height-lg: 48px;
     --openbitfun-control-height-md: 40px;
