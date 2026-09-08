@@ -18,7 +18,18 @@ export function Example() {
 
 The package owns component anatomy, behavior, accessibility, and stable variants. It does not own theme selection persistence, product state, routes, locale resources, or platform APIs.
 
+## Buttons
+
+Button outline and text variants have transparent resting surfaces. Fill and
+primary state colors come from the theme's `component.button.*` contract, with
+variant-specific disabled content. The secondary variant keeps its opaque
+tertiary surface. All variants retain the existing xs/sm/md/lg dimensions;
+text buttons keep those hit targets while omitting the visible pill background
+and radius. Use native hover, pressed, focus, disabled, and loading behavior in
+addition to Design Lab's state specimens.
+
 ## Text overflow
+
 
 Use `OverflowText` for single-line, non-editable labels instead of local
 `text-overflow: ellipsis` rules or shortening the underlying string. Plain text

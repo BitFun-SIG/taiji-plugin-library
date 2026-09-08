@@ -2106,38 +2106,43 @@ export function ComponentDetailPage({
                   ))}
                 </div>
               ) : component.name === "Button" ? (
-                <div
-                  className="component-preview-matrix"
-                  data-component="button"
-                  data-state-count={states.length}
-                >
-                  <span className="component-preview-matrix__corner" />
-                  {states.map((state, index) => (
-                    <span
-                      className="component-preview-matrix__column-label"
-                      data-last={index === states.length - 1 || undefined}
-                      key={state}
+                (["plain", "subtle"] as const).map((surface) => (
+                  <section className="button-state-surface" data-surface={surface} key={surface}>
+                    <h3>{t(surface === "plain" ? "detail.option.plain" : "detail.option.subtle")}</h3>
+                    <div
+                      className="component-preview-matrix"
+                      data-component="button"
+                      data-state-count={states.length}
                     >
-                      {stateLabel(state)}
-                    </span>
-                  ))}
-                  {buttonVariants.map((matrixVariant) => (
-                    <Fragment key={matrixVariant}>
-                      <span className="component-preview-matrix__row-label">
-                        {stateLabel(matrixVariant)}
-                      </span>
-                      {states.map((state) => (
-                        <div
-                          className="component-preview-matrix__cell"
-                          data-active={matrixVariant === variant && state === previewState || undefined}
-                          key={`${matrixVariant}-${state}`}
+                      <span className="component-preview-matrix__corner" />
+                      {states.map((state, index) => (
+                        <span
+                          className="component-preview-matrix__column-label"
+                          data-last={index === states.length - 1 || undefined}
+                          key={state}
                         >
-                          {renderPreview(state, matrixVariant)}
-                        </div>
+                          {stateLabel(state)}
+                        </span>
                       ))}
-                    </Fragment>
-                  ))}
-                </div>
+                      {buttonVariants.map((matrixVariant) => (
+                        <Fragment key={matrixVariant}>
+                          <span className="component-preview-matrix__row-label">
+                            {stateLabel(matrixVariant)}
+                          </span>
+                          {states.map((state) => (
+                            <div
+                              className="component-preview-matrix__cell"
+                              data-active={matrixVariant === variant && state === previewState || undefined}
+                              key={`${matrixVariant}-${state}`}
+                            >
+                              {renderPreview(state, matrixVariant)}
+                            </div>
+                          ))}
+                        </Fragment>
+                      ))}
+                    </div>
+                  </section>
+                ))
               ) : component.name === "Icon" ? (
                 <>
                   <IconCompositionPreview />

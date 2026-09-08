@@ -4,6 +4,56 @@ import { APPEARANCE_THEME_TOKEN_NAMES } from './catalog';
 import { composeAppearancePackage } from './composeAppearancePackage';
 
 describe('composeAppearancePackage', () => {
+  it('keeps explicit legacy Button colors through a package round trip without requiring new tokens', () => {
+    const original: AppearancePackage = {
+      schema: 'openbitfun.appearance', schemaVersion: 2,
+      id: 'example.legacy-button-colors', name: 'Legacy button colors', version: '1.0.0', mode: 'light',
+      renderers: {
+        'theme-tokens': {
+          version: 1,
+          settings: {
+            tokens: {
+              '--openbitfun-color-action-primary-background': '#123456',
+              '--openbitfun-color-action-neutral-surface': '#eeeeee',
+              '--openbitfun-color-accent-default': '#007766',
+            },
+            scopes: { chrome: { '--openbitfun-color-action-neutral-content': '#445566' } },
+          },
+        },
+      },
+    };
+    const payload = JSON.stringify(original);
+    const resolved = composeAppearancePackage(JSON.parse(payload));
+    const settings = resolved.renderers?.['theme-tokens']?.settings;
+    expect(settings?.tokens).toMatchObject({
+      '--openbitfun-color-action-primary-background': '#123456',
+      '--openbitfun-component-button-primary-background': '#123456',
+      '--openbitfun-component-button-fill-background': '#eeeeee',
+      '--openbitfun-component-button-text-content': '#007766',
+      '--openbitfun-component-button-primary-content-disabled': 'rgba(0, 0, 0, 0.20)',
+    });
+    expect(settings?.scopes?.chrome?.['--openbitfun-component-button-content']).toBe('#445566');
+    expect(composeAppearancePackage(JSON.parse(JSON.stringify(resolved))).renderers?.['theme-tokens']).toEqual(
+      resolved.renderers?.['theme-tokens'],
+    );
+    expect(JSON.stringify(original)).toBe(payload);
+  });
+
+  it('prefers explicit Button tokens over legacy aliases in both root and chrome scopes', () => {
+    const tokens = {
+      '--openbitfun-color-action-primary-background': '#123456',
+      '--openbitfun-component-button-primary-background': '#654321',
+    };
+    const resolved = composeAppearancePackage({
+      schema: 'openbitfun.appearance', schemaVersion: 2,
+      id: 'example.button-colors', name: 'Button colors', version: '1.0.0', mode: 'light',
+      renderers: { 'theme-tokens': { version: 1, settings: { tokens, scopes: { chrome: tokens } } } },
+    });
+    const settings = resolved.renderers?.['theme-tokens']?.settings;
+    expect(settings?.tokens['--openbitfun-component-button-primary-background']).toBe('#654321');
+    expect(settings?.scopes?.chrome?.['--openbitfun-component-button-primary-background']).toBe('#654321');
+  });
+
   it('resolves a partial imported package into a complete host appearance', () => {
     const pkg: AppearancePackage = {
       schema: 'openbitfun.appearance',

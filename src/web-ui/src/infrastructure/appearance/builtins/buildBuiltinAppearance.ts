@@ -1,6 +1,8 @@
 import { themeCssVariables, themes, type ThemeTokenName } from '@openbitfun/theme-openbitfun';
 
 import type { AppearancePalette } from './AppearancePalette';
+import { withLegacyButtonTokens } from './buttonThemeCompatibility';
+import { DEFAULT_DARK_APPEARANCE_ID, DEFAULT_LIGHT_APPEARANCE_ID } from './palettes';
 import type {
   AppearanceColorValue,
   AppearanceDurationValue,
@@ -67,11 +69,24 @@ type ThemeValue = string | number | boolean;
 
 function themeValuesToCssTokens(
   values: Readonly<Record<ThemeTokenName, ThemeValue>>,
+  palette: AppearancePalette,
 ): Record<AppearanceThemeTokenName, string> {
-  return Object.fromEntries(
+  const tokens = Object.fromEntries(
     (Object.entries(values) as [ThemeTokenName, ThemeValue][])
       .map(([name, value]) => [themeCssVariables[name], String(value)]),
   ) as Record<AppearanceThemeTokenName, string>;
+  if (palette.id === DEFAULT_LIGHT_APPEARANCE_ID || palette.id === DEFAULT_DARK_APPEARANCE_ID) {
+    return tokens;
+  }
+  // Branded presets retain their existing action palette; the default product
+  // themes consume the component colors published by the design system.
+  const legacyTokens = Object.fromEntries(
+    Object.entries(tokens).filter(([name]) => !name.startsWith('--openbitfun-component-button-')),
+  );
+  for (const [name, value] of Object.entries(withLegacyButtonTokens(legacyTokens))) {
+    if (value !== undefined) tokens[name as AppearanceThemeTokenName] = value;
+  }
+  return tokens;
 }
 
 function createThemeTokenValues(palette: AppearancePalette): Record<ThemeTokenName, ThemeValue> {
@@ -226,7 +241,7 @@ function createChromeThemeTokens(
     'color.scrollbar.thumbHover': scrollbar.thumbHover,
   } satisfies Partial<Record<ThemeTokenName, ThemeValue>>);
 
-  return themeValuesToCssTokens(values);
+  return themeValuesToCssTokens(values, palette);
 }
 
 function createAppearanceOwnedTokens(
@@ -247,7 +262,7 @@ function createAppearanceOwnedTokens(
   const configPageRowHover = configPage?.rowHover
     ?? (palette.type === 'dark' ? colors.element.base : colors.element.soft);
   return {
-    ...themeValuesToCssTokens(createThemeTokenValues(palette)),
+    ...themeValuesToCssTokens(createThemeTokenValues(palette), palette),
     '--openbitfun-component-config-page-section-background': configPage?.section.background ?? colors.background.tertiary,
     '--openbitfun-component-config-page-section-border': configPage?.section.border ?? colors.border.subtle,
     '--openbitfun-component-config-page-section-border-width': configPage?.section.borderWidth ?? '1px',

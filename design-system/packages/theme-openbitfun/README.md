@@ -28,6 +28,20 @@ The same data is available as `@openbitfun/theme-openbitfun/reference-colors.jso
 
 ## Surface and state roles
 
+`component.button.*` owns Button's state palette. Its light fill stays at black
+8% while the shared neutral actions retain their 5/8/10% feedback; its primary
+background uses black 80/60/90% and disabled content 20%. Outline and text variants
+composite directly over the caller's surface. These differences cannot be
+represented by changing the shared action palette without changing menus,
+IconButton, and other controls. Dark and high-contrast mappings retain their
+mode-specific feedback and outline contrast. Color entries remain editable in
+Design Lab's Colors catalog; Button geometry is independent of this palette.
+
+The default Web UI appearances consume these published component values.
+Branded presets and imported appearances may still supply the existing action
+tokens: the Web UI inherits explicit old values only when the corresponding
+component token is absent, and keeps explicit component overrides intact.
+
 - `color.surface.scene`, `panel`, and `raised` own primary content and elevated planes.
 - `color.surface.chrome` owns persistent application structure such as navigation and window-control regions.
 - `color.surface.tertiary` is an opaque low-emphasis fill for persistent grouped content such as cards and field groups.

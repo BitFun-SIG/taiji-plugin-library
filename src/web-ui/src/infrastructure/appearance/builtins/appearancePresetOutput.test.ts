@@ -1,4 +1,4 @@
-import { themes } from '@openbitfun/theme-openbitfun';
+import { themeCssVariables, themes, type ThemeTokenName } from '@openbitfun/theme-openbitfun';
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 
@@ -45,6 +45,32 @@ function statusContrast(content: string, tint: string, background: string): numb
 }
 
 describe('builtin appearance preset output', () => {
+  it('uses the public Button palette in default appearances without changing shared action colors', () => {
+    for (const mode of ['light', 'dark'] as const) {
+      const appearance = getBuiltinAppearance(`openbitfun-${mode}`);
+      const settings = appearance?.renderers?.['theme-tokens']?.settings;
+      for (const [name, value] of Object.entries(themes[mode])) {
+        if (!name.startsWith('component.button.')) continue;
+        expect(settings?.tokens[themeCssVariables[name as ThemeTokenName]]).toBe(value);
+      }
+    }
+    const light = getBuiltinAppearanceThemeTokens('openbitfun-light');
+    expect(light['--openbitfun-component-button-content']).toBe('rgba(0, 0, 0, 0.80)');
+    expect(light['--openbitfun-component-button-text-content']).toBe('#059cb0');
+    expect(light['--openbitfun-color-action-primary-background']).toBe('#101a27');
+    expect(light['--openbitfun-color-action-neutral-content']).toBe('rgba(0, 0, 0, 0.60)');
+  });
+
+  it('preserves the action colors of branded presets through the Button contract', () => {
+    for (const palette of builtinAppearancePalettes) {
+      if (palette.id === 'openbitfun-light' || palette.id === 'openbitfun-dark') continue;
+      const tokens = getBuiltinAppearanceThemeTokens(palette.id);
+      expect(tokens['--openbitfun-component-button-primary-background']).toBe(tokens['--openbitfun-color-action-primary-background']);
+      expect(tokens['--openbitfun-component-button-text-content']).toBe(tokens['--openbitfun-color-accent-default']);
+      expect(tokens['--openbitfun-component-button-content']).toBe(tokens['--openbitfun-color-action-neutral-content']);
+    }
+  });
+
   it('formats hex palette references as stable rgb strings', () => {
     expect(rgbFromHex('#00e6ff')).toBe('rgb(0, 230, 255)');
     expect(rgbaFromHex('#00e6ff', 0.12)).toBe('rgba(0, 230, 255, 0.12)');
