@@ -173,6 +173,13 @@
       "$description": "Single-line action leading: 16px at the default 13px type size, scaling with user typography.",
       "lineHeight": { "$type": "number", "$value": 1.2307692307692308 }
     },
+    "pageIntro": {
+      "fontFamily": { "$value": "{font.family.control}" },
+      "fontSize": { "$value": "{font.size.xl-plus}" },
+      "fontWeight": { "$value": "{font.weight.medium}" },
+      "lineHeight": { "$value": "{lineHeight.tight}" },
+      "letterSpacing": { "$value": "{letterSpacing.normal}" }
+    },
     "fieldHelper": {
       "$description": "Field helper leading: 16px at the default 11px type size, scaling with user typography.",
       "lineHeight": { "$type": "number", "$value": 1.4545454545454546 }
@@ -226,6 +233,13 @@
       }
     },
     "heading": {
+      "welcome": {
+        "fontFamily": { "$value": "{font.family.control}" },
+        "fontSize": { "$value": "{font.size.5xl}" },
+        "fontWeight": { "$value": "{font.weight.semibold}" },
+        "lineHeight": { "$value": "{lineHeight.tight}" },
+        "letterSpacing": { "$value": "{letterSpacing.normal}" }
+      },
       "navigation": {
         "fontFamily": { "$value": "{font.family.control}" },
         "fontSize": { "$value": "{font.size.xl-plus}" },
@@ -591,14 +605,14 @@
       "$type": "dimension",
       "smMinBlockSize": { "$value": "54px" },
       "mdMinBlockSize": { "$value": "62px" },
-      "paddingBlock": { "$value": "{space.2}" },
+      "paddingBlock": { "$value": "{space.3}" },
       "paddingInline": { "$value": "{space.3}" },
       "gap": { "$value": "{space.2}" },
       "leadingSize": { "$value": "30px" },
       "iconSize": { "$value": "16px" },
       "contentGap": { "$value": "{space.1}" },
       "actionsGap": { "$value": "0px" },
-      "actionsPaddingInlineEnd": { "$value": "{space.2}" },
+      "actionsPaddingInlineEnd": { "$value": "{space.3}" },
       "radius": { "$value": "{radius.base}" }
     },
     "launcherButton": {

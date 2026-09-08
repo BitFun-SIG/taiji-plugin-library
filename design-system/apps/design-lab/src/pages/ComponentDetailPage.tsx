@@ -349,13 +349,13 @@ export function ComponentDetailPage({
   const [fieldShowControlTrailing, setFieldShowControlTrailing] = useState(false);
   const [pageHeaderAlign, setPageHeaderAlign] = useState<PageHeaderAlign>("start");
   const [cardContentAlign, setCardContentAlign] = useState<CardContentAlignment>("start");
-  const [pageHeaderSize, setPageHeaderSize] = useState<PageHeaderSize>("lg");
+  const [pageHeaderSize, setPageHeaderSize] = useState<PageHeaderSize>("md");
   const [scrollAreaOrientation, setScrollAreaOrientation] = useState<ScrollAreaOrientation>("vertical");
   const [activityItemAppearance, setActivityItemAppearance] = useState<ActivityItemAppearance>("surface");
   const [activityShowDetail, setActivityShowDetail] = useState(false);
   const [pageHeaderRequired, setPageHeaderRequired] = useState(false);
   const [actionItemShowMetadata, setActionItemShowMetadata] = useState(false);
-  const [actionCardSize, setActionCardSize] = useState<ActionCardSize>("sm");
+  const [actionCardSize, setActionCardSize] = useState<ActionCardSize>("md");
   const [tabGroupSize, setTabGroupSize] = useState<TabGroupSize>("sm");
   const [toolbarSize, setToolbarSize] = useState<ToolbarSize>("sm");
   const [previewState, setPreviewState] = useState(

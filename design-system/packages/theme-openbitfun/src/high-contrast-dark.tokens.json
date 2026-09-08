@@ -19,6 +19,9 @@
     }
   },
   "color": {
+    "actionCard": {
+      "background": { "$type": "color", "$value": "{color.action.neutral.surface}" }
+    },
     "surface": {
       "canvas": { "$type": "color", "$value": "{ref.color.gray.1000}" },
       "panel": { "$type": "color", "$value": "{ref.color.gray.900}" }

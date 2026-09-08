@@ -77,3 +77,5 @@ appearance's explicit old muted color is retained when the caption token is abse
 The built-in light Appearance preserves the public neutral action content (80%)
 in both root and chrome; generic palette projection previously reduced product
 menu labels to secondary text (60%). Explicit imported action colors still win.
+
+Action cards own `color.actionCard.background`: the light entry surface is black at 3% opacity. `surface.subtle` is a transient navy tint and `field.groupBackground` belongs to form groups, so neither represents this persistent action surface. Other modes retain their neutral action surface. Product Appearance preserves explicit legacy neutral-surface overrides in root and chrome.
