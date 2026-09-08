@@ -612,7 +612,9 @@ fn classify_writer_processes(
         .iter()
         .filter(|entry| entry.process_id != current_process_id)
         .filter_map(|entry| {
-            let is_handoff_caller = entry.process_id == caller_process_id;
+            // Zero means an independent launch with no caller. Windows exposes
+            // the System Idle Process at PID 0; it must never block migration.
+            let is_handoff_caller = caller_process_id != 0 && entry.process_id == caller_process_id;
             let known_writer = WRITER_EXECUTABLE_NAMES
                 .iter()
                 .chain(product_writer_binary_names.iter())
@@ -1107,6 +1109,28 @@ mod tests {
             true,
             ErrorKind::NotFound
         ));
+    }
+
+    #[test]
+    fn standalone_process_check_does_not_wait_for_windows_idle_or_itself() {
+        let processes = vec![
+            ProcessEntry {
+                process_id: 0,
+                executable_name: "System Idle Process".into(),
+            },
+            ProcessEntry {
+                process_id: 42,
+                executable_name: "openbitfun-data-migrator.exe".into(),
+            },
+            ProcessEntry {
+                process_id: 81,
+                executable_name: "openbitfun.exe".into(),
+            },
+        ];
+        let blockers = classify_writer_processes(&processes, 0, 42, &[]);
+        assert_eq!(blockers.len(), 1);
+        assert_eq!(blockers[0].process_id, 81);
+        assert!(!blockers[0].is_handoff_caller);
     }
 
     #[test]

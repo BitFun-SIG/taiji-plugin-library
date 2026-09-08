@@ -1,92 +1,67 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import test from 'node:test';
-
-import { prepareDataMigratorTauriConfig } from './data-migrator-tauri-build.mjs';
-import { productBuildEnvironment } from './product-customization/projections.mjs';
-import { resolveProductDefinition } from './product-customization/resolver.mjs';
-
+import { prepareDataMigratorTauriConfig, dataMigratorEnvironment } from './data-migrator-tauri-build.mjs';
+import { releaseVersion, validateReleaseTag } from './data-migrator-release.mjs';
+import { prepareTauriConfig } from './desktop-tauri-build.mjs';
 const ROOT = resolve(import.meta.dirname, '..');
-const APP = join(ROOT, 'src', 'apps', 'data-migrator');
-const ACME = join(ROOT, 'products', 'fixtures', 'acme', 'product.jsonc');
+const APP = join(ROOT, 'src/apps/data-migrator');
 
-test('Data Migrator has an independent product and non-updating bundle identity', () => {
-  const resolution = resolveProductDefinition({
-    rootDir: ROOT,
-    productConfig: ACME,
-    member: 'dataMigrator',
-  });
-  const output = prepareDataMigratorTauriConfig(
-    join(APP, 'tauri.conf.json'),
-    resolution,
-    mkdtempSync(join(tmpdir(), 'openbitfun-data-migrator-config-')),
-  );
+test('independent bundle owns version, offline assets, icons and identity', () => {
+  const output = prepareDataMigratorTauriConfig(join(APP, 'tauri.conf.json'), mkdtempSync(join(tmpdir(), 'migrator-config-')));
   const config = JSON.parse(readFileSync(output, 'utf8'));
-
-  assert.equal(config.productName, 'Acme Data Migrator');
-  assert.equal(config.mainBinaryName, 'acme-data-migrator');
-  assert.equal(config.identifier, 'com.acme.data-migrator');
-  assert.notEqual(config.identifier, 'com.acme.desktop');
+  assert.equal(config.productName, 'OpenBitFun Data Migrator');
+  assert.equal(config.identifier, 'com.openbitfun.data-migrator');
+  assert.equal(config.version, releaseVersion());
   assert.deepEqual(config.build, { frontendDist: 'ui' });
   assert.equal(config.plugins?.updater, undefined);
-  assert.equal(config.bundle.createUpdaterArtifacts, undefined);
-  assert.deepEqual(Object.values(config.bundle.resources), ['THIRD_PARTY_NOTICES.md']);
-  assert.deepEqual(config.app.windows.map(({ label }) => label), ['migrator']);
+  assert.equal(config.bundle.externalBin, undefined);
+  assert.ok(config.bundle.icon.every((icon) => !icon.includes('desktop') && existsSync(join(APP, icon))));
+  assert.ok(config.app.security.csp.includes("connect-src 'self'"));
 });
 
-test('Data Migrator projection provides both trusted sibling binary names', () => {
-  const resolution = resolveProductDefinition({
-    rootDir: ROOT,
-    productConfig: ACME,
-    member: 'dataMigrator',
-  });
-  const environment = productBuildEnvironment(resolution);
-
-  assert.equal(environment.OPENBITFUN_PRODUCT_BINARY_NAME, 'acme-data-migrator');
-  assert.equal(environment.OPENBITFUN_DATA_MIGRATOR_BINARY_NAME, 'acme-data-migrator');
-  assert.equal(environment.OPENBITFUN_DESKTOP_BINARY_NAME, 'acme-desktop');
+test('a Desktop product environment cannot change the migration destination identity', () => {
+  const env = dataMigratorEnvironment({ OPENBITFUN_PRODUCT_ID: 'acme', OPENBITFUN_DATA_NAMESPACE: 'acme', OPENBITFUN_DESKTOP_BINARY_NAME: 'acme', CI: '1' });
+  assert.equal(env.OPENBITFUN_PRODUCT_ID, 'openbitfun');
+  assert.equal(env.OPENBITFUN_DATA_NAMESPACE, 'openbitfun');
+  assert.equal(env.OPENBITFUN_DESKTOP_BINARY_NAME, undefined);
+  assert.equal(env.CI, 'true');
 });
 
-test('Data Migrator dependency and command closure stays migration-only', () => {
+test('Desktop package generation has no migrator payload or build hook', () => {
+  const desktop = join(ROOT, 'src/apps/desktop');
+  const output = prepareTauriConfig(join(desktop, 'tauri.conf.json'), { desktopDir: desktop });
+  const config = JSON.parse(readFileSync(output, 'utf8'));
+  assert.ok(!(config.bundle.externalBin || []).some((file) => file.includes('migrator')));
+  for (const file of ['scripts/dev.cjs', 'scripts/desktop-tauri-build.mjs', 'src/apps/desktop/src/lib.rs']) {
+    assert.doesNotMatch(readFileSync(join(ROOT, file), 'utf8'), /data-migrator|legacy_migration_api/);
+  }
+});
+
+test('migrator dependency and command closure exclude the main app and restart handshake', () => {
   const manifest = readFileSync(join(APP, 'Cargo.toml'), 'utf8');
-  const source = readFileSync(join(APP, 'src', 'app_state.rs'), 'utf8');
-  const registration = readFileSync(join(APP, 'src', 'lib.rs'), 'utf8');
-  const capability = readFileSync(join(APP, 'capabilities', 'migrator.json'), 'utf8');
-
-  assert.match(manifest, /openbitfun-core[^\n]+features = \["legacy-migration"\]/);
-  for (const forbidden of ['product-full', 'openbitfun-agent-runtime', 'plugin-runtime']) {
-    assert.equal(manifest.includes(forbidden), false, `manifest must not include ${forbidden}`);
-  }
-  assert.match(source, /product_assembly_plan_for_profile\(DeliveryProfile::DataMigrator\)/);
-  assert.match(registration, /tauri::generate_handler!/);
-  assert.match(registration, /commands::export_migration_diagnostics/);
-  assert.match(
-    readFileSync(join(ROOT, 'scripts', 'data-migrator-tauri-build.mjs'), 'utf8'),
-    /windowsHide:\s*true/,
-  );
-  for (const forbidden of ['fs:', 'shell:', 'updater:', 'dialog:']) {
-    assert.equal(capability.includes(forbidden), false, `capability must not include ${forbidden}`);
-  }
+  assert.doesNotMatch(manifest, /^openbitfun-core\s*=|product-full|product-capabilities|plugin-runtime/m);
+  const source = readFileSync(join(APP, 'src/app_state.rs'), 'utf8');
+  assert.doesNotMatch(source, /HandoffStore|MigrationOnboardingStore|restart_desktop|TrustedInstallationResolver/);
+  const capability = readFileSync(join(APP, 'capabilities/migrator.json'), 'utf8');
+  assert.doesNotMatch(capability, /fs:|shell:|updater:|dialog:/);
 });
 
-test('Data Migrator gates onboarding actions on authenticated bootstrap', () => {
-  const html = readFileSync(join(APP, 'ui', 'index.html'), 'utf8');
-  const source = readFileSync(join(APP, 'ui', 'app.js'), 'utf8');
-
-  assert.match(html, /<section id="choice-card"[^>]+hidden>/);
-  assert.match(source, /function requireBootstrap\(\)/);
-  assert.match(source, /if \(!requireBootstrap\(\)\) return;/);
-  assert.match(source, /catch \(error\) \{\s+notice\(/);
+test('independent release tags cannot be confused with main app versions', () => {
+  const version = releaseVersion();
+  assert.doesNotThrow(() => validateReleaseTag('data-migrator-v' + version, version));
+  assert.throws(() => validateReleaseTag('v' + version, version));
+  assert.throws(() => validateReleaseTag('data-migrator-v9.0.0', version));
 });
 
-test('Data Migrator labels unverified report counts as staged', () => {
-  const source = readFileSync(join(APP, 'ui', 'app.js'), 'utf8');
-
-  assert.match(
-    source,
-    /result\.state === 'verified' \? text\.imported : text\.staged/,
-  );
-  assert.match(source, /\$\{result\.imported\} \$\{transferLabel\(result\)\}/);
+test('all static UI labels and locale keys have complete translations', () => {
+  const html = readFileSync(join(APP, 'ui/index.html'), 'utf8');
+  const locales = JSON.parse(readFileSync(join(APP, 'ui/locales.json'), 'utf8'));
+  const keys = Object.keys(locales.en).sort();
+  for (const labels of Object.values(locales)) {
+    assert.deepEqual(Object.keys(labels).sort(), keys);
+    for (const match of html.matchAll(/data-i18n="([^"]+)"/g)) assert.ok(labels[match[1]], match[1]);
+  }
 });

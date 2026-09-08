@@ -27,6 +27,7 @@ use openbitfun_core::service::remote_ssh::workspace_state::is_remote_path;
 use openbitfun_core::service::remote_ssh::{
     search_remote_file_names, shell_quote_posix, RemoteFileNameSearch,
 };
+use openbitfun_core::service::workspace::WorkspaceInfoRuntimeExt;
 use openbitfun_core::service::workspace::{
     ScanOptions, WorkspaceInfo, WorkspaceKind, WorkspaceOpenOptions,
 };

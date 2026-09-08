@@ -878,7 +878,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
           </Tooltip>
 
           <div className="openbitfun-nav-panel__assistant-item-menu" data-openbitfun-component="workspace-item" data-openbitfun-part="menu" ref={menuRef} onClick={e => e.stopPropagation()}>
-            <Tooltip content={t('nav.items.project')} placement="right" followCursor>
+            <Tooltip content={t('nav.resources.title')} placement="right" followCursor>
               <button
                 data-openbitfun-component="workspace-item"
                 data-openbitfun-part="action"
@@ -1351,7 +1351,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
 
         <div className="openbitfun-nav-panel__workspace-item-actions" onClick={e => e.stopPropagation()}>
           <div className="openbitfun-nav-panel__workspace-item-menu" data-openbitfun-component="workspace-item" data-openbitfun-part="menu" ref={menuRef}>
-            <Tooltip content={t('nav.items.project')} placement="right" followCursor>
+            <Tooltip content={t('nav.resources.title')} placement="right" followCursor>
               <button
                 data-openbitfun-component="workspace-item"
                 data-openbitfun-part="menuTrigger"

@@ -1,5 +1,6 @@
 use crate::app_state::{CommandError, DiagnosticsExportView, MigratorCoordinator, MigratorView};
-use openbitfun_product_domains::legacy_migration::{MigrationPromptChoice, MigrationSelection};
+use openbitfun_legacy_migration::MigrationRoots;
+use openbitfun_product_domains::legacy_migration::MigrationSelection;
 use serde::Deserialize;
 use tauri::{AppHandle, State};
 
@@ -21,8 +22,39 @@ pub(crate) struct ExecuteRequest {
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub(crate) struct PromptChoiceRequest {
-    pub choice: MigrationPromptChoice,
+pub(crate) struct LocationsRequest {
+    pub locations: MigrationRoots,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub(crate) struct ResumeRequest {
+    pub run_id: String,
+}
+
+#[tauri::command]
+pub(crate) fn set_migration_locations(
+    state: State<'_, MigratorCoordinator>,
+    request: LocationsRequest,
+) -> Result<MigratorView, CommandError> {
+    state.set_locations(request.locations)
+}
+
+#[tauri::command]
+pub(crate) fn new_migration_task(
+    state: State<'_, MigratorCoordinator>,
+    request: EmptyRequest,
+) -> Result<MigratorView, CommandError> {
+    let _ = request;
+    state.new_task()
+}
+
+#[tauri::command]
+pub(crate) fn resume_migration_task(
+    state: State<'_, MigratorCoordinator>,
+    request: ResumeRequest,
+) -> Result<MigratorView, CommandError> {
+    state.resume_task(&request.run_id)
 }
 
 #[tauri::command]
@@ -89,9 +121,10 @@ pub(crate) fn export_migration_diagnostics(
 pub(crate) fn finish_legacy_migration(
     app: AppHandle,
     state: State<'_, MigratorCoordinator>,
-    request: PromptChoiceRequest,
+    request: EmptyRequest,
 ) -> Result<(), CommandError> {
-    state.finish_and_restart(request.choice)?;
+    let _ = request;
+    state.finish()?;
     app.exit(0);
     Ok(())
 }

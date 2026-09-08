@@ -1,44 +1,42 @@
 # Data Migrator Agent Guide
 
-Scope: this guide applies to `src/apps/data-migrator`.
+Scope: src/apps/data-migrator. This is a separately versioned, offline local tool.
+Read README.md for its user-facing contract.
 
-This app is the offline, local-only host for importing legacy BitFun data. It
-must remain a separate executable and WebView identity from Desktop.
+## Boundaries
 
-## Guardrails
+- Launch with no arguments. Own directory selection, discovery, durable task
+  recovery and completion; never depend on a Desktop request or restart Desktop.
+- Keep preferences under the tool's Tauri app-config identity. Migration run
+  journals/backups remain under the destination data directory for recovery.
+  Do not write Desktop onboarding/reminder state.
+- Consume config-contracts, shared storage services and legacy-migration-adapters.
+  Do not depend on Core, product assembly, Agent execution, Web UI, updater,
+  plugin lifecycle or a main-application sibling executable.
+- Use typed Rust commands for filesystem/process operations. Cancellation is
+  advisory and is honored only at engine-declared safe boundaries.
+- Reject unsupported data formats and unsafe directory overlaps. Preserve source
+  data, old plans/reports, snapshots, journals, backups and owner conflict policies.
+- The UI uses public @openbitfun/design-tokens and @openbitfun/theme-openbitfun
+  exports bundled in ui/generated/design-system.css. Regenerate through
+  pnpm run data-migrator:theme:generate. Direct Cargo builds are offline;
+  Desktop dev/build must never generate or build migrator assets.
+- ui/theme.js selects system scheme/contrast before paint. Workflow translations
+  are app-owned; do not import Web UI catalogs. No mocks or browser automation
+  for visual verification.
+- Tool version lives in Cargo.toml and tauri.conf.json. Packaging/signing uses
+  the independent Data Migrator workflow and data-migrator-v tags.
 
-- Select `DeliveryProfile::DataMigrator` and only the Core
-  `legacy-migration` feature. Do not add `product-full`, Agent Runtime,
-  plugin runtime, normal session startup, updater, shell, or frontend
-  filesystem capabilities.
-- Accept only the handoff `run_id` on the command line. Derive the request path
-  from `MigrationRoots`; never accept a request or executable path from UI or
-  command-line input.
-- Keep all filesystem, process, credential, and restart work in Rust. The UI
-  may call only the typed commands registered in `src/lib.rs`.
-- Report domain, phase, and counts. Do not invent progress percentages or emit
-  secrets, user content, credential values, or absolute paths in errors.
-- Cancellation is advisory and may be honored only at engine-declared safe
-  boundaries. Closing during execution requests cancellation and keeps the
-  window open until a safe boundary.
-- The migrator never updates itself. Resolve Desktop as a fixed-name sibling
-  binary using product-definition projections and the trusted installation
-  resolver; do not accept executable paths from handoff input.
-
-## Verification
+## Focused verification
 
 ```bash
-cargo test -p openbitfun-data-migrator
+cargo test -p openbitfun-data-migrator -p openbitfun-legacy-migration-adapters -p openbitfun-legacy-migration --lib
+cargo test -p openbitfun-legacy-migration --test migration_engine_contracts
 node --test scripts/data-migrator-tauri-build.test.mjs
-node --test scripts/desktop-dev-migration.test.mjs
+node --check src/apps/data-migrator/ui/app.js
+pnpm run theme:color-audit:all
 ```
 
-Completion always returns to Desktop. Debug builds launched through `desktop:dev`
-or `desktop:preview:debug` ask that launcher to restart via its private temporary
-handoff directory, preserving the frontend server and development lifecycle.
-Builds without that channel restart the trusted sibling Desktop executable.
-Keep this developer-only channel out of persisted migration and remote protocols.
-
-Run `pnpm run check:core-boundaries` when dependencies or delivery-profile
-selection change. Packaging, signing, and UI interaction are separate explicit
-verification steps.
+Run pnpm run check:core-boundaries for dependency ownership changes and
+pnpm run check:github-config for release workflow changes. Platform packaging
+and native visual checks are separate from these contract checks.

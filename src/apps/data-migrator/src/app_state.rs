@@ -1,36 +1,23 @@
-use openbitfun_core::legacy_migration::adapters_for_groups;
-use openbitfun_core_types::product_identity::product_id;
 use openbitfun_legacy_migration::{
-    blocking_writer_processes_for_product, export_failure_diagnostics, launch_trusted_executable,
-    probe_legacy_source, CancellationToken, HandoffDisposition, HandoffStore, LegacyMigrationError,
-    LegacyMigrationResult, MigrationEngine, MigrationLayout, MigrationOnboardingStore,
-    MigrationRoots, NoCrashInjection, ProbeLimits, TrustedInstallationResolver, WriterProcess,
+    atomic_write_json, blocking_writer_processes, export_failure_diagnostics, list_tasks,
+    load_task, probe_legacy_source, save_task, CancellationToken, LegacyMigrationError,
+    LegacyMigrationResult, MigrationEngine, MigrationLayout, MigrationRoots, NoCrashInjection,
+    ProbeLimits, SavedMigrationTask, WriterProcess,
 };
-use openbitfun_product_capabilities::{product_assembly_plan_for_profile, DeliveryProfile};
+use openbitfun_legacy_migration_adapters::adapters_for_groups;
 use openbitfun_product_domains::legacy_migration::{
     FindingSeverity, LegacySourceDescriptor, MigrationPhase, MigrationPlan, MigrationProgressEvent,
-    MigrationPromptChoice, MigrationRunReport, MigrationRunStatus, MigrationSelection,
-    MigratorHandoffRequest, MigratorProtocolCapabilities, MigratorRequestMode, ScanFinding,
-    CURRENT_MIGRATION_FORMAT_VERSION,
+    MigrationRunReport, MigrationRunStatus, MigrationSelection, ScanFinding,
 };
 use serde::Serialize;
-use std::ffi::OsStr;
-use std::path::Path;
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex, MutexGuard};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 
-const RELEASE_CHANNEL: &str = match option_env!("OPENBITFUN_RELEASE_CHANNEL") {
-    Some(value) => value,
-    None => "stable",
-};
-const DESKTOP_BINARY_NAME: &str = match option_env!("OPENBITFUN_DESKTOP_BINARY_NAME") {
-    Some(value) => value,
-    None => "openbitfun-desktop",
-};
-const DATA_MIGRATOR_BINARY_NAME: &str = match option_env!("OPENBITFUN_DATA_MIGRATOR_BINARY_NAME") {
-    Some(value) => value,
-    None => "openbitfun-data-migrator",
-};
+#[derive(Debug, Clone)]
+struct TaskRequest {
+    run_id: String,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -82,9 +69,14 @@ impl CommandError {
                 "This legacy BitFun data format is not supported by this migrator.",
                 false,
             ),
+            LegacyMigrationError::UnsupportedTarget(_) => Self::new(
+                "unsupported_target",
+                "The destination data format is not supported. Use a compatible migrator or an empty destination.",
+                true,
+            ),
             LegacyMigrationError::InvalidRequest(_) => Self::new(
-                "invalid_handoff",
-                "The migration handoff could not be authenticated or has expired.",
+                "invalid_task",
+                "The selected migration task or data locations are invalid.",
                 false,
             ),
             LegacyMigrationError::InvalidPlan(_) => Self::new(
@@ -167,10 +159,9 @@ impl CommandError {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct MigratorView {
-    pub delivery_profile: String,
-    pub restart_desktop_on_finish: bool,
-    pub protocol: MigratorProtocolCapabilities,
-    pub mode: MigratorRequestMode,
+    pub tool_version: String,
+    pub locations: MigrationRoots,
+    pub saved_tasks: Vec<SavedMigrationTask>,
     pub source: Option<LegacySourceDescriptor>,
     pub selection: MigrationSelection,
     pub findings: Vec<ScanFinding>,
@@ -194,8 +185,10 @@ pub(crate) struct DiagnosticsExportView {
 #[derive(Debug)]
 struct MigratorSession {
     roots: MigrationRoots,
-    request: MigratorHandoffRequest,
-    disposition: HandoffDisposition,
+    request: TaskRequest,
+    recovery: bool,
+    saved_tasks: Vec<SavedMigrationTask>,
+    settings_path: PathBuf,
     source: Option<LegacySourceDescriptor>,
     selection: MigrationSelection,
     findings: Vec<ScanFinding>,
@@ -215,80 +208,111 @@ pub(crate) struct MigratorCoordinator {
 }
 
 impl MigratorCoordinator {
-    pub(crate) fn bootstrap(run_id: &str) -> LegacyMigrationResult<Self> {
-        Self::bootstrap_with(
-            run_id,
-            MigrationRoots::resolve_current_user()?,
-            product_id(),
-            RELEASE_CHANNEL,
-        )
+    pub(crate) fn bootstrap(settings_path: PathBuf) -> LegacyMigrationResult<Self> {
+        let defaults = MigrationRoots::current_user_locations()?;
+        let layout = MigrationLayout::new(&defaults, "preferences");
+        let saved = layout.read_json::<MigrationRoots>(&settings_path);
+        let (roots, error) = match saved {
+            Ok(Some(roots)) => (roots, None),
+            Ok(None) => (defaults, None),
+            Err(error) => (defaults, Some(CommandError::from_legacy(&error))),
+        };
+        let coordinator = Self::bootstrap_with(roots, settings_path);
+        if let Some(error) = error {
+            coordinator.lock().error = Some(error);
+        }
+        Ok(coordinator)
     }
 
-    fn bootstrap_with(
-        run_id: &str,
-        roots: MigrationRoots,
-        expected_product_id: &str,
-        expected_release_channel: &str,
-    ) -> LegacyMigrationResult<Self> {
-        let product_plan = product_assembly_plan_for_profile(DeliveryProfile::DataMigrator);
-        if !product_plan.capability_set().ids().is_empty()
-            || !product_plan.capability_assembly().agent_ids().is_empty()
-            || !product_plan.feature_groups().is_empty()
-        {
-            return Err(LegacyMigrationError::InvalidRequest(
-                "data migrator delivery profile unexpectedly selected runtime capabilities"
-                    .to_string(),
-            ));
-        }
-
-        let store = HandoffStore::new(roots.clone(), expected_product_id, expected_release_channel);
-        let handoff = store.load_request(run_id, now_ms())?;
-        let request = handoff.request().clone();
-        let source = probe_bound_source(&roots, &request)?;
-        let plan = store.load_authorized_plan(&handoff)?;
-        let report = handoff
-            .layout()
-            .read_json::<MigrationRunReport>(&handoff.layout().report_path())?;
-        let selection = plan
-            .as_ref()
-            .map(|plan| plan.selection.clone())
-            .unwrap_or_else(|| request.selection.clone());
-        let findings = plan
-            .as_ref()
-            .map(|plan| plan.findings.clone())
-            .unwrap_or_default();
-        let status = report
-            .as_ref()
-            .map(|report| report.status)
-            .unwrap_or_else(|| {
-                if plan.is_some() {
-                    MigrationRunStatus::Planned
-                } else if source.is_some() {
+    fn bootstrap_with(roots: MigrationRoots, settings_path: PathBuf) -> Self {
+        let probe = crate::locations::validate(&roots)
+            .and_then(|_| probe_legacy_source(&roots, ProbeLimits::default()));
+        let (source, mut error) = match probe {
+            Ok(source) => (source, None),
+            Err(error) => (None, Some(CommandError::from_legacy(&error))),
+        };
+        let saved_tasks = match list_tasks(&roots) {
+            Ok(tasks) => tasks,
+            Err(failure) => {
+                error = Some(CommandError::from_legacy(&failure));
+                Vec::new()
+            }
+        };
+        Self {
+            session: Arc::new(Mutex::new(MigratorSession {
+                roots,
+                settings_path,
+                saved_tasks,
+                request: TaskRequest {
+                    run_id: uuid::Uuid::new_v4().to_string(),
+                },
+                recovery: false,
+                status: if source.is_some() {
                     MigrationRunStatus::Discovered
                 } else {
                     MigrationRunStatus::default()
-                }
-            });
-        let blockers = writer_processes(request.caller_process_id)?;
-
-        Ok(Self {
-            session: Arc::new(Mutex::new(MigratorSession {
-                roots,
-                request,
-                disposition: handoff.disposition(),
+                },
                 source,
-                selection,
-                findings,
-                plan,
-                report,
+                error,
+                selection: MigrationSelection::all(),
+                findings: Vec::new(),
+                plan: None,
+                report: None,
                 progress: None,
-                blockers,
-                status,
+                blockers: Vec::new(),
                 running: false,
-                error: None,
                 cancellation: CancellationToken::default(),
             })),
-        })
+        }
+    }
+
+    pub(crate) fn set_locations(
+        &self,
+        roots: MigrationRoots,
+    ) -> Result<MigratorView, CommandError> {
+        let mut session = self.lock();
+        if session.running {
+            return Err(CommandError::operation_in_progress());
+        }
+        crate::locations::validate(&roots).map_err(|error| CommandError::from_legacy(&error))?;
+        atomic_write_json(&session.settings_path, &roots)
+            .map_err(|error| CommandError::from_legacy(&error))?;
+        let replacement = Self::bootstrap_with(roots, session.settings_path.clone());
+        std::mem::swap(&mut *session, &mut *replacement.lock());
+        Ok(snapshot(&session))
+    }
+
+    pub(crate) fn new_task(&self) -> Result<MigratorView, CommandError> {
+        let mut session = self.lock();
+        if session.running {
+            return Err(CommandError::operation_in_progress());
+        }
+        let replacement =
+            Self::bootstrap_with(session.roots.clone(), session.settings_path.clone());
+        std::mem::swap(&mut *session, &mut *replacement.lock());
+        Ok(snapshot(&session))
+    }
+
+    pub(crate) fn resume_task(&self, run_id: &str) -> Result<MigratorView, CommandError> {
+        let mut session = self.lock();
+        if session.running {
+            return Err(CommandError::operation_in_progress());
+        }
+        let (plan, report) =
+            load_task(&session.roots, run_id).map_err(|error| CommandError::from_legacy(&error))?;
+        session.request.run_id = run_id.to_string();
+        session.selection = plan.selection.clone();
+        session.findings = plan.findings.clone();
+        session.status = report
+            .as_ref()
+            .map(|report| report.status)
+            .unwrap_or(MigrationRunStatus::Planned);
+        session.plan = Some(plan);
+        session.report = report;
+        session.progress = None;
+        session.recovery = true;
+        session.error = None;
+        Ok(snapshot(&session))
     }
 
     pub(crate) fn snapshot(&self) -> MigratorView {
@@ -333,12 +357,12 @@ impl MigratorCoordinator {
     fn scan_background(
         &self,
         roots: MigrationRoots,
-        request: MigratorHandoffRequest,
+        _request: TaskRequest,
         selection: MigrationSelection,
         cancellation: CancellationToken,
     ) {
         let result = (|| {
-            let source = probe_bound_source(&roots, &request)?.ok_or_else(|| {
+            let source = probe_legacy_source(&roots, ProbeLimits::default())?.ok_or_else(|| {
                 LegacyMigrationError::UnsupportedSource(
                     "no supported legacy BitFun data was discovered".to_string(),
                 )
@@ -395,24 +419,25 @@ impl MigratorCoordinator {
     fn prepare_background(
         &self,
         roots: MigrationRoots,
-        request: MigratorHandoffRequest,
+        request: TaskRequest,
         selection: MigrationSelection,
         cancellation: CancellationToken,
     ) {
         let result = (|| {
-            let source = probe_bound_source(&roots, &request)?.ok_or_else(|| {
+            let source = probe_legacy_source(&roots, ProbeLimits::default())?.ok_or_else(|| {
                 LegacyMigrationError::UnsupportedSource(
                     "no supported legacy BitFun data was discovered".to_string(),
                 )
             })?;
-            let engine = migration_engine(roots, &selection)?;
+            let engine = migration_engine(roots.clone(), &selection)?;
             let plan = engine.plan_with_run_id(
                 &source,
                 selection.clone(),
                 request.run_id.clone(),
                 &cancellation,
             )?;
-            let blockers = writer_processes(request.caller_process_id)?;
+            save_task(&roots, &plan)?;
+            let blockers = writer_processes()?;
             Ok::<_, LegacyMigrationError>((source, plan, blockers))
         })();
 
@@ -424,6 +449,8 @@ impl MigratorCoordinator {
                 session.selection = selection;
                 session.findings = plan.findings.clone();
                 session.plan = Some(plan);
+                session.saved_tasks =
+                    list_tasks(&session.roots).unwrap_or_else(|_| session.saved_tasks.clone());
                 session.report = None;
                 session.blockers = blockers;
                 session.status = MigrationRunStatus::Planned;
@@ -445,8 +472,10 @@ impl MigratorCoordinator {
     }
 
     pub(crate) fn refresh_blockers(&self) -> Result<MigratorView, CommandError> {
-        let caller_process_id = self.lock().request.caller_process_id;
-        match writer_processes(caller_process_id) {
+        if self.is_running() {
+            return Err(CommandError::operation_in_progress());
+        }
+        match writer_processes() {
             Ok(blockers) => {
                 let mut session = self.lock();
                 session.blockers = blockers;
@@ -480,13 +509,25 @@ impl MigratorCoordinator {
                     true,
                 ));
             }
-            let store = HandoffStore::new(session.roots.clone(), product_id(), RELEASE_CHANNEL);
-            let handoff = store
-                .load_request(&session.request.run_id, now_ms())
+            let (saved, _) = load_task(&session.roots, &session.request.run_id)
                 .map_err(|error| CommandError::from_legacy(&error))?;
-            store
-                .authorize_plan(&handoff, &plan, now_ms())
-                .map_err(|error| CommandError::from_legacy(&error))?;
+            if saved != plan {
+                return Err(CommandError::new(
+                    "stale_plan",
+                    "Review the saved plan again before continuing.",
+                    true,
+                ));
+            }
+            if matches!(
+                session.status,
+                MigrationRunStatus::Completed | MigrationRunStatus::CompletedWithWarnings
+            ) {
+                return Err(CommandError::new(
+                    "task_completed",
+                    "This task is already complete. Start a new scan to import other data.",
+                    true,
+                ));
+            }
 
             session.cancellation = CancellationToken::default();
             session.running = true;
@@ -532,66 +573,29 @@ impl MigratorCoordinator {
         self.lock().running
     }
 
-    pub(crate) fn finish_and_restart(
-        &self,
-        choice: MigrationPromptChoice,
-    ) -> Result<(), CommandError> {
-        self.finish_with_restart(choice, || self.restart_desktop())
-    }
-
-    fn finish_with_restart(
-        &self,
-        choice: MigrationPromptChoice,
-        restart: impl FnOnce() -> LegacyMigrationResult<()>,
-    ) -> Result<(), CommandError> {
+    pub(crate) fn finish(&self) -> Result<(), CommandError> {
         if self.is_running() {
             return Err(CommandError::operation_in_progress());
         }
-        if choice == MigrationPromptChoice::Unset {
-            return Err(CommandError::new(
-                "invalid_prompt_choice",
-                "Choose whether to migrate now, be reminded later, or stop reminders.",
-                true,
-            ));
-        }
-        if choice == MigrationPromptChoice::MigrateNow && self.lock().report.is_none() {
-            return Err(CommandError::new(
-                "migration_result_required",
-                "A completed or recoverable migration report is required before finishing.",
-                true,
-            ));
-        }
-
-        let result = (|| {
-            self.persist_prompt_choice(choice)?;
-            restart()
-        })();
-        if let Err(error) = result {
-            let mut session = self.lock();
-            let command_error = self.finish_error_locked(&mut session, &error);
-            return Err(command_error);
-        }
         Ok(())
-    }
-
-    pub(crate) fn close_and_restart(&self) -> Result<(), CommandError> {
-        let choice = if self.lock().report.is_some() {
-            MigrationPromptChoice::MigrateNow
-        } else {
-            MigrationPromptChoice::RemindLater
-        };
-        self.finish_and_restart(choice)
     }
 
     fn begin_operation(
         &self,
         selection: &MigrationSelection,
-    ) -> Result<(MigrationRoots, MigratorHandoffRequest, CancellationToken), CommandError> {
+    ) -> Result<(MigrationRoots, TaskRequest, CancellationToken), CommandError> {
         let mut session = self.lock();
         if session.running {
             return Err(CommandError::operation_in_progress());
         }
-        validate_selection(&session.request, selection)?;
+        validate_selection(selection)?;
+        // A changed scan/selection is a new task. Never overwrite an old journal.
+        session.request.run_id = uuid::Uuid::new_v4().to_string();
+        session.recovery = false;
+        session.selection = selection.clone();
+        session.plan = None;
+        session.report = None;
+        session.findings.clear();
         session.cancellation = CancellationToken::default();
         session.running = true;
         session.error = None;
@@ -634,7 +638,7 @@ impl MigratorCoordinator {
     fn execute_background(
         &self,
         roots: MigrationRoots,
-        request: MigratorHandoffRequest,
+        _request: TaskRequest,
         plan: MigrationPlan,
         cancellation: CancellationToken,
     ) {
@@ -643,7 +647,7 @@ impl MigratorCoordinator {
                 self.finish_cancelled_before_execution(&plan);
                 return;
             }
-            match writer_processes(request.caller_process_id) {
+            match writer_processes() {
                 Ok(blockers) => {
                     let done = blockers.is_empty();
                     let mut session = self.lock();
@@ -694,8 +698,8 @@ impl MigratorCoordinator {
                 session.status = report.status;
                 session.report = Some(report);
                 session.error = None;
-                drop(session);
-                let _ = self.persist_prompt_choice(MigrationPromptChoice::MigrateNow);
+                session.saved_tasks =
+                    list_tasks(&session.roots).unwrap_or_else(|_| session.saved_tasks.clone());
             }
             Err(error) => {
                 let layout = MigrationLayout::new(&roots, &plan.run_id);
@@ -734,49 +738,6 @@ impl MigratorCoordinator {
         session.progress = Some(progress);
     }
 
-    fn persist_prompt_choice(&self, choice: MigrationPromptChoice) -> LegacyMigrationResult<()> {
-        let session = self.lock();
-        let store = MigrationOnboardingStore::new(session.roots.clone());
-        let request = &session.request;
-        let source = session.source.as_ref();
-        let has_report = session.report.is_some();
-        store.update(|state| {
-            state.format_version = CURRENT_MIGRATION_FORMAT_VERSION;
-            if let Some(source) = source {
-                state.source_fingerprint = source.source_fingerprint.clone();
-                state.detected_at_ms.get_or_insert_with(now_ms);
-            }
-            state.choice = choice;
-            state.last_prompted_version = Some(env!("CARGO_PKG_VERSION").to_string());
-            state.run_id = Some(request.run_id.clone());
-            state.handled_run_id = Some(request.run_id.clone());
-            if has_report {
-                state.last_report_run_id = Some(request.run_id.clone());
-            }
-        })?;
-        Ok(())
-    }
-
-    fn restart_desktop(&self) -> LegacyMigrationResult<()> {
-        let run_id = self.lock().request.run_id.clone();
-        #[cfg(debug_assertions)]
-        if let Some(directory) = std::env::var_os("OPENBITFUN_DEV_MIGRATION_DIR") {
-            return request_dev_restart(Path::new(&directory), &run_id);
-        }
-        let current = std::env::current_exe().map_err(|error| LegacyMigrationError::Io {
-            path: Path::new(DATA_MIGRATOR_BINARY_NAME).to_path_buf(),
-            source: error,
-        })?;
-        let executable = TrustedInstallationResolver::resolve_sibling(
-            &current,
-            DATA_MIGRATOR_BINARY_NAME,
-            DESKTOP_BINARY_NAME,
-        )?;
-        let arguments = [OsStr::new("--legacy-migration-run-id"), OsStr::new(&run_id)];
-        launch_trusted_executable(&executable, &arguments)?;
-        Ok(())
-    }
-
     fn finish_error_locked(
         &self,
         session: &mut MigratorSession,
@@ -806,46 +767,20 @@ impl MigratorCoordinator {
     }
 }
 
-#[cfg(debug_assertions)]
-fn request_dev_restart(directory: &Path, run_id: &str) -> LegacyMigrationResult<()> {
-    // Only the development supervisor supplies this private, per-launch channel.
-    // The migration request never supplies paths or executable names.
-    let handoff_path = directory.join("handoff.json");
-    let bytes = std::fs::read(&handoff_path).map_err(|source| LegacyMigrationError::Io {
-        path: handoff_path,
-        source,
-    })?;
-    let handoff: serde_json::Value = serde_json::from_slice(&bytes).map_err(|_| {
-        LegacyMigrationError::InvalidRequest("invalid development restart handoff".to_string())
-    })?;
-    if handoff["runId"].as_str() != Some(run_id)
-        || handoff["pid"].as_u64() != Some(u64::from(std::process::id()))
-    {
-        return Err(LegacyMigrationError::InvalidRequest(
-            "development restart handoff does not match this migrator".to_string(),
-        ));
-    }
-    openbitfun_legacy_migration::atomic_write_json(
-        &directory.join("restart.json"),
-        &serde_json::json!({ "runId": run_id }),
-    )
-}
-
 fn migration_engine(
     roots: MigrationRoots,
     selection: &MigrationSelection,
 ) -> LegacyMigrationResult<MigrationEngine> {
+    crate::locations::validate(&roots)?;
+    openbitfun_legacy_migration_adapters::validate_target(&roots)?;
     MigrationEngine::new(roots, adapters_for_groups(selection))
 }
 
-fn writer_processes(caller_process_id: u32) -> LegacyMigrationResult<Vec<WriterProcess>> {
-    blocking_writer_processes_for_product(caller_process_id, &[DESKTOP_BINARY_NAME])
+fn writer_processes() -> LegacyMigrationResult<Vec<WriterProcess>> {
+    blocking_writer_processes(0)
 }
 
-fn validate_selection(
-    request: &MigratorHandoffRequest,
-    selection: &MigrationSelection,
-) -> Result<(), CommandError> {
+fn validate_selection(selection: &MigrationSelection) -> Result<(), CommandError> {
     if selection.groups.is_empty() {
         return Err(CommandError::new(
             "empty_selection",
@@ -853,51 +788,16 @@ fn validate_selection(
             true,
         ));
     }
-    if request.mode == MigratorRequestMode::Execute && request.selection != *selection {
-        return Err(CommandError::new(
-            "selection_mismatch",
-            "The selected groups differ from the scope confirmed in OpenBitFun.",
-            false,
-        ));
-    }
     Ok(())
-}
-
-fn probe_bound_source(
-    roots: &MigrationRoots,
-    request: &MigratorHandoffRequest,
-) -> LegacyMigrationResult<Option<LegacySourceDescriptor>> {
-    let source = probe_legacy_source(roots, ProbeLimits::default())?;
-    if let Some(source) = &source {
-        if request
-            .source_id
-            .as_deref()
-            .is_some_and(|source_id| source_id != source.source_id)
-            || request
-                .source_fingerprint
-                .as_deref()
-                .is_some_and(|fingerprint| fingerprint != source.source_fingerprint)
-        {
-            return Err(LegacyMigrationError::InvalidRequest(
-                "discovered source does not match the authenticated handoff".to_string(),
-            ));
-        }
-    } else if request.source_id.is_some() || request.source_fingerprint.is_some() {
-        return Err(LegacyMigrationError::InvalidRequest(
-            "authenticated handoff source is no longer present".to_string(),
-        ));
-    }
-    Ok(source)
 }
 
 fn snapshot(session: &MigratorSession) -> MigratorView {
     let plan = session.plan.as_ref().map(redact_plan_for_ui);
     let report = session.report.as_ref().map(redact_report_for_ui);
     MigratorView {
-        delivery_profile: DeliveryProfile::DataMigrator.id().to_string(),
-        restart_desktop_on_finish: true,
-        protocol: MigratorProtocolCapabilities::current(),
-        mode: session.request.mode,
+        tool_version: env!("CARGO_PKG_VERSION").to_string(),
+        locations: session.roots.clone(),
+        saved_tasks: session.saved_tasks.clone(),
         source: session.source.clone(),
         selection: session.selection.clone(),
         findings: session
@@ -911,14 +811,18 @@ fn snapshot(session: &MigratorSession) -> MigratorView {
                 .source
                 .as_ref()
                 .is_some_and(|source| source.supported)
-            && !session.running,
+            && !session.running
+            && !matches!(
+                session.status,
+                MigrationRunStatus::Completed | MigrationRunStatus::CompletedWithWarnings
+            ),
         plan,
         report,
         progress: session.progress.clone(),
         blockers: session.blockers.clone(),
         status: session.status,
         running: session.running,
-        recovery: session.disposition == HandoffDisposition::Recovery,
+        recovery: session.recovery,
         error: session.error.clone(),
     }
 }
@@ -973,24 +877,11 @@ fn status_for_phase(phase: MigrationPhase) -> MigrationRunStatus {
     }
 }
 
-fn now_ms() -> i64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_millis()
-        .try_into()
-        .unwrap_or(i64::MAX)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use openbitfun_product_domains::legacy_migration::{
-        MigratorProtocolCapability, MigratorRequestOrigin, CURRENT_MIGRATOR_PROTOCOL_VERSION,
-    };
-    use std::collections::BTreeSet;
     use std::fs;
-
+    use std::path::Path;
     fn fixture_roots(root: &Path) -> MigrationRoots {
         MigrationRoots {
             legacy_user_root: root.join("legacy/user"),
@@ -1004,103 +895,78 @@ mod tests {
         }
     }
 
-    fn handoff_request() -> MigratorHandoffRequest {
-        let current = now_ms();
-        MigratorHandoffRequest {
-            protocol_version: CURRENT_MIGRATOR_PROTOCOL_VERSION,
-            mode: MigratorRequestMode::Onboarding,
-            origin: MigratorRequestOrigin::FirstLaunch,
-            run_id: uuid::Uuid::new_v4().to_string(),
-            nonce: uuid::Uuid::new_v4().to_string(),
-            selection: MigrationSelection::all(),
-            caller_process_id: u32::MAX,
-            product_id: "openbitfun".to_string(),
-            release_channel: "stable".to_string(),
-            created_at_ms: current,
-            expires_at_ms: current + 60_000,
-            required_capabilities: BTreeSet::from([
-                MigratorProtocolCapability::ReadOnlyScan,
-                MigratorProtocolCapability::JournalRecovery,
-            ]),
-            ..MigratorHandoffRequest::default()
-        }
-    }
-
-    fn write_probe_fixture(roots: &MigrationRoots) {
-        let config = roots.legacy_user_root.join("config");
-        fs::create_dir_all(&config).unwrap();
-        fs::write(config.join("app.json"), br#"{"version":"0.2.19"}"#).unwrap();
-    }
-
     #[test]
-    fn bootstrap_consumes_the_real_non_agent_delivery_profile() {
-        let temporary = tempfile::tempdir().unwrap();
-        let roots = fixture_roots(temporary.path());
-        write_probe_fixture(&roots);
-        let request = handoff_request();
-        HandoffStore::new(roots.clone(), "openbitfun", "stable")
-            .write_request(&request, now_ms())
-            .unwrap();
-
-        let coordinator =
-            MigratorCoordinator::bootstrap_with(&request.run_id, roots, "openbitfun", "stable")
-                .unwrap();
-        let view = coordinator.snapshot();
-
-        assert_eq!(view.delivery_profile, "data-migrator");
-        assert!(view.restart_desktop_on_finish);
-        assert_eq!(view.mode, MigratorRequestMode::Onboarding);
-        assert!(view.source.is_some());
-        assert!(!view.recovery);
-    }
-
-    #[test]
-    fn execute_handoff_rejects_a_scope_change() {
-        let mut request = handoff_request();
-        request.mode = MigratorRequestMode::Execute;
-        let mut changed = request.selection.clone();
-        changed
-            .groups
-            .remove(&openbitfun_product_domains::legacy_migration::MigrationGroupId::Memory);
-
-        let error = validate_selection(&request, &changed).unwrap_err();
-        assert_eq!(error.code, "selection_mismatch");
-    }
-
-    #[test]
-    fn cancelled_scan_finishes_in_an_explicit_cancelled_state() {
-        let temporary = tempfile::tempdir().unwrap();
-        let roots = fixture_roots(temporary.path());
-        write_probe_fixture(&roots);
-        let request = handoff_request();
-        HandoffStore::new(roots.clone(), "openbitfun", "stable")
-            .write_request(&request, now_ms())
-            .unwrap();
+    fn starts_without_desktop_request_or_data() {
+        let temp = tempfile::tempdir().unwrap();
+        let roots = fixture_roots(temp.path());
         let coordinator = MigratorCoordinator::bootstrap_with(
-            &request.run_id,
             roots.clone(),
-            "openbitfun",
-            "stable",
+            temp.path().join("tool/locations.json"),
+        );
+        let view = coordinator.snapshot();
+        assert!(view.source.is_none());
+        assert!(view.error.is_none());
+        assert!(!view.running);
+        coordinator.finish().unwrap();
+        assert!(!roots.target_user_root.exists());
+    }
+
+    #[test]
+    fn cancelled_scan_preserves_safe_boundary() {
+        let temp = tempfile::tempdir().unwrap();
+        let roots = fixture_roots(temp.path());
+        fs::create_dir_all(roots.legacy_user_root.join("config")).unwrap();
+        fs::write(
+            roots.legacy_user_root.join("config/app.json"),
+            br#"{"version":"0.2.19"}"#,
         )
         .unwrap();
+        let coordinator =
+            MigratorCoordinator::bootstrap_with(roots, temp.path().join("tool/locations.json"));
         let selection = MigrationSelection::all();
         let (roots, request, cancellation) = coordinator.begin_operation(&selection).unwrap();
+        assert!(coordinator.finish().is_err());
+        assert!(coordinator.new_task().is_err());
         cancellation.cancel();
         coordinator.scan_background(roots, request, selection, cancellation);
-
-        let view = coordinator.snapshot();
-        assert!(!view.running);
-        assert_eq!(view.status, MigrationRunStatus::Cancelled);
-        assert_eq!(
-            view.error.map(|error| error.code).as_deref(),
-            Some("cancelled")
-        );
-        assert_eq!(
-            view.progress.map(|progress| progress.code).as_deref(),
-            Some("migration_cancelled")
-        );
+        assert_eq!(coordinator.snapshot().status, MigrationRunStatus::Cancelled);
+        assert!(!coordinator.is_running());
     }
 
+    #[test]
+    fn rejects_nested_locations_without_writing_preferences() {
+        let temp = tempfile::tempdir().unwrap();
+        let mut roots = fixture_roots(temp.path());
+        let settings = temp.path().join("tool/locations.json");
+        let coordinator = MigratorCoordinator::bootstrap_with(roots.clone(), settings.clone());
+        roots.target_home_root = roots.legacy_user_root.join("nested");
+        assert!(coordinator.set_locations(roots).is_err());
+        assert!(!settings.exists());
+    }
+
+    #[test]
+    fn unsupported_target_is_rejected_before_scan_or_any_writes() {
+        let temp = tempfile::tempdir().unwrap();
+        let roots = fixture_roots(temp.path());
+        assert!(migration_engine(roots.clone(), &MigrationSelection::all()).is_ok());
+        assert!(!roots.target_user_root.exists());
+        let target = roots.target_user_root.join("config/app.json");
+        for value in [
+            serde_json::json!({"product_id":"openbitfun", "schema_version":999, "version":"9.0.0"}),
+            serde_json::json!({"product_id":"other-product", "schema_version":1, "version":"1.0.0"}),
+            serde_json::json!({"version":"0.2.19"}),
+        ] {
+            atomic_write_json(&target, &value).unwrap();
+            let before = fs::read(&target).unwrap();
+            assert!(matches!(
+                migration_engine(roots.clone(), &MigrationSelection::all()),
+                Err(LegacyMigrationError::UnsupportedTarget(_))
+            ));
+            assert_eq!(fs::read(&target).unwrap(), before);
+            assert!(!roots.migration_root().exists());
+            assert!(!roots.legacy_user_root.exists());
+        }
+    }
     #[test]
     fn command_errors_do_not_expose_storage_paths() {
         let error = LegacyMigrationError::Io {
@@ -1140,94 +1006,5 @@ mod tests {
         assert!(command.message.contains("check permissions"));
         assert!(!serialized.contains("private"));
         assert!(!serialized.contains("session-state"));
-    }
-
-    #[test]
-    fn dismissing_onboarding_persists_choice_and_restarts_desktop() {
-        for choice in [
-            MigrationPromptChoice::DoNotRemind,
-            MigrationPromptChoice::RemindLater,
-        ] {
-            let temporary = tempfile::tempdir().unwrap();
-            let roots = fixture_roots(temporary.path());
-            write_probe_fixture(&roots);
-            let request = handoff_request();
-            HandoffStore::new(roots.clone(), "openbitfun", "stable")
-                .write_request(&request, now_ms())
-                .unwrap();
-            let coordinator = MigratorCoordinator::bootstrap_with(
-                &request.run_id,
-                roots.clone(),
-                "openbitfun",
-                "stable",
-            )
-            .unwrap();
-            let mut restarted = false;
-            coordinator
-                .finish_with_restart(choice, || {
-                    // Restart must observe the saved choice and one-time restart receipt.
-                    let state = MigrationOnboardingStore::new(roots.clone()).load().unwrap();
-                    assert_eq!(state.choice, choice);
-                    assert_eq!(
-                        state.handled_run_id.as_deref(),
-                        Some(request.run_id.as_str())
-                    );
-                    restarted = true;
-                    Ok(())
-                })
-                .unwrap();
-            assert!(restarted);
-            assert!(coordinator.snapshot().restart_desktop_on_finish);
-        }
-    }
-
-    #[test]
-    fn failed_restart_stays_visible_and_keeps_the_saved_choice() {
-        let temporary = tempfile::tempdir().unwrap();
-        let roots = fixture_roots(temporary.path());
-        write_probe_fixture(&roots);
-        let request = handoff_request();
-        HandoffStore::new(roots.clone(), "openbitfun", "stable")
-            .write_request(&request, now_ms())
-            .unwrap();
-        let coordinator = MigratorCoordinator::bootstrap_with(
-            &request.run_id,
-            roots.clone(),
-            "openbitfun",
-            "stable",
-        )
-        .unwrap();
-        assert!(coordinator
-            .finish_with_restart(MigrationPromptChoice::DoNotRemind, || {
-                Err(LegacyMigrationError::TrustedInstallationUnavailable(
-                    "missing desktop".into(),
-                ))
-            })
-            .is_err());
-        assert!(coordinator.snapshot().error.is_some());
-        assert_eq!(
-            MigrationOnboardingStore::new(roots).load().unwrap().choice,
-            MigrationPromptChoice::DoNotRemind
-        );
-    }
-
-    #[test]
-    #[cfg(debug_assertions)]
-    fn development_restart_requires_matching_handoff() {
-        let temporary = tempfile::tempdir().unwrap();
-        let run_id = uuid::Uuid::new_v4().to_string();
-        let handoff = temporary.path().join("handoff.json");
-        openbitfun_legacy_migration::atomic_write_json(
-            &handoff,
-            &serde_json::json!({ "runId": run_id, "pid": std::process::id() }),
-        )
-        .unwrap();
-        assert!(request_dev_restart(temporary.path(), "wrong-run").is_err());
-        assert!(!temporary.path().join("restart.json").exists());
-        request_dev_restart(temporary.path(), &run_id).unwrap();
-        let restart: serde_json::Value =
-            serde_json::from_slice(&std::fs::read(temporary.path().join("restart.json")).unwrap())
-                .unwrap();
-        assert_eq!(restart["runId"], run_id);
     }
 }

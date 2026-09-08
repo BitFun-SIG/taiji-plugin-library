@@ -25,7 +25,6 @@ export type SettingsPageId =
   | 'tools.acp'
   | 'data.usage'
   | 'data.archived'
-  | 'data.migration'
   | 'data.diagnostics';
 
 export type SettingsViewId =

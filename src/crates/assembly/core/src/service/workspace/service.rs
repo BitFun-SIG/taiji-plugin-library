@@ -7,6 +7,7 @@ use super::manager::{
     WorkspaceManager, WorkspaceManagerConfig, WorkspaceManagerStatistics, WorkspaceOpenOptions,
     WorkspaceStatus, WorkspaceSummary, WorkspaceType,
 };
+use super::manager::{WorkspaceIdentityRuntimeExt, WorkspaceInfoRuntimeExt};
 use super::persistence::{
     unsupported_workspace_persistence, validate_workspace_persistence_data,
     WorkspacePersistenceData, WORKSPACE_PERSISTENCE_FORMAT_VERSION,

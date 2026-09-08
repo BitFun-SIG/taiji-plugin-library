@@ -5,10 +5,8 @@ import { join } from 'node:path';
 import test from 'node:test';
 import {
   configureDesktopWebFontProfile,
-  planDataMigratorSidecar,
   prepareMacOSFlashgrepForSigning,
   prepareTauriConfig,
-  stageNoBundleDataMigrator,
   shouldRetryMacDmgBuild,
 } from './desktop-tauri-build.mjs';
 import { resolveProductDefinition } from './product-customization/resolver.mjs';
@@ -340,58 +338,6 @@ test('Desktop packaging works without the suspended Flashgrep resource', () => {
     assert.ok(Object.entries(config.bundle.resources).every(([source, target]) =>
       !source.includes('flashgrep') && !target.includes('flashgrep')));
     assert.equal(config.bundle.resources['../../../dist'], 'frontend/dist');
-  } finally {
-    rmSync(fixture, { force: true, recursive: true });
-  }
-});
-
-test('Desktop packaging builds and projects the matching Data Migrator sidecar', () => {
-  const fixture = join(tmpdir(), `openbitfun-migrator-sidecar-${process.pid}-${Date.now()}`);
-  const desktopDir = join(fixture, 'src', 'apps', 'desktop');
-  const targetDir = join(fixture, 'target');
-  mkdirSync(desktopDir, { recursive: true });
-  const baseConfig = join(fixture, 'tauri.conf.json');
-  writeFileSync(baseConfig, JSON.stringify({ bundle: { resources: {} } }));
-  try {
-    const resolution = resolveProductDefinition({
-      rootDir: ROOT,
-      productConfig: join(ROOT, 'products', 'fixtures', 'acme', 'product.jsonc'),
-      member: 'desktop',
-    });
-    const plan = planDataMigratorSidecar(
-      ['--target', 'x86_64-pc-windows-msvc', '--profile', 'release-fast'],
-      resolution,
-      desktopDir,
-      { cargoTargetDir: targetDir },
-    );
-    assert.deepEqual(plan.cargoArgs, [
-      'build',
-      '-p',
-      'openbitfun-data-migrator',
-      '--bin',
-      'openbitfun-data-migrator',
-      '--target',
-      'x86_64-pc-windows-msvc',
-      '--profile',
-      'release-fast',
-    ]);
-    assert.equal(
-      plan.externalBinInput,
-      join(desktopDir, 'gen', 'sidecars', 'acme-data-migrator-x86_64-pc-windows-msvc.exe'),
-    );
-    const generated = prepareTauriConfig(baseConfig, {
-      desktopDir,
-      flashgrepBinary: join(fixture, 'flashgrep'),
-      dataMigratorSidecar: plan,
-      resolution,
-    });
-    const config = JSON.parse(readFileSync(generated, 'utf8'));
-    assert.deepEqual(config.bundle.externalBin, ['gen/sidecars/acme-data-migrator']);
-
-    mkdirSync(plan.artifactDirectory, { recursive: true });
-    writeFileSync(plan.sourceArtifact, 'migrator');
-    assert.equal(stageNoBundleDataMigrator(plan), plan.siblingArtifact);
-    assert.equal(readFileSync(plan.siblingArtifact, 'utf8'), 'migrator');
   } finally {
     rmSync(fixture, { force: true, recursive: true });
   }

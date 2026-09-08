@@ -33,10 +33,22 @@ struct WorkspaceIdentityFrontmatter {
     emoji: Option<String>,
 }
 
-impl WorkspaceIdentity {
-    pub(crate) async fn load_from_workspace_root(
-        workspace_root: &Path,
-    ) -> Result<Option<Self>, String> {
+/// Runtime operations stay in Core; persisted records are shared with offline tools.
+#[async_trait::async_trait]
+pub(crate) trait WorkspaceIdentityRuntimeExt: Sized {
+    async fn load_from_workspace_root(workspace_root: &Path) -> Result<Option<Self>, String>;
+    fn from_markdown(content: &str) -> Result<Self, String>;
+    fn is_empty(&self) -> bool;
+    #[cfg(any(feature = "agent-runtime", test))]
+    fn collect_changed_fields(
+        previous: Option<&WorkspaceIdentity>,
+        current: Option<&WorkspaceIdentity>,
+    ) -> Vec<String>;
+}
+
+#[async_trait::async_trait]
+impl WorkspaceIdentityRuntimeExt for WorkspaceIdentity {
+    async fn load_from_workspace_root(workspace_root: &Path) -> Result<Option<Self>, String> {
         let identity_path = workspace_root.join(IDENTITY_FILE_NAME);
         if !identity_path.exists() {
             return Ok(None);
@@ -81,7 +93,7 @@ impl WorkspaceIdentity {
     }
 
     #[cfg(any(feature = "agent-runtime", test))]
-    pub(crate) fn collect_changed_fields(
+    fn collect_changed_fields(
         previous: Option<&WorkspaceIdentity>,
         current: Option<&WorkspaceIdentity>,
     ) -> Vec<String> {
@@ -192,13 +204,49 @@ impl Default for WorkspaceOpenOptions {
     }
 }
 
-impl WorkspaceInfo {
+/// Runtime operations stay in Core; persisted records are shared with offline tools.
+#[async_trait::async_trait]
+pub trait WorkspaceInfoRuntimeExt: Sized {
+    async fn new(root_path: PathBuf, options: WorkspaceOpenOptions) -> OpenBitFunResult<Self>;
+    async fn new_without_worktree(
+        root_path: PathBuf,
+        options: WorkspaceOpenOptions,
+    ) -> OpenBitFunResult<Self>;
+    async fn new_inner(
+        root_path: PathBuf,
+        options: WorkspaceOpenOptions,
+        load_worktree: bool,
+    ) -> OpenBitFunResult<Self>;
+    async fn load_identity(&mut self);
+    async fn load_worktree(&mut self, freshness: WorktreeTopologyFreshness);
+    async fn resolve_worktree_info(
+        workspace_root: &Path,
+        freshness: WorktreeTopologyFreshness,
+    ) -> Option<WorkspaceWorktreeInfo>;
+    async fn detect_workspace_type(&mut self);
+    async fn detect_languages_from_files(&mut self);
+    async fn scan_workspace(&mut self, options: ScanOptions) -> OpenBitFunResult<()>;
+    fn scan_directory<'a>(
+        &'a self,
+        dir: &'a Path,
+        stats: &'a mut WorkspaceStatistics,
+        options: &'a ScanOptions,
+        depth: usize,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = OpenBitFunResult<()>> + 'a + Send>>;
+    async fn scan_git_info(&self) -> Option<GitInfo>;
+    fn touch(&mut self);
+    async fn is_valid(&self) -> bool;
+    fn get_summary(&self) -> WorkspaceSummary;
+}
+
+#[async_trait::async_trait]
+impl WorkspaceInfoRuntimeExt for WorkspaceInfo {
     /// Creates a new workspace record.
-    pub async fn new(root_path: PathBuf, options: WorkspaceOpenOptions) -> OpenBitFunResult<Self> {
+    async fn new(root_path: PathBuf, options: WorkspaceOpenOptions) -> OpenBitFunResult<Self> {
         Self::new_inner(root_path, options, true).await
     }
 
-    pub(crate) async fn new_without_worktree(
+    async fn new_without_worktree(
         root_path: PathBuf,
         options: WorkspaceOpenOptions,
     ) -> OpenBitFunResult<Self> {
@@ -372,7 +420,7 @@ impl WorkspaceInfo {
         self.worktree = Self::resolve_worktree_info(&self.root_path, freshness).await;
     }
 
-    pub(crate) async fn resolve_worktree_info(
+    async fn resolve_worktree_info(
         workspace_root: &Path,
         freshness: WorktreeTopologyFreshness,
     ) -> Option<WorkspaceWorktreeInfo> {
@@ -628,12 +676,12 @@ impl WorkspaceInfo {
     }
 
     /// Updates the last-accessed timestamp.
-    pub fn touch(&mut self) {
+    fn touch(&mut self) {
         self.last_accessed = chrono::Utc::now();
     }
 
     /// Checks whether the workspace is still valid.
-    pub async fn is_valid(&self) -> bool {
+    async fn is_valid(&self) -> bool {
         if self.workspace_kind == WorkspaceKind::Remote {
             return true;
         }
@@ -641,7 +689,7 @@ impl WorkspaceInfo {
     }
 
     /// Returns a workspace summary.
-    pub fn get_summary(&self) -> WorkspaceSummary {
+    fn get_summary(&self) -> WorkspaceSummary {
         WorkspaceSummary {
             id: self.id.clone(),
             name: self.name.clone(),

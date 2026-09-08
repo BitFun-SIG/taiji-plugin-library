@@ -50,6 +50,9 @@ libc = { workspace = true, optional = true }
 
 [features]
 default = []
+workspace-persistence = ["workspace-identity", "dep:openbitfun-core-types", "dep:openbitfun-runtime-ports", "dep:chrono"]
+coordination-store = ["dep:rusqlite"]
+session-event-format = ["dep:openbitfun-events"]
 tls-provider = ["dep:rustls"]
 credential-vault = [
     "dep:aes-gcm",

@@ -101,3 +101,16 @@ pnpm run check:core-boundaries
 
 Other capability-specific target names remain in `Cargo.toml`; document a new
 command here only when it becomes a recurring owner workflow.
+
+## Offline-compatible storage formats
+
+workspace-persistence owns workspace records and registry validation;
+coordination-store owns the durable coordination SQLite schema;
+session-event-format owns the logged-event envelope and durable-prefix validator.
+StorageError carries only storage error categories; Core preserves its original
+error mappings. Workspace managers, watchers, identity loading and live scanning
+remain in Core through runtime extension traits on the shared records.
+
+```bash
+cargo test -p openbitfun-services-core --no-default-features --features workspace-persistence,coordination-store,session-event-format --lib
+```

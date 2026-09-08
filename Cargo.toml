@@ -29,6 +29,7 @@ members = [
     "src/crates/services/services-core",
     "src/crates/services/services-integrations",
     "src/crates/services/legacy-migration",
+    "src/crates/services/legacy-migration-adapters",
     "src/crates/services/miniapp-market-service",
     "src/crates/services/skin-market-service",
     "src/crates/services/relay-service",
@@ -46,6 +47,7 @@ members = [
     "src/crates/execution/tool-provider-groups",
     "src/crates/execution/tool-execution",
     "src/crates/contracts/core-types",
+    "src/crates/contracts/config-contracts",
     "src/crates/contracts/events",
     "src/crates/contracts/runtime-ports",
 ]

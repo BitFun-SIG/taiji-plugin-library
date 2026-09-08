@@ -209,6 +209,35 @@
         "analytics": "分析"
       }
     },
+    "resources": {
+      "title": "工作区资源",
+      "files": "文件",
+      "terminals": "终端",
+      "local": "本地",
+      "remote": "远程工作区",
+      "peer": "对端设备",
+      "switchWorkspace": "切换工作区",
+      "chooseShell": "选择 Shell",
+      "noTerminals": "在此新建终端，开始工作",
+      "resize": "调整文件与终端分区大小",
+      "revealDirectory": "在文件树中定位工作目录",
+      "openTerminalHere": "在此新建终端",
+      "terminalActions": "终端操作",
+      "removeTerminal": "移除已结束终端",
+      "unavailable": "无法获取终端状态，请重试",
+      "actionFailed": "终端操作失败：{{error}}",
+      "manual": "我的",
+      "agent": "Agent",
+      "status": {
+        "running": "$t(shared:statuses.running)",
+        "saved": "已保存",
+        "exited": "已结束",
+        "unknown": "状态未知",
+        "starting": "正在启动",
+        "stopping": "正在停止",
+        "error": "异常"
+      }
+    },
     "shell": {
       "title": "Shell",
       "views": {

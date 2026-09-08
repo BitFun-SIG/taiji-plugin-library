@@ -5864,6 +5864,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "openbitfun-config-contracts"
+version = "1.0.0"
+dependencies = [
+ "chrono",
+ "hex",
+ "log",
+ "openbitfun-core-types",
+ "openbitfun-product-domains",
+ "serde",
+ "serde_json",
+ "sha2",
+ "ts-rs",
+]
+
+[[package]]
 name = "openbitfun-core"
 version = "1.0.0"
 dependencies = [
@@ -5897,11 +5912,12 @@ dependencies = [
  "openbitfun-ai-adapters",
  "openbitfun-claude-code-adapter",
  "openbitfun-codex-adapter",
+ "openbitfun-config-contracts",
  "openbitfun-core-types",
  "openbitfun-dsh-adapter",
  "openbitfun-events",
  "openbitfun-external-sources",
- "openbitfun-legacy-migration",
+ "openbitfun-legacy-migration-adapters",
  "openbitfun-opencode-adapter",
  "openbitfun-opencode-plugin-host",
  "openbitfun-plugin-runtime-client",
@@ -5945,12 +5961,11 @@ dependencies = [
 
 [[package]]
 name = "openbitfun-data-migrator"
-version = "1.0.0"
+version = "0.1.0"
 dependencies = [
- "openbitfun-core",
  "openbitfun-core-types",
  "openbitfun-legacy-migration",
- "openbitfun-product-capabilities",
+ "openbitfun-legacy-migration-adapters",
  "openbitfun-product-domains",
  "serde",
  "serde_json",
@@ -6003,7 +6018,6 @@ dependencies = [
  "openbitfun-core",
  "openbitfun-core-types",
  "openbitfun-events",
- "openbitfun-legacy-migration",
  "openbitfun-product-domains",
  "openbitfun-relay-service",
  "openbitfun-runtime-ports",
@@ -6109,6 +6123,30 @@ dependencies = [
  "thiserror 2.0.19",
  "uuid",
  "windows 0.61.3",
+]
+
+[[package]]
+name = "openbitfun-legacy-migration-adapters"
+version = "1.0.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "dunce",
+ "hex",
+ "openbitfun-agent-runtime",
+ "openbitfun-config-contracts",
+ "openbitfun-core-types",
+ "openbitfun-legacy-migration",
+ "openbitfun-product-domains",
+ "openbitfun-services-core",
+ "openbitfun-services-integrations",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "tokio",
+ "uuid",
 ]
 
 [[package]]

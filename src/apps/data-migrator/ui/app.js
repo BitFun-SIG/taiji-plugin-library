@@ -1,90 +1,27 @@
-const invoke = window.__TAURI__.core.invoke;
+import { invoke } from './transport.js';
 
-const translations = {
-  en: {
-    eyebrow: 'OpenBitFun maintenance', title: 'Import data from BitFun',
-    intro: 'Choose what to bring forward. Your original BitFun data will not be deleted.',
-    stepSource: 'Step 1', sourceTitle: 'Legacy source', firstLaunch: 'First launch',
-    choiceTitle: 'What would you like to do?',
-    choiceHelp: 'Migration runs only after OpenBitFun and other data writers have stopped.',
-    migrateNow: 'Migrate now', remindLater: 'Remind me later', doNotRemind: 'Do not remind me',
-    stepScope: 'Step 2', scopeTitle: 'Choose migration scope', scan: 'Scan selected data',
-    stepReview: 'Step 3', reviewTitle: 'Review scan', prepare: 'Run preflight plan',
-    stepConfirm: 'Step 4', planTitle: 'Confirm migration', retryWriters: 'Check processes again',
-    start: 'Start migration', stepProgress: 'Step 5', progressTitle: 'Migration progress',
-    phase: 'Phase', domain: 'Domain', count: 'Completed steps',
-    cancel: 'Cancel', stepDone: 'Result', reportTitle: 'Migration report',
-    reportPrivacy: 'This summary contains counts and result codes, not credentials or user content.',
-    exportDiagnostics: 'Export failure diagnostics',
-    diagnosticsExported: 'Sanitized diagnostics saved to {path}',
-    openDesktop: 'Open OpenBitFun', ready: 'Ready', unsupported: 'Unsupported', missing: 'Not found',
-    closeMigrator: 'Close Data Migrator',
-    devRestartHelp: 'Development build: close Data Migrator, then run pnpm run desktop:dev again.',
-    bootstrapPending: 'Data Migrator is still loading. Please try again.',
-    bootstrapFailed: 'Data Migrator could not load its authenticated migration request.',
-    sourceFound: 'BitFun {version} was found. The source stays read-only.',
-    recovery: 'A previous migration journal was found and can be resumed.',
-    blockers: '{count} data-writing process(es) must stop before migration can continue.',
-    noBlockers: 'No data-writing processes are blocking migration.',
-    steps: '{count} migration step(s)', conflicts: '{count} conflict(s)',
-    imported: 'imported', staged: 'staged', skipped: 'skipped', warnings: 'warnings',
-  },
-  'zh-CN': {
-    eyebrow: 'OpenBitFun 数据维护', title: '从 BitFun 导入数据',
-    intro: '选择要迁移的内容。原始 BitFun 数据不会被删除。', stepSource: '第 1 步',
-    sourceTitle: '旧版数据来源', firstLaunch: '首次启动', choiceTitle: '你希望如何处理？',
-    choiceHelp: '迁移只会在 OpenBitFun 和其他数据写入进程停止后运行。', migrateNow: '立即迁移',
-    remindLater: '稍后提醒', doNotRemind: '不再提醒', stepScope: '第 2 步',
-    scopeTitle: '选择迁移范围', scan: '扫描所选数据', stepReview: '第 3 步',
-    reviewTitle: '检查扫描结果', prepare: '运行迁移预检', stepConfirm: '第 4 步',
-    planTitle: '确认迁移', retryWriters: '重新检查进程', start: '开始迁移',
-    stepProgress: '第 5 步', progressTitle: '迁移进度', phase: '阶段', domain: '领域',
-    count: '已完成步骤', cancel: '取消', stepDone: '结果', reportTitle: '迁移报告',
-    reportPrivacy: '此摘要仅包含计数和结果码，不包含凭据或用户正文。',
-    exportDiagnostics: '导出失败诊断', diagnosticsExported: '去敏诊断已保存到 {path}',
-    openDesktop: '打开 OpenBitFun',
-    closeMigrator: '关闭数据迁移器',
-    devRestartHelp: '开发版本：关闭数据迁移器，然后重新运行 pnpm run desktop:dev。',
-    bootstrapPending: '数据迁移器仍在加载，请稍后重试。',
-    bootstrapFailed: '数据迁移器无法加载已认证的迁移请求。',
-    ready: '可迁移', unsupported: '不受支持', missing: '未发现',
-    sourceFound: '已发现 BitFun {version}。迁移期间来源保持只读。',
-    recovery: '发现上次迁移日志，可以从安全状态继续。',
-    blockers: '迁移前还需停止 {count} 个数据写入进程。', noBlockers: '没有进程阻止迁移。',
-    steps: '{count} 个迁移步骤', conflicts: '{count} 个冲突',
-    imported: '已导入', staged: '已暂存', skipped: '已跳过', warnings: '警告',
-  },
-  'zh-TW': {
-    eyebrow: 'OpenBitFun 資料維護', title: '從 BitFun 匯入資料',
-    intro: '選擇要遷移的內容。原始 BitFun 資料不會被刪除。', stepSource: '第 1 步',
-    sourceTitle: '舊版資料來源', firstLaunch: '首次啟動', choiceTitle: '你希望如何處理？',
-    choiceHelp: '遷移只會在 OpenBitFun 和其他資料寫入程序停止後執行。', migrateNow: '立即遷移',
-    remindLater: '稍後提醒', doNotRemind: '不再提醒', stepScope: '第 2 步',
-    scopeTitle: '選擇遷移範圍', scan: '掃描所選資料', stepReview: '第 3 步',
-    reviewTitle: '檢查掃描結果', prepare: '執行遷移預檢', stepConfirm: '第 4 步',
-    planTitle: '確認遷移', retryWriters: '重新檢查程序', start: '開始遷移',
-    stepProgress: '第 5 步', progressTitle: '遷移進度', phase: '階段', domain: '領域',
-    count: '已完成步驟', cancel: '取消', stepDone: '結果', reportTitle: '遷移報告',
-    reportPrivacy: '此摘要僅包含計數和結果碼，不包含憑據或使用者正文。',
-    exportDiagnostics: '匯出失敗診斷', diagnosticsExported: '去敏診斷已儲存至 {path}',
-    openDesktop: '開啟 OpenBitFun',
-    closeMigrator: '關閉資料遷移器',
-    devRestartHelp: '開發版本：關閉資料遷移器，然後重新執行 pnpm run desktop:dev。',
-    bootstrapPending: '資料遷移器仍在載入，請稍後重試。',
-    bootstrapFailed: '資料遷移器無法載入已驗證的遷移請求。',
-    ready: '可遷移', unsupported: '不支援', missing: '未發現',
-    sourceFound: '已發現 BitFun {version}。遷移期間來源保持唯讀。',
-    recovery: '發現上次遷移日誌，可以從安全狀態繼續。',
-    blockers: '遷移前還需停止 {count} 個資料寫入程序。', noBlockers: '沒有程序阻止遷移。',
-    steps: '{count} 個遷移步驟', conflicts: '{count} 個衝突',
-    imported: '已匯入', staged: '已暫存', skipped: '已略過', warnings: '警告',
-  },
-};
+async function loadTranslations() {
+  try {
+    const response = await fetch('locales.json');
+    if (!response.ok) throw new Error('Locale asset unavailable');
+    const catalogs = await response.json();
+    if (!catalogs.en) throw new Error('Default locale unavailable');
+    return catalogs;
+  } catch (error) {
+    const output = document.getElementById('notice');
+    output.textContent = 'Data Migrator could not load its language files. Close it and download or rebuild the complete package.';
+    output.hidden = false;
+    document.querySelectorAll('button, select').forEach((node) => { node.disabled = true; });
+    throw error;
+  }
+}
+const translations = await loadTranslations();
 
-const locale = navigator.language.startsWith('zh-TW') || navigator.language.startsWith('zh-HK')
+
+const locale = localStorage.getItem('migrator.language') || (navigator.language.startsWith('zh-TW') || navigator.language.startsWith('zh-HK')
   ? 'zh-TW'
-  : navigator.language.startsWith('zh') ? 'zh-CN' : 'en';
-const text = translations[locale];
+  : navigator.language.startsWith('zh') ? 'zh-CN' : 'en');
+const text = translations[locale] || translations.en;
 document.documentElement.lang = locale;
 document.querySelectorAll('[data-i18n]').forEach((node) => {
   node.textContent = text[node.dataset.i18n] || translations.en[node.dataset.i18n];
@@ -120,6 +57,9 @@ const groups = [
 
 let current;
 let pollTimer;
+let locationsDirty = false;
+let locationSnapshot;
+let scopeSnapshot;
 
 function format(template, values) {
   return Object.entries(values).reduce((value, [key, replacement]) =>
@@ -134,9 +74,10 @@ function setBusy(busy) {
   document.querySelectorAll('button').forEach((button) => { button.disabled = busy; });
 }
 
-function notice(message) {
+function notice(message, tone = 'danger') {
   const node = document.getElementById('notice');
   node.textContent = message || '';
+  node.dataset.tone = tone;
   node.hidden = !message;
 }
 
@@ -161,8 +102,16 @@ function transferLabel(result) {
   return result.state === 'verified' ? text.imported : text.staged;
 }
 
+function groupLabel(id) {
+  const labels = groups.find(([group]) => group === id)?.[1];
+  return (labels?.[locale] || labels?.en || [id])[0];
+}
+
 function renderScopes(selection) {
   const list = document.getElementById('scope-list');
+  const signature = JSON.stringify([selection, current?.recovery, current?.running]);
+  if (signature === scopeSnapshot) return;
+  scopeSnapshot = signature;
   list.replaceChildren();
   const selected = new Set(selection?.groups?.length ? selection.groups : groups.map(([id]) => id));
   groups.forEach(([id, labels]) => {
@@ -173,7 +122,7 @@ function renderScopes(selection) {
     checkbox.id = `scope-${id}`;
     checkbox.value = id;
     checkbox.checked = selected.has(id);
-    if (current?.mode === 'execute') checkbox.disabled = true;
+    checkbox.disabled = Boolean(current?.running || current?.recovery);
     const label = document.createElement('label');
     label.htmlFor = checkbox.id;
     const strong = document.createElement('strong');
@@ -196,13 +145,28 @@ function render(view) {
   const source = view.source;
   document.getElementById('source-badge').textContent = !source
     ? text.missing : source.supported ? text.ready : text.unsupported;
+  document.getElementById('source-badge').dataset.tone = !source || !source.supported
+    ? 'warning' : 'success';
   document.getElementById('source-summary').textContent = source
     ? format(text.sourceFound, { version: source.productVersion }) : text.missing;
-  document.getElementById('source-path').textContent = source?.roots?.[0]?.displayPath || '';
-  notice(view.error?.message || (view.recovery ? text.recovery : ''));
+  if (!source) document.getElementById('source-summary').textContent = text.noSource;
+  renderLocations(view.locations);
+  document.getElementById('tool-version').textContent = 'v' + view.toolVersion;
+  const tasks = document.getElementById('saved-task');
+  const previousTask = tasks.value;
+  tasks.replaceChildren(...view.savedTasks.map((task) => {
+    const option = document.createElement('option');
+    option.value = task.runId;
+    option.textContent = task.runId + ' · ' + (task.readable ? task.status : text.unreadableTask);
+    option.disabled = !task.readable;
+    return option;
+  }));
+  if ([...tasks.options].some((option) => option.value === previousTask && !option.disabled)) tasks.value = previousTask;
+  show('history-card', view.savedTasks.length > 0 && !view.running);
+  document.getElementById('resume-task').disabled = !tasks.selectedOptions[0] || tasks.selectedOptions[0].disabled || view.running || locationsDirty;
+  notice(view.error?.message || (view.recovery ? text.recovery : ''), view.error ? 'danger' : 'info');
 
-  show('choice-card', view.mode === 'onboarding' && !view.findings.length && !view.plan && !view.running);
-  show('scope-card', Boolean(source) && (view.mode === 'execute' || view.findings.length || view.plan));
+  show('scope-card', !view.recovery && !view.running && !view.plan);
   renderScopes(view.selection);
 
   const findings = document.getElementById('findings');
@@ -213,11 +177,12 @@ function render(view) {
   const planSummary = document.getElementById('plan-summary');
   if (view.plan) {
     planSummary.replaceChildren(
-      row(text.steps.replace('{count}', view.plan.steps.length), view.plan.planHash),
-      row(text.conflicts.replace('{count}', view.plan.conflicts.length), `${view.plan.estimatedWriteBytes} byte(s)`),
+      row(text.steps.replace('{count}', view.plan.steps.length), view.plan.selection.groups.map(groupLabel).join(' · ')),
+      row(text.conflicts.replace('{count}', view.plan.conflicts.length), text.confirmHelp),
+      ...view.plan.conflicts.map((conflict) => row(conflict.domain, conflict.code || conflict.resolution || '')),
     );
   }
-  show('plan-card', Boolean(view.plan) && !view.running && !view.report);
+  show('plan-card', Boolean(view.plan) && !view.running && !['completed', 'completed_with_warnings'].includes(view.status));
   const blocker = document.getElementById('blockers');
   blocker.textContent = view.blockers.length
     ? format(text.blockers, { count: view.blockers.length }) : text.noBlockers;
@@ -239,9 +204,6 @@ function render(view) {
     reportSummary.replaceChildren(...view.report.domainResults.map((result) =>
       row(result.domain, `${result.imported} ${transferLabel(result)}, ${result.skipped} ${text.skipped}, ${result.warnings.filter((item) => item.severity !== 'info').length} ${text.warnings}`)));
   }
-  show('dev-restart-help', !view.restartDesktopOnFinish);
-  document.getElementById('open-desktop').textContent = view.restartDesktopOnFinish
-    ? text.openDesktop : text.closeMigrator;
   show('report-card', !view.running && (Boolean(view.report) || view.status === 'cancelled'));
   const canExportDiagnostics = ['failed_recoverable', 'failed_manual_action_required'].includes(view.status);
   show('export-diagnostics', canExportDiagnostics);
@@ -250,7 +212,12 @@ function render(view) {
     output.textContent = '';
     output.hidden = true;
   }
-  document.getElementById('start').disabled = !view.canExecute;
+  document.querySelectorAll('button, #locations input, #language, #saved-task').forEach((node) => { node.disabled = view.running; });
+  document.getElementById('cancel').disabled = !view.running;
+  document.getElementById('start').disabled = !view.canExecute || locationsDirty;
+  document.getElementById('resume-task').disabled = !tasks.selectedOptions[0] || tasks.selectedOptions[0].disabled || view.running || locationsDirty;
+  for (const id of ['scan', 'prepare']) document.getElementById(id).disabled = view.running || locationsDirty;
+  if (locationsDirty) notice(text.dirtyLocations, 'info');
 
   if (view.running && !pollTimer) {
     pollTimer = window.setInterval(refresh, 500);
@@ -262,16 +229,18 @@ function render(view) {
 
 async function call(command, request = {}) {
   setBusy(true);
+  let failure;
   try {
     const result = await invoke(command, { request });
     if (result) render(result);
     return result;
   } catch (error) {
-    notice(error?.message || String(error));
+    failure = error?.message || String(error);
     return undefined;
   } finally {
     setBusy(false);
     if (current) render(current);
+    if (failure) notice(failure);
   }
 }
 
@@ -286,16 +255,47 @@ async function refresh() {
   }
 }
 
-document.getElementById('migrate-now').addEventListener('click', () => {
-  if (!requireBootstrap()) return;
-  show('choice-card', false);
-  show('scope-card');
-  renderScopes(current.selection);
+function renderLocations(locations) {
+  const signature = JSON.stringify(locations);
+  if (signature === locationSnapshot || locationsDirty) return;
+  locationSnapshot = signature;
+  const host = document.getElementById('locations');
+  host.replaceChildren();
+  for (const [prefix, title] of [['legacy', text.source], ['target', text.target]]) {
+    const group = document.createElement('fieldset');
+    const legend = document.createElement('legend');
+    legend.textContent = title;
+    group.append(legend);
+    for (const suffix of ['UserRoot', 'HomeRoot', 'SkillsRoot', 'SshRoot']) {
+      const key = prefix + suffix;
+      const label = document.createElement('label');
+      const input = document.createElement('input');
+      label.htmlFor = key;
+      label.textContent = text[suffix[0].toLowerCase() + suffix.slice(1)];
+      input.type = 'text'; input.id = key; input.value = locations[key];
+      input.spellcheck = false; input.autocomplete = 'off';
+      input.addEventListener('input', () => { locationsDirty = true; if (current) render(current); });
+      group.append(label, input);
+    }
+    host.append(group);
+  }
+}
+
+document.getElementById('language').value = locale;
+document.getElementById('language').addEventListener('change', (event) => {
+  localStorage.setItem('migrator.language', event.target.value);
+  window.location.reload();
 });
-document.getElementById('remind-later').addEventListener('click', () =>
-  call('finish_legacy_migration', { choice: 'remind_later' }));
-document.getElementById('do-not-remind').addEventListener('click', () =>
-  call('finish_legacy_migration', { choice: 'do_not_remind' }));
+document.getElementById('apply-locations').addEventListener('click', async () => {
+  if (!requireBootstrap()) return;
+  const locations = Object.fromEntries([...document.querySelectorAll('#locations input')].map((input) => [input.id, input.value.trim()]));
+  const result = await call('set_migration_locations', { locations });
+  if (result) { locationsDirty = false; locationSnapshot = undefined; render(result); }
+});
+document.getElementById('resume-task').addEventListener('click', () => call('resume_migration_task', { runId: document.getElementById('saved-task').value }));
+document.getElementById('new-task').addEventListener('click', () => call('new_migration_task'));
+for (const id of ['close', 'finish']) document.getElementById(id).addEventListener('click', () => call('finish_legacy_migration'));
+
 document.getElementById('scan').addEventListener('click', () =>
   call('scan_legacy_migration', { selection: selection() }));
 document.getElementById('prepare').addEventListener('click', () =>
@@ -308,21 +308,18 @@ document.getElementById('cancel').addEventListener('click', () =>
   call('cancel_legacy_migration'));
 document.getElementById('export-diagnostics').addEventListener('click', async () => {
   setBusy(true);
+  let failure;
   try {
     const result = await invoke('export_migration_diagnostics', { request: {} });
     const output = document.getElementById('diagnostics-path');
     output.textContent = format(text.diagnosticsExported, { path: result.filePath });
     output.hidden = false;
   } catch (error) {
-    notice(error?.message || String(error));
+    failure = error?.message || String(error);
   } finally {
     setBusy(false);
     if (current) render(current);
+    if (failure) notice(failure);
   }
 });
-document.getElementById('open-desktop').addEventListener('click', () =>
-  call('finish_legacy_migration', { choice: current.report ? 'migrate_now' : 'remind_later' }));
-
-refresh().then(() => {
-  if (current?.mode === 'execute') show('scope-card');
-});
+refresh();

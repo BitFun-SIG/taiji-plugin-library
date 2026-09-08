@@ -21,10 +21,6 @@ const productIdentityOwner = 'src/crates/contracts/core-types/src/product_identi
 const retiredIdentityDataBoundaryFiles = new Set([
   'OPENBITFUN_LEGACY_DATA_MIGRATION_IMPLEMENTATION_PLAN.md',
   'OPENBITFUN_LEGACY_DATA_MIGRATION_INVENTORY.md',
-  'src/apps/desktop/src/api/legacy_migration_api.rs',
-  'src/web-ui/src/locales/en-US/settings/legacy-migration.json',
-  'src/web-ui/src/locales/zh-CN/settings/legacy-migration.json',
-  'src/web-ui/src/locales/zh-TW/settings/legacy-migration.json',
   'deploy/openbitfun-host/README.md',
   'deploy/openbitfun-host/migrate-market-data-v1.py',
   'src/apps/relay-server/README.md',
@@ -39,6 +35,7 @@ const retiredIdentityDataBoundaryPrefixes = Object.freeze([
   'src/apps/data-migrator/',
   'src/crates/assembly/core/src/legacy_migration/',
   'src/crates/services/legacy-migration/',
+  'src/crates/services/legacy-migration-adapters/',
 ]);
 const noncanonicalIdentityDataBoundaryFiles = new Set([
   'OPENBITFUN_LEGACY_DATA_MIGRATION_INVENTORY.md',
