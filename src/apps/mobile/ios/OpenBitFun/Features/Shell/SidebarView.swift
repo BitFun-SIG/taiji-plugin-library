@@ -37,7 +37,7 @@ struct SidebarView: View {
     @State private var searchVisible = false
     @State private var visibleRecentCount = 6
     @State private var expandedWorkspacePaths: Set<String> = []
-    @State private var expandedDeviceWorkspaceLists: Set<String> = []
+    @State private var visibleDeviceWorkspaceCounts: [String: Int] = [:]
     @State private var compactActionSession: ChatSession?
     @State private var workspacePickerDevice: MobileDeviceDirectoryEntry?
     @State private var workspaceCreatePath: String?
@@ -398,7 +398,8 @@ struct SidebarView: View {
                 .frame(maxWidth: .infinity, minHeight: 42, alignment: .leading)
                 .accessibilityIdentifier("sidebar.emptyWorkspaces")
         }
-        ForEach((expandedDeviceWorkspaceLists.contains(device.id) ? device.workspaces : Array(device.workspaces.prefix(3)))) { workspace in
+        let visibleWorkspaceCount = visibleDeviceWorkspaceCounts[device.id] ?? 3
+        ForEach(device.workspaces.prefix(visibleWorkspaceCount)) { workspace in
             let scopedWorkspace = MobileWorkspaceGroup(
                 path: workspace.path,
                 name: workspace.name,
@@ -431,16 +432,8 @@ struct SidebarView: View {
                 onOpenSession: { model.selectDirectorySession($0) }, onActions: { session in
                     if permanent { onPermanentActions?(session) } else { compactActionSession = session }
                 },
-                sessionLimit: workspace.directoryExpanded ? workspace.sessions.count : 3,
                 selectedDeviceKey: model.accountSelectedDeviceID,
                 selectedWorkspacePath: model.workspaceCatalog.first(where: { $0.selected })?.path,
-                onShowMore: {
-                    model.setDirectoryWorkspaceExpanded(
-                        device: device,
-                        workspace: scopedWorkspace,
-                        expanded: true
-                    )
-                },
                 directoryLoadStatus: workspace.directoryStatus,
                 onRetryDirectoryLoad: {
                     model.retryDirectoryWorkspace(device: device, workspace: scopedWorkspace)
@@ -448,11 +441,17 @@ struct SidebarView: View {
             )
             .padding(.leading, 20)
         }
-        if device.workspaces.count > 3 {
+        if device.workspaces.count > visibleWorkspaceCount {
             Button {
-                expandedDeviceWorkspaceLists.insert(device.id)
+                visibleDeviceWorkspaceCounts[device.id] = min(
+                    device.workspaces.count,
+                    visibleWorkspaceCount + 3
+                )
             } label: {
-                Text(model.localizedFormat("还有 %lld 个工作区", Int64(device.workspaces.count - 3)))
+                Text(model.localizedFormat(
+                    "还有 %lld 个工作区",
+                    Int64(device.workspaces.count - visibleWorkspaceCount)
+                ))
                     .font(.system(size: 13)).foregroundStyle(OpenBitFunTheme.muted).padding(.leading, 42).frame(height: 36, alignment: .leading)
             }.buttonStyle(.plain)
         }
@@ -891,12 +890,11 @@ private struct SidebarWorkspaceRow: View {
     let onOpenWorkspace: () -> Void
     let onOpenSession: (ChatSession) -> Void
     let onActions: (ChatSession) -> Void
-    var sessionLimit: Int = 3
     var selectedDeviceKey: String? = nil
     var selectedWorkspacePath: String? = nil
-    var onShowMore: (() -> Void)? = nil
     var directoryLoadStatus = "READY"
     var onRetryDirectoryLoad: (() -> Void)? = nil
+    @State private var visibleSessionCount = 3
 
     private func isSelected(_ session: ChatSession) -> Bool {
         guard selectedSessionID == session.id,
@@ -993,7 +991,7 @@ private struct SidebarWorkspaceRow: View {
                         .padding(.leading, 42)
                         .frame(height: 38, alignment: .leading)
                 }
-                ForEach(workspace.sessions.prefix(sessionLimit)) { session in
+                ForEach(workspace.sessions.prefix(visibleSessionCount)) { session in
                     HStack(spacing: 0) {
                         Button { onOpenSession(session) } label: {
                             HStack(spacing: 10) {
@@ -1045,13 +1043,15 @@ private struct SidebarWorkspaceRow: View {
                     .background(isSelected(session) ? OpenBitFunTheme.soft : OpenBitFunTheme.transparent)
                     .clipShape(RoundedRectangle(cornerRadius: 9))
                 }
-                if workspace.sessions.count > sessionLimit {
-                    Button(action: { onShowMore?() }) {
+                if workspace.sessions.count > visibleSessionCount {
+                    Button {
+                        visibleSessionCount = min(workspace.sessions.count, visibleSessionCount + 3)
+                    } label: {
                         Text(
                             MobileLocalization.format(
                                 "还有 %lld 个会话",
                                 language: MobileLocalization.restoredLanguage(),
-                                Int64(workspace.sessions.count - sessionLimit)
+                                Int64(workspace.sessions.count - visibleSessionCount)
                             )
                         )
                         .font(.system(size: 13))
