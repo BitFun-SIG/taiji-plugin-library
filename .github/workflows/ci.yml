@@ -97,6 +97,9 @@ jobs:
       - name: Verify release and version-generation contracts
         run: node --test scripts/release-channel.test.mjs scripts/tauri-release-manifest.test.mjs scripts/linux-binaries-manifest.test.mjs scripts/version-generation.test.mjs
 
+      - name: Validate Relay deployment and packaging contracts
+        run: node --test scripts/relay/*.test.mjs
+
       - name: Verify minisign download fallback
         run: |
           set -euo pipefail
