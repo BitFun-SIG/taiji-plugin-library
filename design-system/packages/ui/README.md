@@ -413,3 +413,5 @@ ActionItem hover and pressed surfaces use the semantic neutral hover fill;
 pressed text remains semibold. Menu and navigation captions consume the final
 caption color directly, avoiding a second opacity multiplier. The nested-menu
 Pattern includes a scrolling toggle for keyboard and submenu verification.
+
+Compact tabs use `size="sm"` (30px, 14px icons, 4px icon gap); standard tabs retain 40px and 16px icons. Tabs share the outline-button surface contract and keep selection separate from pointer press. `SegmentedControl size="md"` uses a borderless 36px bar with 30px segments, 3px inset, 4px gaps and 12px segment padding. The default `sm` bar keeps its 28px outer height; separate pills retain their existing heights. Mobile controls own their touch geometry independently.

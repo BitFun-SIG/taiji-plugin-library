@@ -93,7 +93,7 @@ export function PatternsPage({ colorScheme, contrast, density, tokenOverrides }:
                   </FieldRow>
                   <FieldRow>
                     <Field controlWidth="fill" description={t("patterns.settings.themeDescription")} label={t("patterns.settings.theme")} labelWidth="md" orientation="horizontal">
-                      <SegmentedControl onValueChange={setAppearance} options={[{ label: t("patterns.settings.system"), value: "system" }, { label: t("settings.light"), value: "light" }, { label: t("settings.dark"), value: "dark" }]} value={appearance} />
+                      <SegmentedControl size="md" onValueChange={setAppearance} options={[{ label: t("patterns.settings.system"), value: "system" }, { label: t("settings.light"), value: "light" }, { label: t("settings.dark"), value: "dark" }]} value={appearance} />
                     </Field>
                   </FieldRow>
                   <FieldRow>
@@ -107,7 +107,7 @@ export function PatternsPage({ colorScheme, contrast, density, tokenOverrides }:
                 <FieldGroup appearance="subtle">
                   <FieldRow>
                     <Field controlWidth="fill" description={t("patterns.settings.fontSizeDescription")} label={t("patterns.settings.fontSize")} labelWidth="md" orientation="horizontal">
-                      <SegmentedControl onValueChange={setFontSize} options={[{ label: t("settings.compact"), value: "small" }, { label: t("settings.comfortable"), value: "medium" }, { label: t("settings.touch"), value: "large" }]} value={fontSize} />
+                      <SegmentedControl size="md" onValueChange={setFontSize} options={[{ label: t("settings.compact"), value: "small" }, { label: t("settings.comfortable"), value: "medium" }, { label: t("settings.touch"), value: "large" }]} value={fontSize} />
                     </Field>
                   </FieldRow>
                 </FieldGroup>
@@ -155,7 +155,7 @@ export function PatternsPage({ colorScheme, contrast, density, tokenOverrides }:
 
         <PatternSection description={t("patterns.search.description")} index="03" title={t("patterns.search.title")}>
           <Card appearance="raised" className="pattern-command" data-openbitfun-pattern="search-command-surface" gap="md" padding="md" radius="md">
-            <CardHeader actions={<SegmentedControl onValueChange={setScope} options={[{ label: t("patterns.search.all"), value: "all" }, { label: t("patterns.search.files"), value: "files" }, { label: t("patterns.search.commands"), value: "commands" }]} value={scope} />} description={t("patterns.search.description")} title={t("patterns.search.title")} />
+            <CardHeader actions={<SegmentedControl size="md" onValueChange={setScope} options={[{ label: t("patterns.search.all"), value: "all" }, { label: t("patterns.search.files"), value: "files" }, { label: t("patterns.search.commands"), value: "commands" }]} value={scope} />} description={t("patterns.search.description")} title={t("patterns.search.title")} />
             <SearchField aria-label={t("patterns.search.searchPlaceholder")} clearLabel={t("components.preview.close")} leadingIcon={<Icon name="search" />} onClear={() => setQuery("")} onValueChange={setQuery} placeholder={t("patterns.search.searchPlaceholder")} shortcut={<KeyHint>Ctrl K</KeyHint>} value={query} />
             <CardBody>
               <div className="pattern-action-grid">

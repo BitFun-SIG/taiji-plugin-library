@@ -68,11 +68,11 @@ test("TabGroup geometry preserves the capsule selected and outline contract", as
 test("SegmentedControl geometry preserves compact, filled, and filter compositions", async () => {
   const systemDocument = await readSource("system.tokens.json");
 
-  assert.equal(tokens["control.segmentedControl.gap"], "2px");
+  assert.equal(tokens["control.segmentedControl.gap"], "4px");
   assert.equal(tokens["control.segmentedControl.padding"], "2px");
   assert.equal(tokens["control.segmentedControl.paddingMd"], "3px");
-  assert.equal(tokens["control.segmentedControl.segmentHeight"], "22px");
-  assert.equal(tokens["control.segmentedControl.segmentHeightMd"], "28px");
+  assert.equal(tokens["control.segmentedControl.segmentHeight"], "24px");
+  assert.equal(tokens["control.segmentedControl.segmentHeightMd"], "30px");
   assert.equal(tokens["control.segmentedControl.pillSegmentHeight"], "24px");
   assert.equal(tokens["control.segmentedControl.segmentPaddingInline"], "8px");
   assert.equal(tokens["control.segmentedControl.segmentGap"], "4px");
