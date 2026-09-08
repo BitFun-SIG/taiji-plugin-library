@@ -162,8 +162,8 @@ test("SearchField owns a quiet single-border focus without changing Input's focu
   assert.ok(panelFocusRule);
   assert.match(panelFocusRule, /outline-color: var\(--openbitfun-color-border-default\)/);
   assert.ok(focusRule);
-  assert.match(focusRule, /border-color: var\(--openbitfun-color-field-border-hover\)/);
-  assert.match(inputStyles, /\.field:has\(:focus-visible\)\s*\{[^}]*border-color: var\(--openbitfun-color-field-border-focus\)/);
+  assert.match(focusRule, /border-color: var\(--openbitfun-color-field-border-active\)/);
+  assert.doesNotMatch(inputStyles, /--openbitfun-color-field-border-focus|\.field[^{}]*:focus-visible/);
   assert.match(focusRule, /box-shadow: none/);
   assert.doesNotMatch(focusRule, /border-width|outline/);
 });

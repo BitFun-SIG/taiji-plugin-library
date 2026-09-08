@@ -36,6 +36,7 @@ export const searchFieldMeta = {
     "color.field.backgroundHover",
     "color.field.border",
     "color.field.borderHover",
+    "color.field.borderActive",
     "color.field.borderFocus",
     "color.status.danger.border",
     "control.height.sm",

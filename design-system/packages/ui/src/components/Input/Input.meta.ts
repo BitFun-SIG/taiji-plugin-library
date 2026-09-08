@@ -28,7 +28,7 @@ export const inputMeta = {
     "color.field.backgroundHover",
     "color.field.border",
     "color.field.borderHover",
-    "color.field.borderFocus",
+    "color.field.borderActive",
     "color.accent.default",
     "color.status.danger.border",
     "control.height.sm",

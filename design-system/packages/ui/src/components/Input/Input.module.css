@@ -29,12 +29,7 @@
   }
 
   .field:focus-within {
-    border-color: var(--openbitfun-color-field-border-hover);
-    box-shadow: none;
-  }
-
-  .field:has(:focus-visible) {
-    border-color: var(--openbitfun-color-field-border-focus);
+    border-color: var(--openbitfun-color-field-border-active);
     box-shadow: none;
   }
 
@@ -124,8 +119,7 @@
       border-color: ButtonText;
     }
 
-    .field:focus-within,
-    .field:has(:focus-visible) {
+    .field:focus-within {
       border-color: Highlight;
     }
   }

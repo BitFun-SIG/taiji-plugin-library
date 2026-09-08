@@ -429,6 +429,14 @@ test("Input, KeyHint, and SearchField previews expose composable slot and state 
   assert.match(source, /shortcut=\{<KeyHint icon=\{<Icon name="command-mac" \/>\}>K<\/KeyHint>\}/);
   assert.match(source, /onClear=\{\(\) => setValue\(""\)\}/);
   assert.match(source, /readOnly=\{state === "read-only"\}/);
+
+  const styles = await readFile(stylesSource, "utf8");
+  const fieldFocus = styles.match(/\[data-openbitfun-component="input"\]\.lab-force-focus,[^{]+\{([^}]+)\}/)?.[1];
+  assert.ok(fieldFocus, "Input and SearchField must share their preview focus treatment");
+  assert.match(fieldFocus, /border-color: var\(--openbitfun-color-field-border-active\)/);
+  assert.match(fieldFocus, /box-shadow: none/);
+  assert.doesNotMatch(fieldFocus, /border-width:|outline:|--openbitfun-focus-width/);
+  assert.doesNotMatch(styles, /input\.lab-force-focus\s*\{/);
 });
 
 test("ScrollArea preview exposes direction and native scrollbar visibility contracts", async () => {

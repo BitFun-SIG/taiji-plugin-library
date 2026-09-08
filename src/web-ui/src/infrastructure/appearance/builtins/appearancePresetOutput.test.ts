@@ -54,6 +54,7 @@ describe('builtin appearance preset output', () => {
     }
     expect(settings?.tokens['--openbitfun-color-field-border']).toBe('rgba(0, 0, 0, 0.08)');
     expect(settings?.tokens['--openbitfun-color-field-border-hover']).toBe('rgba(0, 0, 0, 0.20)');
+    expect(settings?.tokens['--openbitfun-color-field-border-active']).toBe('rgba(0, 0, 0, 0.20)');
     expect(settings?.tokens['--openbitfun-color-field-border-focus']).toBe(themes.light['color.field.borderFocus']);
     expect(settings?.tokens['--openbitfun-color-field-placeholder']).toBe('rgba(0, 0, 0, 0.40)');
     for (const palette of builtinAppearancePalettes) {
@@ -61,6 +62,7 @@ describe('builtin appearance preset output', () => {
       const tokens = getBuiltinAppearanceThemeTokens(palette.id);
       expect(tokens['--openbitfun-color-field-border']).toBe(palette.colors.border.base);
       expect(tokens['--openbitfun-color-field-border-focus']).toBe(palette.colors.accent[500]);
+      expect(tokens['--openbitfun-color-field-border-active']).toBe(palette.colors.accent[500]);
       expect(tokens['--openbitfun-color-field-placeholder']).toBe(palette.colors.text.muted);
     }
   });

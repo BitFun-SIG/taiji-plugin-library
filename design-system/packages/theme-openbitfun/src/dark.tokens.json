@@ -175,6 +175,7 @@
       }
     },
     "field": {
+      "borderActive": { "$type": "color", "$value": "{color.field.borderFocus}" },
       "placeholder": { "$type": "color", "$value": "{color.content.muted}" },
       "background": { "$type": "color", "$value": "{ref.color.neutral.900}" },
       "backgroundHover": { "$type": "color", "$value": "rgba(255, 255, 255, 0.06)" },

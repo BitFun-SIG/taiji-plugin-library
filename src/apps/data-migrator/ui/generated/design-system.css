@@ -725,6 +725,7 @@
     --openbitfun-color-field-background: #ffffff;
     --openbitfun-color-field-background-hover: #ffffff;
     --openbitfun-color-field-border: rgba(0, 0, 0, 0.08);
+    --openbitfun-color-field-border-active: rgba(0, 0, 0, 0.20);
     --openbitfun-color-field-border-focus: #858585;
     --openbitfun-color-field-border-hover: rgba(0, 0, 0, 0.20);
     --openbitfun-color-field-placeholder: rgba(0, 0, 0, 0.40);
@@ -871,6 +872,7 @@
     --openbitfun-color-field-background: #1c1c1f;
     --openbitfun-color-field-background-hover: rgba(255, 255, 255, 0.06);
     --openbitfun-color-field-border: rgba(255, 255, 255, 0.18);
+    --openbitfun-color-field-border-active: #858585;
     --openbitfun-color-field-border-focus: #858585;
     --openbitfun-color-field-border-hover: rgba(255, 255, 255, 0.24);
     --openbitfun-color-field-placeholder: #858585;
@@ -988,6 +990,7 @@
     --openbitfun-color-control-switch-track: #3b3b3b;
     --openbitfun-color-control-switch-track-checked: #005fcc;
     --openbitfun-color-field-border: #3b3b3b;
+    --openbitfun-color-field-border-active: #005fcc;
     --openbitfun-color-field-border-focus: #005fcc;
     --openbitfun-color-field-border-hover: #000000;
     --openbitfun-color-field-placeholder: #343434;
@@ -1048,6 +1051,7 @@
     --openbitfun-color-control-switch-track: #b5b5b5;
     --openbitfun-color-control-switch-track-checked: #ffcc00;
     --openbitfun-color-field-border: #b5b5b5;
+    --openbitfun-color-field-border-active: #ffcc00;
     --openbitfun-color-field-border-focus: #ffcc00;
     --openbitfun-color-field-border-hover: #ffffff;
     --openbitfun-color-field-placeholder: #d0d0d0;

@@ -1096,11 +1096,6 @@ body,
   outline-offset: var(--openbitfun-focus-offset);
 }
 
-input.lab-force-focus {
-  border-color: var(--openbitfun-color-field-border-focus) !important;
-  box-shadow: 0 0 0 var(--openbitfun-focus-width) var(--openbitfun-color-focus-ring) !important;
-}
-
 [data-openbitfun-component="input"].lab-force-hover,
 [data-openbitfun-component="search-field"].lab-force-hover [data-openbitfun-component="input"] {
   border-color: var(--openbitfun-color-field-border-hover);
@@ -1109,8 +1104,8 @@ input.lab-force-focus {
 
 [data-openbitfun-component="input"].lab-force-focus,
 [data-openbitfun-component="search-field"].lab-force-focus [data-openbitfun-component="input"] {
-  border-color: var(--openbitfun-color-field-border-focus);
-  box-shadow: 0 0 0 var(--openbitfun-focus-width) var(--openbitfun-color-focus-ring);
+  border-color: var(--openbitfun-color-field-border-active);
+  box-shadow: none;
 }
 
 .component-code-panel {
