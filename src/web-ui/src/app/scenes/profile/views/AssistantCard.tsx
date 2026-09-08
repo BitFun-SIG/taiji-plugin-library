@@ -79,11 +79,11 @@ const AssistantCard: React.FC<AssistantCardProps> = ({
               )}
             </span>
             {vibe ? (
-              <span className="assistant-card__vibe" data-openbitfun-component="assistant-card" data-openbitfun-part="vibe">{vibe}</span>
+              <OverflowText lines={1} className="assistant-card__vibe" data-openbitfun-component="assistant-card" data-openbitfun-part="vibe">{vibe}</OverflowText>
             ) : (
-              <span className="assistant-card__vibe assistant-card__vibe--empty" data-openbitfun-component="assistant-card" data-openbitfun-part="vibe">
+              <OverflowText lines={1} className="assistant-card__vibe assistant-card__vibe--empty" data-openbitfun-component="assistant-card" data-openbitfun-part="vibe">
                 {t('nursery.card.noVibe')}
-              </span>
+              </OverflowText>
             )}
             {creature ? (
               <span className="assistant-card__badges" data-openbitfun-component="assistant-card" data-openbitfun-part="badges">

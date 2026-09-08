@@ -464,9 +464,9 @@ const SkillsConfig: React.FC = () => {
                       {t('market.item.installs', { count: skill.installs })}
                     </span>
                   </div>
-                  <div className="openbitfun-skills-config__market-item-description">
+                  <OverflowText as="div" lines={3} className="openbitfun-skills-config__market-item-description">
                     {skill.description?.trim() || t('market.item.noDescription')}
-                  </div>
+                  </OverflowText>
                   <div className="openbitfun-skills-config__market-item-meta">
                     {skill.source ? (
                       sourceLabel !== skill.source ? (
