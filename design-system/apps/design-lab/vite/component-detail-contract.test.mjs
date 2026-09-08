@@ -44,6 +44,10 @@ test("preview matrices define horizontal columns for every registered state coun
   );
   assert.match(
     source,
+    /\.component-preview-matrix\[data-state-count="2"\]\s*\{[^}]*grid-template-columns:\s*96px\s+repeat\(2, minmax\(280px, max-content\)\)/s,
+  );
+  assert.match(
+    source,
     /\.component-preview-matrix\[data-state-count="3"\]\s*\{[^}]*grid-template-columns:\s*96px\s+repeat\(3, minmax\(280px, max-content\)\)/s,
   );
   assert.match(

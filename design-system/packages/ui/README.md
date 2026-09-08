@@ -73,6 +73,47 @@ ellipsis rules are intentional source-code excerpts, contenteditable reference
 chips/placeholders, and multiline message previews. Diagnostic/payload size caps
 and persisted Appearance `textOverflow` values are data contracts, not layout rules.
 
+## Text replacement motion
+
+`RollingText` provides **vertical slide replacement** (also called rolling text):
+the old line moves up and out while the new line enters from below. The line
+positions and measured width share `motion.duration.contentSwap` (320ms) and
+`motion.easing.smooth`. Initial render is static; the current accessible text
+updates immediately, without a live region. The outgoing visual copy is hidden
+from assistive technology.
+
+```tsx
+import { RollingText, TabGroup } from "@openbitfun/ui";
+
+<RollingText transitionKey={record.id}>{record.title}</RollingText>
+
+// TabGroup already owns its text slot; pass an identity instead of wrapping it.
+<TabGroup
+  aria-label="Views"
+  items={[{ value: slotId, label: record.title, labelTransitionKey: record.id }]}
+/>
+```
+
+Keep `transitionKey` stable for edits to the same resource. Without an explicit
+key, changing the text triggers replacement. Plain strings and numbers are
+supported; interactive elements, icons, and actions stay outside the rolling
+line. The new title's natural width is measured within the existing layout
+constraints before paint, then animated from the displayed width. No text clone
+or frame-by-frame React measurement drives that animation. `OverflowText` still
+owns truncation and the full-text fallback; its marquee resumes after replacement
+instead of moving on two axes at once.
+
+A running transition retains one outgoing snapshot and adopts the latest
+incoming value, retargeting from the actual displayed positions and width.
+There is no animation queue. Returning to the outgoing value reverses the roll.
+`prefers-reduced-motion` disables replacement and cancels an in-flight roll when
+the preference changes. Native animation completion owns cleanup, including
+interruption and unmount; there is no timer duplicating the token duration.
+Hosts without Web Animations render the current text immediately.
+
+The **RollingText** Design Lab entry includes manual standalone and TabGroup
+examples for repeated replacement and long labels.
+
 ## Mobile controls
 
 Touch-first controls use the isolated mobile entry so compact and foldable

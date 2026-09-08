@@ -121,6 +121,7 @@ import {
 import type { ComponentMeta } from "@openbitfun/ui/registry";
 import previewImage from "../assets/design-system-hero.webp";
 import { IconCompositionPreview } from "../preview/IconCompositionPreview";
+import { RollingTextPreview } from "../preview/RollingTextPreview";
 import { NestedMenuPattern } from "./ReferencePatterns";
 import { useI18n, type MessageKey } from "../i18n";
 import {
@@ -174,6 +175,7 @@ const optionLabelKeys: Readonly<Record<string, MessageKey>> = {
   chevron: "detail.option.chevron",
   center: "detail.option.center",
   default: "detail.option.default",
+  replacing: "detail.option.replacing",
   disabled: "detail.option.disabled",
   display: "detail.option.display",
   error: "detail.option.error",
@@ -437,6 +439,9 @@ export function ComponentDetailPage({
     : states;
 
   const codeSample = useMemo(() => {
+    if (component.name === "RollingText") {
+      return 'import { RollingText, TabGroup } from "@openbitfun/ui";\n\n// Keep the identity stable for title edits; change it when replacing the resource.\n<RollingText transitionKey={record.id}>{record.title}</RollingText>\n\n// TabGroup owns the text slot and composes RollingText without nested clipping.\n<TabGroup\n  aria-label="Views"\n  items={[{ value: slotId, label: record.title, labelTransitionKey: record.id }]}\n/>\n';
+    }
     if (component.name === "MobileActionSheet") return `import { MobileActionSheet } from "@openbitfun/ui/mobile";\n\n<MobileActionSheet\n  actions={[\n    { id: "rename", label: "${t("components.preview.modalSave")}" },\n    { id: "delete", label: "${t("components.preview.confirmDelete")}", tone: "danger" },\n  ]}\n  cancelLabel="${t("components.preview.modalCancel")}"\n  onAction={handleAction}\n  onOpenChange={() => setOpen(false)}\n  open={open}\n  title="${t("components.preview.session")}"\n/>`;
     if (component.name === "MobileComposer") return `import { MobileComposer } from "@openbitfun/ui/mobile";\n\n<MobileComposer\n  expanded={expanded}\n  leading={<AttachButton />}\n  startActions={<ModelControls />}\n  endActions={<SendButton />}\n>\n  <textarea />\n</MobileComposer>`;
     if (component.name === "MobileChoiceSheet") return `import { MobileChoiceSheet } from "@openbitfun/ui/mobile";\n\n<MobileChoiceSheet\n  cancelLabel="${t("components.preview.modalCancel")}"\n  onOpenChange={() => setOpen(false)}\n  onSelect={setMode}\n  open={open}\n  options={[\n    { label: "${t("components.preview.modeMinimal")}", value: "minimal" },\n    { label: "${t("components.preview.modeStandard")}", value: "standard" },\n    { label: "${t("components.preview.modeUltimate")}", value: "ultimate" },\n  ]}\n  selectedValue={mode}\n  title="${t("components.preview.selectExecutionMode")}"\n/>`;
@@ -1884,6 +1889,10 @@ export function ComponentDetailPage({
           ]}
         />
       );
+    }
+
+    if (component.name === "RollingText") {
+      return <RollingTextPreview interactive={state === "replacing"} />;
     }
 
     if (component.name === "TabGroup") {

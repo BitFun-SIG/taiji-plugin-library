@@ -886,6 +886,10 @@
       "fast": { "$value": "140ms" },
       "base": { "$value": "220ms" },
       "normal": { "$value": "{motion.duration.base}" },
+      "contentSwap": {
+        "$value": "320ms",
+        "$description": "Coordinated single-line content replacement and intrinsic-width changes."
+      },
       "slow": { "$value": "420ms" },
       "lazy": { "$value": "1s" },
       "loop": { "$value": "720ms" }

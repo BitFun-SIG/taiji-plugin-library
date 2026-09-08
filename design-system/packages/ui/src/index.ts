@@ -197,6 +197,7 @@ export {
 } from "./components/NavigationPanel";
 export { PageHeader, type PageHeaderProps } from "./components/PageHeader";
 export { Radio, type RadioProps, type RadioSize } from "./components/Radio";
+export { RollingText, type RollingTextProps } from "./components/RollingText";
 export {
   ScrollArea,
   type ScrollAreaOrientation,
