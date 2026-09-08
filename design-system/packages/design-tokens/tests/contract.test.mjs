@@ -175,12 +175,12 @@ test("AskUser geometry preserves the answered question reference contract", () =
 });
 
 test("ChatComposer geometry preserves the scaled compact capsule contract", () => {
-  assert.equal(tokens["control.chatComposer.compactGap"], "9px");
-  assert.equal(tokens["control.chatComposer.compactHeight"], "45px");
-  assert.equal(tokens["control.chatComposer.compactPaddingBlock"], "9px");
-  assert.equal(tokens["control.chatComposer.compactPaddingInline"], "9px");
-  assert.equal(tokens["control.chatComposer.compactTrackHeight"], "25px");
-  assert.equal(tokens["control.chatComposer.controlHeight"], "25px");
+  assert.equal(tokens["control.chatComposer.compactGap"], "12px");
+  assert.equal(tokens["control.chatComposer.compactHeight"], "42px");
+  assert.equal(tokens["control.chatComposer.compactPaddingBlock"], "8px");
+  assert.equal(tokens["control.chatComposer.compactPaddingInline"], "8px");
+  assert.equal(tokens["control.chatComposer.compactTrackHeight"], "24px");
+  assert.equal(tokens["control.chatComposer.controlHeight"], "24px");
 });
 
 test("FlowChat rhythm keeps compact rows line-like and Turn boundaries distinct", async () => {
