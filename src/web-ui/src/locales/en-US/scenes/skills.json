@@ -241,7 +241,9 @@
       "globalEnabled": "Available to agents",
       "globalDisabled": "Globally disabled",
       "globalToggleLabel": "Toggle global availability for {{name}}"
-    }
+    },
+    "scanIncomplete": "Some skills could not be scanned. Available skills are still listed.",
+    "diagnosticsUnavailable": "This host does not report skill scan diagnostics."
   },
   "deleteModal": {
     "title": "Confirm Delete",

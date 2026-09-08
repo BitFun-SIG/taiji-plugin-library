@@ -97,6 +97,8 @@ The `devtools` Cargo feature exists for debugging UI/UX in the desktop app. When
 cargo check -p openbitfun-desktop && cargo test -p openbitfun-desktop
 ```
 
+For skill discovery response compatibility and timeouts, use
+`cargo test -p openbitfun-desktop --lib api::skill_api::tests`.
 For staged application-update cache and signature behavior, use
 `cargo test -p openbitfun-desktop --lib api::update_api::tests`.
 For peer system-info response compatibility, run

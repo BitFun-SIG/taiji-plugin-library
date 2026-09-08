@@ -10,6 +10,23 @@ import {
 } from './skillPromptReference';
 
 describe('skillPromptReference', () => {
+  it('preserves exact nested source identity alongside legacy name tokens', () => {
+    const key = 'project::codex::.system/pdf';
+    const token = createSkillPromptReferenceToken('pdf', key);
+    expect(token).toBe('[$project::codex::.system/pdf]');
+    expect(parseSkillPromptReferenceToken(token)).toEqual({ skillName: 'pdf', skillKey: key });
+    expect(replaceLeadingSlashCommandWithSkillToken('/pdf read', 'pdf', key)).toBe(`${token} read`);
+    expect(getSkillPromptReferenceMatches(`Use [$pdf] and ${token}`)).toHaveLength(2);
+  });
+
+  it('allows enabled shadowed sources while respecting global, mode and author disabling', () => {
+    const skill = { selectedForRuntime: false, effectiveEnabled: true, globallyEnabled: true, allowUserInvocation: true };
+    expect(isSkillAvailableForUserInvocation(skill)).toBe(true);
+    expect(isSkillAvailableForUserInvocation({ ...skill, effectiveEnabled: false })).toBe(false);
+    expect(isSkillAvailableForUserInvocation({ ...skill, globallyEnabled: false })).toBe(false);
+    expect(isSkillAvailableForUserInvocation({ ...skill, allowUserInvocation: false })).toBe(false);
+  });
+
   it('creates and parses skill prompt tokens', () => {
     const token = createSkillPromptReferenceToken('pdf');
 

@@ -968,6 +968,8 @@
     "currentStatus": "当前状态: {{status}}"
   },
   "contextPicker": {
+    "skillsIncomplete": "部分技能扫描失败，已成功读取的技能仍可使用。",
+    "skillsDiagnosticsUnavailable": "当前主机不提供技能扫描诊断。",
     "menuTitle": "选择上下文",
     "searchResults": "搜索结果",
     "loading": "加载中...",

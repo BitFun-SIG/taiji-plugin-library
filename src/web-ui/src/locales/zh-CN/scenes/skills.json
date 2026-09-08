@@ -241,7 +241,9 @@
       "globalEnabled": "智能体可用",
       "globalDisabled": "已全局禁用",
       "globalToggleLabel": "切换 {{name}} 的全局可用状态"
-    }
+    },
+    "scanIncomplete": "部分技能扫描失败，已成功读取的技能仍可使用。",
+    "diagnosticsUnavailable": "当前主机不提供技能扫描诊断。"
   },
   "deleteModal": {
     "title": "确认删除",

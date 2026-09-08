@@ -449,6 +449,19 @@ export interface GlobalSkillSettings {
   globallyDisabledUserSkillKeys: string[];
 }
 
+export interface SkillScanDiagnostic {
+  path: string;
+  sourceId: string;
+  message: string;
+}
+
+export interface SkillScanReport<T = SkillInfo> {
+  skills: T[];
+  diagnostics: SkillScanDiagnostic[];
+  /** False when an older host returns the legacy array instead of diagnostics. */
+  diagnosticsAvailable: boolean;
+}
+
 export interface SkillMarketItem {
   id: string;
   name: string;

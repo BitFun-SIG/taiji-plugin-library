@@ -459,7 +459,14 @@ const SkillsScene: React.FC = () => {
                       </div>
                     )}
 
-                    {!installed.loading && !installed.error && installedFiltered.length === 0 && (
+                    {!installed.loading && !installed.error && (
+                      installed.diagnostics.length > 0 ? <details className="skills-main__diagnostics">
+                        <summary>{t('list.scanIncomplete')}</summary>
+                        {installed.diagnostics.map((item, index) => <p key={index}>{item.path}: {item.message}</p>)}
+                      </details> : !installed.diagnosticsAvailable && <p role="status">{t('list.diagnosticsUnavailable')}</p>
+                    )}
+
+                    {!installed.loading && !installed.error && installedFiltered.length === 0 && installed.diagnostics.length === 0 && (
                       <div className="skills-main__empty" data-testid="skill-list-empty" data-openbitfun-scene="skills" data-openbitfun-part="empty">
                         <Icon glyph={Package} size="lg" />
                         <span>
@@ -522,7 +529,7 @@ const SkillsScene: React.FC = () => {
                                   <OverflowText behavior="marquee" title="">{skill.name}</OverflowText>
                                 </span>
                                 {skill.description?.trim() && (
-                                  <OverflowText lines={2} className="skills-card__desc" data-testid="skill-list-item-description" data-openbitfun-scene="skills" data-openbitfun-part="installedCardDescription">{skill.description}</OverflowText>
+                                  <OverflowText lines={2} title="" className="skills-card__desc" data-testid="skill-list-item-description" data-openbitfun-scene="skills" data-openbitfun-part="installedCardDescription">{skill.description}</OverflowText>
                                 )}
                                 <div className="skills-card__status-badges">
                                   {skill.isBuiltin && (

@@ -968,6 +968,8 @@
     "currentStatus": "Current status: {{status}}"
   },
   "contextPicker": {
+    "skillsIncomplete": "Some skills could not be scanned. Available skills are still listed.",
+    "skillsDiagnosticsUnavailable": "This host does not report skill scan diagnostics.",
     "menuTitle": "Choose context",
     "searchResults": "Search Results",
     "loading": "Loading...",

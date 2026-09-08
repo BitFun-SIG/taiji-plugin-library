@@ -39,7 +39,8 @@ How to use skills:
   - `command: "user::openbitfun-system::ppt-design"` - invoke a specific built-in skill by stable key
 
 Important:
-- Only use skills listed in the current skill listing's <available_skills> section, unless a trusted host task explicitly supplies an exact stable key or the user's message contains an exact `[$skill-name]` invocation
+- Only use skills listed in the current skill listing's <available_skills> section, unless a trusted host task explicitly supplies an exact stable key or the user's message contains an exact `[$skill-name]` or `[$scope::source::directory]` invocation
+- For an exact stable-key invocation, pass that key unchanged as `command`; never replace it with a same-named skill from another source
 - Do not invoke a skill that is already running
 </skills_instructions>"#
             .to_string()
@@ -232,7 +233,8 @@ impl Tool for SkillTool {
 
         // Find and load skill through registry
         let registry = get_skill_registry();
-        let use_stable_key = skill_name.split("::").count() == 3;
+        let use_stable_key =
+            skill_name.starts_with("user::") || skill_name.starts_with("project::");
         let mut skill_data = if context.is_remote() {
             if let Some(ws_fs) = context.ws_fs() {
                 let root = context
@@ -504,6 +506,64 @@ Use the remote project skill.
 
         assert_eq!(schema["properties"]["arguments"]["type"], "string");
         assert_eq!(schema["required"], json!(["command"]));
+    }
+
+    #[tokio::test]
+    async fn stable_key_loads_a_shadowed_nested_skill_without_changing_name_resolution() {
+        let temp = tempfile::tempdir().unwrap();
+        for (directory, body) in [
+            (".openbitfun/skills/same", "default body"),
+            (".codex/skills/nested/same", "chosen body"),
+        ] {
+            let path = temp.path().join(directory);
+            fs::create_dir_all(&path).unwrap();
+            fs::write(
+                path.join("SKILL.md"),
+                format!(
+                    "---\nname: source-collision-regression\ndescription: fixture\n---\n{body}\n"
+                ),
+            )
+            .unwrap();
+        }
+        let context = local_context(temp.path().to_path_buf());
+        for (command, expected) in [
+            ("source-collision-regression", "default body"),
+            ("project::codex::nested/same", "chosen body"),
+        ] {
+            let results = SkillTool::new()
+                .call_impl(&json!({ "command": command }), &context)
+                .await
+                .unwrap();
+            let ToolResult::Result { data, .. } = &results[0] else {
+                panic!("expected skill result")
+            };
+            assert_eq!(data["content"].as_str().unwrap().trim(), expected);
+        }
+        use crate::agentic::tools::implementations::skills::mode_overrides::{
+            load_project_mode_skills_document_local, save_project_mode_skills_document_local,
+            set_mode_skill_disabled_in_document,
+        };
+        let mut document = load_project_mode_skills_document_local(temp.path())
+            .await
+            .unwrap();
+        set_mode_skill_disabled_in_document(
+            &mut document,
+            "agent",
+            "project::codex::nested/same",
+            true,
+        )
+        .unwrap();
+        save_project_mode_skills_document_local(temp.path(), &document)
+            .await
+            .unwrap();
+        assert!(SkillRegistry::global()
+            .find_and_load_skill_by_key_for_workspace(
+                "project::codex::nested/same",
+                Some(temp.path()),
+                Some("agent")
+            )
+            .await
+            .is_err());
     }
 
     #[tokio::test]
