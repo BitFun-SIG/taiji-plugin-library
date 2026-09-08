@@ -91,6 +91,7 @@ struct SidebarView: View {
             .background(OpenBitFunTheme.page)
         }
         .sheet(item: $compactActionSession) { session in
+            let detentHeight: CGFloat = model.surface == .local ? 380 : 300
             let surface = SessionActionSurface(
                 model: model,
                 session: session,
@@ -107,7 +108,7 @@ struct SidebarView: View {
                 },
                 onClose: { compactActionSession = nil }
             )
-            .presentationDetents([.height(380)])
+            .presentationDetents([.height(detentHeight)])
             .presentationDragIndicator(.hidden)
             if #available(iOS 16.4, *) {
                 surface.presentationCornerRadius(MobileDesignGeometry.popoverRadius)

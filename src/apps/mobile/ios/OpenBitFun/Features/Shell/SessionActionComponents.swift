@@ -69,11 +69,17 @@ struct SessionActionSurface: View {
         .frame(width: presentation == .popover ? 300 : nil)
         .frame(maxWidth: presentation == .bottomSheet ? .infinity : nil)
         .background(OpenBitFunTheme.card)
-        .clipShape(RoundedRectangle(cornerRadius: MobileDesignGeometry.popoverRadius))
-        .overlay(
-            RoundedRectangle(cornerRadius: MobileDesignGeometry.popoverRadius)
-                .stroke(OpenBitFunTheme.line, lineWidth: 1)
+        .clipShape(
+            RoundedRectangle(
+                cornerRadius: presentation == .popover ? MobileDesignGeometry.popoverRadius : 0
+            )
         )
+        .overlay {
+            if presentation == .popover {
+                RoundedRectangle(cornerRadius: MobileDesignGeometry.popoverRadius)
+                    .stroke(OpenBitFunTheme.line, lineWidth: 1)
+            }
+        }
         .shadow(
             color: presentation == .popover ? OpenBitFunTheme.line : OpenBitFunTheme.transparent,
             radius: presentation == .popover ? 20 : 0,
