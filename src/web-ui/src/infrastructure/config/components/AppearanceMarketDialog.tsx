@@ -408,7 +408,7 @@ export function AppearanceMarketDialog({ isOpen, onClose }: AppearanceMarketDial
               && !updateAvailable
               && !linkedToOtherListing ? (
               <Button
-                variant={active ? 'outline' : 'fill'}
+                variant={active ? 'outline' : 'primary'}
                 disabled={active
                   || unsupported
                   || incompatibleVersion
@@ -421,7 +421,7 @@ export function AppearanceMarketDialog({ isOpen, onClose }: AppearanceMarketDial
               </Button>
             ) : (
               <Button
-                variant="fill"
+                variant="primary"
                 disabled={installDisabled}
                 onClick={() => release && void handleInstall(release)}
               >

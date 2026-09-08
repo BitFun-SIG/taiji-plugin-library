@@ -1629,10 +1629,10 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
           <Button type="button" size="sm" variant="outline" onClick={() => void handleCopyLargePaste()}>
             {largePasteCopied ? t('input.largePasteCopied') : t('input.largePasteCopy')}
           </Button>
-          <Button type="button" size="sm" variant="outline" onClick={() => setActiveLargePaste(null)}>
+          <Button type="button" size="sm" variant="fill" onClick={() => setActiveLargePaste(null)}>
             {t('input.largePasteCancel')}
           </Button>
-          <Button type="button" size="sm" variant="fill" onClick={handleSaveLargePaste}>
+          <Button type="button" size="sm" variant="primary" onClick={handleSaveLargePaste}>
             {t('input.largePasteSave')}
           </Button>
         </DialogFooter>

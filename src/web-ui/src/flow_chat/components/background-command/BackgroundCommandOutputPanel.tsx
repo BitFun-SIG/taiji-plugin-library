@@ -443,7 +443,7 @@ export const BackgroundCommandOutputPanel: React.FC<BackgroundCommandOutputPanel
               <div data-openbitfun-component="background-command-output-panel" data-openbitfun-part="inputActions" className="background-command-output-panel__input-editor-actions">
                 <Button
                   type="button"
-                  variant="outline"
+                  variant="fill"
                   size="sm"
                   onClick={handleCloseInputEditor}
                   disabled={isSendingInput}
@@ -452,7 +452,7 @@ export const BackgroundCommandOutputPanel: React.FC<BackgroundCommandOutputPanel
                 </Button>
                 <Button
                   type="submit"
-                  variant="fill"
+                  variant="primary"
                   size="sm"
                   loading={isSendingInput}
                   disabled={!canSubmitInput}

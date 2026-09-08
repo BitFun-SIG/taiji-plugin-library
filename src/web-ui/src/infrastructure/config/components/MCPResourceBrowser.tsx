@@ -138,7 +138,7 @@ export const MCPResourceBrowser: React.FC<MCPResourceBrowserProps> = ({ serverId
           </Button>
           {onClose && (
             <Button
-              variant="outline"
+              variant="fill"
               size="sm"
               onClick={onClose}
             >

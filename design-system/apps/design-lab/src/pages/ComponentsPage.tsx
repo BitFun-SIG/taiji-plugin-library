@@ -215,7 +215,7 @@ function ComponentCardPreview({ component }: { component: ComponentMeta }) {
     case "Button":
       return (
         <Stack align="center" direction="horizontal" gap="2" wrap>
-          <Button variant="fill">{t("components.preview.primary")}</Button>
+          <Button variant="primary">{t("components.preview.primary")}</Button>
           <Button>{t("components.preview.button")}</Button>
         </Stack>
       );

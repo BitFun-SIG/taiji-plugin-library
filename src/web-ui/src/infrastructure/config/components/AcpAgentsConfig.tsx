@@ -1362,7 +1362,7 @@ const AcpAgentsConfig: React.FC<AcpAgentsConfigProps> = ({
             message={t('permissionMode.legacyRejectWarning')}
             description={(
               <Button
-                variant="fill"
+                variant="primary"
                 size="sm"
                 disabled={saving}
                 loading={saving}
@@ -1420,14 +1420,14 @@ const AcpAgentsConfig: React.FC<AcpAgentsConfigProps> = ({
                 data-openbitfun-component="acp-agents-config"
                 data-openbitfun-part="jsonActions"
               >
-                <Button variant="outline" size="sm" onClick={() => {
+                <Button variant="fill" size="sm" onClick={() => {
                   setJsonConfig(jsonBaseline);
                   setJsonDirty(false);
                 }}>
                   {t('actions.revert')}
                 </Button>
                 <Button
-                  variant="fill"
+                  variant="primary"
                   size="sm"
                   onClick={() => { void saveJsonConfig(); }}
                   loading={saving}
@@ -1474,7 +1474,7 @@ const AcpAgentsConfig: React.FC<AcpAgentsConfigProps> = ({
               />
               {dirty && (
                 <Button
-                  variant="fill"
+                  variant="primary"
                   size="sm"
                   leadingIcon={<Save />}
                   onClick={() => { void saveConfig(); }}

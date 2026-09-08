@@ -172,7 +172,7 @@ export function PatternsPage({ colorScheme, contrast, density, tokenOverrides }:
           <Card appearance="subtle" className="pattern-device-card" data-openbitfun-pattern="device-card" gap="md" padding="md" radius="md">
             <CardHeader actions={<IconButton aria-label={t("patterns.device.refresh")} icon={<Icon name="refresh" />} size="sm" variant="quiet" />} description="macOS · 127.0.0.1" leading={<span className="pattern-device-icon"><Icon name="device-mac" size="lg" /></span>} title="MacBook Pro" />
             <CardBody><StatusPill leading={<Icon name="unselected" />} tone="success">{t("patterns.device.online")}</StatusPill></CardBody>
-            <Button leadingIcon={<Icon name="link" />} size="sm" variant="fill">{t("patterns.device.connect")}</Button>
+            <Button leadingIcon={<Icon name="link" />} size="sm" variant="primary">{t("patterns.device.connect")}</Button>
           </Card>
         </PatternSection>
         <PatternSection description={t("patterns.provider.description")} index="05" title={t("patterns.provider.title")}>

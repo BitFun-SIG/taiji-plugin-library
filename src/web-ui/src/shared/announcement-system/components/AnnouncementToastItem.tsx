@@ -105,7 +105,7 @@ const AnnouncementToastItem: React.FC<Props> = ({ card }) => {
       {/* Row 3: action buttons */}
       <div className="announcement-toast__actions">
         <Button
-          variant="fill"
+          variant="primary"
           size="sm"
           onClick={handleAction}
         >

@@ -458,7 +458,7 @@ const MiniAppMarketView: React.FC<MiniAppMarketViewProps> = ({ tabs }) => {
             {installed ? (
               <Button
                 size="sm"
-                variant={canUpdate ? 'outline' : 'fill'}
+                variant={canUpdate ? 'outline' : 'primary'}
                 disabled={actionBusy || workspaceUnsupported}
                 onClick={() => openInstalledApp(installed.appId)}
                 leadingIcon={<Icon name="arrow-up-right" size="sm" />}
@@ -470,7 +470,7 @@ const MiniAppMarketView: React.FC<MiniAppMarketViewProps> = ({ tabs }) => {
             {!installed || canUpdate ? (
               <Button
                 size="sm"
-                variant="fill"
+                variant="primary"
                 disabled={actionBusy || workspaceUnsupported}
                 onClick={() => setInstallPrompt(true)}
               >

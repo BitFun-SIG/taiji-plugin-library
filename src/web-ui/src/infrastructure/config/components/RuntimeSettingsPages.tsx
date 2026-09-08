@@ -1008,7 +1008,7 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({
             >
               <Button
                 size="md"
-                variant="fill"
+                variant="primary"
                 onClick={() => void handleImportCompanionPet()}
                 disabled={!IS_TAURI_DESKTOP || companionPetImporting}
                 title={t('features.pet.importHint')}
@@ -1599,7 +1599,7 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({
           </div>
           <div className="openbitfun-debug-config__modal-footer" data-openbitfun-component="runtime-settings" data-openbitfun-part="modalFooter">
             <Button
-              variant="outline"
+              variant="fill"
               size="sm"
               onClick={() => setBrowserRestartPrompt(null)}
               disabled={browserControlBusy}
@@ -1607,7 +1607,7 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({
               {t('browserControl.restartModal.cancel')}
             </Button>
             <Button
-              variant="fill"
+              variant="primary"
               size="sm"
               onClick={() => void handleBrowserControlRestart()}
               disabled={browserControlBusy}
