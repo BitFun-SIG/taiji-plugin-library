@@ -47,6 +47,7 @@ extension MobileAppModel {
     }
 
     private func clearTargetScopedRemoteProjection(boundTargetKey targetKey: String, epoch: UInt64) {
+        resetRemoteConversationOpen()
         invalidateTargetScopedFileTransfers()
         remoteInitialSessionReady = false
         remoteInitialWorkspaceReady = false
@@ -314,8 +315,51 @@ extension MobileAppModel {
         surface = .remote
         drawerOpen = false
         remoteSessionSelected = true
+        beginRemoteConversationOpen(sessionID: pending.sessionID)
         selectedSessionID = pending.sessionID
         coreAdapter?.openRemoteSession(sessionID: pending.sessionID)
+    }
+
+    /// Mirrors HarmonyOS's deferred conversation-loading gate. Cached transcripts
+    /// normally arrive inside the grace period; a relay fetch gets an explicit
+    /// skeleton instead of leaving the previous session visible.
+    func beginRemoteConversationOpen(sessionID: String) {
+        remoteConversationLoadTask?.cancel()
+        remoteConversationLoadGeneration &+= 1
+        let generation = remoteConversationLoadGeneration
+        remoteConversationOpeningSessionID = sessionID
+        remoteConversationLoading = false
+        selectedSessionID = sessionID
+        timelineRows = []
+        messages = []
+        activeTurnID = nil
+        isSending = false
+        busy = true
+        remoteHasMoreMessages = false
+        remoteConversationLoadTask = Task { [weak self] in
+            do {
+                try await Task.sleep(nanoseconds: 140_000_000)
+            } catch {
+                return
+            }
+            guard let self,
+                  self.remoteConversationLoadGeneration == generation,
+                  self.remoteConversationOpeningSessionID == sessionID else { return }
+            self.remoteConversationLoading = true
+        }
+    }
+
+    func finishRemoteConversationOpenIfReady(timelineSessionID: String) {
+        guard remoteConversationOpeningSessionID == timelineSessionID else { return }
+        resetRemoteConversationOpen()
+    }
+
+    func resetRemoteConversationOpen() {
+        remoteConversationLoadTask?.cancel()
+        remoteConversationLoadTask = nil
+        remoteConversationLoadGeneration &+= 1
+        remoteConversationOpeningSessionID = nil
+        remoteConversationLoading = false
     }
 
     private func advancePendingDirectoryRemoteDraftIfReady() {
@@ -714,6 +758,7 @@ extension MobileAppModel {
         guard let ready = state as? RemoteSessionUiStateReady else {
             remoteInitialSessionReady = false
             if let failed = state as? RemoteSessionUiStateFailed {
+                resetRemoteConversationOpen()
                 let detail = failed.remoteMessage ?? failed.reason.name
                 remoteConnected = false
                 connectionPhase = .disconnected
@@ -797,10 +842,16 @@ extension MobileAppModel {
             setPublishedIfChanged(\.selectedSessionID, to: protected.session.id)
             setPublishedIfChanged(\.remoteSessionSelected, to: true)
         } else {
-            if let selected = ready.selectedSessionId {
+            let openingSessionIsNotReady = remoteConversationOpeningSessionID.map { opening in
+                ready.timeline?.sessionId != opening
+            } ?? false
+            if !openingSessionIsNotReady, let selected = ready.selectedSessionId {
                 setPublishedIfChanged(\.selectedSessionID, to: selected)
             }
-            setPublishedIfChanged(\.remoteSessionSelected, to: ready.selectedSessionId != nil)
+            setPublishedIfChanged(
+                \.remoteSessionSelected,
+                to: openingSessionIsNotReady || ready.selectedSessionId != nil
+            )
         }
         setPublishedIfChanged(\.busy, to: ready.busy)
         setPublishedIfChanged(\.remoteQuery, to: ready.query)
@@ -834,6 +885,7 @@ extension MobileAppModel {
                     )
                 }
             }
+            finishRemoteConversationOpenIfReady(timelineSessionID: timeline.sessionId)
         } else {
             setPublishedIfChanged(\.timelineRows, to: [])
             setPublishedIfChanged(\.messages, to: [])

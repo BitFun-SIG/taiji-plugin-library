@@ -20,6 +20,7 @@ final class MobileAppModel: ObservableObject {
     @Published var remoteViewSettingsOpen = false
     @Published var remoteHasMore = false
     @Published var remoteHasMoreMessages = false
+    @Published var remoteConversationLoading = false
     @Published var remotePermissionMode = "ASK"
     @Published var remotePermissionFailure: String?
     @Published var remoteAssistants: [MobileAssistantOption] = []
@@ -107,6 +108,9 @@ final class MobileAppModel: ObservableObject {
     var pendingDirectoryRemoteDraft: PendingDirectoryRemoteDraft?
     var pendingRemoteAssistantCreate = false
     var selectedRemoteWorkspaceKind = ""
+    var remoteConversationLoadTask: Task<Void, Never>?
+    var remoteConversationLoadGeneration: UInt64 = 0
+    var remoteConversationOpeningSessionID: String?
 
     var coreAdapter: MobileCoreAdapter?
 
@@ -232,6 +236,7 @@ final class MobileAppModel: ObservableObject {
     }
 
     func disconnectRemote() {
+        resetRemoteConversationOpen()
         invalidateTargetScopedFileTransfers()
         committedRemoteCreate = nil
         remoteLastAppliedAuthority = nil

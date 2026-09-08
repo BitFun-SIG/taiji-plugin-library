@@ -342,7 +342,12 @@ struct MobileShellView: View {
                 RemoteConnectedHomeView(model: model)
                 ComposerBar(model: model)
             } else {
-                ChatTimelineView(model: model)
+                ZStack {
+                    ChatTimelineView(model: model)
+                    if model.surface == .remote && model.remoteConversationLoading {
+                        ConversationLoadingState()
+                    }
+                }
                 ComposerBar(model: model)
             }
         }

@@ -92,6 +92,60 @@ struct ChatTimelineView: View {
     }
 }
 
+struct ConversationLoadingState: View {
+    var body: some View {
+        GeometryReader { proxy in
+            let contentWidth = max(0, min(proxy.size.width - 44, 760))
+            VStack(spacing: 18) {
+                assistantSkeleton(width: contentWidth * 0.72, height: 78)
+                userSkeleton(width: contentWidth * 0.46, height: 42)
+                assistantSkeleton(width: contentWidth * 0.84, height: 112)
+            }
+            .frame(width: contentWidth)
+            .padding(.top, 28)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        }
+        .background(OpenBitFunTheme.page)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(MobileLocalization.text("正在加载")))
+    }
+
+    private func assistantSkeleton(width: CGFloat, height: CGFloat) -> some View {
+        HStack(spacing: 0) {
+            VStack(alignment: .leading, spacing: 9) {
+                skeletonLine(fraction: 0.74)
+                skeletonLine(fraction: 0.92)
+                skeletonLine(fraction: 0.58)
+            }
+            .padding(14)
+            .frame(width: width, height: height, alignment: .leading)
+            .background(OpenBitFunTheme.soft)
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private func userSkeleton(width: CGFloat, height: CGFloat) -> some View {
+        HStack(spacing: 0) {
+            Spacer(minLength: 0)
+            RoundedRectangle(cornerRadius: 10)
+                .fill(OpenBitFunTheme.soft)
+                .frame(width: width, height: height)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private func skeletonLine(fraction: CGFloat) -> some View {
+        GeometryReader { proxy in
+            RoundedRectangle(cornerRadius: 5)
+                .fill(OpenBitFunTheme.line)
+                .frame(width: proxy.size.width * fraction, height: 10)
+        }
+        .frame(height: 10)
+    }
+}
+
 private struct ConversationRowView: View {
     let row: MobileConversationRow
     @ObservedObject var model: MobileAppModel

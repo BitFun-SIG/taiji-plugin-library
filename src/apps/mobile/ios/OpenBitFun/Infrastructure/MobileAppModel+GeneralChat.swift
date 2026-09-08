@@ -7,7 +7,12 @@ extension MobileAppModel {
     func select(_ session: ChatSession) {
         pendingDirectoryRemoteDraft = nil
         selectedSessionID = session.id
+        guard remoteConversationOpeningSessionID != session.id else {
+            drawerOpen = false
+            return
+        }
         remoteSessionSelected = true
+        beginRemoteConversationOpen(sessionID: session.id)
         coreAdapter?.openRemoteSession(sessionID: session.id)
         drawerOpen = false
     }
