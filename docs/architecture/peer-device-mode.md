@@ -20,7 +20,7 @@ Two concepts, deliberately independent:
 |---|---|---|
 | What it is | A live control link to a peer | The one device this window draws |
 | How many | Any number, concurrently | Exactly one |
-| Ends when | Explicit disconnect, peer offline, logout | Replaced by the next switch |
+| Ends when | Explicit disconnect or logout | Replaced by the next switch |
 | Effect on the peer's agent | Keeps it running and fanning out | None |
 
 This split is what makes several devices usable at once: dispatch a turn on B,
@@ -69,9 +69,22 @@ requests coalesce to the last target, a committed-but-superseded hydrate is
 invalidated before the next target proceeds, and a real activation failure
 rolls back to the previously rendered reachable surface. Separately,
 `PeerConnectionManager` owns each attachment's
-`connecting`/`ready`/`degraded`/`lost` lifecycle, keepalive and bounded backoff;
+`connecting`/`ready`/`degraded` lifecycle, keepalive and capped backoff;
 React only subscribes to snapshots. Attachment disposal is the only operation
 that discards a peer's cached surface state.
+
+Presence gaps and product RPC transport failures move an established attachment
+into `degraded`; they never select the local surface. Only a dedicated
+`peer_mode_ping` plus recovery `peer_control_attach` handshake changes it back
+to `ready`. Product timeouts do not count as independent failed health checks.
+Recovery uses one in-flight handshake per device, retries with exponential
+backoff capped at 15 seconds, and continues until explicit disconnect/logout.
+A device returning to account presence accelerates a pending retry without
+claiming the control link is already restored. Cached capabilities, the surface
+epoch, requests' target device and session projections stay with that peer;
+recovery neither reboots the surface nor resubmits a Turn. The window displays
+a persistent reconnecting notice with a manual return-to-local action while its
+selected peer is degraded. Background peers recover without switching the view.
 
 Because the local surface can now miss its own events while another device is
 rendered, Session attachment is no longer Peer-only. After this window's first

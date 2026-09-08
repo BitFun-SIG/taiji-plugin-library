@@ -689,6 +689,9 @@
     "errorEnterName": "Please enter a project name",
     "errorCreateFailed": "Failed to create project"
   },
+  "peerConnection": {
+    "reconnecting": "Reconnecting to {{name}}. Content may be out of date."
+  },
   "peerDirectoryPicker": {
     "loading": "Loading remote directories…",
     "empty": "No subfolders in this directory",

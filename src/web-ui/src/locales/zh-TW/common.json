@@ -689,6 +689,9 @@
     "errorEnterName": "請輸入工作區名稱",
     "errorCreateFailed": "建立工作區失敗"
   },
+  "peerConnection": {
+    "reconnecting": "正在重新連線至「{{name}}」。內容可能尚未更新。"
+  },
   "peerDirectoryPicker": {
     "loading": "正在載入遠端目錄…",
     "empty": "此目錄下沒有子資料夾",

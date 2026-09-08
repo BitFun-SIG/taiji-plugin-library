@@ -40,6 +40,7 @@ import { openMainSession } from '@/flow_chat/services/sessionActivation';
 import { notificationService } from '@/shared/notification-system';
 import { api } from '@/infrastructure/api/service-api/ApiClient';
 import { AppearanceBackgroundMediaLayer, appearanceRuntime, useAppearance } from '@/infrastructure/appearance';
+import { PeerConnectionStatus } from '@/infrastructure/peer-device/PeerConnectionStatus';
 import './AppLayout.scss';
 
 type TransitionDirection = 'entering' | 'returning' | null;
@@ -710,6 +711,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
           <Suspense fallback={null}>
             <ToolbarMode />
           </Suspense>
+          <PeerConnectionStatus />
         </div>
       </>
     );
@@ -756,6 +758,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
             isExiting={transitionDir === 'returning'}
           />
         </main>
+        <PeerConnectionStatus />
 
         {/* Hello stays available across every client scene, including Welcome. */}
         <Suspense fallback={null}>
