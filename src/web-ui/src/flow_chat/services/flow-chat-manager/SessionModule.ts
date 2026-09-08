@@ -714,10 +714,12 @@ export async function createChatSession(
  */
 export async function switchChatSession(
   context: FlowChatContext,
-  sessionId: string
+  sessionId: string,
+  isStillRelevant: () => boolean = () => true,
 ): Promise<void> {
   const surfaceScope = getActiveSurfaceScope();
   try {
+    if (!isStillRelevant()) return;
     const switchRequestId = ++latestSwitchRequestId;
     const session = context.flowChatStore.getState().sessions.get(sessionId);
     const isRemoteSession = isRemoteTraceContext(session?.remoteConnectionId, session?.remoteSshHost);
@@ -776,7 +778,7 @@ export async function switchChatSession(
       try {
         await hydrateHistoricalSession(context, sessionId, true, {
           isRetryStillRelevant: () => (
-            surfaceScope.isCurrent() && switchRequestId === latestSwitchRequestId
+            surfaceScope.isCurrent() && switchRequestId === latestSwitchRequestId && isStillRelevant()
           ),
           retryActiveStaleReuse: shouldActivateBeforeHydrate,
         });
@@ -789,7 +791,7 @@ export async function switchChatSession(
         // Continue with activation so the failed state is visible.
       }
 
-      if (switchRequestId !== latestSwitchRequestId) {
+      if (switchRequestId !== latestSwitchRequestId || !isStillRelevant()) {
         recordHistorySessionDiagnosticEvent(sessionId, 'switch_superseded', {
           switchRequestId,
           latestSwitchRequestId,

@@ -430,6 +430,7 @@ test("shared system scales preserve the migrated Web UI foundation contract", ()
   assert.equal(tokens["radius.3xl"], "24px");
   assert.equal(tokens["motion.duration.instant"], "80ms");
   assert.equal(tokens["motion.duration.slow"], "420ms");
+  assert.equal(tokens["motion.duration.contentSwap"], "320ms");
   assert.equal(tokens["motion.easing.standard"], "cubic-bezier(0.23, 1, 0.32, 1)");
   assert.equal(tokens["layer.modal"], 200);
   assert.equal(tokens["layer.contextMenu"], 500);

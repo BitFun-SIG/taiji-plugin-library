@@ -651,6 +651,19 @@ describe('SessionModule historical session coordination', () => {
     expect(flowChatStore.switchSession).toHaveBeenCalledWith('history-1');
   });
 
+  it('does not select a hydrated session after its scene navigation was cancelled', async () => {
+    const load = createDeferred<void>();
+    const { context, flowChatStore } = createContext(createSession());
+    flowChatStore.loadSessionHistory.mockReturnValueOnce(load.promise);
+    let relevant = true;
+    const switching = switchChatSession(context, 'history-1', () => relevant);
+    await Promise.resolve();
+    relevant = false;
+    load.resolve();
+    await switching;
+    expect(flowChatStore.switchSession).not.toHaveBeenCalled();
+  });
+
   it('activates a metadata-only historical session immediately when a recent user open intent exists', async () => {
     const load = createDeferred<void>();
     const { context, flowChatStore } = createContext(createSession());

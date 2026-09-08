@@ -7,13 +7,13 @@
 
 import { forwardRef, useEffect, useRef, useImperativeHandle, useCallback } from 'react';
 import { ContentCanvas, useCanvasStore } from '../../components/panels/content-canvas';
-import { GlobalSearchContent } from '../../global-search/GlobalSearchRoot';
 import {
   switchAgentCanvasWorkspace,
   removeAgentCanvasSnapshot,
 } from '../../components/panels/content-canvas/stores';
 import { workspaceManager } from '@/infrastructure/services/business/workspaceManager';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
+import { useI18n } from '@/infrastructure/i18n';
 import type { PanelContent as OldPanelContent } from '../../components/panels/base/types';
 import type { PanelContent } from '../../components/panels/content-canvas/types';
 import { createLogger } from '@/shared/utils/logger';
@@ -38,6 +38,7 @@ interface AuxPaneProps {
 
 const AuxPane = forwardRef<AuxPaneRef, AuxPaneProps>(
   ({ workspacePath, isSceneActive = true, terminalResizeSuspended = false }, ref) => {
+    const { t } = useI18n('components');
     const { workspace } = useCurrentWorkspace();
     const workspaceId = workspace?.id;
 
@@ -140,7 +141,15 @@ const AuxPane = forwardRef<AuxPaneRef, AuxPaneProps>(
           onBeforeClose={handleBeforeClose}
           terminalResizeSuspended={terminalResizeSuspended}
           missionControlEnabled={false}
-          emptyState={<GlobalSearchContent active={isSceneActive} variant="embedded" />}
+          emptyState={
+            <div
+              className="openbitfun-aux-pane__empty-state"
+              data-openbitfun-component="aux-pane"
+              data-openbitfun-part="emptyState"
+            >
+              {t('canvas.noContentOpen')}
+            </div>
+          }
         />
       </div>
     );

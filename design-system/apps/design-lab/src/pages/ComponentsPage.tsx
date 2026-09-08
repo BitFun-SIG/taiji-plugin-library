@@ -96,6 +96,7 @@ import {
   getFlowChatPreviewDefinition,
 } from "../preview/FlowChatPreviewRegistry";
 import { FlowChatToolGallery } from "../preview/FlowChatToolGallery";
+import { RollingTextPreview } from "../preview/RollingTextPreview";
 
 interface ComponentsPageProps {
   category?: ComponentMeta["category"];
@@ -646,6 +647,8 @@ function ComponentCardPreview({ component }: { component: ComponentMeta }) {
           />
         </Stack>
       );
+    case "RollingText":
+      return <RollingTextPreview />;
     case "TabGroup":
       return (
         <TabGroup

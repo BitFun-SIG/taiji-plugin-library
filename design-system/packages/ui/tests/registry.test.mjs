@@ -84,6 +84,7 @@ test("registry exposes only the formal stable components", () => {
       "ProminentToolCard",
       "ReadFileToolCard",
       "ReviewSummaryToolCard",
+      "RollingText",
       "RunCodeToolCard",
       "ScrollArea",
       "SearchField",

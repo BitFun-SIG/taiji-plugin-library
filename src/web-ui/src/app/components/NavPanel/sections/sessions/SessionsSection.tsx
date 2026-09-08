@@ -5,7 +5,7 @@
  * Owns all data fetching / mutation for chat sessions.
  */
 
-import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { Button, Icon, IconButton, Input, Menu, MenuItem, OverflowText, Tooltip } from '@openbitfun/ui';
 import { createPortal } from 'react-dom';
 import { Bot, Loader2, Archive, ListChecks } from 'lucide-react';
@@ -41,7 +41,7 @@ import {
   useWorkspaceSessionViewStore,
 } from '../../workspaceSessionView';
 import { stateMachineManager } from '@/flow_chat/state-machine';
-import { SessionExecutionState } from '@/flow_chat/state-machine/types';
+import { sessionNavStatusService } from '@/flow_chat/services/sessionNavStatusService';
 import { i18nService } from '@/infrastructure/i18n';
 import { resolveSessionTitle } from '@/flow_chat/utils/sessionTitle';
 import { isSessionNavRowActive } from './sessionNavSelection';
@@ -288,7 +288,14 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
   /** Second level of the session menu: pick what a Markdown export includes. */
   const [isExportScopeMenu, setIsExportScopeMenu] = useState(false);
   const [exportingSessionId, setExportingSessionId] = useState<string | null>(null);
-  const [runningSessionIds, setRunningSessionIds] = useState<Set<string>>(new Set());
+  const orderingRevision = useSyncExternalStore(
+    sessionNavStatusService.subscribeOrdering,
+    sessionNavStatusService.getOrderingSnapshot,
+    sessionNavStatusService.getOrderingSnapshot,
+  );
+  const runningSessionIds = useMemo(() => new Set(
+    [...flowChatState.sessions.keys()].filter(sessionNavStatusService.isRunning),
+  ), [flowChatState.sessions, orderingRevision]);
   const [scheduledJobsSessionId, setScheduledJobsSessionId] = useState<string | null>(null);
   const [batchWorkspace, setBatchWorkspace] = useState<WorkspaceSessionScope | null>(null);
   const editInputRef = useRef<HTMLInputElement>(null);
@@ -318,30 +325,6 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
   const liveReconcileSignatureRef = useRef<string | null>(null);
   /** Last (scope, cursor, size) triple a buffer prefetch ran for. */
   const bufferPrefetchSignatureRef = useRef<string | null>(null);
-
-  // Subscribe to state machine changes for running status
-  useEffect(() => {
-    const updateRunningSessions = () => {
-      const running = new Set<string>();
-      for (const session of flowChatState.sessions.values()) {
-        const machine = stateMachineManager.get(session.sessionId);
-        if (
-          machine &&
-          (machine.getCurrentState() === SessionExecutionState.PROCESSING ||
-            machine.getCurrentState() === SessionExecutionState.FINISHING)
-        ) {
-          running.add(session.sessionId);
-        }
-      }
-      setRunningSessionIds(running);
-    };
-
-    updateRunningSessions();
-    const unsubscribe = stateMachineManager.subscribeGlobal(() => {
-      updateRunningSessions();
-    });
-    return () => unsubscribe();
-  }, [flowChatState.sessions]);
 
   useEffect(() => {
     const selector = (s: FlowChatState): string => {
@@ -838,6 +821,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
         sessionOrdering,
         getTitle,
         session => runningSessionIds.has(session.sessionId),
+        sessionNavStatusService.getSortTimestamp,
       );
 
     for (const [pid, list] of childMap) {
@@ -848,7 +832,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
       topLevelSessions: [...parents].sort(compareForCurrentView),
       childrenByParent: childMap,
     };
-  }, [runningSessionIds, sessionOrdering, sessions]);
+  }, [orderingRevision, runningSessionIds, sessionOrdering, sessions]);
 
   const topLevelSessions = useMemo(
     () => allTopLevelSessions.filter(session => matchesWorkspaceSessionView(

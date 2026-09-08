@@ -305,6 +305,7 @@
     --openbitfun-line-height-ui: 1.4;
     --openbitfun-motion-distance-sm: var(--openbitfun-space-1);
     --openbitfun-motion-duration-base: 220ms;
+    --openbitfun-motion-duration-content-swap: 320ms;
     --openbitfun-motion-duration-fast: 140ms;
     --openbitfun-motion-duration-instant: 80ms;
     --openbitfun-motion-duration-lazy: 1s;
@@ -650,6 +651,8 @@
     --openbitfun-motion-duration-fast: 0ms;
 
     --openbitfun-motion-duration-normal: 0ms;
+
+    --openbitfun-motion-duration-content-swap: 0ms;
 
     --openbitfun-motion-duration-slow: 0ms;
 
