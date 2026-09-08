@@ -72,38 +72,6 @@ export interface SessionSceneNavigation {
 let sessionNavigation: SessionSceneNavigation | undefined;
 let navigationRequest = 0;
 
-export function registerSessionSceneNavigation(adapter: SessionSceneNavigation): () => void {
-  sessionNavigation = adapter;
-  return () => {
-    if (sessionNavigation === adapter) {
-      sessionNavigation = undefined;
-      navigationRequest++;
-      if (useSceneStore.getState().pendingTabId !== null) useSceneStore.setState({ pendingTabId: null });
-    }
-  };
-}
-
-/** Every navigation path, including history and close fallback, uses this gate. */
-function navigateToScene(id: SceneTabId | null, commit: () => void, session?: SessionSceneTarget): void {
-  const hadPendingNavigation = useSceneStore.getState().pendingTabId !== null;
-  const request = ++navigationRequest;
-  const adapter = sessionNavigation;
-  const target = session ?? useSceneStore.getState().openTabs.find(tab => tab.id === id)?.session;
-  const isCurrent = () => request === navigationRequest && adapter === sessionNavigation;
-  if (!target || !adapter || (!hadPendingNavigation && adapter.isActive(target))) {
-    if (useSceneStore.getState().pendingTabId !== null) useSceneStore.setState({ pendingTabId: null });
-    commit();
-    return;
-  }
-
-  useSceneStore.setState({ pendingTabId: id });
-  void adapter.activate(target, isCurrent).then(activated => {
-    if (activated && isCurrent()) commit();
-  }).finally(() => {
-    if (isCurrent()) useSceneStore.setState({ pendingTabId: null });
-  });
-}
-
 function resolveNavSceneId(sceneId: SceneTabId | null): SceneTabId | null {
   if (sceneId === null) return null;
   return getSceneNav(sceneId) ? sceneId : null;
@@ -313,6 +281,38 @@ export const useSceneStore = create<SceneState>((set, get) => ({
     });
   },
 }));
+
+export function registerSessionSceneNavigation(adapter: SessionSceneNavigation): () => void {
+  sessionNavigation = adapter;
+  return () => {
+    if (sessionNavigation === adapter) {
+      sessionNavigation = undefined;
+      navigationRequest++;
+      if (useSceneStore.getState().pendingTabId !== null) useSceneStore.setState({ pendingTabId: null });
+    }
+  };
+}
+
+/** Every navigation path, including history and close fallback, uses this gate. */
+function navigateToScene(id: SceneTabId | null, commit: () => void, session?: SessionSceneTarget): void {
+  const hadPendingNavigation = useSceneStore.getState().pendingTabId !== null;
+  const request = ++navigationRequest;
+  const adapter = sessionNavigation;
+  const target = session ?? useSceneStore.getState().openTabs.find(tab => tab.id === id)?.session;
+  const isCurrent = () => request === navigationRequest && adapter === sessionNavigation;
+  if (!target || !adapter || (!hadPendingNavigation && adapter.isActive(target))) {
+    if (useSceneStore.getState().pendingTabId !== null) useSceneStore.setState({ pendingTabId: null });
+    commit();
+    return;
+  }
+
+  useSceneStore.setState({ pendingTabId: id });
+  void adapter.activate(target, isCurrent).then(activated => {
+    if (activated && isCurrent()) commit();
+  }).finally(() => {
+    if (isCurrent()) useSceneStore.setState({ pendingTabId: null });
+  });
+}
 
 function openSceneTarget(id: SceneTabId, session?: SessionSceneTarget): void {
   const get = useSceneStore.getState;

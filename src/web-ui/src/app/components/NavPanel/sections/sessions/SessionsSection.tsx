@@ -293,9 +293,11 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
     sessionNavStatusService.getOrderingSnapshot,
     sessionNavStatusService.getOrderingSnapshot,
   );
-  const runningSessionIds = useMemo(() => new Set(
-    [...flowChatState.sessions.keys()].filter(sessionNavStatusService.isRunning),
-  ), [flowChatState.sessions, orderingRevision]);
+  const runningSessionIds = useMemo(() => {
+    // The revision invalidates these reads from the live navigation service.
+    void orderingRevision;
+    return new Set([...flowChatState.sessions.keys()].filter(sessionNavStatusService.isRunning));
+  }, [flowChatState.sessions, orderingRevision]);
   const [scheduledJobsSessionId, setScheduledJobsSessionId] = useState<string | null>(null);
   const [batchWorkspace, setBatchWorkspace] = useState<WorkspaceSessionScope | null>(null);
   const editInputRef = useRef<HTMLInputElement>(null);
@@ -798,6 +800,8 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
   );
 
   const { topLevelSessions: allTopLevelSessions, childrenByParent } = useMemo(() => {
+    // Activity timestamps can change independently of the session records.
+    void orderingRevision;
     const childMap = new Map<string, Session[]>();
     const parents: Session[] = [];
 
