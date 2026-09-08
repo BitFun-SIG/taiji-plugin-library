@@ -13,6 +13,7 @@ import {
   getBuiltinAppearance,
 } from './catalog';
 import { withLegacyButtonTokens } from './buttonThemeCompatibility';
+import { withLegacyFieldTokens } from './fieldThemeCompatibility';
 
 const COMPOSITION_LAYERS = Symbol('openbitfun.appearance.composition-layers');
 
@@ -121,12 +122,12 @@ function mergeRenderers(
         ...override['theme-tokens'].settings,
         tokens: {
           ...(base?.['theme-tokens']?.settings.tokens ?? {}),
-          ...withLegacyButtonTokens(override['theme-tokens'].settings.tokens),
+          ...withLegacyFieldTokens(withLegacyButtonTokens(override['theme-tokens'].settings.tokens)),
         },
         scopes: {
           chrome: {
             ...(base?.['theme-tokens']?.settings.scopes?.chrome ?? {}),
-            ...withLegacyButtonTokens(override['theme-tokens'].settings.scopes?.chrome),
+            ...withLegacyFieldTokens(withLegacyButtonTokens(override['theme-tokens'].settings.scopes?.chrome)),
           },
         },
       },

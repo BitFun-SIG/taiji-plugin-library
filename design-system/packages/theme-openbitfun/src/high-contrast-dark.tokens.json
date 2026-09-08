@@ -51,6 +51,7 @@
       }
     },
     "field": {
+      "placeholder": { "$type": "color", "$value": "{color.content.muted}" },
       "border": { "$type": "color", "$value": "{ref.color.gray.250}" },
       "borderHover": { "$type": "color", "$value": "{ref.color.gray.0}" },
       "borderFocus": { "$type": "color", "$value": "{ref.color.amber.400}" }

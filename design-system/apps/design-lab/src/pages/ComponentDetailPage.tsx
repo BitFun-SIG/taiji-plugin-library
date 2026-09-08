@@ -178,6 +178,8 @@ const optionLabelKeys: Readonly<Record<string, MessageKey>> = {
   default: "detail.option.default",
   replacing: "detail.option.replacing",
   disabled: "detail.option.disabled",
+  filled: "detail.option.filled",
+  "read-only": "detail.option.read-only",
   display: "detail.option.display",
   error: "detail.option.error",
   expanded: "detail.option.expanded",
@@ -298,6 +300,27 @@ function NumberInputPreview({ state }: { state: string }) {
   );
 }
 
+function SearchFieldStatePreview({ state }: { state: string }) {
+  const { t } = useI18n();
+  const [value, setValue] = useState(state === "default" ? "" : "OpenBitFun");
+  return (
+    <SearchField
+      aria-label={t("components.preview.searchLabel")}
+      className={state === "hover" ? "lab-force-hover" : state === "focus-visible" ? "lab-force-focus" : undefined}
+      clearLabel={t("components.preview.searchClear")}
+      disabled={state === "disabled"}
+      invalid={state === "invalid"}
+      leadingIcon={<Icon name="search" />}
+      onClear={() => setValue("")}
+      onValueChange={setValue}
+      placeholder={t("components.preview.searchPlaceholder")}
+      readOnly={state === "read-only"}
+      shortcut={<KeyHint icon={<Icon name="command-mac" />}>K</KeyHint>}
+      value={value}
+    />
+  );
+}
+
 export function ComponentDetailPage({
   colorScheme,
   component,
@@ -399,7 +422,7 @@ export function ComponentDetailPage({
         return ["raised", "subtle", "media"] as const;
       case "Input":
       case "SearchField":
-        return ["default", "hover", "focus-visible", "invalid", "disabled"] as const;
+        return ["default", "filled", "hover", "focus-visible", "read-only", "invalid", "disabled"] as const;
       case "Select":
         return ["default", "hover", "focus-visible", "open", "invalid", "disabled"] as const;
       case "Field":
@@ -541,7 +564,9 @@ export function ComponentDetailPage({
         ? " disabled"
         : previewState === "invalid"
           ? " invalid"
-          : "";
+          : previewState === "read-only"
+            ? ' readOnly defaultValue="OpenBitFun"'
+            : previewState === "default" ? "" : ' defaultValue="OpenBitFun"';
       return `import { Icon, Input } from "@openbitfun/ui";\n\n<Input\n  aria-label="${t("components.preview.inputLabel")}"\n  placeholder="${t("components.preview.inputPlaceholder")}"\n  trailing={<Icon name="eye" />}${stateProps}\n/>`;
     }
     if (component.name === "KeyHint") {
@@ -570,12 +595,8 @@ export function ComponentDetailPage({
       return `import { Icon, IconButton, PageHeader } from "@openbitfun/ui";\n\n<PageHeader\n  action={<IconButton aria-label="${t("components.preview.close")}" icon={<Icon name="xmark" />} />}\n  align="${pageHeaderAlign}"\n  description="${t("components.preview.appearanceDescription")}"\n  leading={<Icon name="gear" />}\n  level={2}${requiredProp}\n  size="${pageHeaderSize}"\n  title="${t("components.preview.appearance")}"\n/>`;
     }
     if (component.name === "SearchField") {
-      const stateProps = previewState === "disabled"
-        ? " disabled"
-        : previewState === "invalid"
-          ? " invalid"
-          : "";
-      return `import { Icon, KeyHint, SearchField } from "@openbitfun/ui";\n\n<SearchField\n  aria-label="${t("components.preview.searchLabel")}"\n  leadingIcon={<Icon name="search" />}\n  placeholder="${t("components.preview.searchPlaceholder")}"\n  shortcut={<KeyHint icon={<Icon name="command-mac" />}>K</KeyHint>}${stateProps}\n/>`;
+      const searchStateProps = previewState === "disabled" ? " disabled" : previewState === "invalid" ? " invalid" : previewState === "read-only" ? " readOnly" : "";
+      return `import { useState } from "react";\nimport { Icon, KeyHint, SearchField } from "@openbitfun/ui";\n\nfunction Example() {\n  const [query, setQuery] = useState(${JSON.stringify(previewState === "default" ? "" : "OpenBitFun")});\n  return (\n    <SearchField\n      clearLabel="${t("components.preview.searchClear")}"\n      onClear={() => setQuery("")}\n      onValueChange={setQuery}\n      value={query}\n      aria-label="${t("components.preview.searchLabel")}"\n      leadingIcon={<Icon name="search" />}\n      placeholder="${t("components.preview.searchPlaceholder")}"\n      shortcut={<KeyHint icon={<Icon name="command-mac" />}>K</KeyHint>}${searchStateProps}\n    />\n  );\n}`;
     }
     if (component.name === "Combobox") {
       return `import { Combobox } from "@openbitfun/ui";\n\n<Combobox\n  aria-label="Mode"\n  onValueChange={setMode}\n  options={[\n    { label: "Ask", value: "ask" },\n    { label: "Plan", value: "plan" },\n    { disabled: true, label: "Agent", value: "agent" },\n  ]}\n  value={mode}\n/>`;
@@ -1327,10 +1348,13 @@ export function ComponentDetailPage({
         <Input
           aria-label={t("components.preview.inputLabel")}
           className={previewClassName}
+          defaultValue={state === "default" ? undefined : "OpenBitFun"}
+          key={state}
           disabled={state === "disabled"}
           invalid={state === "invalid"}
           placeholder={t("components.preview.inputPlaceholder")}
-          trailing={<Icon name="eye" size="lg" aria-hidden="true" />}
+          readOnly={state === "read-only"}
+          trailing={<Icon name="eye" />}
         />
       );
     }
@@ -1775,22 +1799,7 @@ export function ComponentDetailPage({
     }
 
     if (component.name === "SearchField") {
-      const previewClassName = state === "hover"
-        ? "lab-force-hover"
-        : state === "focus-visible"
-          ? "lab-force-focus"
-          : undefined;
-      return (
-        <SearchField
-          aria-label={t("components.preview.searchLabel")}
-          className={previewClassName}
-          disabled={state === "disabled"}
-          invalid={state === "invalid"}
-          leadingIcon={<Icon name="search" size="lg" aria-hidden="true" />}
-          placeholder={t("components.preview.searchPlaceholder")}
-          shortcut={<KeyHint icon={<Icon name="command-mac" size="lg" aria-hidden="true" />}>K</KeyHint>}
-        />
-      );
+      return <SearchFieldStatePreview key={state} state={state} />;
     }
 
     if (component.name === "NavigationPanel") {
