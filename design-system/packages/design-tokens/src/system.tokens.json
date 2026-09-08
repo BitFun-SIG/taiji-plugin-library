@@ -169,6 +169,14 @@
         "letterSpacing": { "$value": "{letterSpacing.normal}" }
       }
     },
+    "fieldHelper": {
+      "$description": "Field helper leading: 16px at the default 11px type size, scaling with user typography.",
+      "lineHeight": { "$type": "number", "$value": 1.4545454545454546 }
+    },
+    "formDescription": {
+      "$description": "Form-section description leading: 16px at the default 13px type size, scaling with user typography.",
+      "lineHeight": { "$type": "number", "$value": 1.2307692307692308 }
+    },
     "support": {
       "fontFamily": { "$value": "{font.family.control}" },
       "fontSize": { "$value": "{font.size.meta}" },

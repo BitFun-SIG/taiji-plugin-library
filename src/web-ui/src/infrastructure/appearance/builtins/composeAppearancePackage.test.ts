@@ -16,8 +16,9 @@ describe('composeAppearancePackage', () => {
               '--openbitfun-color-field-border': '#123456',
               '--openbitfun-color-field-border-focus': '#654321',
               '--openbitfun-color-content-muted': '#778899',
+              '--openbitfun-color-surface-tertiary': '#abcdef',
             },
-            scopes: { chrome: { '--openbitfun-color-content-muted': '#556677', '--openbitfun-color-field-border-focus': '#445566' } },
+            scopes: { chrome: { '--openbitfun-color-content-muted': '#556677', '--openbitfun-color-field-border-focus': '#445566', '--openbitfun-color-surface-tertiary': '#aabbcc' } },
           },
         },
       },
@@ -30,7 +31,9 @@ describe('composeAppearancePackage', () => {
       '--openbitfun-color-field-border-focus': '#654321',
       '--openbitfun-color-field-border-active': '#654321',
       '--openbitfun-color-field-placeholder': '#778899',
+      '--openbitfun-color-field-group-background': '#abcdef',
     });
+    expect(settings.scopes?.chrome?.['--openbitfun-color-field-group-background']).toBe('#aabbcc');
     expect(settings.scopes?.chrome?.['--openbitfun-color-field-placeholder']).toBe('#556677');
     expect(settings.scopes?.chrome?.['--openbitfun-color-field-border-active']).toBe('#445566');
     expect(composeAppearancePackage(JSON.parse(JSON.stringify(resolved))).renderers?.['theme-tokens']).toEqual(resolved.renderers?.['theme-tokens']);
@@ -40,7 +43,11 @@ describe('composeAppearancePackage', () => {
     original.renderers!['theme-tokens']!.settings.tokens['--openbitfun-color-field-border-active'] = '#223344';
     original.renderers!['theme-tokens']!.settings.scopes!.chrome!['--openbitfun-color-field-placeholder'] = '#334455';
     original.renderers!['theme-tokens']!.settings.scopes!.chrome!['--openbitfun-color-field-border-active'] = '#556688';
+    original.renderers!['theme-tokens']!.settings.tokens['--openbitfun-color-field-group-background'] = '#123abc';
+    original.renderers!['theme-tokens']!.settings.scopes!.chrome!['--openbitfun-color-field-group-background'] = '#456def';
     const explicit = composeAppearancePackage(original).renderers!['theme-tokens']!.settings;
+    expect(explicit.tokens['--openbitfun-color-field-group-background']).toBe('#123abc');
+    expect(explicit.scopes?.chrome?.['--openbitfun-color-field-group-background']).toBe('#456def');
     expect(explicit.tokens['--openbitfun-color-field-placeholder']).toBe('#112233');
     expect(explicit.tokens['--openbitfun-color-field-border-active']).toBe('#223344');
     expect(explicit.scopes?.chrome?.['--openbitfun-color-field-placeholder']).toBe('#334455');

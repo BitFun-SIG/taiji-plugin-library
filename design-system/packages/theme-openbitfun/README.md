@@ -62,7 +62,8 @@ component token is absent, and keeps explicit component overrides intact.
 
 - `color.surface.scene`, `panel`, and `raised` own primary content and elevated planes.
 - `color.surface.chrome` owns persistent application structure such as navigation and window-control regions.
-- `color.surface.tertiary` is an opaque low-emphasis fill for persistent grouped content such as cards and field groups.
+- `color.surface.tertiary` is an opaque low-emphasis fill for persistent containers such as cards.
+- `color.field.groupBackground` owns grouped form surfaces: light mode uses a 3% black tint so the underlying surface remains visible; dark and high-contrast modes retain their tertiary fill. Opaque tertiary containers and transient `surface.subtle` feedback cannot express this form-specific contract. Imported appearances inherit an explicitly supplied legacy tertiary color unless they supply the new field token.
 - `color.surface.subtle` is a translucent local tint for transient feedback and small inset details. It must not define a persistent application plane.
 - `color.selection.surface` owns persistent neutral selection. Hover and pressed colors remain action feedback and are not substitutes for selection.
 - `color.codeChange.added` (`#1aa73e`) and `color.codeChange.removed` (`#ec221f`) also anchor success and danger emphasis. Warning emphasis uses `#ff8c00`; information uses the existing creative-action blue (`#2e7eff`). These clear hues share light tints instead of separate per-component palettes.

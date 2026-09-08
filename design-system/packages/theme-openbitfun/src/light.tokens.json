@@ -175,6 +175,7 @@
       }
     },
     "field": {
+      "groupBackground": { "$description": "Grouped form tint; independent of opaque tertiary containers and transient subtle feedback.", "$type": "color", "$value": "rgba(0, 0, 0, 0.03)" },
       "borderActive": { "$description": "Input and SearchField editing border, distinct from the stronger generic focus indicator used by other controls.", "$type": "color", "$value": "{color.field.borderHover}" },
       "placeholder": { "$description": "Empty field hints and decorative adornments; distinct from general secondary prose.", "$type": "color", "$value": "rgba(0, 0, 0, 0.40)" },
       "background": { "$type": "color", "$value": "{ref.color.neutral.0}" },

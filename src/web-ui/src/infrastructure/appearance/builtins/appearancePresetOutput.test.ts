@@ -56,6 +56,7 @@ describe('builtin appearance preset output', () => {
     expect(settings?.tokens['--openbitfun-color-field-border-hover']).toBe('rgba(0, 0, 0, 0.20)');
     expect(settings?.tokens['--openbitfun-color-field-border-active']).toBe('rgba(0, 0, 0, 0.20)');
     expect(settings?.tokens['--openbitfun-color-field-border-focus']).toBe(themes.light['color.field.borderFocus']);
+    expect(settings?.tokens['--openbitfun-color-field-group-background']).toBe('rgba(0, 0, 0, 0.03)');
     expect(settings?.tokens['--openbitfun-color-field-placeholder']).toBe('rgba(0, 0, 0, 0.40)');
     for (const palette of builtinAppearancePalettes) {
       if (palette.id === 'openbitfun-light') continue;
@@ -63,6 +64,7 @@ describe('builtin appearance preset output', () => {
       expect(tokens['--openbitfun-color-field-border']).toBe(palette.colors.border.base);
       expect(tokens['--openbitfun-color-field-border-focus']).toBe(palette.colors.accent[500]);
       expect(tokens['--openbitfun-color-field-border-active']).toBe(palette.colors.accent[500]);
+      expect(tokens['--openbitfun-color-field-group-background']).toBe(palette.colors.background.tertiary);
       expect(tokens['--openbitfun-color-field-placeholder']).toBe(palette.colors.text.muted);
     }
   });

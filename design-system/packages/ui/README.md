@@ -397,3 +397,11 @@ Tool-specific data shaping, localization, host actions, stores, and heavy
 renderers remain in the consuming product and enter through semantic props,
 callbacks, and slots. Bespoke product workflows remain product-owned rather
 than being forced into a standard package view.
+
+Field labels follow their orientation: horizontal labels use the 13px semibold
+label role, while vertical labels use the 11px regular meta role. Field helpers
+use secondary content with 16px leading at the default 11px font size;
+FormSection descriptions use primary content with 16px leading at 13px. Both
+leading roles scale with user typography. FieldGroup uses the form group tint,
+retaining its existing row padding, dividers, and radius. The Patterns form
+specimen shows both orientations and long values over a tinted container.

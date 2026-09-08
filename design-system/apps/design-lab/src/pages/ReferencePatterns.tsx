@@ -8,6 +8,7 @@ import {
   Field,
   FieldGroup,
   FieldRow,
+  FormSection,
   Icon,
   IconButton,
   Input,
@@ -34,6 +35,26 @@ import {
   DialogTitle,
 } from "@openbitfun/ui";
 import { useI18n } from "../i18n";
+
+export function FormTypographyPattern() {
+  const { t } = useI18n();
+  return <Card appearance="subtle" padding="md" data-openbitfun-pattern="form-typography">
+    <FormSection title={t("patterns.settings.title")} description={t("patterns.settings.description")}>
+      <FieldGroup>
+        <FieldRow>
+          <Field label={t("patterns.settings.language")} description={t("patterns.settings.languageDescription")} orientation="horizontal" controlWidth="fill" labelWidth="md">
+            <Input defaultValue="English / 简体中文 / 繁體中文" />
+          </Field>
+        </FieldRow>
+        <FieldRow>
+          <Field label={t("patterns.provider.headers")} description={t("components.preview.fieldDescription")} orientation="vertical" controlWidth="fill">
+            <Input defaultValue="X-OpenBitFun-Workspace-Display-Name-With-A-Long-Value" />
+          </Field>
+        </FieldRow>
+      </FieldGroup>
+    </FormSection>
+  </Card>;
+}
 
 export function ProviderConfigurationPattern() {
   const { t } = useI18n();

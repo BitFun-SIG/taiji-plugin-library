@@ -40,6 +40,9 @@ const FIELD_STATE_THEME_VARIABLE_NAMES = [
   '--openbitfun-color-field-border-active',
   '--openbitfun-color-field-placeholder',
 ] as const;
+// Grouped forms own a translucent fill independently of opaque tertiary surfaces
+// and transient subtle feedback; keep this addition outside the shared fingerprint.
+const FIELD_GROUP_THEME_VARIABLE_NAME = '--openbitfun-color-field-group-background';
 const RETIRED_WIDGET_VARIABLE_NAMES = [
   '--background-primary',
   '--bg-primary',
@@ -87,9 +90,11 @@ describe('generated widget appearance payload contract', () => {
     const sharedNames = WIDGET_APPEARANCE_VAR_NAMES.filter(name => (
       !name.startsWith('--openbitfun-component-button-')
       && !FIELD_STATE_THEME_VARIABLE_NAMES.some(fieldName => fieldName === name)
+      && name !== FIELD_GROUP_THEME_VARIABLE_NAME
     ));
     expect(buttonNames).toEqual(BUTTON_THEME_VARIABLE_NAMES);
     expect(fieldStateNames).toEqual(FIELD_STATE_THEME_VARIABLE_NAMES);
+    expect(WIDGET_APPEARANCE_VAR_NAMES).toContain(FIELD_GROUP_THEME_VARIABLE_NAME);
     expect({
       count: sharedNames.length,
       hash: hashNames(sharedNames),
@@ -149,6 +154,7 @@ describe('generated widget appearance payload contract', () => {
       '--openbitfun-component-button-primary-background': '#303030',
       '--openbitfun-component-button-fill-background': 'rgba(0, 0, 0, 0.08)',
       '--openbitfun-color-field-border-active': 'rgba(0, 0, 0, 0.20)',
+      '--openbitfun-color-field-group-background': 'rgba(0, 0, 0, 0.03)',
       '--openbitfun-color-field-placeholder': 'rgba(0, 0, 0, 0.40)',
       '--openbitfun-color-status-danger-surface': 'rgba(200, 0, 0, 0.12)',
       '--openbitfun-color-status-danger-border': '#303030',
