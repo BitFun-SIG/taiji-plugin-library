@@ -19,8 +19,8 @@
  *   flow so flex `align-items: center` stays stable. */
 .flow-thinking-item {
   padding: 0;
-  /* Match `.flow-text-block` and the tool wrappers so flow items share one visual gap. */
-  margin: 0 0 var(--openbitfun-control-flow-chat-flow-item-gap) 0;
+  /* The enclosing transcript composition owns the gap to the next item. */
+  margin: 0;
   background: transparent;
   border: 0;
   box-sizing: border-box;
@@ -31,6 +31,7 @@
 }
 
 .thinking-collapsed-header {
+  min-block-size: max(1lh, var(--openbitfun-control-tool-card-ambient-row-min-block-size));
   display: flex;
   align-items: center;
   gap: var(--openbitfun-control-flow-chat-row-icon-gap);
@@ -154,7 +155,7 @@
   font-family:var(--openbitfun-type-body-sm-font-family);
   word-break: break-word;
   color: var(--openbitfun-color-content-muted);
-  padding: var(--openbitfun-control-flow-chat-card-expanded-padding-block) var(--openbitfun-control-flow-chat-card-expanded-padding-inline) var(--openbitfun-control-flow-chat-card-expanded-padding-block) 0;
+  padding: var(--openbitfun-control-flow-chat-card-expanded-padding-block) var(--openbitfun-control-flow-chat-card-expanded-padding-inline) 0 0;
   background: transparent;
   border: none;
   border-radius: 6px;

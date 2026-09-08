@@ -448,3 +448,9 @@ and disclosure glyphs occupy that same column. Expanded thinking prose remains
 aligned with the body edge; bordered tool detail retains its own content inset.
 The 12px/4px Figma inline trace is a smaller typography scene; the existing
 product 14px glyph size is retained when applying its gap to these summaries.
+
+FlowChat vertical composition uses an 8px item/section gap and 4px inline gap.
+Collapsed ambient tool runs use their 22px minimum line boxes without extra
+spacing between adjacent rows; expanded/prominent cards retain the section gap.
+The enclosing composition owns those gaps, and card bodies own their internal
+padding. The Lab tool sequence demonstrates both arrangements with real cards.
