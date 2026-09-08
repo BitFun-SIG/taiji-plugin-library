@@ -495,7 +495,16 @@ fn launch_data_migrator(run_id: &str) -> LegacyMigrationResult<u32> {
         DESKTOP_BINARY_NAME,
         DATA_MIGRATOR_BINARY_NAME,
     )?;
-    launch_trusted_executable(&executable, &[OsStr::new(run_id)])
+    let pid = launch_trusted_executable(&executable, &[OsStr::new(run_id)])?;
+    #[cfg(debug_assertions)]
+    if let Some(directory) = std::env::var_os("OPENBITFUN_DEV_MIGRATION_DIR") {
+        let path = std::path::PathBuf::from(directory).join("handoff.json");
+        openbitfun_legacy_migration::atomic_write_json(
+            &path,
+            &serde_json::json!({ "runId": run_id, "pid": pid }),
+        )?;
+    }
+    Ok(pid)
 }
 
 fn should_offer_onboarding(

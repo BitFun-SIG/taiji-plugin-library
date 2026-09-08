@@ -32,24 +32,6 @@ const DATA_MIGRATOR_BINARY_NAME: &str = match option_env!("OPENBITFUN_DATA_MIGRA
     None => "openbitfun-data-migrator",
 };
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum FinishAction {
-    CloseForDevRestart,
-    RestartDesktop,
-}
-
-const fn finish_action() -> FinishAction {
-    finish_action_for_build(cfg!(debug_assertions))
-}
-
-const fn finish_action_for_build(is_debug_build: bool) -> FinishAction {
-    if is_debug_build {
-        FinishAction::CloseForDevRestart
-    } else {
-        FinishAction::RestartDesktop
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct CommandError {
@@ -554,6 +536,14 @@ impl MigratorCoordinator {
         &self,
         choice: MigrationPromptChoice,
     ) -> Result<(), CommandError> {
+        self.finish_with_restart(choice, || self.restart_desktop())
+    }
+
+    fn finish_with_restart(
+        &self,
+        choice: MigrationPromptChoice,
+        restart: impl FnOnce() -> LegacyMigrationResult<()>,
+    ) -> Result<(), CommandError> {
         if self.is_running() {
             return Err(CommandError::operation_in_progress());
         }
@@ -574,10 +564,7 @@ impl MigratorCoordinator {
 
         let result = (|| {
             self.persist_prompt_choice(choice)?;
-            match finish_action() {
-                FinishAction::CloseForDevRestart => Ok(()),
-                FinishAction::RestartDesktop => self.restart_desktop(),
-            }
+            restart()
         })();
         if let Err(error) = result {
             let mut session = self.lock();
@@ -772,6 +759,10 @@ impl MigratorCoordinator {
 
     fn restart_desktop(&self) -> LegacyMigrationResult<()> {
         let run_id = self.lock().request.run_id.clone();
+        #[cfg(debug_assertions)]
+        if let Some(directory) = std::env::var_os("OPENBITFUN_DEV_MIGRATION_DIR") {
+            return request_dev_restart(Path::new(&directory), &run_id);
+        }
         let current = std::env::current_exe().map_err(|error| LegacyMigrationError::Io {
             path: Path::new(DATA_MIGRATOR_BINARY_NAME).to_path_buf(),
             source: error,
@@ -813,6 +804,31 @@ impl MigratorCoordinator {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
+}
+
+#[cfg(debug_assertions)]
+fn request_dev_restart(directory: &Path, run_id: &str) -> LegacyMigrationResult<()> {
+    // Only the development supervisor supplies this private, per-launch channel.
+    // The migration request never supplies paths or executable names.
+    let handoff_path = directory.join("handoff.json");
+    let bytes = std::fs::read(&handoff_path).map_err(|source| LegacyMigrationError::Io {
+        path: handoff_path,
+        source,
+    })?;
+    let handoff: serde_json::Value = serde_json::from_slice(&bytes).map_err(|_| {
+        LegacyMigrationError::InvalidRequest("invalid development restart handoff".to_string())
+    })?;
+    if handoff["runId"].as_str() != Some(run_id)
+        || handoff["pid"].as_u64() != Some(u64::from(std::process::id()))
+    {
+        return Err(LegacyMigrationError::InvalidRequest(
+            "development restart handoff does not match this migrator".to_string(),
+        ));
+    }
+    openbitfun_legacy_migration::atomic_write_json(
+        &directory.join("restart.json"),
+        &serde_json::json!({ "runId": run_id }),
+    )
 }
 
 fn migration_engine(
@@ -879,7 +895,7 @@ fn snapshot(session: &MigratorSession) -> MigratorView {
     let report = session.report.as_ref().map(redact_report_for_ui);
     MigratorView {
         delivery_profile: DeliveryProfile::DataMigrator.id().to_string(),
-        restart_desktop_on_finish: finish_action() == FinishAction::RestartDesktop,
+        restart_desktop_on_finish: true,
         protocol: MigratorProtocolCapabilities::current(),
         mode: session.request.mode,
         source: session.source.clone(),
@@ -1032,7 +1048,7 @@ mod tests {
         let view = coordinator.snapshot();
 
         assert_eq!(view.delivery_profile, "data-migrator");
-        assert!(!view.restart_desktop_on_finish);
+        assert!(view.restart_desktop_on_finish);
         assert_eq!(view.mode, MigratorRequestMode::Onboarding);
         assert!(view.source.is_some());
         assert!(!view.recovery);
@@ -1127,8 +1143,91 @@ mod tests {
     }
 
     #[test]
-    fn finish_action_preserves_release_restart_and_closes_debug() {
-        assert_eq!(finish_action(), FinishAction::CloseForDevRestart);
-        assert_eq!(finish_action_for_build(false), FinishAction::RestartDesktop);
+    fn dismissing_onboarding_persists_choice_and_restarts_desktop() {
+        for choice in [
+            MigrationPromptChoice::DoNotRemind,
+            MigrationPromptChoice::RemindLater,
+        ] {
+            let temporary = tempfile::tempdir().unwrap();
+            let roots = fixture_roots(temporary.path());
+            write_probe_fixture(&roots);
+            let request = handoff_request();
+            HandoffStore::new(roots.clone(), "openbitfun", "stable")
+                .write_request(&request, now_ms())
+                .unwrap();
+            let coordinator = MigratorCoordinator::bootstrap_with(
+                &request.run_id,
+                roots.clone(),
+                "openbitfun",
+                "stable",
+            )
+            .unwrap();
+            let mut restarted = false;
+            coordinator
+                .finish_with_restart(choice, || {
+                    // Restart must observe the saved choice and one-time restart receipt.
+                    let state = MigrationOnboardingStore::new(roots.clone()).load().unwrap();
+                    assert_eq!(state.choice, choice);
+                    assert_eq!(
+                        state.handled_run_id.as_deref(),
+                        Some(request.run_id.as_str())
+                    );
+                    restarted = true;
+                    Ok(())
+                })
+                .unwrap();
+            assert!(restarted);
+            assert!(coordinator.snapshot().restart_desktop_on_finish);
+        }
+    }
+
+    #[test]
+    fn failed_restart_stays_visible_and_keeps_the_saved_choice() {
+        let temporary = tempfile::tempdir().unwrap();
+        let roots = fixture_roots(temporary.path());
+        write_probe_fixture(&roots);
+        let request = handoff_request();
+        HandoffStore::new(roots.clone(), "openbitfun", "stable")
+            .write_request(&request, now_ms())
+            .unwrap();
+        let coordinator = MigratorCoordinator::bootstrap_with(
+            &request.run_id,
+            roots.clone(),
+            "openbitfun",
+            "stable",
+        )
+        .unwrap();
+        assert!(coordinator
+            .finish_with_restart(MigrationPromptChoice::DoNotRemind, || {
+                Err(LegacyMigrationError::TrustedInstallationUnavailable(
+                    "missing desktop".into(),
+                ))
+            })
+            .is_err());
+        assert!(coordinator.snapshot().error.is_some());
+        assert_eq!(
+            MigrationOnboardingStore::new(roots).load().unwrap().choice,
+            MigrationPromptChoice::DoNotRemind
+        );
+    }
+
+    #[test]
+    #[cfg(debug_assertions)]
+    fn development_restart_requires_matching_handoff() {
+        let temporary = tempfile::tempdir().unwrap();
+        let run_id = uuid::Uuid::new_v4().to_string();
+        let handoff = temporary.path().join("handoff.json");
+        openbitfun_legacy_migration::atomic_write_json(
+            &handoff,
+            &serde_json::json!({ "runId": run_id, "pid": std::process::id() }),
+        )
+        .unwrap();
+        assert!(request_dev_restart(temporary.path(), "wrong-run").is_err());
+        assert!(!temporary.path().join("restart.json").exists());
+        request_dev_restart(temporary.path(), &run_id).unwrap();
+        let restart: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(temporary.path().join("restart.json")).unwrap())
+                .unwrap();
+        assert_eq!(restart["runId"], run_id);
     }
 }
