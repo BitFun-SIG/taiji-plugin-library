@@ -30,7 +30,14 @@ must remain a separate executable and WebView identity from Desktop.
 ```bash
 cargo test -p openbitfun-data-migrator
 node --test scripts/data-migrator-tauri-build.test.mjs
+node --test scripts/desktop-dev-migration.test.mjs
 ```
+
+Completion always returns to Desktop. Debug builds launched through `desktop:dev`
+or `desktop:preview:debug` ask that launcher to restart via its private temporary
+handoff directory, preserving the frontend server and development lifecycle.
+Builds without that channel restart the trusted sibling Desktop executable.
+Keep this developer-only channel out of persisted migration and remote protocols.
 
 Run `pnpm run check:core-boundaries` when dependencies or delivery-profile
 selection change. Packaging, signing, and UI interaction are separate explicit

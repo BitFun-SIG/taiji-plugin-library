@@ -712,9 +712,59 @@ fn platform_process_entries() -> LegacyMigrationResult<Vec<ProcessEntry>> {
 
 #[cfg(target_os = "macos")]
 fn platform_process_entries() -> LegacyMigrationResult<Vec<ProcessEntry>> {
-    Err(LegacyMigrationError::ProcessInspection(
-        "process inventory is not implemented for macOS".to_string(),
-    ))
+    // macOS has no /proc. Use the system ps with unlimited output width so
+    // application bundle paths (including spaces) cannot truncate writer names.
+    // `comm` excludes arguments, which may contain user content or credentials.
+    let output = openbitfun_services_core::process_manager::create_command("/bin/ps")
+        .args(["-ww", "-axo", "pid=,comm="])
+        .env("LC_ALL", "C")
+        .stdin(std::process::Stdio::null())
+        .output()
+        .map_err(|_| {
+            LegacyMigrationError::ProcessInspection("could not run system ps".to_string())
+        })?;
+    if !output.status.success() {
+        return Err(LegacyMigrationError::ProcessInspection(
+            "system ps failed to enumerate processes".to_string(),
+        ));
+    }
+    parse_macos_process_entries(&String::from_utf8_lossy(&output.stdout))
+}
+
+#[cfg(any(target_os = "macos", test))]
+fn parse_macos_process_entries(output: &str) -> LegacyMigrationResult<Vec<ProcessEntry>> {
+    let invalid_inventory = || {
+        LegacyMigrationError::ProcessInspection(
+            "system ps returned an invalid inventory".to_string(),
+        )
+    };
+    let mut entries = Vec::new();
+    for line in output.lines().filter(|line| !line.trim().is_empty()) {
+        let (pid, command) = line
+            .trim_start()
+            .split_once(char::is_whitespace)
+            .ok_or_else(invalid_inventory)?;
+        let process_id = pid
+            .parse::<u32>()
+            .ok()
+            .filter(|pid| *pid > 0)
+            .ok_or_else(invalid_inventory)?;
+        let executable_name = command
+            .trim_start()
+            .rsplit('/')
+            .next()
+            .filter(|name| !name.is_empty())
+            .ok_or_else(invalid_inventory)?
+            .to_string();
+        entries.push(ProcessEntry {
+            process_id,
+            executable_name,
+        });
+    }
+    if entries.is_empty() {
+        return Err(invalid_inventory());
+    }
+    Ok(entries)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -884,6 +934,66 @@ mod tests {
         CURRENT_MIGRATION_FORMAT_VERSION, CURRENT_MIGRATOR_PROTOCOL_VERSION,
     };
     use std::collections::BTreeSet;
+
+    #[test]
+    fn macos_inventory_preserves_bundle_names_and_writer_classification() {
+        let entries = parse_macos_process_entries(
+            "   42 /Users/test/Development Projects/target/debug/openbitfun-desktop\n\
+              43 /Applications/BitFun.app/Contents/MacOS/BitFun\n\
+              44 /Applications/Custom Product.app/Contents/MacOS/Custom Product\n\
+              45 /Applications/OpenBitFun.app/Contents/MacOS/openbitfun-data-migrator\n\
+              46 /usr/bin/unrelated\n",
+        )
+        .expect("parse process inventory");
+        let blockers = classify_writer_processes(&entries, 42, 45, &["Custom Product"]);
+        assert_eq!(
+            blockers
+                .iter()
+                .map(|entry| entry.process_id)
+                .collect::<Vec<_>>(),
+            vec![42, 43, 44]
+        );
+        assert!(blockers[0].is_handoff_caller);
+        assert_eq!(blockers[1].executable_name, "BitFun");
+        assert_eq!(blockers[2].executable_name, "Custom Product");
+    }
+
+    #[test]
+    fn macos_inventory_rejects_empty_or_malformed_output() {
+        for output in [
+            "",
+            " \n",
+            "42",
+            "0 /bin/app",
+            "pid /bin/app",
+            "42 ",
+            "42 /",
+            "42 /bin/app\ninvalid",
+        ] {
+            assert!(
+                matches!(
+                    parse_macos_process_entries(output),
+                    Err(LegacyMigrationError::ProcessInspection(_))
+                ),
+                "accepted invalid process inventory: {output:?}"
+            );
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn macos_process_inventory_includes_current_executable() {
+        let entries = platform_process_entries().expect("inspect macOS processes");
+        let current = entries
+            .iter()
+            .find(|entry| entry.process_id == std::process::id())
+            .expect("current process is present");
+        let executable = std::env::current_exe().expect("current executable");
+        assert_eq!(
+            current.executable_name,
+            executable.file_name().unwrap().to_string_lossy()
+        );
+    }
 
     fn roots(root: &Path) -> MigrationRoots {
         MigrationRoots {
