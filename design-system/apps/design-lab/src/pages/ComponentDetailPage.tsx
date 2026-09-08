@@ -618,7 +618,7 @@ export function ComponentDetailPage({
       return `import { Icon, SegmentedControl } from "@openbitfun/ui";\n\n<SegmentedControl\n  size="md"\n  aria-label="${t("components.preview.segmentedLabel")}"\n  defaultValue="${defaultMode}"\n  onValueChange={setMode}\n  options={[\n    { icon: <Icon name="session" />, label: "${t("components.preview.segmentedChat")}", value: "chat" },\n    { label: "${t("components.preview.segmentedAgent")}", value: "agent" },\n  ]}\n/>`;
     }
     if (component.name === "StatusPill") {
-      return `import { Icon, StatusPill } from "@openbitfun/ui";\n\n<StatusPill leading={<Icon name="unselected" />} tone="${previewState}">\n  Ask\n</StatusPill>`;
+      return `import { Icon, StatusPill } from "@openbitfun/ui";\n\n<StatusPill emphasis leading={<Icon name="unselected" />} tone="${previewState}">\n  Ask\n</StatusPill>`;
     }
     if (component.name === "Disclosure") {
       const stateProps = previewState === "open" ? " defaultOpen" : previewState === "disabled" ? " disabled" : "";
@@ -1149,6 +1149,7 @@ export function ComponentDetailPage({
     if (component.name === "StatusPill") {
       return (
         <StatusPill
+          emphasis
           leading={<Icon name="unselected" />}
           tone={state as StatusPillTone}
         >

@@ -80,6 +80,9 @@ function themeValuesToCssTokens(
       // Neutral action labels are primary text in the public theme. The generic
       // palette's secondary text projection used to make product menus too faint.
       tokens['--openbitfun-color-action-neutral-content'] = String(themes.light['color.action.neutral.content']);
+      tokens['--openbitfun-color-scrollbar-thumb'] = String(themes.light['color.scrollbar.thumb']);
+      tokens['--openbitfun-color-number-badge-background'] = String(themes.light['color.numberBadge.background']);
+      tokens['--openbitfun-color-key-hint-content'] = String(themes.light['color.keyHint.content']);
       tokens['--openbitfun-color-action-card-background'] = String(themes.light['color.actionCard.background']);
       tokens['--openbitfun-color-content-caption'] = String(themes.light['color.content.caption']);
       // Default light fields use the published neutral states in both root and
@@ -134,6 +137,8 @@ function createThemeTokenValues(palette: AppearancePalette): Record<ThemeTokenNa
     'color.scrollbar.thumbHover': scrollbar.thumbHover,
     'color.content.primary': colors.text.primary,
     'color.content.caption': colors.text.muted,
+    'color.keyHint.content': colors.text.muted,
+    'color.numberBadge.background': colors.element.base,
     'color.content.secondary': colors.text.secondary,
     'color.content.muted': colors.text.muted,
     'color.content.disabled': colors.text.disabled,
@@ -228,6 +233,8 @@ function createChromeThemeTokens(
     'color.surface.subtle': chrome.element.subtle,
     'color.content.primary': chrome.text.primary,
     'color.content.caption': chrome.text.muted,
+    'color.keyHint.content': chrome.text.muted,
+    'color.numberBadge.background': chrome.element.base,
     'color.content.secondary': chrome.text.secondary,
     'color.content.muted': chrome.text.muted,
     'color.content.disabled': chrome.text.disabled,

@@ -35,7 +35,7 @@ import {
   type TokenOverrides,
 } from "@openbitfun/ui";
 import { useI18n, type MessageKey } from "../i18n";
-import { FormTypographyPattern, NestedMenuPattern, ProviderConfigurationPattern, SceneToolbarPattern, WorkspaceConfigurationPattern } from "./ReferencePatterns";
+import { IndicatorsPattern, FormTypographyPattern, NestedMenuPattern, ProviderConfigurationPattern, SceneToolbarPattern, WorkspaceConfigurationPattern } from "./ReferencePatterns";
 
 interface PatternsPageProps {
   colorScheme: ColorScheme;
@@ -79,6 +79,8 @@ export function PatternsPage({ colorScheme, contrast, density, tokenOverrides }:
           <h1>{t("patterns.title")}</h1>
           <p>{t("patterns.description")}</p>
         </header>
+
+        <IndicatorsPattern />
 
         <PatternSection description={t("patterns.settings.description")} index="01" title={t("patterns.settings.title")}>
           <Card appearance="raised" className="pattern-settings" data-openbitfun-pattern="settings-form" padding="md" radius="md">

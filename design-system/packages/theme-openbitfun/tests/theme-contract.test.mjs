@@ -295,13 +295,13 @@ test("default modes preserve the built-in Appearance anchor values", () => {
   assert.equal(themes.light["color.selection.surface"], "rgba(0, 0, 0, 0.08)");
   assert.equal(themes.light["color.surface.chrome"], "#f8f8f9");
   assert.equal(themes.light["color.surface.tertiary"], "#f7f7f7");
-  assert.equal(themes.light["color.scrollbar.thumb"], "rgba(0, 0, 0, 0.08)");
+  assert.equal(themes.light["color.scrollbar.thumb"], "rgba(0, 0, 0, 0.10)");
   assert.equal(themes.light["color.scrollbar.thumbHover"], "rgba(0, 0, 0, 0.10)");
-  assert.equal(themes.light["color.keyHint.background"], "rgba(0, 0, 0, 0.05)");
+  assert.equal(themes.light["color.keyHint.background"], "rgba(0, 0, 0, 0.08)");
   assert.equal(themes.light["color.control.highlight.background"], "#059cb0");
   assert.equal(themes.light["color.control.highlight.content"], "#000000");
   assert.equal(themes.light["color.content.requiredIndicator"], "#059cb0");
-  assert.equal(themes.light["color.control.launcher.background"], "rgba(0, 0, 0, 0.10)");
+  assert.equal(themes.light["color.control.launcher.background"], "rgba(0, 0, 0, 0.08)");
   assert.equal(
     themes.light["color.control.launcher.backgroundHover"],
     "color-mix(in srgb, #059cb0 20%, transparent)",
@@ -313,7 +313,7 @@ test("default modes preserve the built-in Appearance anchor values", () => {
   assert.equal(themes.light["color.control.launcher.content"], "rgba(0, 0, 0, 0.80)");
   assert.equal(themes.light["color.control.launcher.contentHover"], "#059cb0");
   assert.equal(themes.light["color.control.launcher.contentPressed"], "#059cb0");
-  assert.equal(themes.light["color.control.switch.track"], "#dddddd");
+  assert.equal(themes.light["color.control.switch.track"], "rgba(0, 0, 0, 0.10)");
   assert.equal(themes.light["color.control.switch.trackChecked"], "#059cb0");
   assert.equal(themes.light["color.control.switch.thumb"], "#ffffff");
   assert.equal(themes.light["color.identity.harness.minimal"], "#b434ef");
