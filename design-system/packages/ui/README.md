@@ -25,6 +25,9 @@ Use `OverflowText` for single-line, non-editable labels instead of local
 defaults to **fade-out truncation with an interaction marquee**: a background-independent
 gradient mask at the inline end, followed by scrolling on hover or keyboard focus.
 Both effects apply only when the text actually overflows. Short labels remain untouched.
+Overflowing labels also open a wrapping, selectable tooltip on hover or keyboard
+focus, including when motion is reduced. The tooltip uses the owning
+`data-overflow-trigger` control and groups its clipped text slots into one popup.
 Standard button, menu, navigation, card, selection, and disclosure text slots
 already use this primitive; consumers should not wrap those slots a second time.
 
@@ -55,16 +58,22 @@ Rich children default to fade to preserve the label's existing inline compositio
 Composite containers keep their icons/actions fixed and give each text slot its
 own `OverflowText`. Marquee measures and
 translates one inline text span; keep icons, badges, and action buttons outside
-it. Complete text stays in the accessibility tree. Clipped string/number labels
-get a native title unless the caller supplies one; rich content should use its
-own full-text tooltip or detail view. Do not use marquee as the sole way to
-access information on touch surfaces.
+it. Complete text stays in the accessibility tree. Plain-text arrays and rich
+labels use their complete rendered text in the tooltip. A supplied `title`
+overrides that text; `title=""` opts out when a surrounding native title owns the
+content. An explicit enclosing `Tooltip` suppresses automatic nested tooltips.
+Do not use marquee as the sole way to access information on touch surfaces.
 
 Multi-line descriptions should normally wrap. Editable fields, source code,
 structured paths that need to preserve their suffix, and native controls keep
 their appropriate text treatment instead of receiving a blanket fade rule.
 Mobile sheet/page titles and row descriptions wrap for touch access. Tooltips
 also wrap: a full-text fallback must not truncate its own content.
+
+For a compact multiline preview, use `<OverflowText as="p" lines={2}>` (or `div`
+to preserve the existing semantics). It measures vertical clipping as well as
+horizontal overflow and exposes the same full-text tooltip. Keep existing
+click-to-open details or expansion controls available on touch surfaces.
 
 The Web UI uses this contract in shell/navigation and search, workspace/session
 lists, model and context pickers, file/Git lists, settings, tool-card summaries,

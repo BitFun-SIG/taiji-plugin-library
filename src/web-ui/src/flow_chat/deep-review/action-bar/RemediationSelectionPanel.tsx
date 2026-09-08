@@ -183,7 +183,7 @@ export const RemediationSelectionPanel: React.FC<RemediationSelectionPanelProps>
                         />
                         <span
                           className="deep-review-action-bar__remediation-text"
-                          title={item.decisionContext ? item.plan : undefined}
+                          title={item.decisionContext ? `${item.decisionContext.question}\n${item.plan}` : item.plan}
                         >
                           {isCompleted && (
                             <Icon name="check-circle" size="xs" className="deep-review-action-bar__completed-icon" />

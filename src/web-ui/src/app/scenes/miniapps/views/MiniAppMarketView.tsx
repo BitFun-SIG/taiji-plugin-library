@@ -391,7 +391,7 @@ const MiniAppMarketView: React.FC<MiniAppMarketViewProps> = ({ tabs }) => {
                             <span>v{item.latestRelease}</span>
                           </div>
                           <strong><OverflowText>{name}</OverflowText></strong>
-                          <p>{description}</p>
+                          <OverflowText as="p" lines={2}>{description}</OverflowText>
                           <div className="miniapp-market-card__stats">
                             <span><Icon name="star" size="xs" /> {item.ratingAverage.toFixed(1)}</span>
                             <span><Icon name="arrow-down" size="xs" /> {formatNumber(item.downloadCount)}</span>

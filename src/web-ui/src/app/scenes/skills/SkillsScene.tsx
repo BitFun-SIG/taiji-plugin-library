@@ -502,7 +502,7 @@ const SkillsScene: React.FC = () => {
                                   <OverflowText behavior="marquee">{skill.name}</OverflowText>
                                 </span>
                                 {skill.description?.trim() && (
-                                  <span className="skills-card__desc" data-testid="skill-list-item-description" data-openbitfun-scene="skills" data-openbitfun-part="installedCardDescription">{skill.description}</span>
+                                  <OverflowText lines={2} className="skills-card__desc" data-testid="skill-list-item-description" data-openbitfun-scene="skills" data-openbitfun-part="installedCardDescription">{skill.description}</OverflowText>
                                 )}
                                 <div className="skills-card__status-badges">
                                   {skill.isBuiltin && (
