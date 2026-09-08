@@ -131,6 +131,7 @@ test("every registered component declares states and owned tokens", () => {
           token.startsWith("lineHeight.") ||
           token.startsWith("layout.") ||
           token.startsWith("motion.") ||
+          token === "opacity.iconArtwork" ||
           token.startsWith("overlay.") ||
           token.startsWith("radius.") ||
           token.startsWith("scrollbar.") ||

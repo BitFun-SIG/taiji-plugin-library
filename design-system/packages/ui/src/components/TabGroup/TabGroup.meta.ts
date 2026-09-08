@@ -15,6 +15,7 @@ export const tabGroupMeta = {
   ],
   states: ["selected", "unselected", "hover", "disabled"],
   tokens: [
+    "opacity.iconArtwork",
     "color.action.neutral.border",
     "color.action.neutral.content",
     "color.action.neutral.contentDisabled",

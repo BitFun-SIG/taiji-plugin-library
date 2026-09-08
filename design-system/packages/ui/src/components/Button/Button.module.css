@@ -236,6 +236,7 @@
   }
 
   .icon {
+    --openbitfun-opacity-icon-artwork: 1;
     display: inline-flex;
     flex: 0 0 auto;
     align-items: center;
@@ -258,6 +259,11 @@
   .trailingIcon {
     inline-size: var(--_button-trailing-icon-size);
     block-size: var(--_button-trailing-icon-size);
+    opacity: 0.5;
+  }
+
+  .button:disabled .trailingIcon {
+    opacity: 1;
   }
 
   .progress {

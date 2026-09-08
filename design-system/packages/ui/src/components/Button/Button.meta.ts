@@ -15,6 +15,7 @@ export const buttonMeta = {
   ],
   states: ["default", "hover", "active", "disabled"],
   tokens: [
+    "opacity.iconArtwork",
     "component.button.content",
     "component.button.outlineBorder",
     "component.button.outlineBorderInteractive",

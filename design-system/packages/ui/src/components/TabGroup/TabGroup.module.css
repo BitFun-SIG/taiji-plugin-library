@@ -101,6 +101,7 @@
   }
 
   .icon {
+    --openbitfun-opacity-icon-artwork: 1;
     display: inline-flex;
     flex: 0 0 auto;
     align-items: center;
