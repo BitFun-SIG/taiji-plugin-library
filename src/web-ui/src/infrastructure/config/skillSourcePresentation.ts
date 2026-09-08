@@ -46,6 +46,18 @@ export function getSkillSourceLabel(
   );
 }
 
+/** Stable ecosystem identity shared by user and project discovery slots. */
+export function getSkillSourceId(skill: SkillInfo): string {
+  const identity = (skill.sourceId?.trim() || skill.sourceSlot?.trim() || 'openbitfun')
+    .toLowerCase()
+    .replace(/^(home|config)\./, '');
+  if (identity === 'claude') return 'claude-code';
+  if (identity === 'agents') return 'agent-skills';
+  if (identity === 'openbitfun-system' || identity === 'openbitfun-user') return 'openbitfun';
+  if (identity.startsWith('opencode.')) return 'opencode';
+  return identity;
+}
+
 export function canDeleteSkill(skill: SkillInfo): boolean {
   if (skill.isBuiltin) return false;
 

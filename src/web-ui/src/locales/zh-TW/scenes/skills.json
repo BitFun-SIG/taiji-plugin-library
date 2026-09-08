@@ -32,6 +32,7 @@
     "subtitleAll": "管理所有已安裝的用戶級和項目級技能",
     "titleBuiltin": "內建技能",
     "titleUser": "用戶級技能",
+    "titleSource": "{{source}} 技能",
     "subtitleUser": "全局安裝的用戶級技能",
     "titleProject": "項目級技能",
     "subtitleProject": "目前工作區的項目級技能"
@@ -42,6 +43,7 @@
     "hideDuplicates": "隱藏重複項"
   },
   "filters": {
+    "source": "{{source}}",
     "all": "全部",
     "builtin": "內建",
     "user": "用戶級",
@@ -51,8 +53,9 @@
   "categories": {
     "all": "查看所有已安裝的技能，包含內建、用戶與項目級。",
     "builtin": "系統出廠內建的核心技能，不可刪除。",
-    "user": "為目前帳戶全域安裝的用戶級技能。",
-    "project": "目前工作區底下的項目級技能。",
+    "user": "為目前帳戶全域安裝的 OpenBitFun 用戶級技能。",
+    "project": "目前工作區底下的 OpenBitFun 項目級技能。",
+    "source": "從 {{source}} 掃描到的技能，包含用戶級及目前工作區的項目級技能。",
     "suite": "依模式分組的內建技能套件，可一鍵控制可見性。"
   },
   "section": {

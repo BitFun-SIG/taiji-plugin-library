@@ -3,13 +3,19 @@ import { open } from '@tauri-apps/plugin-dialog';
 import { useTranslation } from 'react-i18next';
 import { configAPI } from '@/infrastructure/api';
 import type { SkillInfo, SkillLevel, SkillValidationResult } from '@/infrastructure/config/types';
-import { canDeleteSkill } from '@/infrastructure/config/skillSourcePresentation';
+import { canDeleteSkill, getSkillSourceId, getSkillSourceLabel } from '@/infrastructure/config/skillSourcePresentation';
 import { useWorkspaceManagerSync } from '@/infrastructure/hooks/useWorkspaceManagerSync';
 import { useNotification } from '@/shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
 import type { InstalledFilter } from '../skillsSceneStore';
 
 const log = createLogger('SkillsScene:useInstalledSkills');
+
+function installedSkillGroup(skill: SkillInfo): InstalledFilter {
+  if (skill.isBuiltin) return 'builtin';
+  const sourceId = getSkillSourceId(skill);
+  return sourceId === 'openbitfun' ? skill.level : `source:${sourceId}`;
+}
 
 interface UseInstalledSkillsOptions {
   searchQuery: string;
@@ -314,14 +320,10 @@ export function useInstalledSkills({
   const filteredSkills = useMemo(() => {
     return skills.filter((skill) => {
       let matchesFilter = true;
-      if (activeFilter === 'user') {
-        matchesFilter = skill.level === 'user' && !skill.isBuiltin;
-      } else if (activeFilter === 'project') {
-        matchesFilter = skill.level === 'project' && !skill.isBuiltin;
-      } else if (activeFilter === 'builtin') {
+      if (activeFilter === 'suite') {
         matchesFilter = skill.isBuiltin;
-      } else if (activeFilter === 'suite') {
-        matchesFilter = skill.isBuiltin;
+      } else if (activeFilter !== 'all') {
+        matchesFilter = installedSkillGroup(skill) === activeFilter;
       }
 
       const matchesQuery = !normalizedQuery || [
@@ -333,13 +335,25 @@ export function useInstalledSkills({
     });
   }, [activeFilter, normalizedQuery, skills]);
 
-  const counts = useMemo(() => ({
-    all: skills.length,
-    builtin: skills.filter((skill) => skill.isBuiltin).length,
-    user: skills.filter((skill) => skill.level === 'user' && !skill.isBuiltin).length,
-    project: skills.filter((skill) => skill.level === 'project' && !skill.isBuiltin).length,
-    suite: skills.filter((skill) => skill.isBuiltin).length,
-  }), [skills]);
+  const { counts, sourceGroups } = useMemo(() => {
+    const counts: Record<InstalledFilter, number> = {
+      all: skills.length, builtin: 0, user: 0, project: 0, suite: 0,
+    };
+    const sources = new Map<`source:${string}`, string>();
+    for (const skill of skills) {
+      const group = installedSkillGroup(skill);
+      counts[group] = (counts[group] ?? 0) + 1;
+      if (group.startsWith('source:')) {
+        sources.set(group as `source:${string}`, getSkillSourceLabel(skill, t('list.item.unknownSource')));
+      }
+    }
+    counts.suite = counts.builtin;
+    return {
+      counts,
+      sourceGroups: [...sources].sort(([left], [right]) => left.localeCompare(right))
+        .map(([id, label]) => ({ id, label })),
+    };
+  }, [skills, t]);
 
   return {
     skills,
@@ -347,6 +361,7 @@ export function useInstalledSkills({
     savingGlobalSkillKey,
     filteredSkills,
     counts,
+    sourceGroups,
     loading,
     error,
     loadSkills,

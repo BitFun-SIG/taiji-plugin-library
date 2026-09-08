@@ -60,6 +60,7 @@ interface CategoryInfo {
   labelKey: string;
   titleKey: string;
   descKey: string;
+  sourceLabel?: string;
 }
 
 const CATEGORIES: CategoryInfo[] = [
@@ -245,8 +246,27 @@ const SkillsScene: React.FC = () => {
     return list;
   }, [hideDuplicates, installed.filteredSkills]);
 
-  const activeInstalledCategory = CATEGORIES.find((category) => category.id === installedFilter)
+  const installedCategories: CategoryInfo[] = [
+    ...CATEGORIES.filter((category) => category.id !== 'suite'),
+    ...installed.sourceGroups.map((group) => ({
+      id: group.id,
+      icon: <Icon name="extension" size="sm" />,
+      labelKey: 'filters.source',
+      titleKey: 'installed.titleSource',
+      descKey: 'categories.source',
+      sourceLabel: group.label,
+    })),
+    ...CATEGORIES.filter((category) => category.id === 'suite'),
+  ];
+  const activeInstalledCategory = installedCategories.find((category) => category.id === installedFilter)
     ?? CATEGORIES[0];
+
+  useEffect(() => {
+    if (!installed.loading && !installed.error && installedFilter.startsWith('source:')
+      && !installed.sourceGroups.some((group) => group.id === installedFilter)) {
+      setInstalledFilter('all');
+    }
+  }, [installed.loading, installed.error, installed.sourceGroups, installedFilter, setInstalledFilter]);
 
   return (
     <div className="openbitfun-skills-scene" data-testid="agent-skill-panel" data-openbitfun-scene="skills" data-openbitfun-part="root" data-openbitfun-tab={activeTab}>
@@ -303,8 +323,8 @@ const SkillsScene: React.FC = () => {
                 <h2 className="skills-sidebar__title" data-openbitfun-scene="skills" data-openbitfun-part="sidebarTitle">{t('installed.titleAll')}</h2>
               </div>
               <nav className="skills-sidebar__nav" aria-label={t('installed.titleAll')} data-openbitfun-scene="skills" data-openbitfun-part="sidebarNav">
-                {CATEGORIES.map((cat) => {
-                  const count = installed.counts[cat.id];
+                {installedCategories.map((cat) => {
+                  const count = installed.counts[cat.id] ?? 0;
                   const isEmpty = count === 0;
                   return (
                     <div
@@ -321,7 +341,7 @@ const SkillsScene: React.FC = () => {
                       <NavigationPanelItem
                         selected={installedFilter === cat.id}
                         onClick={() => setInstalledFilter(cat.id)}
-                        title={t(cat.descKey)}
+                        title={t(cat.descKey, { source: cat.sourceLabel })}
                         leading={<span data-openbitfun-scene="skills" data-openbitfun-part="sidebarItemIcon">{cat.icon}</span>}
                         metadata={(
                           <span className="skills-sidebar__item-count" data-openbitfun-scene="skills" data-openbitfun-part="sidebarItemCount">
@@ -329,7 +349,7 @@ const SkillsScene: React.FC = () => {
                           </span>
                         )}
                       >
-                        <span data-openbitfun-scene="skills" data-openbitfun-part="sidebarItemLabel">{t(cat.labelKey)}</span>
+                        <span data-openbitfun-scene="skills" data-openbitfun-part="sidebarItemLabel">{t(cat.labelKey, { source: cat.sourceLabel })}</span>
                       </NavigationPanelItem>
                     </div>
                   );
@@ -337,7 +357,7 @@ const SkillsScene: React.FC = () => {
               </nav>
               <div className="skills-sidebar__footer" data-openbitfun-scene="skills" data-openbitfun-part="sidebarFooter">
                 <p className="skills-sidebar__hint" data-openbitfun-scene="skills" data-openbitfun-part="sidebarHint">
-                  {t(CATEGORIES.find((c) => c.id === installedFilter)?.descKey ?? 'categories.all')}
+                  {t(activeInstalledCategory.descKey, { source: activeInstalledCategory.sourceLabel })}
                 </p>
               </div>
             </ScrollArea>}
@@ -387,7 +407,7 @@ const SkillsScene: React.FC = () => {
                     >
                       <div className="skills-main__list-heading">
                         <span data-openbitfun-scene="skills" data-openbitfun-part="installedListTitle">
-                          {t(activeInstalledCategory.titleKey)}
+                          {t(activeInstalledCategory.titleKey, { source: activeInstalledCategory.sourceLabel })}
                         </span>
                         <span
                           className="skills-main__list-count"
@@ -499,7 +519,7 @@ const SkillsScene: React.FC = () => {
                               </div>
                               <div className="skills-card__info" data-openbitfun-scene="skills" data-openbitfun-part="installedCardInfo">
                                 <span className="skills-card__name" data-testid="skill-list-item-title" data-openbitfun-scene="skills" data-openbitfun-part="installedCardName">
-                                  <OverflowText behavior="marquee">{skill.name}</OverflowText>
+                                  <OverflowText behavior="marquee" title="">{skill.name}</OverflowText>
                                 </span>
                                 {skill.description?.trim() && (
                                   <OverflowText lines={2} className="skills-card__desc" data-testid="skill-list-item-description" data-openbitfun-scene="skills" data-openbitfun-part="installedCardDescription">{skill.description}</OverflowText>
@@ -517,14 +537,9 @@ const SkillsScene: React.FC = () => {
                                     </StatusPill>
                                   )}
                                   {skill.isShadowed && (
-                                    <span title={t('list.item.shadowedTooltip', {
-                                      source: coverageSourceBySkillKey.get(skill.key)
-                                        ?? t('list.item.unknownSource'),
-                                    })}>
-                                      <StatusPill tone="warning" leading={<Icon glyph={ShieldAlert} />}>
-                                        {t('list.item.shadowed')}
-                                      </StatusPill>
-                                    </span>
+                                    <StatusPill tone="warning" leading={<Icon glyph={ShieldAlert} />}>
+                                      {t('list.item.shadowed')}
+                                    </StatusPill>
                                   )}
                                 </div>
                               </div>
@@ -554,7 +569,7 @@ const SkillsScene: React.FC = () => {
                               {skill.level === 'user'
                                 ? <Icon name="user" size="xs" />
                                 : <Icon glyph={FolderOpen} size="xs" />}
-                              <OverflowText>
+                              <OverflowText title="">
                                 {market.isRemoteWorkspace
                                   ? skill.level === 'user'
                                     ? t('list.item.localUser')

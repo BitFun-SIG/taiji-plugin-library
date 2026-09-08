@@ -5,6 +5,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SkillInfo } from '@/infrastructure/config/types';
 import { useInstalledSkills } from './useInstalledSkills';
+import type { InstalledFilter } from '../skillsSceneStore';
 
 const getSkillConfigsMock = vi.hoisted(() => vi.fn());
 const getGlobalSkillSettingsMock = vi.hoisted(() => vi.fn());
@@ -44,10 +45,14 @@ vi.mock('@/shared/notification-system', () => ({
 
 let currentInstalled: ReturnType<typeof useInstalledSkills> | null = null;
 
-function Harness({ enabled }: { enabled: boolean }) {
+function Harness({ enabled, activeFilter = 'all', searchQuery = '' }: {
+  enabled: boolean;
+  activeFilter?: InstalledFilter;
+  searchQuery?: string;
+}) {
   const installed = useInstalledSkills({
-    searchQuery: '',
-    activeFilter: 'all',
+    searchQuery,
+    activeFilter,
     enabled,
   });
   currentInstalled = installed;
@@ -100,6 +105,44 @@ describe('useInstalledSkills', () => {
 
     expect(getSkillConfigsMock).toHaveBeenCalledTimes(1);
     expect(getGlobalSkillSettingsMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('groups external agents across scopes and keeps counts independent of search', async () => {
+    const skill = (key: string, overrides: Partial<SkillInfo> = {}): SkillInfo => ({
+      key, name: 'shared-name', description: '', path: `/skills/${key}`,
+      level: 'user', sourceSlot: 'openbitfun', sourceId: 'openbitfun',
+      dirName: 'shared-name', isBuiltin: false, ...overrides,
+    });
+    const skills = [
+      skill('owned-user'),
+      skill('owned-project', { level: 'project' }),
+      skill('builtin', { isBuiltin: true }),
+      skill('codex-user', { sourceId: 'codex', sourceSlot: 'home.codex' }),
+      skill('codex-project', { sourceId: '', sourceSlot: 'codex', level: 'project', description: 'remote workspace' }),
+      skill('claude', { sourceId: 'claude-code', sourceSlot: 'home.claude', isShadowed: true }),
+      skill('agents', { sourceId: 'agent-skills', sourceSlot: 'home.agents' }),
+    ];
+    getSkillConfigsMock.mockResolvedValue(skills);
+    await act(async () => root.render(<Harness enabled activeFilter="source:codex" />));
+    expect(currentInstalled?.filteredSkills.map((item) => item.key)).toEqual(['codex-user', 'codex-project']);
+    expect(currentInstalled?.sourceGroups).toEqual([
+      { id: 'source:agent-skills', label: 'Agent Skills' },
+      { id: 'source:claude-code', label: 'Claude Code' },
+      { id: 'source:codex', label: 'Codex' },
+    ]);
+    expect(currentInstalled?.counts).toEqual({
+      all: 7, builtin: 1, suite: 1, user: 1, project: 1,
+      'source:codex': 2, 'source:claude-code': 1, 'source:agent-skills': 1,
+    });
+    await act(async () => root.render(<Harness enabled activeFilter="source:codex" searchQuery="remote" />));
+    expect(currentInstalled?.filteredSkills.map((item) => item.key)).toEqual(['codex-project']);
+    expect(currentInstalled?.counts['source:codex']).toBe(2);
+    await act(async () => root.render(<Harness enabled activeFilter="user" />));
+    expect(currentInstalled?.filteredSkills.map((item) => item.key)).toEqual(['owned-user']);
+    await act(async () => root.render(<Harness enabled activeFilter="project" />));
+    expect(currentInstalled?.filteredSkills.map((item) => item.key)).toEqual(['owned-project']);
+    await act(async () => root.render(<Harness enabled activeFilter="all" />));
+    expect(currentInstalled?.filteredSkills).toEqual(skills);
   });
 
   it('ignores a desktop skill load that finishes after switching away', async () => {
