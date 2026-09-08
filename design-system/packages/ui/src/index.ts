@@ -1,4 +1,5 @@
 import "./styles/layers.css";
+import "./styles/scrollbars.css";
 
 export {
   DesignSystemProvider,

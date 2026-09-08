@@ -626,9 +626,8 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     searchQuery,
     onSearchChange: setSearchQuery,
     matches: searchMatches,
-    matchIndices: searchMatchIndices,
+    matchesByVirtualIndex: searchMatchesByVirtualIndex,
     currentMatchIndex: searchCurrentMatchIndex,
-    currentMatchVirtualIndex: searchCurrentMatchVirtualIndex,
     goToNext: handleSearchNext,
     goToPrev: handleSearchPrev,
     clearSearch,
@@ -939,14 +938,14 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     pendingPermissionToolCallIds,
     exploreGroupStates,
     searchQuery,
-    searchMatchIndices,
-    searchCurrentMatchVirtualIndex,
+    searchMatchesByVirtualIndex,
+    searchCurrentMatch,
   }), [
     pendingPermissionToolCallIds,
     exploreGroupStates,
     searchQuery,
-    searchMatchIndices,
-    searchCurrentMatchVirtualIndex,
+    searchMatchesByVirtualIndex,
+    searchCurrentMatch,
   ]);
 
   const turnSummaries = useMemo<FlowChatTurnSummary[]>(() => {

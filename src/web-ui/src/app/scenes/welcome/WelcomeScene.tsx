@@ -4,17 +4,16 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { RollingText } from '@openbitfun/ui';
 import { useI18n } from '@/infrastructure/i18n';
 import { isReducedMotionPreferred } from '@/shared/utils/motionPreference';
 import './WelcomeScene.scss';
 
-const WORD_HOLD_MS = [2400, 2400, 4200] as const;
+const WORD_HOLD_MS = 3000;
 const YOUR_WORD_INDEX = 2;
 
 const WelcomeScene: React.FC = () => {
   const { t } = useI18n('common');
-  const [wordIndex, setWordIndex] = useState(0);
+  const [wordIndex, setWordIndex] = useState(() => isReducedMotionPreferred() ? YOUR_WORD_INDEX : 0);
   const [reducedMotion, setReducedMotion] = useState(isReducedMotionPreferred);
   const [isVisible, setIsVisible] = useState(() => !document.hidden);
   const [isHovered, setIsHovered] = useState(false);
@@ -27,7 +26,11 @@ const WelcomeScene: React.FC = () => {
 
   useEffect(() => {
     const media = window.matchMedia?.('(prefers-reduced-motion: reduce)');
-    const handleMotionChange = () => setReducedMotion(isReducedMotionPreferred());
+    const handleMotionChange = () => {
+      const prefersReducedMotion = isReducedMotionPreferred();
+      setReducedMotion(prefersReducedMotion);
+      if (prefersReducedMotion) setWordIndex(YOUR_WORD_INDEX);
+    };
     const handleVisibilityChange = () => setIsVisible(!document.hidden);
     media?.addEventListener('change', handleMotionChange);
     document.addEventListener('visibilitychange', handleVisibilityChange);
@@ -38,14 +41,14 @@ const WelcomeScene: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (reducedMotion || !isVisible || isHovered) return;
+    if (reducedMotion || !isVisible || isHovered || wordIndex >= YOUR_WORD_INDEX) return;
     const timer = window.setTimeout(() => {
-      setWordIndex(index => (index + 1) % WORD_HOLD_MS.length);
-    }, WORD_HOLD_MS[wordIndex]);
+      setWordIndex(index => Math.min(index + 1, YOUR_WORD_INDEX));
+    }, WORD_HOLD_MS);
     return () => window.clearTimeout(timer);
   }, [wordIndex, reducedMotion, isVisible, isHovered]);
 
-  const displayedWord = words[reducedMotion ? YOUR_WORD_INDEX : wordIndex];
+  const displayedWordIndex = reducedMotion ? YOUR_WORD_INDEX : wordIndex;
 
   return (
     <section
@@ -86,13 +89,16 @@ const WelcomeScene: React.FC = () => {
             onPointerLeave={() => setIsHovered(false)}
           >
             <span className="welcome-scene__word-slot" aria-hidden="true">
-              {/* Reserve the longest word so the suffix stays in one place. */}
+              {/* Keep every phrase in the same grid cell so the suffix stays still. */}
               {words.map((word, index) => (
-                <span className="welcome-scene__word-sizer" key={index}>{word}</span>
+                <span
+                  className="welcome-scene__word"
+                  data-active={index === displayedWordIndex ? 'true' : 'false'}
+                  key={index}
+                >
+                  {word}
+                </span>
               ))}
-              <RollingText className="welcome-scene__word" behavior="fade">
-                {displayedWord}
-              </RollingText>
             </span>
             <span className="welcome-scene__suffix" aria-hidden="true">{suffix}</span>
           </h2>

@@ -1,5 +1,5 @@
 /**
- * The brand and rotating welcome share one calm, unbroken line.
+ * The welcome fades between three phrases, then rests on the final invitation.
  */
 .welcome-scene {
   position: relative;
@@ -84,16 +84,23 @@
     text-align: end;
   }
 
-  &__word-sizer,
   &__word {
     grid-area: 1 / 1;
     white-space: nowrap;
-  }
-
-  &__word-sizer {
     visibility: hidden;
-    pointer-events: none;
-    user-select: none;
+    opacity: 0;
+    transition:
+      opacity var(--openbitfun-motion-duration-slow) var(--openbitfun-motion-easing-smooth),
+      visibility 0s var(--openbitfun-motion-duration-slow);
+
+    &[data-active='true'] {
+      visibility: inherit;
+      opacity: 1;
+      // Briefly overlap the fades without leaving two legible phrases stacked.
+      transition-delay:
+        calc(var(--openbitfun-motion-duration-slow) - var(--openbitfun-motion-duration-instant)),
+        0s;
+    }
   }
 
   &__suffix {
@@ -146,5 +153,9 @@
 @media (prefers-reduced-motion: reduce) {
   .welcome-scene {
     animation: none;
+
+    &__word {
+      transition: none;
+    }
   }
 }

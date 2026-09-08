@@ -1506,7 +1506,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       : [],
     [canUseSkillsForTarget, resolvedModeSkills],
   );
-  const showAdditionalModes = quickSkillShortcuts.length > 0;
+  // Claw is the fixed runtime owner for Assistant sessions, so presenting
+  // quick Skills as alternate modes in their add menu is misleading.
+  const showAdditionalModes = chatInputModePolicy.fixedModeId !== 'Claw'
+    && quickSkillShortcuts.length > 0;
   const boostMenuLayoutRevision = quickSkillShortcuts
     .map(shortcut => shortcut.id)
     .join('|');

@@ -28,8 +28,8 @@ export const searchFieldMeta = {
     "color.content.muted",
     "color.content.disabled",
     "color.surface.raised",
-    "color.surface.subtle",
     "color.border.subtle",
+    "color.border.default",
     "color.field.background",
     "color.field.backgroundHover",
     "color.field.border",
@@ -44,5 +44,6 @@ export const searchFieldMeta = {
     "radius.pill",
     "radius.lg",
     "effect.blur.medium",
+    "shadow.overlay",
   ],
 } as const satisfies ComponentMeta;
