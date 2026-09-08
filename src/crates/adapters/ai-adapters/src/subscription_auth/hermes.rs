@@ -652,7 +652,8 @@ mod tests {
 
     #[test]
     fn refresh_uses_the_portal_header_without_a_token_in_the_form() {
-        let request = refresh_request(&reqwest::Client::new(), "synthetic-refresh")
+        let client = http_client(&SubscriptionHttpOptions::default()).unwrap();
+        let request = refresh_request(&client, "synthetic-refresh")
             .build()
             .unwrap();
         assert_eq!(request.url().as_str(), TOKEN_URL);
