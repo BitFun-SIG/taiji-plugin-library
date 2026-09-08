@@ -157,9 +157,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
       try {
         const raw = await configManager.getOptionalConfig('app.keybindings');
         const overrides = parseStoredKeybindings(raw);
-        if (Object.keys(overrides).length > 0) {
-          shortcutManager.loadUserOverrides(overrides);
-        }
+        shortcutManager.loadUserOverrides(overrides);
       } catch {
         // No overrides stored yet — that's fine
       }
@@ -167,9 +165,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
 
     void load();
 
-    const unsubscribe = configManager.onConfigChange((path) => {
-      if (path === 'app.keybindings') void load();
-    });
+    const unsubscribe = configManager.watch('app.keybindings', () => { void load(); });
 
     return () => unsubscribe();
   }, []);
