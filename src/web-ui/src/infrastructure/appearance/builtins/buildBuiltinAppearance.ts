@@ -77,6 +77,10 @@ function themeValuesToCssTokens(
   ) as Record<AppearanceThemeTokenName, string>;
   if (palette.id === DEFAULT_LIGHT_APPEARANCE_ID || palette.id === DEFAULT_DARK_APPEARANCE_ID) {
     if (palette.id === DEFAULT_LIGHT_APPEARANCE_ID) {
+      // Neutral action labels are primary text in the public theme. The generic
+      // palette's secondary text projection used to make product menus too faint.
+      tokens['--openbitfun-color-action-neutral-content'] = String(themes.light['color.action.neutral.content']);
+      tokens['--openbitfun-color-content-caption'] = String(themes.light['color.content.caption']);
       // Default light fields use the published neutral states in both root and
       // chrome. Branded palettes and imported overrides retain their own colors.
       for (const name of Object.keys(themes.light) as ThemeTokenName[]) {
@@ -128,6 +132,7 @@ function createThemeTokenValues(palette: AppearancePalette): Record<ThemeTokenNa
     'color.scrollbar.thumb': scrollbar.thumb,
     'color.scrollbar.thumbHover': scrollbar.thumbHover,
     'color.content.primary': colors.text.primary,
+    'color.content.caption': colors.text.muted,
     'color.content.secondary': colors.text.secondary,
     'color.content.muted': colors.text.muted,
     'color.content.disabled': colors.text.disabled,
@@ -220,6 +225,7 @@ function createChromeThemeTokens(
     'color.surface.chrome': chrome.background.chrome ?? chrome.background.primary,
     'color.surface.subtle': chrome.element.subtle,
     'color.content.primary': chrome.text.primary,
+    'color.content.caption': chrome.text.muted,
     'color.content.secondary': chrome.text.secondary,
     'color.content.muted': chrome.text.muted,
     'color.content.disabled': chrome.text.disabled,

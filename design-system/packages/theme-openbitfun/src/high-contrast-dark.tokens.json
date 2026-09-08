@@ -24,6 +24,7 @@
       "panel": { "$type": "color", "$value": "{ref.color.gray.900}" }
     },
     "content": {
+      "caption": { "$description": "Menu and navigation group captions; carries final opacity without attenuating primary text again.", "$type": "color", "$value": "{color.content.muted}" },
       "primary": { "$type": "color", "$value": "{ref.color.gray.0}" },
       "secondary": { "$type": "color", "$value": "{ref.color.gray.50}" },
       "muted": { "$type": "color", "$value": "{ref.color.gray.150}" }

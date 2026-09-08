@@ -245,7 +245,7 @@
     --openbitfun-layout-navigation-panel-footer-padding: var(--openbitfun-space-2);
     --openbitfun-layout-navigation-panel-heading-action-size: 22px;
     --openbitfun-layout-navigation-panel-heading-gap: var(--openbitfun-space-5);
-    --openbitfun-layout-navigation-panel-heading-height: 22px;
+    --openbitfun-layout-navigation-panel-heading-height: 24px;
     --openbitfun-layout-navigation-panel-heading-padding-inline: var(--openbitfun-space-2);
     --openbitfun-layout-navigation-panel-inline-size: 216px;
     --openbitfun-layout-navigation-panel-item-gap: var(--openbitfun-space-2);
@@ -398,6 +398,7 @@
     --openbitfun-space-8: 32px;
     --openbitfun-space-component-block: 8px;
     --openbitfun-space-component-inline: 12px;
+    --openbitfun-type-action-row-line-height: 1.2307692307692308;
     --openbitfun-type-body-lg-font-family: var(--openbitfun-font-family-sans);
     --openbitfun-type-body-lg-font-size: var(--openbitfun-font-size-lg);
     --openbitfun-type-body-lg-font-weight: var(--openbitfun-font-weight-regular);
@@ -704,6 +705,7 @@
     --openbitfun-color-border-subtle: rgba(16, 26, 39, 0.08);
     --openbitfun-color-code-change-added: #1aa73e;
     --openbitfun-color-code-change-removed: #ec221f;
+    --openbitfun-color-content-caption: rgba(0, 0, 0, 0.40);
     --openbitfun-color-content-disabled: rgba(0, 0, 0, 0.30);
     --openbitfun-color-content-inverse: #ffffff;
     --openbitfun-color-content-muted: #6a6a6a;
@@ -805,7 +807,7 @@
     --openbitfun-shadow-inner-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.08);
     --openbitfun-shadow-inner-highlight-hover: inset 0 1px 0 rgba(255, 255, 255, 0.24);
     --openbitfun-shadow-lg: 0 8px 16px rgba(16, 26, 39, 0.09);
-    --openbitfun-shadow-menu: 0 4px 10px rgba(0, 0, 0, 0.12);
+    --openbitfun-shadow-menu: 0 4px 20px rgba(0, 0, 0, 0.12);
     --openbitfun-shadow-overlay: 0 4px 20px rgba(0, 0, 0, 0.12);
     --openbitfun-shadow-raised: 0 2px 4px rgba(16, 26, 39, 0.055);
     --openbitfun-shadow-sm: 0 2px 4px rgba(16, 26, 39, 0.055);
@@ -852,6 +854,7 @@
     --openbitfun-color-border-subtle: rgba(255, 255, 255, 0.12);
     --openbitfun-color-code-change-added: #1aa73e;
     --openbitfun-color-code-change-removed: #ec221f;
+    --openbitfun-color-content-caption: #858585;
     --openbitfun-color-content-disabled: #555555;
     --openbitfun-color-content-inverse: #0e0e10;
     --openbitfun-color-content-muted: #858585;
@@ -978,6 +981,7 @@
     --openbitfun-color-border-default: #3b3b3b;
     --openbitfun-color-border-strong: #000000;
     --openbitfun-color-border-subtle: #707070;
+    --openbitfun-color-content-caption: #343434;
     --openbitfun-color-content-muted: #343434;
     --openbitfun-color-content-primary: #000000;
     --openbitfun-color-content-required-indicator: #005fcc;
@@ -1040,6 +1044,7 @@
     --openbitfun-color-border-default: #b5b5b5;
     --openbitfun-color-border-strong: #ffffff;
     --openbitfun-color-border-subtle: #8a8a8a;
+    --openbitfun-color-content-caption: #d0d0d0;
     --openbitfun-color-content-muted: #d0d0d0;
     --openbitfun-color-content-primary: #ffffff;
     --openbitfun-color-content-required-indicator: #ffcc00;

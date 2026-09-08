@@ -169,6 +169,10 @@
         "letterSpacing": { "$value": "{letterSpacing.normal}" }
       }
     },
+    "actionRow": {
+      "$description": "Single-line action leading: 16px at the default 13px type size, scaling with user typography.",
+      "lineHeight": { "$type": "number", "$value": 1.2307692307692308 }
+    },
     "fieldHelper": {
       "$description": "Field helper leading: 16px at the default 11px type size, scaling with user typography.",
       "lineHeight": { "$type": "number", "$value": 1.4545454545454546 }
@@ -724,7 +728,7 @@
       "surfacePadding": { "$value": "{space.2}" },
       "contentGap": { "$value": "{space.4}" },
       "sectionGap": { "$value": "{space.1}" },
-      "headingHeight": { "$value": "22px" },
+      "headingHeight": { "$value": "24px" },
       "headingPaddingInline": { "$value": "{space.2}" },
       "headingGap": { "$value": "{space.5}" },
       "headingActionSize": { "$value": "22px" },
