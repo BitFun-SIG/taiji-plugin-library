@@ -356,7 +356,7 @@ export class PeerConnectionManager {
         // of host loss and must not consume the health-check retry counter.
         onHostInvokeTransportFailure: (_error, meta) => {
           const current = this.entries.get(deviceId);
-          if (current === entry) {
+          if (current?.adapter === adapter) {
             this.requestRecovery(current, 'request', meta?.action);
           }
         },
