@@ -1,4 +1,4 @@
-import { Play, MoreHorizontal } from 'lucide-react';
+import { Play } from 'lucide-react';
 import { Icon, IconButton, OverflowText, Tooltip } from '@openbitfun/ui';
 import { useI18n } from '@/infrastructure/i18n';
 import type { MenuItem } from '@/shared/context-menu-system/types/menu.types';
@@ -91,7 +91,7 @@ export default function WorkspaceTerminals({ terminals, busy, selectedId, onSele
                     onClick={() => run(async () => { onSelect(await terminals.startEntry(entry)); })} />
                 </Tooltip>
               )}
-              <IconButton size="xs" aria-label={t('nav.resources.terminalActions')} icon={<MoreHorizontal size={12} />}
+              <IconButton size="xs" aria-label={t('nav.resources.terminalActions')} icon={<Icon name="more" size="xs" />}
                 aria-haspopup="menu" onClick={event => showResourceMenu(event, menuItems(entry))} />
             </div>
           </div>

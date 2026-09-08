@@ -1431,7 +1431,7 @@ pub struct WorkspaceManagerStatistics {
 
 #[cfg(test)]
 mod tests {
-    use super::WorkspaceIdentity;
+    use super::{WorkspaceIdentity, WorkspaceIdentityRuntimeExt};
 
     #[test]
     fn workspace_identity_reads_optional_avatar_without_requiring_it() {

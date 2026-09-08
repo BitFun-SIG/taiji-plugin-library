@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useRef, useState, useSyncExternalStore } from 'react';
-import { FilePlus, FolderPlus, List, Plus, RotateCw } from 'lucide-react';
+import { FilePlus, FolderPlus, List, RotateCw } from 'lucide-react';
 import {
   Icon, IconButton, NavigationPanel, NavigationPanelBody, NavigationPanelContent,
   NavigationPanelHeader, OverflowText, Tooltip,
@@ -171,7 +171,7 @@ function WorkspaceResourceContent({ resourceKey }: { resourceKey: string }) {
                   <div className="openbitfun-file-viewer-nav__actions" data-openbitfun-component="file-viewer-nav" data-openbitfun-part="actions">
                     <Tooltip content={t('nav.shell.actions.refresh')}><IconButton size="xs" aria-label={t('nav.shell.actions.refresh')} icon={<RotateCw />}
                       disabled={busy || terminals.loading} onClick={() => run(terminals.refresh)} /></Tooltip>
-                    <Tooltip content={t('nav.shell.actions.newTerminal')}><IconButton size="xs" aria-label={t('nav.shell.actions.newTerminal')} icon={<Plus />}
+                    <Tooltip content={t('nav.shell.actions.newTerminal')}><IconButton size="xs" aria-label={t('nav.shell.actions.newTerminal')} icon={<Icon name="plus" size="xs" />}
                       disabled={busy} onClick={() => createTerminal()} /></Tooltip>
                     {!isRemote && shells.length > 1 && <IconButton size="xs" aria-label={t('nav.resources.chooseShell')} aria-haspopup="menu"
                       icon={<Icon name="chevron-down" size="xs" />} disabled={busy}

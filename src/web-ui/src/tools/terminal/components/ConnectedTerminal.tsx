@@ -6,7 +6,7 @@
 import React, { useEffect, useRef, useCallback, useState, memo } from 'react';
 import { Button, Icon } from '@openbitfun/ui';
 import { useI18n } from '@/infrastructure/i18n';
-import { AlertCircle, X } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
 import Terminal, { TerminalRef, type TerminalOptions } from './Terminal';
 import { useTerminal } from '../hooks/useTerminal';
 import { registerTerminalActions, unregisterTerminalActions } from '../services/TerminalActionManager';
@@ -520,7 +520,7 @@ const ConnectedTerminal: React.FC<ConnectedTerminalProps> = memo(({
               title={closeBehavior === 'detach' ? t('actions.closeView') : t('actions.stopTerminal')}
               data-testid="shell-panel-close"
             >
-              {closeBehavior === 'detach' ? <X size={14} /> : <Icon name="delete" size="sm" />}
+              {closeBehavior === 'detach' ? <Icon name="xmark" size="sm" /> : <Icon name="delete" size="sm" />}
             </button>
           </div>
         </div>

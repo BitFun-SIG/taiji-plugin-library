@@ -28,7 +28,7 @@ const snapshots = new Map<string, SessionResponse[]>();
 export function useTerminalSessions(options: UseTerminalSessionsOptions) {
   const { workspacePath, isRemote, currentConnectionId, scope, workspaces, savedSessionIds } = options;
   const key = scope.key('workspace-terminals', currentConnectionId, workspacePath);
-  const activation = useMemo(() => ({ key }), [key, scope]);
+  const activation = useMemo(() => ({ key, scope }), [key, scope]);
   const currentActivation = useRef<typeof activation | null>(activation);
   currentActivation.current = activation;
   useEffect(() => {
@@ -39,7 +39,10 @@ export function useTerminalSessions(options: UseTerminalSessionsOptions) {
   const [snapshot, setSnapshot] = useState<SessionSnapshot>(() => ({
     key, sessions: snapshots.get(key) ?? [], loading: true, error: null,
   }));
-  const sessions = snapshot.key === key ? snapshot.sessions : snapshots.get(key) ?? [];
+  const sessions = useMemo(
+    () => snapshot.key === key ? snapshot.sessions : snapshots.get(key) ?? [],
+    [key, snapshot],
+  );
   const sessionMap = useMemo(() => new Map(sessions.map(session => [session.id, session])), [sessions]);
   const target = useMemo<TerminalWorkspaceScope>(() => ({
     rootPath: workspacePath ?? '', isRemote, connectionId: currentConnectionId,
