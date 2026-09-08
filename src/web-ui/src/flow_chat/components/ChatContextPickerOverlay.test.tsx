@@ -97,6 +97,17 @@ const option = (kind: string) => document.querySelector<HTMLElement>(
 );
 
 describe('ChatContextPicker overlay', () => {
+  it('shows only the runtime winner for a name without exposing its key', async () => {
+    const chosen = vi.fn();
+    const skills = [{ name: 'pdf', key: 'user::codex::pdf', selectedForRuntime: false }, { name: 'pdf', key: 'project::codex::pdf', selectedForRuntime: true }];
+    await act(async () => root.render(<Harness searchQuery="pdf" skills={skills} onSelectSkill={chosen} />));
+    const options = document.querySelectorAll<HTMLElement>('[data-openbitfun-context-kind="skill"]');
+    expect(options).toHaveLength(1);
+    expect(options[0].textContent).toBe('pdf');
+    await act(async () => options[0].click());
+    expect(chosen).toHaveBeenCalledWith(skills[1]);
+  });
+
   let container: HTMLDivElement;
   let root: Root;
 
@@ -290,9 +301,13 @@ describe('ChatContextPicker overlay', () => {
       .toBeNull();
     expect(skillOptions[0]?.querySelector('[data-openbitfun-part="metadata"]')?.textContent)
       .toBe('Work with PDFs');
-    expect(skillOptions[0]?.querySelector('[data-overflow-behavior="marquee"][data-marquee-active="true"]')
-      ?.getAttribute('data-marquee-active')).toBe('true');
-    expect(skillOptions[1]?.querySelector('[data-openbitfun-part="metadata"]')).toBeNull();
+    const description = skillOptions[0]?.querySelector('[data-openbitfun-part="skillDescription"]');
+    expect(description?.getAttribute('data-marquee-active')).toBeNull();
+    expect(description?.getAttribute('title')).toBe('');
+    expect(skillOptions[0]?.getAttribute('title')).toBe('');
+    expect(skillOptions[0]?.querySelector('[data-openbitfun-part="label"]')?.getAttribute('title')).toBe('');
+    expect(skillOptions[1]?.querySelector('[data-openbitfun-part="metadata"]')?.textContent)
+      .toBe('Build presentations');
     expect(workspaceAPI.getDirectoryChildren).not.toHaveBeenCalled();
 
     await act(async () => {
@@ -303,7 +318,7 @@ describe('ChatContextPicker overlay', () => {
       }));
     });
 
-    expect(skillOptions[0]?.querySelector('[data-openbitfun-part="metadata"]')).toBeNull();
+    expect(skillOptions[0]?.querySelector('[data-openbitfun-part="metadata"]')?.textContent).toBe('Work with PDFs');
     expect(skillOptions[1]?.querySelector('[data-openbitfun-part="metadata"]')?.textContent)
       .toBe('Build presentations');
 

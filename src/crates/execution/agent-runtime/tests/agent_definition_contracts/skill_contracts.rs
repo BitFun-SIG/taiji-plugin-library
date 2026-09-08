@@ -1153,3 +1153,21 @@ fn explicit_invocation_reaches_default_hidden_agent_browser() {
         }
     }
 }
+
+#[test]
+fn skill_scan_reports_tolerate_older_shapes_and_escape_diagnostics() {
+    use openbitfun_agent_runtime::skills::{SkillScanDiagnostic, SkillScanReport};
+    let legacy = serde_json::json!({"skills": ["pdf"]});
+    let report: SkillScanReport<String> = serde_json::from_value(legacy.clone()).unwrap();
+    assert!(report.diagnostics.is_empty());
+    let roundtrip: SkillScanReport<String> =
+        serde_json::from_value(serde_json::to_value(report).unwrap()).unwrap();
+    assert_eq!(roundtrip.skills, vec!["pdf"]);
+    let diagnostic = SkillScanDiagnostic {
+        path: "/remote/<path>".into(),
+        source_id: "codex".into(),
+        message: "read & parse failed".into(),
+    };
+    assert!(diagnostic.to_xml().contains("&lt;path&gt;"));
+    assert!(diagnostic.to_xml().contains("read &amp; parse failed"));
+}

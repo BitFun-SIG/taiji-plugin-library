@@ -7,6 +7,38 @@ use std::path::Path;
 const CLAUDE_DESCRIPTION_MAX_CHARS: usize = 1536;
 const CLAUDE_ARGUMENT_NAMES_MAX: usize = 32;
 
+/// A discovery problem is separate from the usable skill inventory.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SkillScanDiagnostic {
+    pub path: String,
+    pub source_id: String,
+    pub message: String,
+}
+
+impl SkillScanDiagnostic {
+    pub fn to_xml(&self) -> String {
+        let text = format!(
+            "Skill discovery incomplete at {} ({}): {}",
+            self.path, self.source_id, self.message
+        );
+        let escaped = text
+            .replace('&', "&amp;")
+            .replace('<', "&lt;")
+            .replace('>', "&gt;");
+        format!("<skill_discovery_warning>{escaped}</skill_discovery_warning>")
+    }
+}
+
+/// Opt-in report; legacy list consumers continue to receive the skills array.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SkillScanReport<T = SkillInfo> {
+    pub skills: Vec<T>,
+    #[serde(default)]
+    pub diagnostics: Vec<SkillScanDiagnostic>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum SkillSourceDialect {
     AgentSkills,

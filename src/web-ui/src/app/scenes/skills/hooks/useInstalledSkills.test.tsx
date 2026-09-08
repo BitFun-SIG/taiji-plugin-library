@@ -8,6 +8,7 @@ import { useInstalledSkills } from './useInstalledSkills';
 import type { InstalledFilter } from '../skillsSceneStore';
 
 const getSkillConfigsMock = vi.hoisted(() => vi.fn());
+const diagnosticsMock = vi.hoisted(() => ({ items: [] as Array<{path: string; sourceId: string; message: string}> }));
 const getGlobalSkillSettingsMock = vi.hoisted(() => vi.fn());
 const setGlobalSkillDisabledMock = vi.hoisted(() => vi.fn());
 const deleteSkillMock = vi.hoisted(() => vi.fn());
@@ -24,7 +25,7 @@ vi.mock('react-i18next', () => ({
 }));
 vi.mock('@/infrastructure/api', () => ({
   configAPI: {
-    getSkillConfigs: getSkillConfigsMock,
+    getSkillScanReport: async (...args: unknown[]) => ({ skills: await getSkillConfigsMock(...args), diagnostics: diagnosticsMock.items, diagnosticsAvailable: true }),
     getGlobalSkillSettings: getGlobalSkillSettingsMock,
     setGlobalSkillDisabled: setGlobalSkillDisabledMock,
     validateSkillPath: validateSkillPathMock,
@@ -80,6 +81,7 @@ describe('useInstalledSkills', () => {
     notificationMocks.warning.mockReset();
     notificationMocks.error.mockReset();
     currentInstalled = null;
+    diagnosticsMock.items = [];
   });
 
   afterEach(async () => {
@@ -88,7 +90,17 @@ describe('useInstalledSkills', () => {
     vi.useRealTimers();
   });
 
-  it('does not query desktop skill configuration during a remote connection', async () => {
+  it('preserves available skills alongside discovery failures', async () => {
+    const skills = [{ key: 'user::codex::good', name: 'good', sourceId: 'codex', level: 'user', path: '/skills/good' }];
+    getSkillConfigsMock.mockResolvedValue(skills);
+    diagnosticsMock.items = [{ path: '/skills/bad/SKILL.md', sourceId: 'codex', message: 'missing description' }];
+    await act(async () => root.render(<Harness enabled />));
+    expect(currentInstalled?.skills).toEqual(skills);
+    expect(currentInstalled?.diagnostics).toEqual(diagnosticsMock.items);
+    expect(currentInstalled?.error).toBeNull();
+  });
+
+  it('does not query desktop skill configuration during a remote connection' , async () => {
     await act(async () => {
       root.render(<Harness enabled={false} />);
       await Promise.resolve();

@@ -1482,6 +1482,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     loading: resolvedModeSkillsLoading,
     hasLoaded: resolvedModeSkillsLoaded,
     failed: resolvedModeSkillsLoadFailed,
+    diagnostics: resolvedSkillDiagnostics,
+    diagnosticsAvailable: resolvedSkillDiagnosticsAvailable,
     retry: retryResolvedModeSkills,
   } = useResolvedModeSkills({
     enabled: isSceneActive && canUseSkillsForTarget && (
@@ -1494,11 +1496,25 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     modeId: effectiveSendAgentType,
     workspacePath: targetWorkspacePath,
   });
+  const skillReferenceNames = useMemo(
+    () => Object.fromEntries(resolvedModeSkills.map(skill => [skill.key, skill.name])),
+    [resolvedModeSkills],
+  );
   const userInvocableSkills = useMemo(
     // Management keeps the full catalog; invocation surfaces apply both runtime and author visibility.
     () => resolvedModeSkills.filter(isSkillAvailableForUserInvocation),
     [resolvedModeSkills]
   );
+
+  const duplicateSkillNames = useMemo(() => {
+    const seen = new Set<string>();
+    const duplicates = new Set<string>();
+    for (const skill of userInvocableSkills) {
+      if (seen.has(skill.name)) duplicates.add(skill.name);
+      seen.add(skill.name);
+    }
+    return duplicates;
+  }, [userInvocableSkills]);
 
   const quickSkillShortcuts = useMemo(
     () => canUseSkillsForTarget
@@ -3184,12 +3200,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }
 
     const q = (slashCommandState.query || '').trim().toLowerCase();
-    const seenNames = new Set<string>();
+    const seenKeys = new Set<string>();
     return userInvocableSkills
       .filter(skill => {
         const normalizedName = skill.name.trim();
         const normalizedNameKey = normalizedName.toLowerCase();
-        if (!normalizedName || seenNames.has(normalizedNameKey)) {
+        if (!normalizedName || seenKeys.has(skill.key)) {
           return false;
         }
         if (!isSlashAddressableSkillName(normalizedName)) {
@@ -3201,7 +3217,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           normalizedNameKey.includes(q) ||
           skill.description.toLowerCase().includes(q);
         if (matches) {
-          seenNames.add(normalizedNameKey);
+          seenKeys.add(skill.key);
         }
         return matches;
       })
@@ -3209,7 +3225,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         kind: 'skill' as const,
         id: skill.key,
         command: `/${skill.name}`,
-        label: [skill.argumentHint?.trim(), skill.description || skill.name]
+        label: [duplicateSkillNames.has(skill.name) ? skill.key : undefined, skill.argumentHint?.trim(), skill.description || skill.name]
           .filter(Boolean)
           .join(' — '),
         skillName: skill.name,
@@ -3221,7 +3237,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         const bExact = bName === q ? 0 : bName.startsWith(q) ? 1 : 2;
         return aExact - bExact || aName.localeCompare(bName);
       });
-  }, [canUseSkillsForTarget, slashCommandState.query, userInvocableSkills]);
+  }, [canUseSkillsForTarget, duplicateSkillNames, slashCommandState.query, userInvocableSkills]);
 
   const resolveTypedMcpPromptCommand = useCallback((text: string): SlashMcpPromptItem | null => {
     const trimmed = text.trim();
@@ -5187,14 +5203,14 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     const replaceInlineTrigger = getRichTextTriggerController()?.replaceActiveInlineTrigger;
 
     if (inlineTriggerState.isActive) {
-      replaceInlineTrigger?.(`[$${item.skillName}]`);
+      replaceInlineTrigger?.(createSkillPromptReferenceToken(item.skillName, item.id));
       setQueuedInput(null);
       setSlashCommandState({ isActive: false, kind: 'all', query: '', selectedIndex: 0 });
       window.setTimeout(() => richTextInputRef.current?.focus(), 0);
       return;
     }
 
-    const next = replaceLeadingSlashCommandWithSkillToken(inputState.value, item.skillName);
+    const next = replaceLeadingSlashCommandWithSkillToken(inputState.value, item.skillName, item.id);
     dispatchInput({ type: 'SET_VALUE', payload: next });
     inputValueRef.current = next;
     setQueuedInput(null);
@@ -5554,13 +5570,13 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     [dispatchInput, focusRichTextInputSoon, getRichTextTriggerController, inputState.value]
   );
 
-  const insertSkillIntoInput = useCallback((skillName: string) => {
-    insertInlineReferenceIntoInput(createSkillPromptReferenceToken(skillName));
+  const insertSkillIntoInput = useCallback((skillName: string, skillKey?: string) => {
+    insertInlineReferenceIntoInput(createSkillPromptReferenceToken(skillName, skillKey));
   }, [insertInlineReferenceIntoInput]);
 
   const selectContextSkill = useCallback((skill: ContextPickerSkill) => {
     getRichTextTriggerController()?.replaceActiveContextTrigger?.(
-      createSkillPromptReferenceToken(skill.name),
+      createSkillPromptReferenceToken(skill.name, skill.key),
     );
     setQueuedInput(null);
     focusRichTextInputSoon();
@@ -6010,6 +6026,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 onLargePaste={createLargePastePlaceholder}
                 onPasteFiles={handleClipboardFiles}
                 pendingLargePastes={pendingLargePastes}
+                skillReferenceNames={skillReferenceNames}
                 onUpdateLargePaste={updateLargePaste}
                 onRemoveLargePaste={removeLargePaste}
                 onKeyDown={handleKeyDown}
@@ -6039,6 +6056,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 skills={canUseSkillsForTarget ? userInvocableSkills : []}
                 skillsLoading={resolvedModeSkillsLoading}
                 skillsLoadFailed={resolvedModeSkillsLoadFailed}
+                skillDiagnostics={resolvedSkillDiagnostics}
+                skillDiagnosticsAvailable={resolvedSkillDiagnosticsAvailable}
                 onRetrySkills={retryResolvedModeSkills}
                 onSelectSkill={canUseSkillsForTarget ? selectContextSkill : undefined}
                 onAddImage={!isAcpTargetSession ? handleContextPickerAddImage : undefined}
@@ -6471,10 +6490,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                                   leading={<Icon name="spark" size="xs" aria-hidden />}
                                   onClick={event => {
                                     event.stopPropagation();
-                                    insertSkillIntoInput(skill.name);
+                                    insertSkillIntoInput(skill.name, skill.key);
                                   }}
                                 >
-                                  {[skill.name, skill.argumentHint?.trim()].filter(Boolean).join(' ')}
+                                  {[skill.name, duplicateSkillNames.has(skill.name) ? `(${skill.key})` : undefined, skill.argumentHint?.trim()].filter(Boolean).join(' ')}
                                 </MenuItem>
                               ))
                             )}

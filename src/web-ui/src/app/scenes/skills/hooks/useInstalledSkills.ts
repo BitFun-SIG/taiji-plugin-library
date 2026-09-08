@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { open } from '@tauri-apps/plugin-dialog';
 import { useTranslation } from 'react-i18next';
 import { configAPI } from '@/infrastructure/api';
-import type { SkillInfo, SkillLevel, SkillValidationResult } from '@/infrastructure/config/types';
+import type { SkillInfo, SkillLevel, SkillValidationResult, SkillScanDiagnostic } from '@/infrastructure/config/types';
 import { canDeleteSkill, getSkillSourceId, getSkillSourceLabel } from '@/infrastructure/config/skillSourcePresentation';
 import { useWorkspaceManagerSync } from '@/infrastructure/hooks/useWorkspaceManagerSync';
 import { useNotification } from '@/shared/notification-system';
@@ -33,6 +33,8 @@ export function useInstalledSkills({
   const { workspacePath, hasWorkspace, isRemoteWorkspace } = useWorkspaceManagerSync();
 
   const [skills, setSkills] = useState<SkillInfo[]>([]);
+  const [diagnostics, setDiagnostics] = useState<SkillScanDiagnostic[]>([]);
+  const [diagnosticsAvailable, setDiagnosticsAvailable] = useState(true);
   const [globallyDisabledSkillKeys, setGloballyDisabledSkillKeys] = useState<Set<string>>(new Set());
   const [savingGlobalSkillKey, setSavingGlobalSkillKey] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -77,7 +79,7 @@ export function useInstalledSkills({
       setLoading(true);
       setError(null);
       const [list, globalSettings] = await Promise.all([
-        configAPI.getSkillConfigs({
+        configAPI.getSkillScanReport({
           forceRefresh,
           workspacePath: workspacePath || undefined,
         }),
@@ -86,7 +88,9 @@ export function useInstalledSkills({
       if (requestId !== loadRequestIdRef.current || !capabilityIsCurrent(capabilityEpoch)) {
         return;
       }
-      setSkills(list);
+      setSkills(list.skills);
+      setDiagnostics(list.diagnostics);
+      setDiagnosticsAvailable(list.diagnosticsAvailable);
       setGloballyDisabledSkillKeys(new Set(globalSettings.globallyDisabledUserSkillKeys));
     } catch (err) {
       if (requestId !== loadRequestIdRef.current || !capabilityIsCurrent(capabilityEpoch)) {
@@ -109,6 +113,8 @@ export function useInstalledSkills({
     setIsAdding(false);
     if (!enabled) {
       setSkills([]);
+      setDiagnostics([]);
+      setDiagnosticsAvailable(true);
       setGloballyDisabledSkillKeys(new Set());
       setSavingGlobalSkillKey(null);
       setError(null);
@@ -357,6 +363,8 @@ export function useInstalledSkills({
 
   return {
     skills,
+    diagnostics,
+    diagnosticsAvailable,
     globallyDisabledSkillKeys,
     savingGlobalSkillKey,
     filteredSkills,
