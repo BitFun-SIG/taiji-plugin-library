@@ -35,7 +35,7 @@ import {
   type TokenOverrides,
 } from "@openbitfun/ui";
 import { useI18n, type MessageKey } from "../i18n";
-import { FormTypographyPattern, NestedMenuPattern, ProviderConfigurationPattern, SceneToolbarPattern } from "./ReferencePatterns";
+import { FormTypographyPattern, NestedMenuPattern, ProviderConfigurationPattern, SceneToolbarPattern, WorkspaceConfigurationPattern } from "./ReferencePatterns";
 
 interface PatternsPageProps {
   colorScheme: ColorScheme;
@@ -179,6 +179,7 @@ export function PatternsPage({ colorScheme, contrast, density, tokenOverrides }:
         </PatternSection>
         <PatternSection description={t("patterns.provider.description")} index="05" title={t("patterns.provider.title")}>
           <ProviderConfigurationPattern />
+          <WorkspaceConfigurationPattern />
         </PatternSection>
         <PatternSection description={t("patterns.toolbar.description")} index="06" title={t("patterns.toolbar.title")}>
           <SceneToolbarPattern />

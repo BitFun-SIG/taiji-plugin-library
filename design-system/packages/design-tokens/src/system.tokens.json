@@ -870,7 +870,7 @@
       "maxInlineSizeSmall": { "$value": "420px" },
       "maxInlineSizeMedium": { "$value": "560px" },
       "maxInlineSizeLarge": { "$value": "600px" },
-      "maxInlineSizeXlarge": { "$value": "720px" },
+      "maxInlineSizeXlarge": { "$value": "800px" },
       "maxInlineSizeXxlarge": { "$value": "960px" },
       "maxInlineSizeWide": { "$value": "1200px" }
     }

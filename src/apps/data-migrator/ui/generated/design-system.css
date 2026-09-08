@@ -349,7 +349,7 @@
     --openbitfun-overlay-dialog-max-inline-size-medium: 560px;
     --openbitfun-overlay-dialog-max-inline-size-small: 420px;
     --openbitfun-overlay-dialog-max-inline-size-wide: 1200px;
-    --openbitfun-overlay-dialog-max-inline-size-xlarge: 720px;
+    --openbitfun-overlay-dialog-max-inline-size-xlarge: 800px;
     --openbitfun-overlay-dialog-max-inline-size-xxlarge: 960px;
     --openbitfun-overlay-dialog-scrollbar-width: var(--openbitfun-scrollbar-width);
     --openbitfun-overlay-dialog-surface-radius: 28px;

@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 import {
   Button,
   Card,
@@ -61,10 +61,10 @@ export function ProviderConfigurationPattern() {
   const [open, setOpen] = useState(false);
   const [revision, setRevision] = useState(0);
   const [saved, setSaved] = useState(false);
-  const footer = (close: () => void) => <CardFooter align="center">
+  const footer = (close: () => void) => <>
     <Button variant="fill" onClick={close}>{t("components.preview.modalCancel")}</Button>
     <Button variant="primary" onClick={() => { setSaved(true); setOpen(false); }}>{t("components.preview.modalSave")}</Button>
-  </CardFooter>;
+  </>;
 
   return <div className="pattern-provider" data-openbitfun-pattern="provider-configuration">
     <div className="pattern-demo-actions">
@@ -74,12 +74,12 @@ export function ProviderConfigurationPattern() {
       <Card appearance="raised" padding="md" gap="lg" radius="lg">
         <PageHeader level={3} size="md" title={t("components.preview.modalTitle")} />
         <ProviderFields key={revision} />
-        {footer(() => { setRevision(value => value + 1); setSaved(false); })}
+        <CardFooter align="center">{footer(() => { setRevision(value => value + 1); setSaved(false); })}</CardFooter>
       </Card>
       <Dialog
         open={open}
         onOpenChange={(nextOpen) => { if (!nextOpen) (() => setOpen(false))(); }}
-        size="md"
+        size="xl"
       >
         <DialogHeader>
           <DialogHeading>
@@ -87,15 +87,62 @@ export function ProviderConfigurationPattern() {
           </DialogHeading>
           <DialogClose aria-label={t("components.preview.close")} />
         </DialogHeader>
-        <DialogBody inset="none">
+        <DialogBody>
           <div className="pattern-provider-modal">
         <ProviderFields />
                 </div>
                 </DialogBody>
-        <DialogFooter>{footer(() => setOpen(false))}</DialogFooter>
+        <DialogFooter appearance="floating">{footer(() => setOpen(false))}</DialogFooter>
       </Dialog>
     </>
     <p className="pattern-feedback" role="status">{t(saved ? "patterns.provider.saved" : "patterns.provider.previewOnly")}</p>
+  </div>;
+}
+
+export function WorkspaceConfigurationPattern() {
+  const { t } = useI18n();
+  const formId = useId();
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [parent, setParent] = useState("/workspaces");
+  const [savedPath, setSavedPath] = useState("");
+  const fullPath = name.trim() ? `${parent}/${name.trim()}` : "";
+  return <div data-openbitfun-pattern="workspace-configuration">
+    <Button size="sm" onClick={() => setOpen(true)}>{t("patterns.actions.newProject")}</Button>
+    <Dialog open={open} onOpenChange={() => setOpen(false)} size="sm">
+      <DialogHeader>
+        <DialogHeading><DialogTitle>{t("patterns.actions.newProject")}</DialogTitle></DialogHeading>
+        <DialogClose />
+      </DialogHeader>
+      <DialogBody>
+        <form id={formId} onSubmit={(event) => {
+          event.preventDefault();
+          if (!name.trim()) return;
+          setSavedPath(fullPath);
+          setOpen(false);
+        }}>
+          <FieldGroup appearance="subtle" dividers>
+            <FieldRow><Field label={t("patterns.workspace.parent")} controlWidth="fill">
+              <Select size="sm" value={parent} onValueChange={(value) => setParent(String(value))} options={[
+                { value: "/workspaces", label: "/workspaces" },
+                { value: "/workspaces/design-system/long-parent-directory", label: "/workspaces/design-system/long-parent-directory" },
+              ]} />
+            </Field></FieldRow>
+            <FieldRow><Field label={t("patterns.workspace.name")} controlWidth="fill">
+              <Input size="sm" value={name} onChange={(event) => setName(event.target.value)} autoFocus />
+            </Field></FieldRow>
+            {fullPath && <FieldRow><Field label={t("patterns.workspace.fullPath")} controlWidth="fill">
+              <span className="pattern-workspace-path">{fullPath}</span>
+            </Field></FieldRow>}
+          </FieldGroup>
+        </form>
+      </DialogBody>
+      <DialogFooter>
+        <Button size="sm" variant="fill" onClick={() => setOpen(false)}>{t("components.preview.modalCancel")}</Button>
+        <Button size="sm" variant="primary" type="submit" form={formId} disabled={!name.trim()}>{t("patterns.actions.newProject")}</Button>
+      </DialogFooter>
+    </Dialog>
+    {savedPath && <p className="pattern-workspace-path" role="status">{savedPath}</p>}
   </div>;
 }
 
