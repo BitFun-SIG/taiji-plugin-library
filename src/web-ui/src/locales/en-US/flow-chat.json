@@ -624,6 +624,7 @@
     "codeBlock": "Code Block",
     "image": "Image",
     "url": "URL",
+    "dropToAdd": "Drop to add to message",
     "dragHint": "Drop files here to add context"
   },
   "agent": {
