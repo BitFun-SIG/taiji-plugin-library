@@ -817,7 +817,7 @@ export function ComponentDetailPage({
             </DialogHeading>
             <DialogClose />
           </DialogHeader>
-          <DialogBody className="component-dialog-example__body">{renderDialogConfigurationContent()}</DialogBody>
+          <DialogBody>{renderDialogConfigurationContent()}</DialogBody>
           <DialogFooter appearance="floating">
             <Button onClick={closePreview} variant="fill">
               {t("components.preview.modalCancel")}

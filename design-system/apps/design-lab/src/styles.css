@@ -3744,11 +3744,6 @@ body,
   min-width: 0;
 }
 
-.component-dialog-example__body {
-  padding-block-end: var(--openbitfun-overlay-dialog-footer-content-inset);
-  scroll-padding-block-end: var(--openbitfun-overlay-dialog-footer-content-inset);
-}
-
 .component-dialog-example__hint {
   margin: 0;
   color: var(--openbitfun-color-content-muted);

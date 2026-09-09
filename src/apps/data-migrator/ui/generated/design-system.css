@@ -530,10 +530,10 @@
     --openbitfun-type-heading-compact-page-letter-spacing: var(--openbitfun-letter-spacing-normal);
     --openbitfun-type-heading-compact-page-line-height: var(--openbitfun-line-height-tight);
     --openbitfun-type-heading-dialog-font-family: var(--openbitfun-font-family-sans);
-    --openbitfun-type-heading-dialog-font-size: var(--openbitfun-font-size-3xl);
-    --openbitfun-type-heading-dialog-font-weight: var(--openbitfun-font-weight-semibold);
-    --openbitfun-type-heading-dialog-letter-spacing: var(--openbitfun-letter-spacing-tight);
-    --openbitfun-type-heading-dialog-line-height: var(--openbitfun-line-height-tight);
+    --openbitfun-type-heading-dialog-font-size: var(--openbitfun-font-size-3xl-plus);
+    --openbitfun-type-heading-dialog-font-weight: var(--openbitfun-font-weight-bold);
+    --openbitfun-type-heading-dialog-letter-spacing: var(--openbitfun-letter-spacing-normal);
+    --openbitfun-type-heading-dialog-line-height: 1.2083333333;
     --openbitfun-type-heading-display-font-family: var(--openbitfun-font-family-sans);
     --openbitfun-type-heading-display-font-size: var(--openbitfun-font-size-4xl);
     --openbitfun-type-heading-display-font-weight: var(--openbitfun-font-weight-semibold);
