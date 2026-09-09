@@ -163,7 +163,7 @@
       "developer": "Developer",
       "productivity": "Productivity",
       "data": "Data",
-      "creative": "Creative",
+      "creative": "$t(shared:agents.Creative)",
       "education": "Education",
       "utilities": "Utilities",
       "entertainment": "Entertainment",

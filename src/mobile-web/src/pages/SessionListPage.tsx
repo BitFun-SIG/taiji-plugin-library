@@ -169,22 +169,20 @@ function formatTime(
 
 function agentLabel(agentType: string, t: (key: string) => string): string {
   switch (agentType) {
-    case 'minimal':
+    case 'Minimal':
       return t('sessions.harnessMinimal');
-    case 'Ultra':
-    case 'ultra':
-    case 'ultimate':
+    case 'Ultimate':
       return t('sessions.harnessUltimate');
     case 'code':
       return t('sessions.agentCode');
-    case 'agentic':
+    case 'Standard':
       return t('sessions.harnessStandard');
     case 'cowork':
     case 'Cowork':
       return t('sessions.agentCowork');
     case 'claw':
     case 'Claw':
-      return t('shared.agents.claw');
+      return t('shared.agents.Claw');
     default:
       return agentType || t('sessions.agentDefault');
   }

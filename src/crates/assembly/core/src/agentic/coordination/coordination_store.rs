@@ -331,7 +331,7 @@ ORDER BY swarm_nodes.created_at_ms ASC, agents.agent_pk ASC
                 .map_err(db_error)?;
             let root_session_id = match root_session_id {
                 Some(root_session_id) => root_session_id,
-                None if parent_agent_type == "Ultra" => parent_session_id.clone(),
+                None if parent_agent_type == "Ultimate" => parent_session_id.clone(),
                 None => {
                     return Err(OpenBitFunError::tool(
                         "Swarm parent is not part of the current tree".to_string(),
@@ -370,7 +370,7 @@ ORDER BY swarm_nodes.created_at_ms ASC, agents.agent_pk ASC
                     "Swarm child depth does not match its parent lineage".to_string(),
                 ));
             }
-            if !matches!(parent.2.as_str(), "Ultra" | "SwarmPlanner") {
+            if !matches!(parent.2.as_str(), "Ultimate" | "SwarmPlanner") {
                 return Err(OpenBitFunError::tool(
                     "Only a Swarm planner can launch child agents".to_string(),
                 ));
@@ -1431,7 +1431,7 @@ PRAGMA user_version = 2;
     async fn swarm_admission_enforces_depth_and_tree_size_budgets() {
         let (_root, store) = test_store();
         store
-            .reserve_swarm_child("root", "planner", "Ultra", "SwarmPlanner", 1)
+            .reserve_swarm_child("root", "planner", "Ultimate", "SwarmPlanner", 1)
             .await
             .expect("reserve planner");
         store
@@ -1445,7 +1445,7 @@ PRAGMA user_version = 2;
             .await
             .expect_err("a non-Ultra session cannot create a new Swarm tree");
         store
-            .reserve_swarm_child("planner", "spoofed-worker", "Ultra", "SwarmWorker", 2)
+            .reserve_swarm_child("planner", "spoofed-worker", "Ultimate", "SwarmWorker", 2)
             .await
             .expect_err("the runtime parent type must match the persisted tree node");
         store
@@ -1603,7 +1603,7 @@ PRAGMA user_version = 2;
     async fn direct_child_agents_use_latest_status_and_ignore_delivery() {
         let (_root, store) = test_store();
         store
-            .reserve_swarm_child("root", "planner", "Ultra", "SwarmPlanner", 1)
+            .reserve_swarm_child("root", "planner", "Ultimate", "SwarmPlanner", 1)
             .await
             .expect("reserve planner");
         store
@@ -1675,7 +1675,7 @@ PRAGMA user_version = 2;
     async fn direct_child_resolution_and_subtree_postorder_are_lineage_scoped() {
         let (_root, store) = test_store();
         store
-            .reserve_swarm_child("root", "planner", "Ultra", "SwarmPlanner", 1)
+            .reserve_swarm_child("root", "planner", "Ultimate", "SwarmPlanner", 1)
             .await
             .expect("reserve planner");
         store

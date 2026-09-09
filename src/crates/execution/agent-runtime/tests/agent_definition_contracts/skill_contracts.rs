@@ -406,7 +406,7 @@ fn builtin_skill_catalog_and_mode_policy_are_runtime_owned() {
     assert_eq!(builtin_skill_group_key("unknown-skill"), None);
 
     assert_eq!(
-        resolve_builtin_default_enabled("ppt-design", "agentic"),
+        resolve_builtin_default_enabled("ppt-design", "Standard"),
         Some(false)
     );
     assert_eq!(
@@ -422,7 +422,7 @@ fn builtin_skill_catalog_and_mode_policy_are_runtime_owned() {
         Some(true)
     );
     assert_eq!(
-        resolve_builtin_default_enabled("miniapp-dev", "agentic"),
+        resolve_builtin_default_enabled("miniapp-dev", "Standard"),
         Some(false)
     );
     assert_eq!(
@@ -442,20 +442,23 @@ fn builtin_skill_catalog_and_mode_policy_are_runtime_owned() {
         Some(true)
     );
     assert_eq!(
-        resolve_builtin_default_enabled("openbitfun-frontend-dev", "agentic"),
+        resolve_builtin_default_enabled("openbitfun-frontend-dev", "Standard"),
         Some(false)
     );
     assert_eq!(
-        resolve_builtin_default_enabled("agent-browser", "coding_shared"),
+        resolve_builtin_default_enabled("agent-browser", "Standard"),
         Some(false)
     );
     assert_eq!(
-        resolve_builtin_default_enabled("agent-browser", "Ultra"),
+        resolve_builtin_default_enabled("agent-browser", "Ultimate"),
         Some(true)
     );
-    assert_eq!(resolve_builtin_default_enabled("plan", "Ultra"), Some(true));
     assert_eq!(
-        resolve_builtin_default_enabled("find-skills", "Ultra"),
+        resolve_builtin_default_enabled("plan", "Ultimate"),
+        Some(true)
+    );
+    assert_eq!(
+        resolve_builtin_default_enabled("find-skills", "Ultimate"),
         Some(false)
     );
     assert_eq!(
@@ -467,7 +470,7 @@ fn builtin_skill_catalog_and_mode_policy_are_runtime_owned() {
         Some(false)
     );
     for (mode_id, expected) in [
-        ("coding_shared", true),
+        ("Standard", true),
         ("Cowork", true),
         ("Creative", true),
         ("DeepResearch", true),
@@ -480,8 +483,8 @@ fn builtin_skill_catalog_and_mode_policy_are_runtime_owned() {
         );
     }
     for (mode_id, expected) in [
-        ("agentic", true),
-        ("coding_shared", true),
+        ("Standard", true),
+        ("Standard", true),
         ("Claw", true),
         ("Cowork", true),
         ("Creative", true),
@@ -501,8 +504,8 @@ fn builtin_skill_catalog_and_mode_policy_are_runtime_owned() {
         "pr-review-canvas",
     ] {
         for mode_id in [
-            "agentic",
-            "coding_shared",
+            "Standard",
+            "Standard",
             "Claw",
             "Cowork",
             "Creative",
@@ -666,13 +669,13 @@ fn skill_resolution_applies_builtin_and_user_override_rules() {
 
     assert!(!resolve_skill_default_enabled_for_mode(
         &presentation,
-        "agentic"
+        "Standard"
     ));
-    assert!(resolve_skill_default_enabled_for_mode(&custom, "agentic"));
+    assert!(resolve_skill_default_enabled_for_mode(&custom, "Standard"));
 
     let default_state = resolve_skill_state_for_mode(
         &presentation,
-        "agentic",
+        "Standard",
         &UserModeSkillOverrides::default(),
         &disabled_project,
     );
@@ -685,7 +688,7 @@ fn skill_resolution_applies_builtin_and_user_override_rules() {
     let mut overrides = UserModeSkillOverrides::default();
     overrides.enabled_skills.push(presentation.key.clone());
     let enabled_state =
-        resolve_skill_state_for_mode(&presentation, "agentic", &overrides, &disabled_project);
+        resolve_skill_state_for_mode(&presentation, "Standard", &overrides, &disabled_project);
     assert!(enabled_state.effective_enabled);
     assert_eq!(
         enabled_state.reason,
@@ -1053,7 +1056,7 @@ fn mode_skill_candidate_filtering_and_info_are_runtime_owned() {
 
     let filtered = filter_candidates_for_mode(
         vec![project_doc.clone(), custom_user.clone()],
-        "agentic",
+        "Standard",
         &UserModeSkillOverrides::default(),
         &disabled_project,
     );
@@ -1068,7 +1071,7 @@ fn mode_skill_candidate_filtering_and_info_are_runtime_owned() {
     let infos = build_mode_skill_infos(
         all_skills,
         resolved,
-        "agentic",
+        "Standard",
         &UserModeSkillOverrides::default(),
         &disabled_project,
         &HashSet::new(),
@@ -1127,7 +1130,7 @@ fn mode_skill_info_reports_the_actual_runtime_winner_after_filtering() {
 
     let filtered = filter_candidates_for_mode(
         candidates.clone(),
-        "agentic",
+        "Standard",
         &UserModeSkillOverrides::default(),
         &disabled_project,
     );
@@ -1135,7 +1138,7 @@ fn mode_skill_info_reports_the_actual_runtime_winner_after_filtering() {
     let infos = build_mode_skill_infos(
         sort_skills(annotate_shadowed_skills(candidates)),
         resolved,
-        "agentic",
+        "Standard",
         &UserModeSkillOverrides::default(),
         &disabled_project,
         &HashSet::new(),
@@ -1188,7 +1191,7 @@ fn global_skill_disable_overrides_mode_selection_without_changing_mode_defaults(
     let infos = build_mode_skill_infos(
         vec![skill],
         Vec::new(),
-        "agentic",
+        "Standard",
         &UserModeSkillOverrides::default(),
         &HashSet::new(),
         &globally_disabled,
@@ -1206,7 +1209,7 @@ fn global_skill_disable_overrides_mode_selection_without_changing_mode_defaults(
 
     let filtered = filter_candidates_for_mode(
         vec![candidate],
-        "agentic",
+        "Standard",
         &UserModeSkillOverrides::default(),
         &HashSet::new(),
     );
@@ -1223,7 +1226,7 @@ fn explicit_invocation_hidden_builtin_fallback_is_runtime_owned() {
     match resolve_default_hidden_builtin_for_explicit_invocation(
         "gstack-review",
         vec![candidate.clone()],
-        Some("agentic"),
+        Some("Standard"),
     ) {
         ExplicitSkillInvocationResolution::Found(skill) => {
             assert_eq!(skill.key, "user::openbitfun-system::gstack-review");
@@ -1235,7 +1238,7 @@ fn explicit_invocation_hidden_builtin_fallback_is_runtime_owned() {
         resolve_default_hidden_builtin_for_explicit_invocation(
             "missing-skill",
             vec![candidate.clone()],
-            Some("agentic")
+            Some("Standard")
         ),
         ExplicitSkillInvocationResolution::NotFound
     ));
@@ -1258,7 +1261,7 @@ fn explicit_invocation_reaches_default_hidden_agent_browser() {
         priority: 10,
     };
 
-    for mode_id in ["agentic", "coding_shared", "Claw", "Cowork"] {
+    for mode_id in ["Standard", "Standard", "Claw", "Cowork"] {
         assert_eq!(
             resolve_builtin_default_enabled("agent-browser", mode_id),
             Some(false),

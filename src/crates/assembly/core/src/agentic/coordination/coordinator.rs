@@ -1027,7 +1027,7 @@ fn delegation_policy_for_agent_turn(
     swarm_depth: Option<u8>,
 ) -> OpenBitFunResult<DelegationPolicy> {
     match agent_type {
-        "Ultra" => Ok(DelegationPolicy::swarm_root()),
+        "Ultimate" => Ok(DelegationPolicy::swarm_root()),
         "SwarmPlanner" => {
             let nesting_depth = swarm_depth.ok_or_else(|| {
                 OpenBitFunError::tool(
@@ -1615,9 +1615,9 @@ impl ConversationCoordinator {
 
     fn normalize_agent_type(agent_type: &str) -> String {
         if agent_type.trim().is_empty() {
-            "agentic".to_string()
+            "Standard".to_string()
         } else {
-            agent_type.trim().to_string()
+            openbitfun_core_types::agent_identity::canonical_agent_id(agent_type.trim()).to_string()
         }
     }
 
@@ -2957,7 +2957,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             let metadata = SessionMetadata {
                 session_id: session_id.to_string(),
                 session_name: "Recovered Session".to_string(),
-                agent_type: "agentic".to_string(),
+                agent_type: "Standard".to_string(),
                 last_user_dialog_agent_type: None,
                 last_submitted_agent_type: None,
                 created_by: None,
@@ -5084,12 +5084,12 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             Some(session) => {
                 let agent_type = session.agent_type.trim();
                 if agent_type.is_empty() {
-                    "agentic".to_string()
+                    "Standard".to_string()
                 } else {
                     agent_type.to_string()
                 }
             }
-            None => "agentic".to_string(),
+            None => "Standard".to_string(),
         };
         let workspace_path = self
             .require_main_session_workspace(session_id)
@@ -5260,12 +5260,12 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             Some(session) => {
                 let agent_type = session.agent_type.trim();
                 if agent_type.is_empty() {
-                    "agentic".to_string()
+                    "Standard".to_string()
                 } else {
                     agent_type.to_string()
                 }
             }
-            None => "agentic".to_string(),
+            None => "Standard".to_string(),
         };
         let workspace_path = self
             .require_main_session_workspace(session_id)
@@ -5939,7 +5939,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         } else if !session.agent_type.is_empty() {
             session.agent_type.clone()
         } else {
-            "agentic".to_string()
+            "Standard".to_string()
         };
         let effective_agent_type = Self::normalize_agent_type(&provisional_agent_type);
         let primary_agent_binding = Self::resolve_session_primary_agent(
@@ -15240,8 +15240,8 @@ mod tests {
 
     #[test]
     fn agent_turn_delegation_policy_recovers_swarm_scope_and_depth() {
-        let ultra = delegation_policy_for_agent_turn("Ultra", None)
-            .expect("Ultra should start a Swarm tree");
+        let ultra = delegation_policy_for_agent_turn("Ultimate", None)
+            .expect("Ultimate should start a Swarm tree");
         assert!(ultra.allow_subagent_spawn);
         assert_eq!(ultra.nesting_depth, 0);
         assert_eq!(
@@ -15365,7 +15365,7 @@ mod tests {
             .create_session_with_id(
                 Some(session_id.clone()),
                 "Cancellation fault".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.path().to_string_lossy().into_owned()),
                     ..Default::default()
@@ -15409,7 +15409,7 @@ mod tests {
                     round_id: "round-1".to_string(),
                     attempt_id: None,
                     attempt_index: None,
-                    agent_type: "agentic".to_string(),
+                    agent_type: "Standard".to_string(),
                     workspace: None,
                     primary_model_facts: Default::default(),
                     context_vars: HashMap::new(),
@@ -15474,7 +15474,7 @@ mod tests {
         let summary = runtime_session_summary(openbitfun_agent_runtime::session::SessionSummary {
             session_id: "session".to_string(),
             session_name: "Session".to_string(),
-            agent_type: "agentic".to_string(),
+            agent_type: "Standard".to_string(),
             model_id: Some("fast".to_string()),
             reasoning_preset: Some("high".to_string()),
             last_user_dialog_agent_type: None,
@@ -15622,14 +15622,13 @@ mod tests {
             .expect("session remains loaded");
         let workspace = ConversationCoordinator::build_workspace_binding(&session.config).await;
 
-        let binding =
-            ConversationCoordinator::resolve_session_primary_agent(&session, "agentic", &workspace)
-                .await
-                .expect(
-                    "explicitly selected local mode should resolve independently of the old owner",
-                );
+        let binding = ConversationCoordinator::resolve_session_primary_agent(
+            &session, "Standard", &workspace,
+        )
+        .await
+        .expect("explicitly selected local mode should resolve independently of the old owner");
 
-        assert_eq!(binding.runtime_agent_key, "agentic");
+        assert_eq!(binding.runtime_agent_key, "Standard");
         assert_eq!(binding.route_owner, SessionAgentRouteOwner::Local);
 
         session_manager
@@ -15646,7 +15645,7 @@ mod tests {
             .expect("case-variant session remains loaded");
         let error = match ConversationCoordinator::resolve_session_primary_agent(
             &case_variant_session,
-            "agentic",
+            "Standard",
             &workspace,
         )
         .await
@@ -15772,7 +15771,7 @@ mod tests {
         let session = session_manager
             .create_session(
                 "Cancelled compaction".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.path().to_string_lossy().into_owned()),
                     ..SessionConfig::default()
@@ -15805,7 +15804,7 @@ mod tests {
             session_id.clone(),
             turn_id.clone(),
             0,
-            "agentic".to_string(),
+            "Standard".to_string(),
             None,
             None,
             None,
@@ -15851,7 +15850,7 @@ mod tests {
         let session = session_manager
             .create_session(
                 "Persistence failure".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.to_string_lossy().into_owned()),
                     ..Default::default()
@@ -16283,7 +16282,7 @@ mod tests {
             &coordinator,
             AgentSessionModeUpdateRequest {
                 session_id: "missing-session".to_string(),
-                mode_id: "agentic".to_string(),
+                mode_id: "Standard".to_string(),
                 agent_route_key: None,
             },
         )
@@ -16314,7 +16313,7 @@ mod tests {
                 coordinator.create_session_with_workspace(
                     None,
                     "Runtime mode validation".to_string(),
-                    "agentic".to_string(),
+                    "Standard".to_string(),
                     SessionConfig {
                         workspace_path: Some(workspace_path_string.clone()),
                         ..Default::default()
@@ -16360,7 +16359,7 @@ mod tests {
                 coordinator.create_session_with_workspace(
                     None,
                     "Runtime mode validation".to_string(),
-                    "agentic".to_string(),
+                    "Standard".to_string(),
                     SessionConfig {
                         workspace_path: Some(workspace_path_string.clone()),
                         ..Default::default()
@@ -16407,7 +16406,7 @@ mod tests {
                 coordinator.create_session_with_workspace(
                     None,
                     "Runtime mode update".to_string(),
-                    "agentic".to_string(),
+                    "Standard".to_string(),
                     SessionConfig {
                         workspace_path: Some(workspace_path_string.clone()),
                         ..Default::default()
@@ -16460,7 +16459,7 @@ mod tests {
                 coordinator.create_session_with_workspace(
                     None,
                     "Runtime model update".to_string(),
-                    "agentic".to_string(),
+                    "Standard".to_string(),
                     SessionConfig {
                         workspace_path: Some(workspace_path_string.clone()),
                         model_id: Some("primary".to_string()),
@@ -16744,7 +16743,7 @@ mod tests {
         let session = session_manager
             .create_session(
                 "Durable completion".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.path().to_string_lossy().into_owned()),
                     ..Default::default()
@@ -16755,7 +16754,7 @@ mod tests {
         let turn_id = session_manager
             .start_dialog_turn(
                 &session.session_id,
-                "agentic".to_string(),
+                "Standard".to_string(),
                 "finish".to_string(),
                 Some("turn-durable-fence".to_string()),
                 None,
@@ -16818,7 +16817,7 @@ mod tests {
             .create_transient_session_with_id_and_details(
                 Some("transient-session".to_string()),
                 "Transient completion".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.path().to_string_lossy().into_owned()),
                     ..Default::default()
@@ -16831,7 +16830,7 @@ mod tests {
         let turn_id = session_manager
             .start_dialog_turn(
                 &session.session_id,
-                "agentic".to_string(),
+                "Standard".to_string(),
                 "finish".to_string(),
                 Some("turn-transient-result".to_string()),
                 None,
@@ -16881,7 +16880,7 @@ mod tests {
         let cancelled_turn_id = session_manager
             .start_dialog_turn(
                 &session.session_id,
-                "agentic".to_string(),
+                "Standard".to_string(),
                 "cancel".to_string(),
                 Some("turn-transient-cancelled".to_string()),
                 None,
@@ -16908,7 +16907,7 @@ mod tests {
         let failed_turn_id = session_manager
             .start_dialog_turn(
                 &session.session_id,
-                "agentic".to_string(),
+                "Standard".to_string(),
                 "fail".to_string(),
                 Some("turn-transient-failed".to_string()),
                 None,
@@ -16943,7 +16942,7 @@ mod tests {
             .create_session_with_id(
                 Some(session_id.to_string()),
                 "Reverted".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.to_string_lossy().into_owned()),
                     ..Default::default()
@@ -16955,7 +16954,7 @@ mod tests {
             session_manager
                 .start_dialog_turn(
                     session_id,
-                    "agentic".to_string(),
+                    "Standard".to_string(),
                     prompt.to_string(),
                     Some(turn_id.to_string()),
                     None,
@@ -17406,7 +17405,7 @@ mod tests {
         let session = session_manager
             .create_session(
                 "Transient transcript".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.path().to_string_lossy().into_owned()),
                     ..Default::default()
@@ -17472,7 +17471,7 @@ mod tests {
             .create_session_with_id(
                 Some("ownership-conflict".to_string()),
                 "blocked".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                     ..Default::default()
@@ -17874,7 +17873,7 @@ mod tests {
             .create_hidden_subagent_session_with_workspace(
                 Some("hidden-ownership-conflict".to_string()),
                 "hidden".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig::default(),
                 workspace_path.clone(),
                 None,
@@ -17971,7 +17970,7 @@ mod tests {
         let session = session_manager
             .create_session(
                 "Shell turn".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.path().to_string_lossy().into_owned()),
                     ..Default::default()
@@ -18067,7 +18066,7 @@ mod tests {
         let session = session_manager
             .create_session(
                 "Denied shell turn".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.path().to_string_lossy().into_owned()),
                     ..Default::default()
@@ -18125,7 +18124,7 @@ mod tests {
         let session = session_manager
             .create_session(
                 "Failed shell turn".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.path().to_string_lossy().into_owned()),
                     ..Default::default()
@@ -18180,7 +18179,7 @@ mod tests {
         let session = session_manager
             .create_session(
                 "Cancelled shell turn".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.path().to_string_lossy().into_owned()),
                     ..Default::default()
@@ -18956,7 +18955,7 @@ mod tests {
             &coordinator,
             AgentSessionCreateRequest {
                 session_name: "Worker".to_string(),
-                agent_type: "agentic".to_string(),
+                agent_type: "Standard".to_string(),
                 agent_route_key: None,
                 workspace_path: Some(workspace_path.to_string_lossy().into_owned()),
                 project_workspace_path: None,
@@ -18996,7 +18995,7 @@ mod tests {
             &coordinator,
             AgentSessionCreateRequest {
                 session_name: "Original".to_string(),
-                agent_type: "agentic".to_string(),
+                agent_type: "Standard".to_string(),
                 agent_route_key: None,
                 workspace_path: Some(workspace.clone()),
                 project_workspace_path: None,
@@ -19103,7 +19102,7 @@ mod tests {
             &coordinator,
             AgentSessionCreateRequest {
                 session_name: "Over capacity".to_string(),
-                agent_type: "agentic".to_string(),
+                agent_type: "Standard".to_string(),
                 agent_route_key: None,
                 workspace_path: Some(std::env::temp_dir().to_string_lossy().into_owned()),
                 project_workspace_path: None,
@@ -19135,7 +19134,7 @@ mod tests {
             "fixed-session-id".to_string(),
             AgentSessionCreateRequest {
                 session_name: "Fixed worker".to_string(),
-                agent_type: "agentic".to_string(),
+                agent_type: "Standard".to_string(),
                 agent_route_key: None,
                 workspace_path: Some(workspace_path.to_string_lossy().into_owned()),
                 project_workspace_path: None,
@@ -19170,7 +19169,7 @@ mod tests {
             "fixed-session-id".to_string(),
             AgentSessionCreateRequest {
                 session_name: "Duplicate worker".to_string(),
-                agent_type: "agentic".to_string(),
+                agent_type: "Standard".to_string(),
                 agent_route_key: None,
                 workspace_path: Some(workspace_path.to_string_lossy().into_owned()),
                 project_workspace_path: None,
@@ -19281,7 +19280,7 @@ mod tests {
             let mut metadata = SessionMetadata::new(
                 session_id.clone(),
                 format!("Remote {index}"),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 "primary".to_string(),
             );
             metadata.custom_metadata = Some(thread_goal_patch(&goal));
@@ -19325,7 +19324,7 @@ mod tests {
             .create_session_with_id(
                 Some(loaded_session_id.clone()),
                 "Loaded remote A".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(logical_workspace_path.to_string()),
                     remote_connection_id: Some(remote_identities[0].0.clone()),
@@ -19356,7 +19355,7 @@ mod tests {
         let mut loaded_metadata = SessionMetadata::new(
             loaded_session_id.clone(),
             "Loaded remote A".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             "primary".to_string(),
         );
         loaded_metadata.custom_metadata = Some(thread_goal_patch(&loaded_goal_fixture));
@@ -19440,7 +19439,7 @@ mod tests {
             .create_session_with_id(
                 Some(session_id.clone()),
                 "Remote goal mutation".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(logical_workspace_path.clone()),
                     remote_connection_id: Some(remote_connection_id),
@@ -19503,7 +19502,7 @@ mod tests {
                 coordinator.create_session_with_workspace(
                     None,
                     "First".to_string(),
-                    "agentic".to_string(),
+                    "Standard".to_string(),
                     SessionConfig {
                         workspace_path: Some(workspace_path_string.clone()),
                         ..Default::default()
@@ -19523,7 +19522,7 @@ mod tests {
                 coordinator.create_session_with_workspace(
                     None,
                     "Second".to_string(),
-                    "agentic".to_string(),
+                    "Standard".to_string(),
                     SessionConfig {
                         workspace_path: Some(workspace_path_string.clone()),
                         ..Default::default()
@@ -19558,7 +19557,7 @@ mod tests {
                 coordinator.create_session_with_workspace(
                     None,
                     "Explicit".to_string(),
-                    "agentic".to_string(),
+                    "Standard".to_string(),
                     SessionConfig {
                         workspace_path: Some(workspace_path_string.clone()),
                         model_id: Some("explicit-model".to_string()),
@@ -19585,7 +19584,7 @@ mod tests {
         let workspace = workspace_path.to_string_lossy().into_owned();
         let request = |name: &str| AgentSessionCreateRequest {
             session_name: name.to_string(),
-            agent_type: "agentic".to_string(),
+            agent_type: "Standard".to_string(),
             agent_route_key: None,
             workspace_path: Some(workspace.clone()),
             project_workspace_path: None,
@@ -19719,7 +19718,7 @@ mod tests {
             "../other-session".to_string(),
             AgentSessionCreateRequest {
                 session_name: "Invalid worker".to_string(),
-                agent_type: "agentic".to_string(),
+                agent_type: "Standard".to_string(),
                 agent_route_key: None,
                 workspace_path: Some(std::env::temp_dir().to_string_lossy().into_owned()),
                 project_workspace_path: None,
@@ -19793,7 +19792,7 @@ mod tests {
         let parent_session = session_manager
             .create_session(
                 "Parent".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     model_id: Some("primary".to_string()),
                     workspace_path: Some(workspace_path.to_string_lossy().into_owned()),
@@ -19905,7 +19904,7 @@ mod tests {
         let parent_session = session_manager
             .create_session(
                 "Parent".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     model_id: Some("primary".to_string()),
                     workspace_path: Some(workspace_path.clone()),
@@ -19984,7 +19983,7 @@ mod tests {
             .create_transient_session_with_id_and_details(
                 None,
                 "Transient parent".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     model_id: Some("primary".to_string()),
                     workspace_path: Some(workspace.clone()),
@@ -20125,7 +20124,7 @@ mod tests {
         let parent_session = session_manager
             .create_session(
                 "Parent".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     model_id: Some("primary".to_string()),
                     workspace_path: Some(workspace_path.to_string_lossy().into_owned()),
@@ -20139,7 +20138,7 @@ mod tests {
             .create_hidden_agent_session(
                 None,
                 "Reusable subagent".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     model_id: Some("parent-model".to_string()),
                     workspace_path: Some(workspace_path.to_string_lossy().into_owned()),
@@ -20289,7 +20288,7 @@ mod tests {
         let parent_session = session_manager
             .create_session(
                 "Parent".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     model_id: Some("primary".to_string()),
                     workspace_path: Some(workspace_path.to_string_lossy().into_owned()),
@@ -20441,7 +20440,7 @@ mod tests {
             .create_hidden_agent_session(
                 None,
                 "Reusable subagent".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace_path.to_string_lossy().into_owned()),
                     ..Default::default()
@@ -20461,7 +20460,7 @@ mod tests {
         let turn_id = session_manager
             .start_dialog_turn_with_existing_context(
                 &session.session_id,
-                "agentic".to_string(),
+                "Standard".to_string(),
                 "continue investigation".to_string(),
                 Some("subagent-turn-reuse".to_string()),
                 None,
@@ -20519,7 +20518,7 @@ mod tests {
         let parent_session = session_manager
             .create_session(
                 "Parent".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace_path.to_string_lossy().into_owned()),
                     remote_connection_id: Some("ssh-user@example.test:22".to_string()),
@@ -20532,8 +20531,8 @@ mod tests {
         session_manager
             .inherit_session_agent_type_state(
                 &parent_session.session_id,
-                Some("agentic".to_string()),
-                Some("agentic".to_string()),
+                Some("Standard".to_string()),
+                Some("Standard".to_string()),
             )
             .await
             .expect("parent agent type state should be set");
@@ -20597,11 +20596,11 @@ mod tests {
         );
         assert_eq!(
             child_session.last_user_dialog_agent_type.as_deref(),
-            Some("agentic")
+            Some("Standard")
         );
         assert_eq!(
             child_session.last_submitted_agent_type.as_deref(),
-            Some("agentic")
+            Some("Standard")
         );
         assert_eq!(
             child_session.config.remote_connection_id.as_deref(),
@@ -20778,7 +20777,7 @@ mod tests {
             "deepReviewRunManifest": { "reviewTargetEvidence": { "version": 1 } }
         });
 
-        assert!(turn_review_manifest_for_agent(Some(&metadata), "agentic").is_none());
+        assert!(turn_review_manifest_for_agent(Some(&metadata), "Standard").is_none());
         assert!(turn_review_manifest_for_agent(Some(&metadata), "CodeReview").is_some());
         assert!(turn_review_manifest_for_agent(Some(&metadata), "DeepReview").is_some());
     }

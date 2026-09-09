@@ -369,9 +369,16 @@ async fn fanout_peer_device_event_once(item: PeerEventFanoutItem) {
         return;
     }
     use openbitfun_core::service::remote_connect::remote_server::RemoteCommand;
+    let mut payload = item.payload;
+    if let Err(error) = openbitfun_core_types::agent_identity_wire::translate_agent_identity_fields(
+        &mut payload,
+        openbitfun_core_types::agent_identity_wire::AgentIdentityDialect::Legacy,
+    ) {
+        log::warn!("Peer event contains conflicting Agent profiles; preserving records: {error}");
+    }
     let envelope = match serde_json::to_string(&RemoteCommand::DeviceEvent {
         event: item.event.clone(),
-        payload: item.payload,
+        payload,
     }) {
         Ok(s) => s,
         Err(e) => {
@@ -2523,7 +2530,7 @@ pub async fn account_connect_devices() -> Result<Vec<OnlineDeviceInfo>, String> 
                                             }
                                         };
                                         let agent =
-                                            agent_type.unwrap_or_else(|| "agentic".to_string());
+                                            agent_type.unwrap_or_else(|| "Standard".to_string());
                                         if let Err(e) = scheduler
                                             .submit(
                                                 session_id,

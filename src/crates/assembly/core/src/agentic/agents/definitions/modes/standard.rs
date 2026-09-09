@@ -1,54 +1,54 @@
-//! Agentic Mode
+//! Standard Harness
 //!
 //! Uses the shared coding prompt, tools, exposure policy, and user context.
 
 use crate::agentic::agents::{
-    shared_coding_mode_tool_exposure_overrides, shared_coding_mode_tools,
-    shared_coding_mode_user_context_policy, Agent, AgentToolPolicyOverrides, UserContextPolicy,
-    SHARED_CODING_MODE_PROMPT_TEMPLATE,
+    standard_harness_tool_exposure_overrides, standard_harness_tools,
+    standard_harness_user_context_policy, Agent, AgentToolPolicyOverrides, UserContextPolicy,
+    STANDARD_HARNESS_PROMPT_TEMPLATE,
 };
 use async_trait::async_trait;
 
-pub struct AgenticMode {
+pub struct StandardHarness {
     default_tools: Vec<String>,
     tool_exposure_overrides: AgentToolPolicyOverrides,
 }
 
-impl Default for AgenticMode {
+impl Default for StandardHarness {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl AgenticMode {
+impl StandardHarness {
     pub fn new() -> Self {
         Self {
-            default_tools: shared_coding_mode_tools(),
-            tool_exposure_overrides: shared_coding_mode_tool_exposure_overrides(),
+            default_tools: standard_harness_tools(),
+            tool_exposure_overrides: standard_harness_tool_exposure_overrides(),
         }
     }
 }
 
 #[async_trait]
-impl Agent for AgenticMode {
+impl Agent for StandardHarness {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
 
     fn id(&self) -> &str {
-        "agentic"
+        "Standard"
     }
 
     fn name(&self) -> &str {
-        "Agentic"
+        "Standard"
     }
 
     fn description(&self) -> &str {
-        "Full-featured AI assistant with access to all tools for comprehensive software development tasks"
+        "Standard Harness for software development with task planning, tools, and delegated subagents"
     }
 
     fn prompt_template_name(&self, _model_name: Option<&str>) -> &str {
-        SHARED_CODING_MODE_PROMPT_TEMPLATE
+        STANDARD_HARNESS_PROMPT_TEMPLATE
     }
 
     fn default_tools(&self) -> Vec<String> {
@@ -60,7 +60,7 @@ impl Agent for AgenticMode {
     }
 
     fn user_context_policy(&self) -> UserContextPolicy {
-        shared_coding_mode_user_context_policy()
+        standard_harness_user_context_policy()
     }
 
     fn is_readonly(&self) -> bool {

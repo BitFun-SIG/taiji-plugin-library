@@ -3435,7 +3435,7 @@ mod tests {
         let mut session = Session::new_with_id(
             "session-model-scope".to_string(),
             "Model scope".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             Default::default(),
         );
 

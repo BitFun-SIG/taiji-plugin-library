@@ -801,7 +801,6 @@ $_section-header-height: 22px;
     }
 
     &:hover {
-      transform: translateY(-2px) scale(1.06);
       box-shadow: 0 10px 20px color-mix(in srgb, var(--openbitfun-color-content-on-light) 24%, transparent);
       filter: saturate(1);
       opacity: 1;
@@ -2110,11 +2109,6 @@ $_section-header-height: 22px;
     transition: none;
   }
 
-  .openbitfun-nav-panel__top-action-btn:hover .openbitfun-nav-panel__top-action-icon-circle,
-  .openbitfun-nav-panel__top-action-btn:active .openbitfun-nav-panel__top-action-icon-circle {
-    transform: scale(1);
-  }
-
   .openbitfun-nav-panel__top-action-btn:not(.openbitfun-nav-panel__top-action-btn--sub) .openbitfun-nav-panel__top-action-icon-slot {
     transition: none;
   }
@@ -2351,8 +2345,6 @@ $_section-header-height: 22px;
   background: var(--openbitfun-color-action-primary-background);
   color: var(--openbitfun-color-action-primary-content);
   box-shadow: var(--openbitfun-shadow-sm);
-  transform: scale(1);
-  transform-origin: center;
 
   .openbitfun-nav-panel__top-action-btn:hover & {
     background: var(--openbitfun-color-action-primary-hover);
@@ -2365,7 +2357,6 @@ $_section-header-height: 22px;
     background: var(--openbitfun-color-action-primary-pressed);
     color: var(--openbitfun-color-action-primary-content);
     box-shadow: var(--openbitfun-shadow-xs);
-    transform: scale(0.86);
   }
 }
 
@@ -2472,7 +2463,6 @@ $_section-header-height: 22px;
       color 120ms ease;
 
     &:active {
-      transform: scale(0.985);
       background: var(--openbitfun-color-action-neutral-surface-hover);
     }
 
@@ -2497,10 +2487,6 @@ $_section-header-height: 22px;
 
     .openbitfun-nav-panel__top-action-btn:hover & {
       transform: none;
-    }
-
-    .openbitfun-nav-panel__top-action-btn:active & {
-      transform: scale(0.95);
     }
   }
 
@@ -2536,10 +2522,6 @@ $_section-header-height: 22px;
     transition:
       transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
       background 120ms ease;
-
-    &--interactive:active {
-      transform: scale(0.985);
-    }
   }
 
   &__section-label {
@@ -2555,10 +2537,6 @@ $_section-header-height: 22px;
       transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
       color 120ms ease,
       background 120ms ease;
-
-    &:active {
-      transform: scale(0.94);
-    }
   }
 
   &__item-slot {
@@ -2587,10 +2565,6 @@ $_section-header-height: 22px;
       background 120ms ease,
       color 120ms ease,
       opacity 120ms ease;
-
-    &:active {
-      transform: scale(0.985);
-    }
 
     &.is-active {
       @include nav-font.nav-panel-text-row-active;
@@ -2639,10 +2613,6 @@ $_section-header-height: 22px;
     &.is-active {
       box-shadow: none;
     }
-
-    &:active {
-      transform: scale(0.985);
-    }
   }
 
   &__pages-entry.is-active,
@@ -2662,12 +2632,7 @@ $_section-header-height: 22px;
       filter 120ms ease;
 
     &:hover {
-      transform: scale(1.05);
       box-shadow: none;
-    }
-
-    &:active {
-      transform: scale(0.94);
     }
   }
 
@@ -2682,10 +2647,6 @@ $_section-header-height: 22px;
     &:hover {
       transform: none;
       box-shadow: none;
-    }
-
-    &:active {
-      transform: scale(0.985);
     }
   }
 
@@ -2720,11 +2681,6 @@ $_section-header-height: 22px;
     color 120ms ease;
 }
 
-.openbitfun-nav-panel__footer-btn--icon:active,
-.openbitfun-nav-panel__footer .openbitfun-notification-btn:active {
-  transform: scale(0.94);
-}
-
 .openbitfun-nav-panel__workspace-menu,
 .openbitfun-nav-panel__footer-menu,
 .openbitfun-nav-panel__appearance-submenu {
@@ -2742,10 +2698,6 @@ $_section-header-height: 22px;
     border-color 120ms ease,
     background 120ms ease,
     color 120ms ease;
-
-  &:active:not(:disabled) {
-    transform: scale(0.97);
-  }
 }
 
 @keyframes openbitfun-nav-popover-in {

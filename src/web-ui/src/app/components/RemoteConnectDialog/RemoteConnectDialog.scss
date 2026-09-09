@@ -494,10 +494,6 @@
     );
   }
 
-  &:active {
-    transform: scale(0.98);
-  }
-
   &:focus-visible {
     outline: var(--openbitfun-focus-width) solid var(--openbitfun-color-focus-ring);
     outline-offset: 3px;

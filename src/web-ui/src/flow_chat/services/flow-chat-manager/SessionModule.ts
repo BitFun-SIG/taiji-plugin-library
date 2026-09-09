@@ -573,7 +573,7 @@ export const resolveAgentTypeForSessionCreation = async (
       ),
     );
     if (!configuredDefaultMode) {
-      return 'agentic';
+      return 'Standard';
     }
 
     const availableModes = await agentAPI.getAvailableModes({
@@ -597,7 +597,7 @@ export const resolveAgentTypeForSessionCreation = async (
     });
   }
 
-  return 'agentic';
+  return 'Standard';
 };
 
 function requireSessionWorkspacePath(
@@ -1209,7 +1209,7 @@ export async function ensureBackendSession(
       sessionName:
         resolveSessionTitle(latestSession, (key, options) => i18nService.t(key, options)) ||
         `Session ${sessionId.slice(0, 8)}`,
-      agentType: latestSession.mode || 'agentic',
+      agentType: latestSession.mode || 'Standard',
       workspacePath,
       projectWorkspacePath,
       executionTarget:
@@ -1261,7 +1261,7 @@ export async function retryCreateBackendSession(
     sessionName:
       resolveSessionTitle(session, (key, options) => i18nService.t(key, options)) ||
       `Session ${sessionId.slice(0, 8)}`,
-    agentType: session.mode || 'agentic',
+    agentType: session.mode || 'Standard',
     workspacePath,
     projectWorkspacePath,
     executionTarget:

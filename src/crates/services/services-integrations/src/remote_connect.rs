@@ -1860,22 +1860,27 @@ pub struct RemoteModelCatalogPollDelta {
 }
 
 pub fn resolve_remote_agent_type(mobile_type: Option<&str>) -> &'static str {
+    if let Some(harness) =
+        mobile_type.and_then(openbitfun_core_types::agent_identity::HarnessId::from_legacy_id)
+    {
+        return harness.as_str();
+    }
     match mobile_type {
-        Some(value) if value.eq_ignore_ascii_case("minimal") => "minimal",
+        Some(value) if value.eq_ignore_ascii_case("minimal") => "Minimal",
         Some(value)
             if value.eq_ignore_ascii_case("ultra") || value.eq_ignore_ascii_case("ultimate") =>
         {
-            "Ultra"
+            "Ultimate"
         }
         Some(value)
             if value.eq_ignore_ascii_case("balanced") || value.eq_ignore_ascii_case("standard") =>
         {
-            "agentic"
+            "Standard"
         }
-        Some("code") | Some("agentic") | Some("Agentic") => "agentic",
+        Some("code") => "Standard",
         Some("cowork") | Some("Cowork") => "Cowork",
         Some("claw") | Some("Claw") | Some("assistant") | Some("chat") => "Claw",
-        _ => "agentic",
+        _ => "Standard",
     }
 }
 
@@ -1890,6 +1895,10 @@ pub struct ImageAttachment {
 pub struct SessionInfo {
     pub session_id: String,
     pub name: String,
+    #[serde(
+        serialize_with = "openbitfun_core_types::agent_identity_wire::serialize_legacy_agent_id",
+        deserialize_with = "openbitfun_core_types::agent_identity::deserialize_agent_id"
+    )]
     pub agent_type: String,
     pub created_at: String,
     pub updated_at: String,
@@ -2751,7 +2760,7 @@ where
             );
             info!(
                 "Remote send_message: session={session_id}, agent_type={}, image_contexts={}",
-                agent_type.as_deref().unwrap_or("agentic"),
+                agent_type.as_deref().unwrap_or("Standard"),
                 resolved_contexts.len()
             );
             remote_dialog_submit_response(
@@ -4106,7 +4115,7 @@ mod tests {
                 RemoteSessionMetadata {
                     session_id: "session-a".to_string(),
                     name: "keep me".to_string(),
-                    agent_type: "agentic".to_string(),
+                    agent_type: "Standard".to_string(),
                     created_at_ms: 1_000,
                     last_active_at_ms: 2_000,
                     turn_count: 3,
@@ -4114,7 +4123,7 @@ mod tests {
                 RemoteSessionMetadata {
                     session_id: "session-b".to_string(),
                     name: "other".to_string(),
-                    agent_type: "agentic".to_string(),
+                    agent_type: "Standard".to_string(),
                     created_at_ms: 1_000,
                     last_active_at_ms: 2_000,
                     turn_count: 1,

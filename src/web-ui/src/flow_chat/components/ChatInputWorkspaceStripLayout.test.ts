@@ -329,7 +329,7 @@ describe('composer context track layout', () => {
       'composer.setValue(newSessionId, transferredDraft.value)',
     );
     expect(chatInput).not.toContain('data-testid="chat-input-agent-mode-chip"');
-    expect(chatInput).not.toContain("modeState.current !== 'agentic'");
+    expect(chatInput).not.toContain("modeState.current !== 'Standard'");
     expect(chatInput).toContain('!isMultiLine && executionLevelPolicy.userConfigurable ? (');
   });
 

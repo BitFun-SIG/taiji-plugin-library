@@ -862,6 +862,7 @@ test('contract and AI adapter tests keep reviewed feature and failure-domain top
       name: 'core_type_contracts',
       path: 'tests/core_type_contracts.rs',
       leaves: [
+        'tests/core_type_contracts/agent_identity.rs',
         'tests/core_type_contracts/session_contracts.rs',
         'tests/core_type_contracts/session_usage_contracts.rs',
         'tests/core_type_contracts/surface_contracts.rs',

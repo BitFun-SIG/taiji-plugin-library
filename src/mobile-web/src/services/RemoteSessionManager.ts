@@ -1,3 +1,4 @@
+import { translateAgentIdentityFields } from '../../../shared/agent-harness/wire';
 /**
  * Manages remote sessions by sending commands to the desktop via the relay.
  * All communication is request-response via RelayHttpClient (HTTP).
@@ -275,13 +276,17 @@ export class RemoteSessionManager {
     const targetDeviceId = target.deviceId;
     if (!targetDeviceId) throw new Error('Select an account device to continue');
     try {
-      const resp = await this.client.sendDeviceRpc<T>(targetDeviceId, cmdWithId, relayOptions);
+      const resp = await this.client.sendDeviceRpc<T>(
+        targetDeviceId,
+        translateAgentIdentityFields(cmdWithId, 'legacy'),
+        relayOptions,
+      );
       this.ensureControlTargetCurrent(target);
       const respAny = resp as any;
       if (respAny.resp === 'error') {
         throw new Error(respAny.message || 'Unknown error');
       }
-      return resp;
+      return translateAgentIdentityFields(resp, 'canonical');
     } catch (error: unknown) {
       // Suppress both successful and failed completions after a target switch.
       // The epoch check (rather than device id alone) also closes A -> B -> A

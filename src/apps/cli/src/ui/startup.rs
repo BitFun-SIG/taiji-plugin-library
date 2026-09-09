@@ -2501,8 +2501,8 @@ mod logo_contract_tests {
     #[test]
     fn external_or_unknown_startup_modes_do_not_change_the_shared_default() {
         let local = TuiAgentMode {
-            id: "agentic".to_string(),
-            route_key: "agentic".to_string(),
+            id: "Standard".to_string(),
+            route_key: "Standard".to_string(),
             description: String::new(),
             model_id: None,
             is_external: false,

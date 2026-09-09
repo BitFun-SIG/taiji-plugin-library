@@ -657,6 +657,15 @@ async fn fanout_peer_device_event_once(queued: QueuedPeerDeviceEvent) {
         continuity,
         terminal,
     } = queued;
+    let mut payload = payload;
+    if let Err(error) = openbitfun_core_types::agent_identity_wire::translate_agent_identity_fields(
+        &mut payload,
+        openbitfun_core_types::agent_identity_wire::AgentIdentityDialect::Legacy,
+    ) {
+        tracing::warn!(
+            "Peer event contains conflicting Agent profiles; preserving records: {error}"
+        );
+    }
     if !continuity_is_current(&continuity) {
         return;
     }

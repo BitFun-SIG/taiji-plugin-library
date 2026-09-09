@@ -1048,7 +1048,7 @@ mod tests {
     fn local_tool_context(workspace: &Path) -> ToolUseContext {
         ToolUseContext {
             tool_call_id: None,
-            agent_type: Some("agentic".to_string()),
+            agent_type: Some("Standard".to_string()),
             session_id: None,
             dialog_turn_id: None,
             workspace: Some(WorkspaceBinding::new(None, workspace.to_path_buf())),
@@ -1067,7 +1067,7 @@ mod tests {
                 .expect("remote session identity should build");
         ToolUseContext {
             tool_call_id: None,
-            agent_type: Some("agentic".to_string()),
+            agent_type: Some("Standard".to_string()),
             session_id: None,
             dialog_turn_id: None,
             workspace: Some(WorkspaceBinding::new_remote(
@@ -1355,7 +1355,7 @@ mod tests {
         let tool = ExecCommandTool::new();
         let context = ToolUseContext {
             tool_call_id: None,
-            agent_type: Some("agentic".to_string()),
+            agent_type: Some("Standard".to_string()),
             session_id: None,
             dialog_turn_id: None,
             workspace: None,

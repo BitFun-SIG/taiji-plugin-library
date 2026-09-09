@@ -502,7 +502,7 @@ mod tests {
         SessionMetadata::new(
             "session-1".to_string(),
             "Session".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             "model".to_string(),
         )
     }
@@ -625,7 +625,7 @@ mod tests {
         let built = build_session_metadata(SessionMetadataBuildFacts {
             session_id: "session-1",
             session_name: "Updated session",
-            agent_type: "agentic",
+            agent_type: "Standard",
             last_user_dialog_agent_type: Some("plan"),
             last_submitted_agent_type: Some("code"),
             created_by: Some("creator"),
@@ -682,7 +682,7 @@ mod tests {
         let built = build_session_metadata(SessionMetadataBuildFacts {
             session_id: "session-1",
             session_name: "New session",
-            agent_type: "agentic",
+            agent_type: "Standard",
             last_user_dialog_agent_type: None,
             last_submitted_agent_type: None,
             created_by: None,
@@ -720,7 +720,7 @@ mod tests {
         let built = build_session_metadata(SessionMetadataBuildFacts {
             session_id: "session-worktree",
             session_name: "Isolated session",
-            agent_type: "agentic",
+            agent_type: "Standard",
             last_user_dialog_agent_type: None,
             last_submitted_agent_type: None,
             created_by: None,

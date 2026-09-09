@@ -630,7 +630,7 @@
   "agent": {
     "title": "智能体",
     "select": "选择智能体",
-    "default": "默认助手",
+    "default": "$t(shared:agents.default)",
     "coding": "编程助手",
     "review": "审核",
     "architect": "架构师",
@@ -726,7 +726,6 @@
     "harness": {
       "selectorTooltip": "当前执行：{{name}}",
       "fixedTooltip": "本会话使用 {{name}}，开始后已固定。",
-      "activateBalanced": "切换到标准 Harness",
       "compatibilityShort": "兼容模式",
       "comingSoon": "开发中",
       "comingSoonNotice": "「{{name}}」Harness 执行框架正在开发中。",
@@ -749,12 +748,23 @@
       "unavailable": "不可用",
       "agentUnavailable": "当前 Host 或设置不支持 {{name}}。",
       "profiles": {
-        "minimal": { "name": "极简" },
-        "balanced": { "name": "标准" },
-        "ultimate": { "name": "极致" },
-        "creative": { "name": "创造" },
-        "other": { "name": "智能体" }
-      }
+        "other": {
+          "name": "智能体"
+        },
+        "Minimal": {
+          "name": "$t(shared:agents.Minimal)"
+        },
+        "Standard": {
+          "name": "$t(shared:agents.Standard)"
+        },
+        "Ultimate": {
+          "name": "$t(shared:agents.Ultimate)"
+        },
+        "Creative": {
+          "name": "$t(shared:agents.Creative)"
+        }
+      },
+      "activateStandard": "切换到标准 Harness"
     },
     "agents": {
       "available": "可用",
@@ -762,9 +772,15 @@
       "comingSoon": "开发中",
       "comingSoonNotice": "直接调用「{{name}}」Agent 的能力正在开发中。",
       "reviewUnavailable": "Review Agent 需要一个包含可审查变更的活动会话。",
-      "review": { "name": "Review" },
-      "cowork": { "name": "Cowork" },
-      "computerUse": { "name": "Computer Use" }
+      "review": {
+        "name": "Review"
+      },
+      "cowork": {
+        "name": "Cowork"
+      },
+      "computerUse": {
+        "name": "Computer Use"
+      }
     },
     "addBoostTooltip": "指令、上下文、图片或 Skill",
     "modeChangeFailed": "切换智能体模式失败，请重试。",
@@ -839,7 +855,6 @@
     "boostSkillsEmpty": "暂无已启用的 Skill",
     "openSkillsLibrary": "管理 Skills…",
     "insertSkillLine": "Please use the Skill tool with command \"{{name}}\".",
-    "resetToAgentic": "移除当前 Agent",
     "defaultModeSetTooltip": "将 {{mode}} 设为新聊天默认模式",
     "defaultModeUnsetTooltip": "默认模式覆盖已启用，点击清除",
     "defaultModeSet": "已将 {{mode}} 设为新聊天默认模式。",
@@ -921,20 +936,22 @@
     "sendingToMain": "主会话：{{title}}",
     "sendingToBtw": "侧问会话：{{title}}",
     "modeDescriptions": {
-      "agentic": "AI 主导执行，自动规划和完成编码任务，拥有完整的工具访问能力",
       "Claw": "个人助理模式：面向个人工作区和日常事务，使用独立的助理上下文",
       "Cowork": "协作模式：先澄清再推进，轻量跟踪进度，随时验证结果",
       "ComputerUse": "独立电脑操作智能体：感知本机环境，操作应用、浏览器与系统界面",
       "DeepResearch": "深度研究：并行派发多个子 Agent 同时调研不同章节，快速生成高质量研究报告",
-      "Ultra": "群体规划模式：适合复杂任务，可能并发发起较多模型请求，从而增加 API 成本和供应商限流压力"
+      "Standard": "AI 主导执行，自动规划和完成编码任务，拥有完整的工具访问能力",
+      "Ultimate": "群体规划模式：适合复杂任务，可能并发发起较多模型请求，从而增加 API 成本和供应商限流压力"
     },
     "modeNames": {
-      "agentic": "Agentic",
-      "Claw": "Claw",
-      "Cowork": "Cowork",
-      "ComputerUse": "Computer Use",
-      "DeepResearch": "Deep Research",
-      "Ultra": "Ultra"
+      "Claw": "$t(shared:agents.Claw)",
+      "Cowork": "$t(shared:agents.Cowork)",
+      "ComputerUse": "$t(shared:agents.ComputerUse)",
+      "DeepResearch": "$t(shared:agents.DeepResearch)",
+      "Standard": "$t(shared:agents.Standard)",
+      "Ultimate": "$t(shared:agents.Ultimate)",
+      "Minimal": "$t(shared:agents.Minimal)",
+      "Creative": "$t(shared:agents.Creative)"
     },
     "openFolder": "打开文件夹…",
     "selectWorkspaceTitle": "选择工作区目录",
@@ -1976,7 +1993,7 @@
       "executing": "执行中...",
       "subAgentFailed": "子代理任务执行失败",
       "subAgentTaskFailed": "子代理任务失败",
-      "failed": "失败",
+      "failed": "$t(shared:statuses.failed)",
       "confirmDelegate": "确认委派",
       "cancel": "取消",
       "task": "任务",
@@ -2010,7 +2027,7 @@
       "status": {
         "pending": "等待中",
         "running": "执行中",
-        "completed": "已完成",
+        "completed": "$t(shared:statuses.done)",
         "failed": "执行失败"
       },
       "loadingMore": "正在加载更多输出...",
@@ -2200,9 +2217,9 @@
       "paramsReceiving": "接收参数中",
       "preparing": "准备中",
       "running": "执行中",
-      "completed": "已完成",
-      "error": "失败",
-      "cancelled": "已取消"
+      "completed": "$t(shared:statuses.done)",
+      "error": "$t(shared:statuses.failed)",
+      "cancelled": "$t(shared:statuses.cancelled)"
     },
     "toolbar": {
       "executing": "执行中...",
