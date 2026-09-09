@@ -46,6 +46,9 @@ const FIELD_GROUP_THEME_VARIABLE_NAME = '--openbitfun-color-field-group-backgrou
 // Menu and navigation captions own their final contrast independently of body
 // descriptions and field hints; assert this addition without changing the shared baseline.
 const CAPTION_THEME_VARIABLE_NAME = '--openbitfun-color-content-caption';
+// Persistent action cards own their fill independently of transient feedback
+// and form groups; keep the shared contract fingerprint unchanged.
+const ACTION_CARD_THEME_VARIABLE_NAME = '--openbitfun-color-action-card-background';
 const RETIRED_WIDGET_VARIABLE_NAMES = [
   '--background-primary',
   '--bg-primary',
@@ -95,11 +98,13 @@ describe('generated widget appearance payload contract', () => {
       && !FIELD_STATE_THEME_VARIABLE_NAMES.some(fieldName => fieldName === name)
       && name !== FIELD_GROUP_THEME_VARIABLE_NAME
       && name !== CAPTION_THEME_VARIABLE_NAME
+      && name !== ACTION_CARD_THEME_VARIABLE_NAME
     ));
     expect(buttonNames).toEqual(BUTTON_THEME_VARIABLE_NAMES);
     expect(fieldStateNames).toEqual(FIELD_STATE_THEME_VARIABLE_NAMES);
     expect(WIDGET_APPEARANCE_VAR_NAMES).toContain(FIELD_GROUP_THEME_VARIABLE_NAME);
     expect(WIDGET_APPEARANCE_VAR_NAMES).toContain(CAPTION_THEME_VARIABLE_NAME);
+    expect(WIDGET_APPEARANCE_VAR_NAMES).toContain(ACTION_CARD_THEME_VARIABLE_NAME);
     expect({
       count: sharedNames.length,
       hash: hashNames(sharedNames),
@@ -156,6 +161,7 @@ describe('generated widget appearance payload contract', () => {
       '--openbitfun-color-action-primary-content': '#101010',
       '--openbitfun-color-action-primary-hover': 'linear-gradient(test-hover)',
       '--openbitfun-color-action-primary-pressed': '#202020',
+      '--openbitfun-color-action-card-background': 'rgba(0, 0, 0, 0.07)',
       '--openbitfun-color-content-caption': 'rgba(0, 0, 0, 0.45)',
       '--openbitfun-component-button-primary-background': '#303030',
       '--openbitfun-component-button-fill-background': 'rgba(0, 0, 0, 0.08)',

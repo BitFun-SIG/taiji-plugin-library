@@ -6,13 +6,13 @@
     --openbitfun-border-width-default: 1px;
     --openbitfun-border-width-strong: 2px;
     --openbitfun-control-action-card-actions-gap: 0px;
-    --openbitfun-control-action-card-actions-padding-inline-end: var(--openbitfun-space-2);
+    --openbitfun-control-action-card-actions-padding-inline-end: var(--openbitfun-space-3);
     --openbitfun-control-action-card-content-gap: var(--openbitfun-space-1);
     --openbitfun-control-action-card-gap: var(--openbitfun-space-2);
     --openbitfun-control-action-card-icon-size: 16px;
     --openbitfun-control-action-card-leading-size: 30px;
     --openbitfun-control-action-card-md-min-block-size: 62px;
-    --openbitfun-control-action-card-padding-block: var(--openbitfun-space-2);
+    --openbitfun-control-action-card-padding-block: var(--openbitfun-space-3);
     --openbitfun-control-action-card-padding-inline: var(--openbitfun-space-3);
     --openbitfun-control-action-card-radius: var(--openbitfun-radius-base);
     --openbitfun-control-action-card-sm-min-block-size: 54px;
@@ -554,6 +554,11 @@
     --openbitfun-type-heading-section-font-weight: var(--openbitfun-font-weight-semibold);
     --openbitfun-type-heading-section-letter-spacing: var(--openbitfun-letter-spacing-normal);
     --openbitfun-type-heading-section-line-height: var(--openbitfun-line-height-tight);
+    --openbitfun-type-heading-welcome-font-family: var(--openbitfun-font-family-control);
+    --openbitfun-type-heading-welcome-font-size: var(--openbitfun-font-size-5xl);
+    --openbitfun-type-heading-welcome-font-weight: var(--openbitfun-font-weight-semibold);
+    --openbitfun-type-heading-welcome-letter-spacing: var(--openbitfun-letter-spacing-normal);
+    --openbitfun-type-heading-welcome-line-height: var(--openbitfun-line-height-tight);
     --openbitfun-type-label-lg-font-family: var(--openbitfun-font-family-control);
     --openbitfun-type-label-lg-font-size: var(--openbitfun-font-size-base);
     --openbitfun-type-label-lg-font-weight: var(--openbitfun-font-weight-medium);
@@ -619,6 +624,11 @@
     --openbitfun-type-overline-xs-font-weight: var(--openbitfun-font-weight-semibold);
     --openbitfun-type-overline-xs-letter-spacing: var(--openbitfun-letter-spacing-widest);
     --openbitfun-type-overline-xs-line-height: var(--openbitfun-line-height-none);
+    --openbitfun-type-page-intro-font-family: var(--openbitfun-font-family-control);
+    --openbitfun-type-page-intro-font-size: var(--openbitfun-font-size-xl-plus);
+    --openbitfun-type-page-intro-font-weight: var(--openbitfun-font-weight-medium);
+    --openbitfun-type-page-intro-letter-spacing: var(--openbitfun-letter-spacing-normal);
+    --openbitfun-type-page-intro-line-height: var(--openbitfun-line-height-tight);
     --openbitfun-type-support-font-family: var(--openbitfun-font-family-control);
     --openbitfun-type-support-font-size: var(--openbitfun-font-size-meta);
     --openbitfun-type-support-font-weight: var(--openbitfun-font-weight-regular);
@@ -703,6 +713,7 @@
     --openbitfun-color-action-secondary-content: rgba(0, 0, 0, 0.80);
     --openbitfun-color-action-secondary-hover: rgba(16, 26, 39, 0.09);
     --openbitfun-color-action-secondary-pressed: rgba(16, 26, 39, 0.13);
+    --openbitfun-color-action-card-background: rgba(0, 0, 0, 0.03);
     --openbitfun-color-border-default: rgba(16, 26, 39, 0.15);
     --openbitfun-color-border-strong: rgba(16, 26, 39, 0.34);
     --openbitfun-color-border-subtle: rgba(16, 26, 39, 0.08);
@@ -852,6 +863,7 @@
     --openbitfun-color-action-secondary-content: #e8e8e8;
     --openbitfun-color-action-secondary-hover: rgba(255, 255, 255, 0.1);
     --openbitfun-color-action-secondary-pressed: rgba(255, 255, 255, 0.12);
+    --openbitfun-color-action-card-background: rgba(255, 255, 255, 0.1);
     --openbitfun-color-border-default: rgba(255, 255, 255, 0.18);
     --openbitfun-color-border-strong: rgba(255, 255, 255, 0.3);
     --openbitfun-color-border-subtle: rgba(255, 255, 255, 0.12);
@@ -981,6 +993,7 @@
     --openbitfun-color-action-primary-hover: #262626;
     --openbitfun-color-action-quiet-content: #161616;
     --openbitfun-color-action-secondary-content: #000000;
+    --openbitfun-color-action-card-background: #e6e6e6;
     --openbitfun-color-border-default: #3b3b3b;
     --openbitfun-color-border-strong: #000000;
     --openbitfun-color-border-subtle: #707070;
@@ -1044,6 +1057,7 @@
     --openbitfun-color-action-primary-content: #000000;
     --openbitfun-color-action-primary-hover: #e6e6e6;
     --openbitfun-color-action-primary-pressed: #ffffff;
+    --openbitfun-color-action-card-background: #343434;
     --openbitfun-color-border-default: #b5b5b5;
     --openbitfun-color-border-strong: #ffffff;
     --openbitfun-color-border-subtle: #8a8a8a;

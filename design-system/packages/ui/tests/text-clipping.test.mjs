@@ -33,6 +33,10 @@ for (const [component, selector] of [
       declarations["line-height"],
       component === "ActionItem"
         ? /^var\(--openbitfun-type-action-row-line-height\)$/
+        : component === "ActionCard"
+          ? selector === ".title"
+            ? /^var\(--openbitfun-type-heading-section-line-height\)$/
+            : /^var\(--openbitfun-type-action-row-line-height\)$/
         : component === "Dialog"
           ? /^var\(--openbitfun-type-heading-dialog-line-height\)$/
           : /^var\(--openbitfun-(?:line-height-base|type-body-sm-line-height|type-label-(?:xs|md)-line-height)\)$/,

@@ -80,6 +80,7 @@ function themeValuesToCssTokens(
       // Neutral action labels are primary text in the public theme. The generic
       // palette's secondary text projection used to make product menus too faint.
       tokens['--openbitfun-color-action-neutral-content'] = String(themes.light['color.action.neutral.content']);
+      tokens['--openbitfun-color-action-card-background'] = String(themes.light['color.actionCard.background']);
       tokens['--openbitfun-color-content-caption'] = String(themes.light['color.content.caption']);
       // Default light fields use the published neutral states in both root and
       // chrome. Branded palettes and imported overrides retain their own colors.
@@ -147,6 +148,7 @@ function createThemeTokenValues(palette: AppearancePalette): Record<ThemeTokenNa
     'color.action.neutral.content': colors.text.secondary,
     'color.action.neutral.contentDisabled': colors.text.disabled,
     'color.action.neutral.fillBorder': colors.element.base,
+    'color.actionCard.background': colors.element.base,
     'color.action.neutral.surface': colors.element.base,
     'color.action.neutral.surfaceHover': colors.element.medium,
     'color.action.neutral.surfacePressed': colors.element.strong,
@@ -238,6 +240,7 @@ function createChromeThemeTokens(
     'color.action.neutral.content': chrome.text.secondary,
     'color.action.neutral.contentDisabled': chrome.text.disabled,
     'color.action.neutral.fillBorder': chrome.element.base,
+    'color.actionCard.background': chrome.element.base,
     'color.action.neutral.surface': chrome.element.base,
     'color.action.neutral.surfaceHover': chrome.element.medium,
     'color.action.neutral.surfacePressed': chrome.element.strong,

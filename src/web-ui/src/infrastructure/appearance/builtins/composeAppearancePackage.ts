@@ -15,6 +15,7 @@ import {
 import { withLegacyButtonTokens } from './buttonThemeCompatibility';
 import { withLegacyFieldTokens } from './fieldThemeCompatibility';
 import { withLegacyCaptionToken } from './captionThemeCompatibility';
+import { withLegacyActionCardToken } from './actionCardThemeCompatibility';
 
 const COMPOSITION_LAYERS = Symbol('openbitfun.appearance.composition-layers');
 
@@ -123,12 +124,12 @@ function mergeRenderers(
         ...override['theme-tokens'].settings,
         tokens: {
           ...(base?.['theme-tokens']?.settings.tokens ?? {}),
-          ...withLegacyCaptionToken(withLegacyFieldTokens(withLegacyButtonTokens(override['theme-tokens'].settings.tokens))),
+          ...withLegacyActionCardToken(withLegacyCaptionToken(withLegacyFieldTokens(withLegacyButtonTokens(override['theme-tokens'].settings.tokens)))),
         },
         scopes: {
           chrome: {
             ...(base?.['theme-tokens']?.settings.scopes?.chrome ?? {}),
-            ...withLegacyCaptionToken(withLegacyFieldTokens(withLegacyButtonTokens(override['theme-tokens'].settings.scopes?.chrome))),
+            ...withLegacyActionCardToken(withLegacyCaptionToken(withLegacyFieldTokens(withLegacyButtonTokens(override['theme-tokens'].settings.scopes?.chrome)))),
           },
         },
       },

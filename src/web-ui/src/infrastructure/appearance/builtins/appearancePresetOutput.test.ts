@@ -49,7 +49,7 @@ describe('builtin appearance preset output', () => {
     const settings = getBuiltinAppearance('openbitfun-light')?.renderers?.['theme-tokens']?.settings;
     for (const tokens of [settings?.tokens, settings?.scopes?.chrome].filter(Boolean)) {
       for (const [name, value] of Object.entries(themes.light)) {
-        if (name.startsWith('color.field.')) expect(tokens?.[themeCssVariables[name as ThemeTokenName]]).toBe(value);
+        if (name.startsWith('color.field.') || name === 'color.actionCard.background') expect(tokens?.[themeCssVariables[name as ThemeTokenName]]).toBe(value);
       }
     }
     expect(settings?.tokens['--openbitfun-color-field-border']).toBe('rgba(0, 0, 0, 0.08)');
@@ -61,6 +61,7 @@ describe('builtin appearance preset output', () => {
     for (const palette of builtinAppearancePalettes) {
       if (palette.id === 'openbitfun-light') continue;
       const tokens = getBuiltinAppearanceThemeTokens(palette.id);
+      expect(tokens['--openbitfun-color-action-card-background']).toBe(palette.colors.element.base);
       expect(tokens['--openbitfun-color-field-border']).toBe(palette.colors.border.base);
       expect(tokens['--openbitfun-color-field-border-focus']).toBe(palette.colors.accent[500]);
       expect(tokens['--openbitfun-color-field-border-active']).toBe(palette.colors.accent[500]);

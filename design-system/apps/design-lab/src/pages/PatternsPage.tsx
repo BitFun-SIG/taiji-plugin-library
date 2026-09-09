@@ -82,7 +82,7 @@ export function PatternsPage({ colorScheme, contrast, density, tokenOverrides }:
 
         <PatternSection description={t("patterns.settings.description")} index="01" title={t("patterns.settings.title")}>
           <Card appearance="raised" className="pattern-settings" data-openbitfun-pattern="settings-form" padding="md" radius="md">
-            <PageHeader description={t("components.preview.appearanceDescription")} level={3} size="lg" title={t("components.preview.appearance")} />
+            <PageHeader description={t("components.preview.appearanceDescription")} level={3} size="md" title={t("components.preview.appearance")} />
             <CardBody>
               <FormSection description={t("patterns.settings.description")} headingAs="h4" title={t("components.preview.appearance")}>
                 <FieldGroup appearance="subtle" dividers>
@@ -147,7 +147,7 @@ export function PatternsPage({ colorScheme, contrast, density, tokenOverrides }:
               </NavigationPanelFooter>
             </NavigationPanel>
             <div className="pattern-navigation-copy">
-              <PageHeader description={t("patterns.navigation.description")} level={3} size="lg" title={t("patterns.navigation.workspace")} />
+              <PageHeader description={t("patterns.navigation.description")} level={3} size="display" title={t("patterns.navigation.workspace")} />
               <p>{t("patterns.navigation.status")}</p>
             </div>
           </div>

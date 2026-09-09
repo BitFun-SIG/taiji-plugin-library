@@ -4,6 +4,28 @@ import { APPEARANCE_THEME_TOKEN_NAMES } from './catalog';
 import { composeAppearancePackage } from './composeAppearancePackage';
 
 describe('composeAppearancePackage', () => {
+  it('preserves legacy action-card backgrounds in root and chrome across old-payload round trips', () => {
+    const original: AppearancePackage = {
+      schema: 'openbitfun.appearance', schemaVersion: 2,
+      id: 'example.legacy-cards', name: 'Legacy cards', version: '1.0.0', mode: 'light',
+      renderers: { 'theme-tokens': { version: 1, settings: {
+        tokens: { '--openbitfun-color-action-neutral-surface': '#123456' },
+        scopes: { chrome: { '--openbitfun-color-action-neutral-surface': '#654321' } },
+      } } },
+    };
+    const payload = JSON.stringify(original);
+    const resolved = composeAppearancePackage(JSON.parse(payload));
+    const settings = resolved.renderers!['theme-tokens']!.settings;
+    expect(settings.tokens['--openbitfun-color-action-card-background']).toBe('#123456');
+    expect(settings.scopes?.chrome?.['--openbitfun-color-action-card-background']).toBe('#654321');
+    expect(composeAppearancePackage(JSON.parse(JSON.stringify(resolved))).renderers?.['theme-tokens']).toEqual(resolved.renderers?.['theme-tokens']);
+    expect(JSON.stringify(original)).toBe(payload);
+    original.renderers!['theme-tokens']!.settings.tokens['--openbitfun-color-action-card-background'] = '#112233';
+    original.renderers!['theme-tokens']!.settings.scopes!.chrome!['--openbitfun-color-action-card-background'] = '#334455';
+    const explicit = composeAppearancePackage(original).renderers!['theme-tokens']!.settings;
+    expect(explicit.tokens['--openbitfun-color-action-card-background']).toBe('#112233');
+    expect(explicit.scopes?.chrome?.['--openbitfun-color-action-card-background']).toBe('#334455');
+  });
   it('preserves legacy field colors and explicit hint overrides across old-payload round trips', () => {
     const original: AppearancePackage = {
       schema: 'openbitfun.appearance', schemaVersion: 2,
