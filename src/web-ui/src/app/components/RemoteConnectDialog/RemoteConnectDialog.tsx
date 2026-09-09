@@ -716,7 +716,7 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
         setLoading(false);
       }
     }
-  }, [accountLoggedIn, activeView, networkTab, botTab, tgToken, feishuAppId, feishuAppSecret, weixinIlinkToken, weixinBaseUrl, weixinBotAccountId, selectedLanIp, startPolling, t, hasAgreedDisclaimer]);
+  }, [accountLoggedIn, activeView, networkTab, botTab, tgToken, feishuAppId, feishuAppSecret, weixinIlinkToken, weixinBaseUrl, weixinBotAccountId, selectedLanIp, startPolling, hasAgreedDisclaimer]);
 
   const handleStartWeixinQr = useCallback(async () => {
     if (!hasAgreedDisclaimer) {
