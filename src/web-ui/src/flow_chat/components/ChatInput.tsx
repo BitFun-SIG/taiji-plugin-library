@@ -1,3 +1,4 @@
+import { ChatInputImagePreview } from './ChatInputImagePreview';
 /**
  * Standalone chat input component
  * Separated from bottom bar, supports session-level state awareness
@@ -276,6 +277,9 @@ const log = createLogger('ChatInput');
 export interface ChatInputProps {
   className?: string;
   isSceneActive?: boolean;
+  /** The host conversation area that accepts files for this composer. */
+  fileDropTargetRef?: React.RefObject<HTMLElement | null>;
+  onFileDragOverChange?: (isOver: boolean) => void;
   /**
    * Optional content and transport registration for hosts that embed the
    * standard composer. The registration never replaces ChatInput's UI.
@@ -483,6 +487,8 @@ interface ExternalFileIntakeRequest {
 export const ChatInput: React.FC<ChatInputProps> = ({
   className = '',
   isSceneActive = true,
+  fileDropTargetRef,
+  onFileDragOverChange,
   registration,
 }) => {
   const deviceSurfaceScope = getActiveSurfaceScope();
@@ -505,6 +511,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const richTextInputRef = useRef<RichTextInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const externalFileDropTargetRef = useRef<HTMLDivElement>(null);
+  const [nativeFileDragOver, setNativeFileDragOver] = useState(false);
+  const [contextFileDragOver, setContextFileDragOver] = useState(false);
   const inputAreaAnchorRef = useRef<HTMLDivElement>(null);
   const agentBoostRef = useRef<HTMLDivElement>(null);
   const boostTriggerRef = useRef<HTMLSpanElement>(null);
@@ -4795,12 +4803,21 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   }, [addClipboardImageFiles, captureExternalFileIntakeRequest, enqueueExternalFileIntake]);
 
   useLocalFileDrop({
-    targetRef: externalFileDropTargetRef,
-    enabled: !isWindowsDesktopRuntime()
+    targetRef: fileDropTargetRef ?? externalFileDropTargetRef,
+    enabled: isSceneActive && !isWindowsDesktopRuntime()
       && !caps.transferInFlight
       && !isInterruptedTurnRecoveryInFlight,
     onDropPaths: paths => intakeExternalPaths('drop', paths),
+    onDragOver: setNativeFileDragOver,
   });
+
+  useEffect(() => {
+    onFileDragOverChange?.(isSceneActive && !caps.transferInFlight
+      && !isInterruptedTurnRecoveryInFlight && (nativeFileDragOver || contextFileDragOver));
+  }, [onFileDragOverChange, isSceneActive, caps.transferInFlight,
+    isInterruptedTurnRecoveryInFlight, nativeFileDragOver, contextFileDragOver]);
+
+  useEffect(() => () => onFileDragOverChange?.(false), [onFileDragOverChange]);
 
   const handleRecoverInterruptedTurn = useCallback(async () => {
     const candidate = interruptedTurnRecovery;
@@ -5864,9 +5881,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     <>
       {deepReviewConsentDialog}
       <ContextDropZone
+        extendedTargetRef={fileDropTargetRef}
+        onDragStateChange={setContextFileDragOver}
         acceptedTypes={['file', 'directory', 'image', 'code-snippet', 'mermaid-diagram']}
         className="openbitfun-chat-input-drop-zone"
-        disabled={isInterruptedTurnRecoveryInFlight}
+        disabled={!isSceneActive || caps.transferInFlight || isInterruptedTurnRecoveryInFlight}
         onExternalFilesDrop={
           isWindowsDesktopRuntime() && !caps.transferInFlight
             ? files => { void handleHtmlExternalFilesDrop(files); }
@@ -5982,26 +6001,13 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                   data-testid="chat-input-image-strip"
                 >
                   {imageContexts.map(image => {
-                    const previewUrl = image.thumbnailUrl || image.dataUrl;
                     return (
                       <div data-openbitfun-component="chat-input" data-openbitfun-part="image"
                         key={image.id}
                         className="openbitfun-chat-input__image-chip"
                         title={image.imageName}
                       >
-                        {previewUrl ? (
-                          <img
-                            className="openbitfun-chat-input__image-chip-thumb"
-                            data-openbitfun-component="chat-input"
-                            data-openbitfun-part="imagePreview"
-                            src={previewUrl}
-                            alt={image.imageName}
-                          />
-                        ) : (
-                          <div className="openbitfun-chat-input__image-chip-thumb openbitfun-chat-input__image-chip-thumb--placeholder" data-openbitfun-component="chat-input" data-openbitfun-part="imagePreview">
-                            <Icon name="image" size="sm" />
-                          </div>
-                        )}
+                        <ChatInputImagePreview image={image} surfaceEpoch={deviceSurfaceScope.epoch} />
                         <button
                           type="button"
                           className="openbitfun-chat-input__image-chip-remove"

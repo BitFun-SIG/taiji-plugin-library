@@ -624,6 +624,7 @@
     "codeBlock": "代碼塊",
     "image": "圖片",
     "url": "URL",
+    "dropToAdd": "放開即可新增",
     "dragHint": "拖放檔案到此處新增上下文"
   },
   "agent": {
