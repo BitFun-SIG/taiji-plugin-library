@@ -58,9 +58,6 @@ import androidx.compose.ui.unit.sp
 import com.openbitfun.mobile.app.R
 import com.openbitfun.mobile.app.ui.common.SignedOutConnectionActions
 import com.openbitfun.mobile.app.ui.theme.openBitFunColors
-import com.openbitfun.mobile.core.feature.pairing.PairingIntent
-import com.openbitfun.mobile.core.feature.pairing.PairingUiState
-import com.openbitfun.mobile.core.feature.pairing.inspectPairingLink
 import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions
 import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
@@ -82,9 +79,7 @@ internal const val CONNECT_SUBMIT_TEST_TAG: String = "connect-submit"
  */
 @Composable
 internal fun ConnectView(
-    state: PairingUiState,
     onSubmit: (String) -> Unit,
-    onDismiss: () -> Unit,
     onBack: () -> Unit,
     onOpenAccount: () -> Unit,
     startScanning: Boolean = false,
@@ -96,16 +91,6 @@ internal fun ConnectView(
     var url by rememberSaveable { mutableStateOf("") }
     var scanFailed by rememberSaveable { mutableStateOf(false) }
 
-    // Ports `ConnectionErrorResult.shouldShowRemoteUrlInput`: a link that is
-    // itself at fault puts the field back on screen, because the scan button
-    // that got the user here cannot fix a link that has expired. Keyed on the
-    // state rather than run on every recomposition, so tapping back out of the
-    // form while the failure is still showing stays out.
-    LaunchedEffect(state) {
-        if (state is PairingUiState.Failed && state.failure.reopensLinkInput) manual = true
-    }
-
-    val connecting = state is PairingUiState.Connecting
     val context = LocalContext.current
     val scanner = remember(context) {
         GmsBarcodeScanning.getClient(
@@ -147,19 +132,17 @@ internal fun ConnectView(
             if (scanning) {
                 ScanPairing(
                     scanFailed = scanFailed,
-                    connecting = connecting,
+                    connecting = false,
                     onBack = { scanning = false },
                     onManual = { manual = true },
                 )
             } else {
                 IntroPairing(
-                    state = state,
-                    connecting = connecting,
+                    connecting = false,
                     onScan = {
                         scanning = true
                         scan()
                     },
-                    onDismiss = onDismiss,
                     onBack = onBack,
                     onOpenAccount = onOpenAccount,
                 )
@@ -167,12 +150,10 @@ internal fun ConnectView(
         }
         if (manual) {
             ManualPairing(
-                state = state,
                 url = url,
-                connecting = connecting,
+                connecting = false,
                 onUrlChange = { url = it },
                 onBack = { manual = false },
-                onDismiss = onDismiss,
                 onSubmit = { onSubmit(url) },
                 modifier = Modifier.fillMaxSize(),
             )
@@ -182,10 +163,8 @@ internal fun ConnectView(
 
 @Composable
 private fun ColumnScope.IntroPairing(
-    state: PairingUiState,
     connecting: Boolean,
     onScan: () -> Unit,
-    onDismiss: () -> Unit,
     onBack: () -> Unit,
     onOpenAccount: () -> Unit,
 ) {
@@ -226,9 +205,6 @@ private fun ColumnScope.IntroPairing(
             fontWeight = FontWeight.Bold,
             textAlign = TextAlign.Center,
         )
-        if (state is PairingUiState.Failed) {
-            PairingFailureCard(state, onDismiss)
-        }
     }
 
     SignedOutConnectionActions(
@@ -306,12 +282,10 @@ private fun ColumnScope.ScanPairing(
 
 @Composable
 private fun ManualPairing(
-    state: PairingUiState,
     url: String,
     connecting: Boolean,
     onUrlChange: (String) -> Unit,
     onBack: () -> Unit,
-    onDismiss: () -> Unit,
     onSubmit: () -> Unit,
     modifier: Modifier,
 ) {
@@ -363,9 +337,6 @@ private fun ManualPairing(
                 enabled = !connecting,
                 testTag = CONNECT_PAIRING_CODE_TEST_TAG,
             )
-            if (state is PairingUiState.Failed) {
-                PairingFailureCard(state, onDismiss)
-            }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -556,28 +527,4 @@ private fun Centered(text: String, fontSize: androidx.compose.ui.unit.TextUnit =
         textAlign = TextAlign.Center,
         modifier = Modifier.fillMaxWidth(0.84f),
     )
-}
-
-@Composable
-private fun PairingFailureCard(state: PairingUiState.Failed, onDismiss: () -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Text(
-                state.failure.message(),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.error,
-            )
-            // The desktop's own wording, shown under our heading rather than
-            // instead of it: it is written by the peer and is not localized.
-            state.failure.remoteMessage?.let {
-                Text(it, style = MaterialTheme.typography.bodySmall)
-            }
-            TextButton(onClick = onDismiss) {
-                Text(stringResource(R.string.pairing_dismiss))
-            }
-        }
-    }
 }

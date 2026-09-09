@@ -25,7 +25,7 @@ use tokio::sync::{
 };
 use tracing::{debug, error, info, warn};
 
-use crate::relay::room::{send_outbound_message, ConnId, OutboundMessage, ResponsePayload};
+use crate::relay::transport::{send_outbound_message, ConnId, OutboundMessage};
 use crate::routes::api::AppState;
 
 const OUTBOUND_QUEUE_CAPACITY: usize = 128;
@@ -36,7 +36,6 @@ const MAX_WS_MESSAGE_BYTES: usize = 16 * 1024;
 const MAX_ENCRYPTED_PAYLOAD_BYTES: usize = 48 * 1024 * 1024;
 const MAX_IDENTIFIER_BYTES: usize = 128;
 const MAX_DEVICE_NAME_BYTES: usize = 256;
-const MAX_PUBLIC_KEY_BYTES: usize = 512;
 const MAX_NONCE_BYTES: usize = 256;
 const RATE_LIMIT_WINDOW: Duration = Duration::from_secs(60);
 const MAX_MESSAGES_PER_WINDOW: u32 = 12_000;
@@ -101,22 +100,8 @@ impl ConnectionRateLimiter {
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum InboundMessage {
-    CreateRoom {
-        room_id: Option<String>,
-        device_id: String,
-        #[allow(dead_code)]
-        device_type: String,
-        public_key: String,
-    },
-    /// Desktop responds to a bridged HTTP request.
-    RelayResponse {
-        correlation_id: String,
-        encrypted_data: String,
-        nonce: String,
-    },
     Heartbeat,
-    /// Account-authenticated connect (parallel to CreateRoom for the device
-    /// routing pathway). Validates the token and registers the device.
+    /// Authenticate the socket before admitting any device traffic.
     AuthConnect {
         token: String,
         device_name: String,
@@ -138,22 +123,6 @@ pub enum InboundMessage {
 #[derive(Debug, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum OutboundProtocol {
-    RoomCreated {
-        room_id: String,
-    },
-    /// Mobile pairing request forwarded to desktop.
-    PairRequest {
-        correlation_id: String,
-        public_key: String,
-        device_id: String,
-        device_name: String,
-    },
-    /// Encrypted command from mobile forwarded to desktop.
-    Command {
-        correlation_id: String,
-        encrypted_data: String,
-        nonce: String,
-    },
     HeartbeatAck,
     Error {
         message: String,
@@ -274,7 +243,7 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
     let (out_tx, mut out_rx) = mpsc::channel::<OutboundMessage>(OUTBOUND_QUEUE_CAPACITY);
     let (force_close_tx, mut force_close_rx) = watch::channel(false);
 
-    let conn_id = state.room_manager.next_conn_id();
+    let conn_id = state.device_manager.next_connection_id();
     let mut rate_limiter = ConnectionRateLimiter::new();
     let authentication_deadline = tokio::time::Instant::now() + AUTHENTICATION_TIMEOUT;
     let mut token_expiry_task: Option<tokio::task::JoinHandle<()>> = None;
@@ -390,14 +359,11 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
         task.abort();
     }
 
-    state.room_manager.on_disconnect(conn_id);
     let _presence_projection_guard = state.device_manager.lock_presence_projection().await;
     if let Some((user_id, device_id)) = state.device_manager.unregister(conn_id) {
         // Best-effort: mark the device offline in the DB and notify peers.
         if !state.device_manager.is_device_online(&user_id, &device_id) {
-            if let Some(db) = state.db.as_ref() {
-                let _ = crate::db::DeviceRow::set_online(db, &user_id, &device_id, false).await;
-            }
+            let _ = crate::db::DeviceRow::set_online(&state.db, &user_id, &device_id, false).await;
         }
         state
             .device_manager
@@ -428,13 +394,11 @@ async fn finish_socket_writer(mut write_task: tokio::task::JoinHandle<()>) {
 }
 
 fn ensure_device_token_revalidator(state: &AppState) {
-    let Some(db) = state.db.clone() else {
-        return;
-    };
+    let db = Arc::downgrade(&state.db);
     if !state.device_manager.claim_token_revalidator_start() {
         return;
     }
-    let device_manager = Arc::clone(&state.device_manager);
+    let device_manager = Arc::downgrade(&state.device_manager);
     tokio::spawn(async move {
         let mut interval = tokio::time::interval(DEVICE_TOKEN_REVALIDATION_INTERVAL);
         interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
@@ -443,6 +407,9 @@ fn ensure_device_token_revalidator(state: &AppState) {
         interval.tick().await;
         loop {
             interval.tick().await;
+            let (Some(db), Some(device_manager)) = (db.upgrade(), device_manager.upgrade()) else {
+                break;
+            };
             if let Err(error) = revalidate_active_device_tokens_once(&db, &device_manager).await {
                 warn!(%error, "Failed to revalidate active device tokens");
             }
@@ -538,8 +505,6 @@ async fn handle_text_message(
         }
     };
     let message_type = match &msg {
-        InboundMessage::CreateRoom { .. } => "create_room",
-        InboundMessage::RelayResponse { .. } => "relay_response",
         InboundMessage::Heartbeat => "heartbeat",
         InboundMessage::AuthConnect { .. } => "auth_connect",
         InboundMessage::DeviceMessage { .. } => "device_message",
@@ -550,87 +515,14 @@ async fn handle_text_message(
     );
 
     match msg {
-        InboundMessage::CreateRoom {
-            room_id,
-            device_id,
-            device_type,
-            public_key,
-        } => {
-            if state.db.is_some() {
-                return reject_protocol(out_tx, "pairing rooms are retired; sign in with GitHub and use the account device directory");
-            }
-            if state.device_manager.conn_mapping(conn_id).is_some() {
-                return reject_protocol(
-                    out_tx,
-                    "an authenticated device connection cannot create a pairing room",
-                );
-            }
-            if !is_valid_identifier(&device_id)
-                || !is_valid_display_text(&device_type, 32)
-                || !is_valid_display_text(&public_key, MAX_PUBLIC_KEY_BYTES)
-                || room_id
-                    .as_deref()
-                    .is_some_and(|value| !crate::relay::room::is_valid_room_id(value))
-            {
-                return reject_protocol(out_tx, "invalid room parameters");
-            }
-            let room_id = room_id.unwrap_or_else(generate_room_id);
-            let ok = state.room_manager.create_room(
-                &room_id,
-                conn_id,
-                &device_id,
-                &public_key,
-                out_tx.clone(),
-            );
-            if ok {
-                send_json(out_tx, &OutboundProtocol::RoomCreated { room_id }).await
-            } else {
-                send_json(
-                    out_tx,
-                    &OutboundProtocol::Error {
-                        message: "failed to create room".into(),
-                    },
-                )
-                .await
-            }
-        }
-
-        InboundMessage::RelayResponse {
-            correlation_id,
-            encrypted_data,
-            nonce,
-        } => {
-            if !is_valid_identifier(&correlation_id)
-                || !is_valid_encrypted_payload(&encrypted_data, &nonce)
-            {
-                return reject_protocol(out_tx, "invalid relay response");
-            }
-            debug!("RelayResponse from desktop conn_id={conn_id} corr={correlation_id}");
-            if !state.room_manager.resolve_pending_from_conn(
-                conn_id,
-                &correlation_id,
-                ResponsePayload {
-                    encrypted_data,
-                    nonce,
-                },
-            ) {
-                return reject_protocol(out_tx, "relay response does not match this room");
-            }
-            true
-        }
-
         InboundMessage::Heartbeat => {
-            // Account-authenticated device connections have no room; treat
-            // heartbeat as a keepalive ack when the conn is registered.
-            if state.room_manager.heartbeat(conn_id)
-                || state.device_manager.conn_mapping(conn_id).is_some()
-            {
+            if state.device_manager.conn_mapping(conn_id).is_some() {
                 send_json_best_effort(out_tx, &OutboundProtocol::HeartbeatAck)
             } else {
                 send_json_best_effort(
                     out_tx,
                     &OutboundProtocol::Error {
-                        message: "Room not found or expired".into(),
+                        message: "Device is not authenticated".into(),
                     },
                 )
             }
@@ -641,9 +533,7 @@ async fn handle_text_message(
             device_name,
             device_kind,
         } => {
-            if state.room_manager.has_connection(conn_id)
-                || state.device_manager.has_connection(conn_id)
-            {
+            if state.device_manager.has_connection(conn_id) {
                 return reject_protocol(out_tx, "connection is already authenticated");
             }
             if !crate::db::is_valid_auth_token(&token)
@@ -654,14 +544,7 @@ async fn handle_text_message(
             {
                 return reject_protocol(out_tx, "invalid authentication parameters");
             }
-            let Some(db) = state.db.as_ref() else {
-                return send_json_best_effort(
-                    out_tx,
-                    &OutboundProtocol::AuthError {
-                        message: "account features disabled".into(),
-                    },
-                );
-            };
+            let db = state.db.as_ref();
             let auth = match crate::db::AuthToken::find(db, &token).await {
                 Ok(Some(a)) => a,
                 _ => {
@@ -1044,11 +927,6 @@ fn send_json_best_effort<T: Serialize>(tx: &mpsc::Sender<OutboundMessage>, msg: 
     }
 }
 
-fn generate_room_id() -> String {
-    let bytes: [u8; 6] = rand::random();
-    bytes.iter().map(|b| format!("{b:02x}")).collect()
-}
-
 #[cfg(test)]
 mod tests {
     #[test]
@@ -1101,19 +979,17 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn client_close_receives_ack_and_removes_room_routing() {
+    async fn client_close_receives_ack_without_leaking_socket() {
         use futures_util::{SinkExt, StreamExt};
         use tokio_tungstenite::tungstenite::{
             protocol::{frame::coding::CloseCode, CloseFrame},
             Message,
         };
 
-        let rooms = crate::RoomManager::new();
         let app = crate::build_relay_router(
-            rooms.clone(),
             std::sync::Arc::new(crate::MemoryAssetStore::new()),
             std::time::Instant::now(),
-            None,
+            std::sync::Arc::new(crate::db::connect(":memory:").await.unwrap()),
             "test",
         );
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -1122,23 +998,6 @@ mod tests {
         let (mut client, _) = tokio_tungstenite::connect_async(format!("ws://{address}/ws"))
             .await
             .unwrap();
-        client
-            .send(Message::Text(
-                serde_json::json!({
-                    "type": "create_room",
-                    "device_id": "close-test",
-                    "device_type": "desktop",
-                    "public_key": "test-public-key"
-                })
-                .to_string()
-                .into(),
-            ))
-            .await
-            .unwrap();
-        let registered = client.next().await.unwrap().unwrap();
-        assert!(registered.into_text().unwrap().contains("room_created"));
-        assert_eq!(rooms.connection_count(), 1);
-
         let close = CloseFrame {
             code: CloseCode::Normal,
             reason: "completed".into(),
@@ -1153,7 +1012,6 @@ mod tests {
             .expect("close acknowledgement frame")
             .expect("clean WebSocket close");
         assert_eq!(response, Message::Close(Some(close)));
-        assert_eq!(rooms.connection_count(), 0);
         server.abort();
         let _ = server.await;
     }

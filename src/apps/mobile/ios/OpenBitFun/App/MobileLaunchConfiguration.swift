@@ -209,10 +209,11 @@ enum MobileLaunchConfiguration {
 
 private extension MobileAppModel {
     func configureConnectedPreview() {
-        directPairingConnected = true
+        accountUser = "preview"
+        accountSelectedDeviceID = "preview-desktop"
         surface = .remote
         remoteConnected = true
-        remoteExpectedDeviceKey = "pairing"
+        remoteExpectedDeviceKey = "account:preview-desktop"
         remoteInitialSessionReady = true
         remoteInitialWorkspaceReady = true
         remoteCreateWorkspacePhase = .ready

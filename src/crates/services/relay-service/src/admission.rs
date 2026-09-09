@@ -37,13 +37,6 @@ pub(crate) async fn admit(
     {
         return StatusCode::TOO_MANY_REQUESTS.into_response();
     }
-    // Account-enabled service no longer exposes anonymous pairing-room APIs.
-    if state.db.is_some() && path.starts_with("/api/rooms/") {
-        return match crate::routes::devices::validate_user(&state, request.headers()).await {
-            Ok(_) => StatusCode::GONE.into_response(),
-            Err(status) => status.into_response(),
-        };
-    }
     if path.starts_with("/api/devices") {
         let auth = match crate::routes::devices::validate_user(&state, request.headers()).await {
             Ok(auth) => auth,
@@ -132,10 +125,9 @@ mod tests {
     async fn router() -> axum::Router {
         let db = crate::db::connect(":memory:").await.unwrap();
         crate::build_relay_router(
-            crate::RoomManager::new(),
             Arc::new(crate::MemoryAssetStore::new()),
             std::time::Instant::now(),
-            Some(Arc::new(db)),
+            Arc::new(db),
             "test",
         )
     }
@@ -179,7 +171,7 @@ mod tests {
             .unwrap();
         assert_eq!(
             router().await.oneshot(request).await.unwrap().status(),
-            StatusCode::UNAUTHORIZED
+            StatusCode::NOT_FOUND
         );
     }
 }

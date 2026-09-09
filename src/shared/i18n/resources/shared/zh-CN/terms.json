@@ -33,7 +33,6 @@
   },
   "connectionMethods": {
     "lan": "局域网",
-    "ngrok": "Ngrok",
     "openbitfunServer": "OpenBitFun Server",
     "customServer": "自定义服务器",
     "botFeishu": "飞书机器人",

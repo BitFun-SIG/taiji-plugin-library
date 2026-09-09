@@ -1,10 +1,10 @@
 # OpenBitFun Relay Server
 
 The official Relay connects devices signed in to the same GitHub identity.
-GitHub is the shared identity shared with the marketplaces. Users sign in
+GitHub identity is shared with the marketplaces. Users sign in
 from OpenBitFun; they do not create a Relay account or deploy a server.
 
-Clients use `https://remote.openbitfun.com/v/1.0.0`. This release is deployed with
+The official endpoint is `https://remote.openbitfun.com/v/1.0.0`. This release is deployed with
 its own process, database, assets, and reverse-proxy location. An existing
 `/relay` deployment remains on its existing binary and data directory.
 
@@ -15,21 +15,34 @@ directory and derive an AES-GCM key with X25519 and HKDF-SHA256. The Relay does
 not receive device private keys or upload copies of settings and sessions.
 Sessions and files are read from the owning online device on demand.
 
+Selecting **Same network** starts the same Relay implementation inside the
+Desktop host at `http://<LAN-IP>:9700`. Its SQLite database is local to that
+host (`<product-home>/relay-v1.0.0/local-server/relay.db`), separate from the
+official server database. Login, device registration, device discovery,
+public-key lookup, RPC and presence all use the selected Relay endpoint.
+The two modes differ only in endpoint and host startup; no device traffic is
+forwarded from the local Relay to the official Relay.
+
+Both modes verify GitHub identity through `auth.openbitfun.com`, so signing in
+requires internet access. An invitation contains only the selected endpoint
+and device id (`/#/pair?did=<device-id>`); scanning it grants no authority.
+The controller must sign in and resolve that id in its same-account directory.
+Anonymous room pairing and tunnel-provider startup have been removed.
+
 SSH and Docker workspace connections remain independent of Relay login.
 
 ## For community developers and forks
 
-Self-hosting is supported through source and deployment scripts. The official
-app uses a fixed official endpoint; it has no deployment wizard or editable
+Self-hosting is supported through source and deployment scripts. The public mode uses a fixed official endpoint; it has no deployment wizard or editable
 Relay URL. A private Relay therefore needs a matching client build.
 
 1. Fork this workspace and read `CONTRIBUTING.md`. Build the Relay and mobile
    controller from the same revision. Keep your fork's changes in source control.
 2. Select your HTTPS endpoint in `product-domains/src/account.rs`, then align
    the frontend constants in `src/web-ui/src/infrastructure/remote-connect/remoteConnectionState.ts`
-   and `src/mobile-web/src/services/CloudAccountClient.ts`. Native clients have
-   matching constants in KMP `core-transport/CloudAccountClient.kt` and HarmonyOS
-   `services/CloudAccountClient.ets`; update the HarmonyOS account-link parser too.
+   and `src/mobile-web/src/services/pairingLink.ts`. Native clients have
+   matching constants in KMP `core-transport/AccountDeviceLink.kt` and HarmonyOS
+   `services/AccountDeviceLink.ets`; update the HarmonyOS account-link parser too.
    Search for `https://remote.openbitfun.com/v/1.0.0` to verify every runtime
    reference and corresponding test before building your distribution.
 3. Decide who owns identity. You can retain the official GitHub identity
@@ -75,7 +88,7 @@ authority at `https://auth.openbitfun.com/api/v1/me`.
 ```bash
 cargo build --release -p openbitfun-relay-server
 RELAY_PORT=9700 RELAY_DB_PATH=/var/lib/openbitfun-relay-v1/relay.db \
-  RELAY_ROOM_WEB_DIR=/var/lib/openbitfun-relay-v1/assets \
+  RELAY_ASSET_DIR=/var/lib/openbitfun-relay-v1/assets \
   ./target/release/openbitfun-relay-server
 ```
 

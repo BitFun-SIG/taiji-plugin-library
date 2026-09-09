@@ -10,7 +10,7 @@ import { RelayHttpClient } from './services/RelayHttpClient';
 import {
   RemoteSessionManager,
 } from './services/RemoteSessionManager';
-import { reconcileDelegatedAccountOwner } from './services/delegatedAccountOwner';
+import { reconcileAccountOwner } from './services/accountOwner';
 import {
   clearMobileNavigation,
   saveMobileNavigation,
@@ -56,7 +56,7 @@ const AppContent: React.FC = () => {
   const isWideLayout = useWideLayout();
   const connectionHealth = useMobileStore((state) => state.connectionHealth);
   const clientRef = useRef<RelayHttpClient | null>(null);
-  const delegatedOwnerUnlistenRef = useRef<(() => void) | null>(null);
+  const accountOwnerUnlistenRef = useRef<(() => void) | null>(null);
   const sessionMgrRef = useRef<RemoteSessionManager | null>(null);
   const [sessionMgr, setSessionMgr] = useState<RemoteSessionManager | null>(null);
   const [accountDirectoryOpen, setAccountDirectoryOpen] = useState(false);
@@ -137,14 +137,14 @@ const AppContent: React.FC = () => {
       navigation?: PairedNavigation,
     ) => {
       navigationRef.current = navigation ?? null;
-      const needsDevice = client.hasDelegatedIdentity && !client.isPaired && !client.pairedDeviceId;
+      const needsDevice = client.hasAccountIdentity && !client.targetDeviceId;
       setAccountDirectoryOpen(needsDevice);
       setPreferredDeviceId(preferredDeviceId);
-      delegatedOwnerUnlistenRef.current?.();
+      accountOwnerUnlistenRef.current?.();
       clientRef.current = client;
-      delegatedOwnerUnlistenRef.current = client.onDelegatedAccountOwnerChange((change) => {
+      accountOwnerUnlistenRef.current = client.onAccountOwnerChange((change) => {
         if (clientRef.current !== client) return;
-        const ownerScopedStateWasReset = reconcileDelegatedAccountOwner(change);
+        const ownerScopedStateWasReset = reconcileAccountOwner(change);
         if (!ownerScopedStateWasReset) return;
         navigationRef.current = null;
 
@@ -260,7 +260,7 @@ const AppContent: React.FC = () => {
     clearTimeout(timerRef.current);
     const restored = navigationRef.current?.restored;
     if (navigationRef.current) navigationRef.current.restored = null;
-    if (restored && restored.deviceId === clientRef.current?.pairedDeviceId && restored.session) {
+    if (restored && restored.deviceId === clientRef.current?.targetDeviceId && restored.session) {
       setActiveSessionId(restored.session.id);
       setActiveSessionName(restored.session.name);
       setActiveSessionAgentType(restored.session.agentType);
@@ -290,8 +290,8 @@ const AppContent: React.FC = () => {
     clearMobileNavigation();
     setAccountDirectoryOpen(false);
     setPreferredDeviceId(undefined);
-    delegatedOwnerUnlistenRef.current?.();
-    delegatedOwnerUnlistenRef.current = null;
+    accountOwnerUnlistenRef.current?.();
+    accountOwnerUnlistenRef.current = null;
     clientRef.current?.resetConnectionIdentity();
     clientRef.current = null;
     sessionMgrRef.current = null;
@@ -311,14 +311,14 @@ const AppContent: React.FC = () => {
   }, []);
 
   useEffect(() => () => {
-    delegatedOwnerUnlistenRef.current?.();
-    delegatedOwnerUnlistenRef.current = null;
+    accountOwnerUnlistenRef.current?.();
+    accountOwnerUnlistenRef.current = null;
   }, []);
 
   useEffect(() => {
     const navigation = navigationRef.current;
     if (!navigation || accountDirectoryOpen || page === 'pairing' || !controlTarget
-      || controlTarget.deviceId !== clientRef.current?.pairedDeviceId) return;
+      || controlTarget.deviceId !== clientRef.current?.targetDeviceId) return;
     saveMobileNavigation(navigation.scope, {
       deviceId: controlTarget.deviceId,
       session: page === 'chat' && activeSessionId ? {

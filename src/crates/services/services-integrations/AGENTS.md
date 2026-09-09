@@ -24,8 +24,8 @@ slices that are outside pure product logic but still platform-neutral.
   presentation/validation behavior remain outside this crate unless a reviewed
   owner move proves behavior equivalence.
 - Remote-connect platform-neutral primitives belong here: device identity,
-  pairing/encryption, QR payload generation, relay client protocol, dialog/cancel
-  orchestration ports, LAN/ngrok provider helpers, IM bot provider clients,
+  account device encryption, authenticated device invitation generation, relay client protocol, dialog/cancel
+  orchestration ports, LAN endpoint helpers, IM bot provider clients,
   provider-private cursor caches, mobile-web relay upload, image-context adapter
   contracts, remote workspace helpers, and command/response assembly.
 - The `remote-persistence` feature is the lightweight persisted-shape owner shared

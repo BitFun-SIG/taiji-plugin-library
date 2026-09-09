@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "digest": "fnv1a64:f56bce0c151f3bec",
+  "digest": "fnv1a64:9daa331d28595b8d",
   "retiredCommandPrefixes": [
     {
       "prefix": "lsp_",
@@ -83,18 +83,6 @@
     },
     {
       "id": "account_connect_devices",
-      "surface": "tauri_command",
-      "remoteWorkspace": "WorkspaceAgnostic",
-      "peer": {
-        "kind": "controller_local"
-      },
-      "cliPeer": {
-        "kind": "unsupported",
-        "reason": "the controller keeps this command; peer hosts refuse it before dispatch"
-      }
-    },
-    {
-      "id": "account_delegate_to_paired",
       "surface": "tauri_command",
       "remoteWorkspace": "WorkspaceAgnostic",
       "peer": {

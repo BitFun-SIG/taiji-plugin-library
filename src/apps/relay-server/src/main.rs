@@ -1,7 +1,7 @@
 //! OpenBitFun Relay Server
 //!
 //! Standalone binary that runs the relay as a network service.
-//! Uses `DiskAssetStore` for filesystem-backed mobile-web file storage.
+//! Uses `DiskAssetStore` for filesystem-backed published Page assets.
 
 use anyhow::Context;
 use std::sync::Arc;
@@ -10,7 +10,7 @@ use tracing::info;
 mod config;
 
 use config::RelayConfig;
-use openbitfun_relay_service::{DiskAssetStore, RoomManager, WebAssetStore};
+use openbitfun_relay_service::DiskAssetStore;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -24,24 +24,10 @@ async fn main() -> anyhow::Result<()> {
     let cfg = RelayConfig::from_env()?;
     info!("OpenBitFun Relay Server v{}", env!("CARGO_PKG_VERSION"));
 
-    let room_manager = RoomManager::new();
     let asset_store = Arc::new(DiskAssetStore::new_with_max_bytes(
-        &cfg.room_web_dir,
+        &cfg.asset_dir,
         cfg.asset_store_max_bytes,
     ));
-
-    let cleanup_rm = room_manager.clone();
-    let cleanup_ttl = cfg.room_ttl_secs;
-    let cleanup_store = asset_store.clone();
-    tokio::spawn(async move {
-        loop {
-            tokio::time::sleep(std::time::Duration::from_secs(60)).await;
-            let stale_ids = cleanup_rm.cleanup_stale_rooms(cleanup_ttl);
-            for room_id in &stale_ids {
-                cleanup_store.cleanup_room(room_id);
-            }
-        }
-    });
 
     let start_time = std::time::Instant::now();
 
@@ -51,11 +37,11 @@ async fn main() -> anyhow::Result<()> {
             .with_context(|| {
                 format!("failed to initialize configured account database at {path}")
             })?;
-        Some(Arc::new(pool))
+        Arc::new(pool)
     } else {
         anyhow::bail!("RELAY_DB_PATH is required; anonymous relay mode is no longer supported")
     };
-    if db.is_some() && cfg.cors_allow_origins.iter().any(|origin| origin == "*") {
+    if cfg.cors_allow_origins.iter().any(|origin| origin == "*") {
         anyhow::bail!(
             "RELAY_CORS_ALLOW_ORIGINS=* is not allowed when RELAY_DB_PATH enables account APIs"
         );
@@ -69,7 +55,7 @@ async fn main() -> anyhow::Result<()> {
                 .map_err(anyhow::Error::msg)?,
         ),
         (None, None) => {
-            if db.is_some() {
+            {
                 tracing::warn!(
                     "RELAY_PAGE_PUBLIC_BASE_URL and RELAY_PAGE_AUTH_BASE_URL are not set; \
                      published Pages are disabled until isolated origins are configured"
@@ -83,9 +69,8 @@ async fn main() -> anyhow::Result<()> {
     };
 
     let pages_enabled = page_browser_auth.is_some();
-    let page_data_dir = std::path::PathBuf::from(&cfg.room_web_dir).join("page-data");
+    let page_data_dir = std::path::PathBuf::from(&cfg.asset_dir).join("page-data");
     let mut app = openbitfun_relay_service::build_relay_router_with_page_data_origins_and_page_auth(
-        room_manager,
         asset_store,
         start_time,
         db,
@@ -108,12 +93,12 @@ async fn main() -> anyhow::Result<()> {
     // the same browser hardening as relay API responses.
     app = app.layer(axum::middleware::from_fn(host_security_headers));
 
-    info!("Room web upload dir: {}", cfg.room_web_dir);
+    info!("Page asset directory: {}", cfg.asset_dir);
     info!("Asset store capacity: {} bytes", cfg.asset_store_max_bytes);
 
     let listener = tokio::net::TcpListener::bind(cfg.listen_addr).await?;
     info!("Relay server listening on {}", cfg.listen_addr);
-    info!("WebSocket endpoint: ws://{}/ws", cfg.listen_addr);
+    info!("Device WebSocket endpoint: ws://{}/ws", cfg.listen_addr);
 
     axum::serve(
         listener,

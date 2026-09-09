@@ -1,3 +1,4 @@
+import { normalizeAccountRelayUrl } from '../../services/AccountDeviceLink';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { stampRemoteSessionsDevice } from '../../services/RemoteSessionIdentity';
 import {
@@ -13,8 +14,6 @@ import { ConnectionErrorPolicy } from '../../services/ConnectionErrorPolicy';
 import { Encoding } from '../../services/Encoding';
 import { RemoteHeartbeatController } from '../../services/RemoteHeartbeatController';
 import { RemoteLogger } from '../../services/RemoteLogger';
-import { RemoteDescriptorParser } from '../../services/RemoteDescriptorParser';
-import { ConnectScanDecisionPolicy } from '../../services/ConnectScanDecisionPolicy';
 import { RemoteSessionManager } from '../../services/RemoteSessionManager';
 import { WatchProvisionOutcome } from '../../services/WatchProvisionController';
 import { RemotePermissionMode } from '../../model/RemoteModels';
@@ -68,6 +67,8 @@ export class SettingsController {
   private readonly cloud?: CloudAccountSettingsDependencies;
   private cloudSession?: CloudAccountSession;
   private cloudRelayUrl: string = '';
+  private selectedRelayUrl: string = DEFAULT_CLOUD_RELAY_URL;
+  private accountLoginVersion: number = 0;
   /** Account login identity; pairing projections must never overwrite it. */
   private cloudAccountUsername: string = '';
   private accountDevices: CloudAccountDevice[] = [];
@@ -141,64 +142,30 @@ export class SettingsController {
     }
   }
 
-  async persistDelegatedAccountSession(targetDeviceId: string = '', targetDeviceName: string = ''): Promise<void> {
-    const cloud = this.requireCloud();
-    const delegated = cloud.sessionManager.delegatedAccountSession();
-    if (!delegated) {
-      // A room and an account target are independent recovery paths. Choosing
-      // an ordinary QR room must not erase the last account device; the saved
-      // control-target type decides which one the next launch tries first.
-      return;
-    }
-    const existing = this.cloudSession;
-    if (existing && (existing.userId !== delegated.session.userId ||
-      !ConnectScanDecisionPolicy.relayEndpointsCompatible(this.cloudRelayUrl, delegated.relayUrl))) {
-      RemoteLogger.warn('delegated account session ignored because the signed-in account or relay differs');
-      if (this.preferredTargetDeviceId.length > 0) {
-        this.clearPreferredCloudTarget();
-        try {
-          await this.persistCurrentCloudSessionTarget('', '');
-        } catch (err) {
-          RemoteLogger.warn(`account target clear persistence failed: ${String(err)}`);
-        }
-      }
-      return;
-    }
-    const session = existing || delegated.session;
-    const relayUrl = existing && this.cloudRelayUrl.length > 0 ? this.cloudRelayUrl : delegated.relayUrl;
-    const username = existing ? (this.cloudAccountUsername || session.userId) : delegated.session.userId;
-    if (!existing) {
-      this.applyCloudAccountSession(session, relayUrl, username);
-    }
-    const persisted: PersistedCloudAccountSession = {
-      relayUrl,
-      username,
-      token: session.token,
-      userId: session.userId,
-      masterKey: Encoding.bytesToBase64(session.masterKey)
-    };
-    const targetId = targetDeviceId.trim();
-    if (targetId.length > 0) {
-      persisted.targetDeviceId = targetId;
-      persisted.targetDeviceName = targetDeviceName.trim() || targetId;
-      this.setPreferredCloudTarget(targetId, persisted.targetDeviceName);
-    }
-    try {
-      await cloud.sessionStore.save(persisted);
-      RemoteLogger.info(`delegated account session persisted after room pairing target=${targetId.length > 0 ? '1' : '0'}`);
-    } catch (err) {
-      // The transport is already authenticated and useful. Storage failure
-      // means this launch cannot be resumed after a kill; it must not tear down
-      // the link the user just established.
-      RemoteLogger.warn(`delegated account session persistence failed: ${String(err)}`);
+  selectAccountRelay(relayUrl: string): void {
+    const endpoint = normalizeAccountRelayUrl(relayUrl);
+    if (!endpoint) throw new Error('Invalid Relay URL');
+    if (this.cloudRelayUrl !== endpoint) {
+      this.teardownCloudAccountProjection(this.requireCloud());
+      this.selectedRelayUrl = endpoint;
     }
   }
 
   async loginCloudAccount(): Promise<string> {
-    const relayUrl = DEFAULT_CLOUD_RELAY_URL;
+    const relayUrl = this.selectedRelayUrl;
+    const generation = ++this.accountLoginVersion;
     const cloud = this.requireCloud();
     RemoteLogger.info('cloud account UI login requested');
-    const session = await cloud.client.login(cloud.hooks.deviceId(), cloud.hooks.openAuthorization);
+    const deviceSecret = await cloud.sessionStore.deviceSecret();
+    if (generation !== this.accountLoginVersion) { deviceSecret.fill(0); throw new Error('Account login cancelled'); }
+    let session: CloudAccountSession;
+    try {
+      session = await cloud.client.login(relayUrl, cloud.hooks.deviceId(), cloud.hooks.openAuthorization, deviceSecret);
+    } finally { deviceSecret.fill(0); }
+    if (generation !== this.accountLoginVersion) {
+      session.masterKey.fill(0);
+      throw new Error('Account login cancelled');
+    }
     const username = session.userId;
     this.clearPreferredCloudTarget();
     this.applyCloudAccountSession(session, relayUrl, username);
@@ -219,6 +186,7 @@ export class SettingsController {
     const remoteState = this.requireCloud().remoteState;
     this.cloudSession = session;
     this.cloudRelayUrl = relayUrl.trim();
+    this.selectedRelayUrl = this.cloudRelayUrl;
     this.cloudAccountUsername = username.trim();
     remoteState.setAccountUserId(session.userId);
     remoteState.setAccountUsername(this.cloudAccountUsername);
@@ -266,51 +234,6 @@ export class SettingsController {
       deviceId,
       deviceName: this.preferredTargetDeviceName.trim() || deviceId
     };
-  }
-
-  /**
-   * Upgrades an older account record that predates persisted target devices.
-   *
-   * An account-auth QR directly identifies a stable account device. An ordinary
-   * QR may migrate only when the refreshed account roster independently proves
-   * that the same desktop device exists on the same relay. This prevents a
-   * stale room from silently switching control to another remembered desktop.
-   */
-  async migrateLegacyPairingTarget(
-    remoteUrl: string,
-    deviceId: string,
-    deviceName: string
-  ): Promise<PreferredCloudTarget | undefined> {
-    const targetId = deviceId.trim();
-    if (!this.cloudSession || targetId.length === 0) {
-      return undefined;
-    }
-    if (this.preferredTargetDeviceId.length > 0) {
-      return this.preferredTargetDeviceId === targetId ? this.preferredCloudTarget() : undefined;
-    }
-    try {
-      const descriptor = RemoteDescriptorParser.parse(remoteUrl);
-      const knownAccountDevice = this.knownAccountDevice(targetId);
-      if ((!descriptor.accountAuth && !knownAccountDevice) || !ConnectScanDecisionPolicy.relayEndpointsCompatible(
-        this.cloudRelayUrl,
-        descriptor.relayUrl
-      )) {
-        return undefined;
-      }
-      const targetName = knownAccountDevice?.deviceName || deviceName.trim() || targetId;
-      this.setPreferredCloudTarget(targetId, targetName);
-      this.restorePreferredCloudTargetProjection();
-      try {
-        await this.persistCurrentCloudSessionTarget(targetId, targetName);
-      } catch (err) {
-        RemoteLogger.warn(`legacy account target persistence failed: ${String(err)}`);
-      }
-      RemoteLogger.info(`legacy QR pairing migrated to account target device=${targetId}`);
-      return this.preferredCloudTarget();
-    } catch (err) {
-      RemoteLogger.warn(`legacy QR pairing target migration skipped: ${String(err)}`);
-      return undefined;
-    }
   }
 
   /**
@@ -731,6 +654,8 @@ export class SettingsController {
   /** Drops the remaining account identity facts after remote teardown. */
   private clearCloudAccountIdentity(cloud: CloudAccountSettingsDependencies): void {
     this.stopPresencePolling();
+    this.accountLoginVersion += 1;
+    this.cloudSession?.masterKey.fill(0);
     this.cloudSession = undefined;
     this.cloudRelayUrl = '';
     this.cloudAccountUsername = '';

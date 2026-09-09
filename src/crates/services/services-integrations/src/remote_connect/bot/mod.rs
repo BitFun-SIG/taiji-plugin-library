@@ -56,6 +56,8 @@ pub struct BotPairingInfo {
 /// Persisted bot connection — saved to disk so reconnect survives restarts.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SavedBotConnection {
+    #[serde(default)]
+    pub account_user_id: String,
     pub bot_type: String,
     pub chat_id: String,
     pub config: BotConfig,

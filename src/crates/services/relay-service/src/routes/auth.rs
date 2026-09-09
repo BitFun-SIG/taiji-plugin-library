@@ -276,10 +276,7 @@ pub(crate) async fn verify_identity_credentials(
     access_token: &str,
     injected_verifier: Option<&crate::identity::IdentityVerifier>,
 ) -> Result<UserRow, (StatusCode, Json<ErrorResponse>)> {
-    let db = state
-        .db
-        .as_ref()
-        .ok_or_else(|| err("account features disabled", StatusCode::NOT_IMPLEMENTED))?;
+    let db = state.db.as_ref();
     if !state.login_rate_limiter.check_and_record(
         "identity",
         &client_ip(headers, peer_addr),
@@ -337,10 +334,7 @@ pub(crate) async fn login(
         verifier.as_ref().map(|v| &v.0),
     )
     .await?;
-    let db = state
-        .db
-        .as_ref()
-        .ok_or_else(|| err("account features disabled", StatusCode::NOT_IMPLEMENTED))?;
+    let db = state.db.as_ref();
     DeviceRow::upsert(
         db,
         &body.device_id,
@@ -367,10 +361,7 @@ pub(crate) async fn login(
 
 /// `POST /api/auth/logout` — revoke the caller's token on the relay.
 pub async fn logout(State(state): State<AppState>, headers: HeaderMap) -> StatusCode {
-    let db = match state.db.as_ref() {
-        Some(db) => db,
-        None => return StatusCode::NOT_IMPLEMENTED,
-    };
+    let db = state.db.as_ref();
     let token = headers
         .get(axum::http::header::AUTHORIZATION)
         .and_then(|v| v.to_str().ok())
@@ -400,7 +391,7 @@ pub async fn logout(State(state): State<AppState>, headers: HeaderMap) -> Status
             // Delete the token row
             if let Err(error) = sqlx::query("DELETE FROM auth_tokens WHERE token = ?")
                 .bind(&token)
-                .execute(&**db)
+                .execute(db)
                 .await
             {
                 tracing::error!(%error, "Failed to revoke account token");
@@ -473,7 +464,7 @@ pub async fn delegate(
     headers: HeaderMap,
     Json(body): Json<DelegateRequest>,
 ) -> Result<Json<AuthResponse>, StatusCode> {
-    let db = state.db.as_ref().ok_or(StatusCode::NOT_IMPLEMENTED)?;
+    let db = state.db.as_ref();
     let token = headers
         .get(axum::http::header::AUTHORIZATION)
         .and_then(|v| v.to_str().ok())
@@ -546,10 +537,7 @@ pub async fn provision_device(
         ));
     }
 
-    let db = state
-        .db
-        .as_ref()
-        .ok_or_else(|| err("account features disabled", StatusCode::NOT_IMPLEMENTED))?;
+    let db = state.db.as_ref();
     let token = headers
         .get(axum::http::header::AUTHORIZATION)
         .and_then(|value| value.to_str().ok())
@@ -635,7 +623,7 @@ pub fn extract_bearer_token(headers: &HeaderMap) -> Option<String> {
 
 /// Validate a raw token string against the account database.
 pub async fn validate_token(state: &AppState, token: &str) -> Result<AuthUser, StatusCode> {
-    let db = state.db.as_ref().ok_or(StatusCode::NOT_IMPLEMENTED)?;
+    let db = state.db.as_ref();
     let auth = AuthToken::find(db, token)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
@@ -653,7 +641,6 @@ pub async fn validate_token(state: &AppState, token: &str) -> Result<AuthUser, S
 mod tests {
     use super::*;
     use crate::db::{connect, DbPool};
-    use crate::relay::RoomManager;
     use crate::MemoryAssetStore;
     use axum::body::{to_bytes, Body};
     use axum::http::{header, Request};
@@ -686,10 +673,9 @@ mod tests {
             .unwrap()
             .token;
         let app = crate::build_relay_router(
-            RoomManager::new(),
             Arc::new(MemoryAssetStore::new()),
             std::time::Instant::now(),
-            Some(db.clone()),
+            db.clone(),
             "test",
         );
         (app, db, token)

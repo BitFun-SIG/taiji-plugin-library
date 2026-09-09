@@ -169,13 +169,6 @@ export class AppRootRuntime extends AppRootRuntimeComposition {
       }
       return;
     }
-    if (!this.settingsController.preferredCloudTarget()) {
-      await this.settingsController.migrateLegacyPairingTarget(
-        this.remotePageState.remoteUrl,
-        this.remotePageState.desktopId,
-        this.remotePageState.desktopName
-      );
-    }
     if (this.settingsController.preferredCloudTarget()) {
       await this.restoreAccountDeviceTarget(false);
     }

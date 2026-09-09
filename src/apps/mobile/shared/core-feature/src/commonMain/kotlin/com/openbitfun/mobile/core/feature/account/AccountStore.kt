@@ -1,7 +1,6 @@
 package com.openbitfun.mobile.core.feature.account
 
 import com.openbitfun.mobile.core.feature.CoreLog
-import com.openbitfun.mobile.core.feature.pairing.asTransportLog
 import com.openbitfun.mobile.core.feature.session.RemoteSessionStore
 import com.openbitfun.mobile.core.feature.workspace.RemoteWorkspaceStore
 import com.openbitfun.mobile.core.persistence.MobilePersistenceStores
@@ -38,8 +37,10 @@ internal data class AccountSessionData(
 
 internal interface AccountBackend {
     suspend fun login(
+        relayUrl: String,
         deviceId: String,
         deviceName: String,
+        deviceSecret: ByteArray,
         onAuthorization: (String) -> Unit,
     ): AccountSessionData
 
@@ -60,6 +61,7 @@ public class AccountStore internal constructor(
     private val _state = MutableStateFlow<AccountUiState>(AccountUiState.Idle)
     public val state: StateFlow<AccountUiState> = _state.asStateFlow()
     private var session: AccountSessionData? = null
+    private var selectedRelayUrl: String = com.openbitfun.mobile.core.transport.DEFAULT_CLOUD_RELAY_URL
     private var work: Job? = null
     /** Latest account membership snapshot, used to authorize explicit device stores. */
     private var controllableDevices: List<AccountDeviceUi> = emptyList()
@@ -68,6 +70,17 @@ public class AccountStore internal constructor(
         when (intent) {
             AccountIntent.Restore -> restore()
             AccountIntent.Login -> login()
+            is AccountIntent.SelectRelay -> {
+                val endpoint = com.openbitfun.mobile.core.transport.normalizeAccountRelayUrl(intent.relayUrl) ?: return
+                if (session?.relayUrl != endpoint) {
+                    work?.cancel()
+                    session?.masterKey?.fill(0)
+                    session = null
+                    controllableDevices = emptyList()
+                    selectedRelayUrl = endpoint
+                    _state.value = AccountUiState.SignedOut
+                }
+            }
             is AccountIntent.SelectDevice -> selectDevice(intent.deviceId)
             AccountIntent.RefreshDevices -> refreshDevices()
             AccountIntent.Retry -> retryFailedStage()
@@ -168,6 +181,7 @@ public class AccountStore internal constructor(
                 return@launch
             }
             session = restored
+            selectedRelayUrl = restored.relayUrl
             try {
                 publishReady(restored, backend.listDevices(restored, deviceId))
             } catch (cancelled: CancellationException) {
@@ -196,10 +210,21 @@ public class AccountStore internal constructor(
         work?.cancel()
         _state.value = AccountUiState.SigningIn
         work = scope.launch {
+            val deviceSecret = try {
+                secureStore.read(DEVICE_KEY)?.also { require(it.size == 32) }
+                    ?: (session?.masterKey?.copyOf() ?: CloudAccountClient.generateDeviceSecret()).also {
+                        secureStore.write(DEVICE_KEY, it)
+                    }
+            } catch (_: Throwable) {
+                failLogin(AccountFailureReason.SECURE_STORAGE, AccountFailureStage.SECURE_STORAGE)
+                return@launch
+            }
             val loggedIn = try {
                 backend.login(
+                    selectedRelayUrl,
                     deviceId,
                     deviceName,
+                    deviceSecret,
                     { url -> _state.value = AccountUiState.Authorizing(url) },
                 )
             } catch (cancelled: CancellationException) {
@@ -213,6 +238,8 @@ public class AccountStore internal constructor(
                 // never evidence that secure storage was involved.
                 failLogin(AccountFailureReason.MALFORMED_RESPONSE, AccountFailureStage.AUTHENTICATION)
                 return@launch
+            } finally {
+                deviceSecret.fill(0)
             }
 
             controllableDevices = emptyList()
@@ -389,6 +416,7 @@ public class AccountStore internal constructor(
         controllableDevices = AccountDevicePolicy.controlTargets(devices, deviceId)
         _state.value = AccountUiState.Ready(
             userId = current.userId,
+            relayUrl = current.relayUrl,
             username = current.username,
             devices = controllableDevices,
             selectedDeviceId = current.targetDeviceId,
@@ -414,6 +442,7 @@ public class AccountStore internal constructor(
             )
         }
 
+        private const val DEVICE_KEY = "relay_device_private_key_v1"
         private const val SESSION_KEY = "github_device_session_v1"
         private val JSON = Json { ignoreUnknownKeys = true }
 
@@ -449,25 +478,27 @@ private class CloudBackend(
     private val log: TransportLog,
 ) : AccountBackend {
     override suspend fun login(
+        relayUrl: String,
         deviceId: String,
         deviceName: String,
+        deviceSecret: ByteArray,
         onAuthorization: (String) -> Unit,
     ): AccountSessionData {
-        val start = client.startAuthorization()
+        val start = client.startAuthorization(relayUrl)
         onAuthorization(start.authorizationUrl)
         var accessToken: String? = null
         while (kotlin.time.Clock.System.now().epochSeconds < start.expiresAt) {
             kotlinx.coroutines.delay(start.pollIntervalSeconds.coerceIn(1, 30) * 1000L)
-            val poll = client.pollAuthorization(start)
+            val poll = client.pollAuthorization(relayUrl, start)
             if (poll.status == "authorized") {
                 accessToken = poll.tokens?.accessToken
                 break
             }
             if (poll.status == "expired" || poll.status == "denied") break
         }
-        val session = client.login(accessToken ?: throw CloudAccountException(CloudAccountFailure.AUTHENTICATION), deviceId, deviceName)
+        val session = client.login(relayUrl, accessToken ?: throw CloudAccountException(CloudAccountFailure.AUTHENTICATION), deviceId, deviceName, deviceSecret)
         return AccountSessionData(
-            relayUrl = com.openbitfun.mobile.core.transport.DEFAULT_CLOUD_RELAY_URL,
+            relayUrl = relayUrl,
             username = session.userId,
             token = session.token,
             userId = session.userId,

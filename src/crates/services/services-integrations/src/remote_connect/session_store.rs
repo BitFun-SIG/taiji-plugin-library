@@ -51,6 +51,15 @@ fn session_file_path() -> Result<PathBuf> {
 
 // ── Public API ──────────────────────────────────────────────────────────
 
+pub fn device_secret(relay_url: &str, user_id: &str, device_id: &str) -> Result<[u8; 32]> {
+    crate::remote_persistence::load_or_create_device_secret(
+        &session_store_directory()?,
+        relay_url,
+        user_id,
+        device_id,
+    )
+}
+
 /// Persist the session (token, master_key, user_id, relay_url) to disk,
 /// encrypted with the machine-bound key.
 pub fn save_session(

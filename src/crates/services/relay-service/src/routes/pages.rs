@@ -512,11 +512,7 @@ fn upload_request_matches_session_intent(
 }
 
 fn require_db(state: &AppState) -> Result<&crate::db::DbPool, StatusCode> {
-    state
-        .db
-        .as_ref()
-        .map(|db| db.as_ref())
-        .ok_or(StatusCode::NOT_IMPLEMENTED)
+    Ok(state.db.as_ref())
 }
 
 pub fn pages_router() -> Router<AppState> {
@@ -2540,7 +2536,7 @@ async fn serve_with_worker(
         .try_acquire(&page.user_id, &page.slug)
         .map_err(|_| StatusCode::TOO_MANY_REQUESTS)?;
     let page_data = state.page_data.clone().ok_or(StatusCode::NOT_IMPLEMENTED)?;
-    let db = state.db.clone().ok_or(StatusCode::NOT_IMPLEMENTED)?;
+    let db = state.db.clone();
     let asset_store = Arc::clone(&state.asset_store);
     let asset_store_fallback = Arc::clone(&state.asset_store);
     let asset_key = asset_key.to_string();
@@ -2759,9 +2755,7 @@ async fn maybe_migrate_legacy_page_locked(
     slug: &str,
     expected_generation: &str,
 ) {
-    let Some(db) = state.db.as_ref() else {
-        return;
-    };
+    let db = state.db.as_ref();
     let Ok(Some(page)) = PageRow::get(db, user_id, slug).await else {
         return;
     };
@@ -3011,7 +3005,6 @@ fn mime_from_path(p: &str) -> &'static str {
 mod tests {
     use super::*;
     use crate::db::{connect, page_kv, AuthToken, DeviceRow, PageRow, UserRow};
-    use crate::relay::RoomManager;
     use crate::MemoryAssetStore;
     use axum::body::to_bytes;
     use axum::http::{Request, StatusCode};
@@ -3089,10 +3082,9 @@ mod tests {
         std::mem::forget(tmp);
 
         let app = crate::build_relay_router_with_page_data_origins_and_page_auth(
-            RoomManager::new(),
             Arc::new(MemoryAssetStore::new()),
             std::time::Instant::now(),
-            Some(Arc::clone(&pool)),
+            Arc::clone(&pool),
             "test",
             Some(page_data_dir),
             Vec::new(),

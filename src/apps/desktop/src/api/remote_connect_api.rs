@@ -18,9 +18,8 @@ use openbitfun_core::service::remote_connect::session_store::{
 };
 use openbitfun_core::service::remote_connect::{
     bot::{self, weixin, BotConfig},
-    lan, session_store, AccountClient, AccountPairingVerification, AccountSession,
-    ConnectionMethod, ConnectionResult, DelegatedIdentityAuthorization, DeviceIdentity,
-    PairingState, ProvisionedDeviceAuthorization, RemoteConnectConfig, RemoteConnectService,
+    lan, session_store, AccountClient, AccountSession, ConnectionMethod, ConnectionResult,
+    DeviceIdentity, RemoteConnectConfig, RemoteConnectService,
 };
 use openbitfun_core::service::workspace::{get_global_workspace_service, WorkspaceKind};
 use openbitfun_core::service::workspace_runtime::WorkspaceRuntimeService;
@@ -62,13 +61,9 @@ static ACCOUNT_OPERATION_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::cons
 /// transition guard only after all login-time network requests complete.
 static ACCOUNT_LOGIN_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 static ACCOUNT_CONTEXT_TRANSITION_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
-/// Serializes QR-room starts with account identity boundaries.
-///
-/// An unpaired QR advertises the authentication mode that existed when it was
-/// created, so login/logout must retire that stale invitation. An established
-/// room is an independent control channel and survives the account boundary;
-/// its account-derived authority is cleared separately during the transition.
-static ACCOUNT_ROOM_BOUNDARY_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+/// Serializes connection entry point changes and explicit disconnection.
+static RELAY_START_STOP_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+static ACCOUNT_TRANSITION_BOUNDARY_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 static ACCOUNT_CONTEXT_GENERATION: AtomicU64 = AtomicU64::new(1);
 static ACCOUNT_CONTEXT_TRANSITIONS: AtomicUsize = AtomicUsize::new(0);
 
@@ -612,12 +607,11 @@ async fn invalidate_local_account_session_if_current(
         log::info!("Ignored auth failure from a stale account generation");
         return false;
     }
-    let _room_boundary_guard = ACCOUNT_ROOM_BOUNDARY_LOCK.lock().await;
+    let _room_boundary_guard = ACCOUNT_TRANSITION_BOUNDARY_LOCK.lock().await;
     if !account_context_matches(expected_generation, expected_token).await {
         log::info!("Ignored auth failure from a stale account generation");
         return false;
     }
-    retire_unpaired_room_for_account_boundary("account session expiry").await;
     let Some(_transition_guard) = begin_account_transition_if_current(expected_generation).await
     else {
         log::info!("Ignored auth failure from a stale account generation");
@@ -636,8 +630,6 @@ async fn invalidate_local_account_session_if_current(
     TOKEN_EXPIRED.store(true, std::sync::atomic::Ordering::Relaxed);
     stop_and_clear_device_routing("Account session expired").await;
     if let Some(service) = get_service_holder().read().await.as_ref() {
-        service.clear_account_pairing_context().await;
-        service.clear_trusted_mobile_identity().await;
         service.clear_bot_delegated_identities().await;
     }
     *get_account_context().write().await = None;
@@ -1211,123 +1203,6 @@ pub fn set_mobile_web_resource_path(path: PathBuf) {
 /// IM bots (global provider). Called after session is restored (startup) or
 /// after fresh login.
 async fn register_delegated_identity_providers() {
-    // Room-channel provider for mobile-web.
-    let account_context = get_account_context().clone();
-    if let Some(service) = get_service_holder().read().await.as_ref() {
-        service
-            .set_delegated_identity_provider(move || {
-                let account_context = account_context.clone();
-                Box::pin(async move {
-                    let generation = account_context_generation();
-                    if !account_context_is_current(generation) {
-                        return None;
-                    }
-                    // Core calls this provider while holding the room lifecycle
-                    // lease. Acquire the account lease second and return it with
-                    // the credentials so account replacement cannot begin until
-                    // Core has encrypted and sent the response.
-                    let account_lease = lock_account_operation(generation).await.ok()?;
-                    let context = account_context.read().await.clone()?;
-                    if !account_context_matches(generation, &context.session.token).await {
-                        return None;
-                    }
-                    match AccountClient::new()
-                        .delegate_token(&context.relay_url, &context.session)
-                        .await
-                    {
-                        Ok(delegated) => {
-                            if delegated.user_id != context.session.user_id {
-                                log::warn!(
-                                    "Delegated identity user did not match the desktop account"
-                                );
-                                return None;
-                            }
-                            if !account_context_matches(generation, &context.session.token).await {
-                                return None;
-                            }
-                            Some(DelegatedIdentityAuthorization::with_host_lease(
-                                delegated.token,
-                                delegated.user_id,
-                                delegated.device_secret,
-                                account_lease,
-                            ))
-                        }
-                        Err(e) => {
-                            log::warn!("Delegate token failed: {e}");
-                            None
-                        }
-                    }
-                })
-            })
-            .await;
-
-        // Room-channel provider that adds a keyboard-less device (a watch) to
-        // this account. Same lease discipline as delegation above; the errors
-        // are returned rather than swallowed because a provisioning failure is
-        // shown to someone standing there waiting for it.
-        let account_context = get_account_context().clone();
-        service
-            .set_peer_device_provisioner(move |device_id, device_name, request_id| {
-                let account_context = account_context.clone();
-                Box::pin(async move {
-                    // Minted by the device being provisioned so a retry anywhere
-                    // along the chain replays one idempotent relay request.
-                    let request_id = uuid::Uuid::parse_str(&request_id)
-                        .map_err(|_| "Request id must be a UUID".to_string())?;
-                    let generation = account_context_generation();
-                    if !account_context_is_current(generation) {
-                        return Err("Desktop account changed; try again".to_string());
-                    }
-                    let account_lease = lock_account_operation(generation)
-                        .await
-                        .map_err(|_| "Desktop account changed; try again".to_string())?;
-                    let context = account_context.read().await.clone().ok_or_else(|| {
-                        "Desktop is not logged into a GitHub account".to_string()
-                    })?;
-                    if !account_context_matches(generation, &context.session.token).await {
-                        return Err("Desktop account changed; try again".to_string());
-                    }
-                    let target_secret = openbitfun_services_integrations::remote_connect::device_crypto::provisioning_secret(
-                        &context.session.master_key, &device_id, &request_id.to_string(),
-                    );
-                    let provisioned = AccountClient::new()
-                        .provision_device_token(
-                            &context.relay_url,
-                            &context.session,
-                            &device_id,
-                            &device_name,
-                            "watch",
-                            request_id,
-                            &target_secret,
-                        )
-                        .await
-                        .map_err(|e| {
-                            log::warn!("Provision device token failed: {e}");
-                            format!("Could not add the device to your account: {e}")
-                        })?;
-                    if !account_context_matches(generation, &context.session.token).await {
-                        return Err("Desktop account changed; try again".to_string());
-                    }
-                    Ok(ProvisionedDeviceAuthorization::with_host_lease(
-                        provisioned.token,
-                        provisioned.user_id,
-                        target_secret,
-                        provisioned.device_id,
-                        account_lease,
-                    ))
-                })
-            })
-            .await;
-
-        // Account-mode mobile pairing: QR prefill + password verification.
-        register_account_pairing_context(service).await;
-
-        // Login/restore may switch accounts; drop any prior URL-bound mobile
-        // identity so the next pair can bind to the current account user id.
-        service.clear_trusted_mobile_identity().await;
-        service.clear_bot_delegated_identities().await;
-    }
-
     // Global provider for IM bots.
     let account_context = get_account_context().clone();
     openbitfun_core::service::remote_connect::bot::set_delegated_identity_provider(move || {
@@ -1358,34 +1233,6 @@ async fn register_delegated_identity_providers() {
             }
         })
     });
-}
-
-/// Verify the mobile's global GitHub identity against the current host account.
-async fn register_account_pairing_context(service: &RemoteConnectService) {
-    let username = load_credential_hint()
-        .map(|hint| hint.username)
-        .unwrap_or_default();
-    service.set_account_pairing_username(Some(username)).await;
-    let account_context = get_account_context().clone();
-    service.set_account_pairing_verifier(move |_username, access_token| {
-        let account_context = account_context.clone();
-        async move {
-            let generation = account_context_generation();
-            let context = account_context.read().await.clone()
-                .ok_or_else(|| "Desktop is signed out; sign in and scan again".to_string())?;
-            let verified = openbitfun_services_integrations::account_identity::AccountIdentityClient::verify_access_token(&access_token)
-                .await.map_err(|_| "Could not verify GitHub login; sign in and try again".to_string())?;
-            if verified.user.github_id.to_string() != context.session.user_id {
-                return Err("Sign in with the same GitHub account as the desktop".to_string());
-            }
-            let account_lease = lock_account_operation(generation).await
-                .map_err(|_| "Desktop account changed; scan again".to_string())?;
-            if !account_context_matches(generation, &context.session.token).await {
-                return Err("Desktop account changed; scan again".to_string());
-            }
-            Ok(AccountPairingVerification::with_host_lease(context.session.user_id, account_lease))
-        }
-    }).await;
 }
 
 pub fn init_on_startup() {
@@ -1480,7 +1327,6 @@ pub fn init_on_startup() {
 
 /// Synchronous cleanup called when the application exits.
 pub fn cleanup_on_exit() {
-    openbitfun_core::service::remote_connect::ngrok::cleanup_all_ngrok();
     log::info!("Remote connect cleanup completed on exit");
 }
 
@@ -1514,6 +1360,13 @@ fn new_remote_connect_service(config: RemoteConnectConfig) -> anyhow::Result<Rem
 async fn restore_saved_bots() {
     use openbitfun_core::service::remote_connect::bot;
 
+    let generation = account_context_generation();
+    let Ok(_account_guard) = lock_account_operation(generation).await else {
+        return;
+    };
+    let Ok((session, _)) = read_account_context_for_generation(generation).await else {
+        return;
+    };
     let data = bot::load_bot_persistence();
     if data.connections.is_empty() {
         return;
@@ -1525,8 +1378,9 @@ async fn restore_saved_bots() {
         return;
     };
 
+    service.set_bot_account(Some(session.user_id.clone())).await;
     for conn in &data.connections {
-        if !conn.chat_state.paired {
+        if !conn.chat_state.paired || conn.account_user_id != session.user_id {
             continue;
         }
         log::info!(
@@ -1572,7 +1426,7 @@ fn detect_mobile_web_dir() -> Option<String> {
         return Some(dir);
     }
 
-    log::warn!("mobile-web dist directory not found; LAN/Ngrok modes will not serve static files");
+    log::warn!("mobile-web dist directory not found; LAN mode will not serve static files");
     None
 }
 
@@ -1644,28 +1498,11 @@ pub struct StartRemoteConnectRequest {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct RemoteConnectStatusResponse {
-    pub is_connected: bool,
-    pub pairing_state: PairingState,
-    pub active_method: Option<String>,
-    pub peer_device_name: Option<String>,
-    pub peer_user_id: Option<String>,
-    /// A browser/phone has reached this host through its authenticated account route.
-    /// This is independent of the temporary QR-room invitation and pairing state.
-    #[serde(default)]
-    pub account_control_connected: bool,
-    /// Source of the live account control channel, separate from `active_method`.
-    #[serde(default)]
-    pub account_control_relay_url: Option<String>,
-    /// Live browser sessions; absent on hosts without client-level presence.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub account_control_clients:
-        Option<Vec<openbitfun_services_integrations::remote_connect::RemoteControlClient>>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub account_control_has_unidentified_clients: Option<bool>,
-    /// Independent bot connection info — e.g. "Telegram(7096812005)".
-    /// Present when a bot is active, regardless of relay pairing state.
+    pub relay_connected: bool,
+    pub relay_url: Option<String>,
+    pub active_method: Option<ConnectionMethod>,
+    pub clients: Vec<openbitfun_services_integrations::remote_connect::RemoteControlClient>,
     pub bot_connected: Option<String>,
-    /// Bot verbose mode setting — when true, intermediate progress is sent to users.
     pub bot_verbose_mode: bool,
 }
 
@@ -1918,12 +1755,6 @@ pub async fn remote_connect_get_methods() -> Result<Vec<ConnectionMethodInfo>, S
                 available: true,
                 description: "Same local network".into(),
             },
-            ConnectionMethod::Ngrok => ConnectionMethodInfo {
-                id: "ngrok".into(),
-                name: "ngrok".into(),
-                available: true,
-                description: "Internet via ngrok tunnel".into(),
-            },
             ConnectionMethod::OpenBitFunServer => ConnectionMethodInfo {
                 id: "openbitfun_server".into(),
                 name: "OpenBitFun Server".into(),
@@ -1962,7 +1793,6 @@ fn parse_connection_method(
         "lan" => Ok(ConnectionMethod::Lan {
             ip: lan_ip.filter(|s| !s.is_empty()),
         }),
-        "ngrok" => Ok(ConnectionMethod::Ngrok),
         "openbitfun_server" => Ok(ConnectionMethod::OpenBitFunServer),
         "bot_feishu" => Ok(ConnectionMethod::BotFeishu),
         "bot_telegram" => Ok(ConnectionMethod::BotTelegram),
@@ -1977,34 +1807,63 @@ pub async fn remote_connect_start(
 ) -> Result<ConnectionResult, String> {
     ensure_service().await?;
     let method = parse_connection_method(&request.method, request.lan_ip)?;
-    if method == ConnectionMethod::OpenBitFunServer {
-        // Register the already signed-in GitHub identity on demand. This must
-        // run before the room boundary lock because login owns that lock too.
+    let _start_stop = RELAY_START_STOP_LOCK.lock().await;
+    if matches!(
+        method,
+        ConnectionMethod::BotFeishu | ConnectionMethod::BotTelegram | ConnectionMethod::BotWeixin
+    ) {
+        // IM transports also require the signed-in account before pairing.
         if read_account_context().await.is_err() {
             account_login(AccountAuthRequest {}).await?;
         }
+        let generation = account_context_generation();
+        let _account_guard = lock_account_operation(generation).await?;
+        let (session, _) = read_account_context_for_generation(generation).await?;
+        let holder = get_service_holder().read().await;
+        let service = holder.as_ref().ok_or("service not initialized")?;
+        service.set_bot_account(Some(session.user_id)).await;
+        return service
+            .start(method)
+            .await
+            .map_err(|e| format!("start remote connect: {e}"));
+    }
+    let relay_url = {
+        let holder = get_service_holder().read().await;
+        holder
+            .as_ref()
+            .ok_or("service not initialized")?
+            .prepare_relay(&method)
+            .await
+            .map_err(|e| e.to_string())?
+    };
+    let result = async {
+        let current_url = read_account_context().await.ok().map(|(_, url)| url);
+        if current_url.as_deref() != Some(relay_url.as_str()) {
+            login_account_on_relay(relay_url).await?;
+        }
         account_connect_devices().await?;
+        let holder = get_service_holder().read().await;
+        holder
+            .as_ref()
+            .ok_or("service not initialized")?
+            .start(method)
+            .await
+            .map_err(|e| format!("start remote connect: {e}"))
     }
-    let _room_boundary_guard = ACCOUNT_ROOM_BOUNDARY_LOCK.lock().await;
-
-    let holder = get_service_holder();
-    let guard = holder.read().await;
-    let service = guard.as_ref().ok_or("service not initialized")?;
-    // Refresh account pairing context so a newly logged-in session is reflected
-    // in the QR (`auth=account&user=...`) before the room is created.
-    if read_account_context().await.is_ok() {
-        register_account_pairing_context(service).await;
-    } else {
-        service.clear_account_pairing_context().await;
+    .await;
+    if result.is_err() {
+        stop_and_clear_device_routing("Relay connection failed").await;
+        if let Some(service) = get_service_holder().read().await.as_ref() {
+            service.stop_relay().await;
+        }
     }
-    service
-        .start(method)
-        .await
-        .map_err(|e| format!("start remote connect: {e}"))
+    result
 }
 
 #[tauri::command]
 pub async fn remote_connect_stop() -> Result<(), String> {
+    let _start_stop = RELAY_START_STOP_LOCK.lock().await;
+    stop_and_clear_device_routing("Relay stopped").await;
     let holder = get_service_holder();
     let guard = holder.read().await;
     if let Some(service) = guard.as_ref() {
@@ -2032,30 +1891,19 @@ pub async fn remote_connect_status() -> Result<RemoteConnectStatusResponse, Stri
     let guard = holder.read().await;
     let service = guard.as_ref().ok_or("service not initialized")?;
 
-    let state = service.pairing_state().await;
-    let method = service.active_method().await;
-    let peer = service.peer_device_name().await;
-    let peer_user_id = service.trusted_mobile_user_id().await;
-    let bot_connected = service.bot_connected_info().await;
-    let bot_verbose_mode = bot::load_bot_persistence().verbose_mode;
-    let (account_control_relay_url, clients, unidentified) =
-        account_control_snapshot(std::time::Instant::now())
-            .await
-            .map(|(url, clients, unidentified)| (Some(url), clients, unidentified))
-            .unwrap_or_default();
-
+    let relay_connected = service.is_device_connected().await;
+    let relay_url = service.device_relay_url().await;
+    let clients = account_control_snapshot(std::time::Instant::now())
+        .await
+        .map(|(_, clients, _)| clients)
+        .unwrap_or_default();
     Ok(RemoteConnectStatusResponse {
-        is_connected: state == PairingState::Connected,
-        pairing_state: state,
-        active_method: method.map(|m| format!("{m:?}")),
-        peer_device_name: peer,
-        peer_user_id,
-        account_control_connected: account_control_relay_url.is_some(),
-        account_control_relay_url,
-        account_control_clients: Some(clients),
-        account_control_has_unidentified_clients: Some(unidentified),
-        bot_connected,
-        bot_verbose_mode,
+        relay_connected,
+        relay_url,
+        active_method: service.active_method().await,
+        clients,
+        bot_connected: service.bot_connected_info().await,
+        bot_verbose_mode: bot::load_bot_persistence().verbose_mode,
     })
 }
 
@@ -2226,6 +2074,10 @@ async fn persist_account_session(device_id: Option<&str>) -> Result<(), String> 
 
 #[tauri::command]
 pub async fn account_login(_request: AccountAuthRequest) -> Result<AccountLoginResult, String> {
+    login_account_on_relay(openbitfun_product_domains::account::DEFAULT_RELAY_URL.to_string()).await
+}
+
+async fn login_account_on_relay(relay_url: String) -> Result<AccountLoginResult, String> {
     // Keep the old account fully usable while credentials are verified. Only a
     // successful candidate is allowed to begin the protected replacement
     // transition and retire the old account's runtime state.
@@ -2234,7 +2086,6 @@ pub async fn account_login(_request: AccountAuthRequest) -> Result<AccountLoginR
     if !account_context_is_current(expected_generation) {
         return Err("account context changed".to_string());
     }
-    let relay_url = openbitfun_product_domains::account::DEFAULT_RELAY_URL.to_string();
     let device = current_device_identity()?;
     let client = AccountClient::new();
     let (session, profile) = client
@@ -2242,12 +2093,11 @@ pub async fn account_login(_request: AccountAuthRequest) -> Result<AccountLoginR
         .await
         .map_err(|e| format!("{e}"))?;
 
-    let _room_boundary_guard = ACCOUNT_ROOM_BOUNDARY_LOCK.lock().await;
+    let _room_boundary_guard = ACCOUNT_TRANSITION_BOUNDARY_LOCK.lock().await;
     if !account_context_is_current(expected_generation) {
         revoke_login_candidate(&client, &relay_url, &session, "account replacement race").await;
         return Err("account context changed".to_string());
     }
-    retire_unpaired_room_for_account_boundary("account login or replacement").await;
     let Some(mut transition_guard) = begin_account_transition_if_current(expected_generation).await
     else {
         revoke_login_candidate(&client, &relay_url, &session, "account replacement race").await;
@@ -2267,8 +2117,6 @@ pub async fn account_login(_request: AccountAuthRequest) -> Result<AccountLoginR
     // before publishing the replacement context.
     stop_and_clear_device_routing("Account changed").await;
     if let Some(service) = get_service_holder().read().await.as_ref() {
-        service.clear_account_pairing_context().await;
-        service.clear_trusted_mobile_identity().await;
         service.clear_bot_delegated_identities().await;
     }
     // Retire the prior credential before persisting the authenticated replacement.
@@ -2330,8 +2178,7 @@ pub async fn account_status() -> Result<AccountStatus, String> {
 /// deletion already revoked the current token along with the device row.
 async fn clear_account_login(revoke_relay_token: bool) {
     // Retire account-bound operations before clearing credentials.
-    let _room_boundary_guard = ACCOUNT_ROOM_BOUNDARY_LOCK.lock().await;
-    retire_unpaired_room_for_account_boundary("account logout").await;
+    let _room_boundary_guard = ACCOUNT_TRANSITION_BOUNDARY_LOCK.lock().await;
     let _operation_guard = begin_account_transition().await;
     clear_account_login_state(revoke_relay_token).await;
 }
@@ -2344,11 +2191,10 @@ async fn clear_account_login_if_current(
     if !account_context_matches(expected_generation, expected_token).await {
         return false;
     }
-    let _room_boundary_guard = ACCOUNT_ROOM_BOUNDARY_LOCK.lock().await;
+    let _room_boundary_guard = ACCOUNT_TRANSITION_BOUNDARY_LOCK.lock().await;
     if !account_context_matches(expected_generation, expected_token).await {
         return false;
     }
-    retire_unpaired_room_for_account_boundary("account session clear").await;
     let Some(_transition_guard) = begin_account_transition_if_current(expected_generation).await
     else {
         return false;
@@ -2372,8 +2218,6 @@ async fn clear_account_login_state(revoke_relay_token: bool) {
     // Disconnect device routing before clearing the session.
     stop_and_clear_device_routing("Account logged out").await;
     if let Some(service) = get_service_holder().read().await.as_ref() {
-        service.clear_account_pairing_context().await;
-        service.clear_trusted_mobile_identity().await;
         service.clear_bot_delegated_identities().await;
     }
     if revoke_relay_token {
@@ -2393,38 +2237,6 @@ async fn clear_account_login_state(revoke_relay_token: bool) {
         "account://login-state",
         serde_json::json!({ "logged_in": false }),
     );
-}
-
-fn pairing_room_requires_rotation(state: &PairingState) -> bool {
-    !matches!(
-        state,
-        PairingState::Idle | PairingState::Connected | PairingState::Disconnected
-    )
-}
-
-/// Retire only an invitation whose encoded account mode is now stale.
-///
-/// Callers hold `ACCOUNT_ROOM_BOUNDARY_LOCK` and invoke this before acquiring
-/// account sync/transition guards. That lock order lets an in-flight pairing
-/// finish or be retired and avoids a room-lifecycle -> account-sync cycle.
-/// A connected room retains its transport but loses account-derived authority
-/// through the normal context cleanup below this boundary.
-async fn retire_unpaired_room_for_account_boundary(reason: &str) {
-    let holder = get_service_holder();
-    let guard = holder.read().await;
-    let Some(service) = guard.as_ref() else {
-        return;
-    };
-    if service.active_method().await.is_none() {
-        return;
-    }
-    let pairing_state = service.pairing_state().await;
-    if pairing_room_requires_rotation(&pairing_state) {
-        log::info!("Retiring unpaired QR room at {reason}");
-        service.stop_relay().await;
-    } else if pairing_state == PairingState::Connected {
-        log::info!("Preserving connected QR room across {reason}");
-    }
 }
 
 #[tauri::command]
@@ -3088,100 +2900,6 @@ pub async fn account_device_rpc(
     Ok(response)
 }
 
-/// Delegate the account identity to a paired mobile-web/IM client.
-/// Called by the frontend after pairing succeeds.
-#[tauri::command]
-pub async fn account_delegate_to_paired(correlation_id: String) -> Result<String, String> {
-    let account_generation = account_context_generation();
-    let (session, relay_url) = read_account_context_for_generation(account_generation).await?;
-    let client = AccountClient::new();
-
-    // Capture the room owner before requesting a token. A later secret check
-    // rejects a pairing that changed while the relay request was in flight.
-    let holder = get_service_holder().read().await;
-    if !account_context_matches(account_generation, &session.token).await {
-        return Err("account context changed".to_string());
-    }
-    let service = holder
-        .as_ref()
-        .ok_or_else(|| "remote connect service not initialized".to_string())?;
-    let pairing_secret = service
-        .pairing_shared_secret()
-        .await
-        .ok_or_else(|| "no paired device".to_string())?;
-    if !account_context_matches(account_generation, &session.token).await {
-        return Err("account context changed".to_string());
-    }
-
-    // 1. Get a delegated token from the relay
-    let delegated = client
-        .delegate_token(&relay_url, &session)
-        .await
-        .map_err(|e| format!("{e}"))?;
-    if !account_context_matches(account_generation, &session.token).await {
-        return Err("account context changed".to_string());
-    }
-    if delegated.user_id != session.user_id {
-        return Err("delegated identity does not match the current account".to_string());
-    }
-
-    let current_pairing_secret = service.pairing_shared_secret().await;
-    if !account_context_matches(account_generation, &session.token).await {
-        return Err("account context changed".to_string());
-    }
-    if current_pairing_secret.as_ref() != Some(&pairing_secret) {
-        return Err("paired device changed".to_string());
-    }
-
-    // 2. Build the delegated identity JSON (master_key as base64)
-    use base64::{engine::general_purpose::STANDARD as B64, Engine};
-    let device_id = current_device_identity()?.device_id;
-    let identity_json = serde_json::json!({
-        "resp": "delegate_identity",
-        "token": delegated.token,
-        "user_id": delegated.user_id,
-        "master_key": B64.encode(delegated.device_secret),
-        "device_id": device_id,
-    });
-    let identity_str =
-        serde_json::to_string(&identity_json).map_err(|e| format!("serialize identity: {e}"))?;
-
-    // 3. Encrypt with the captured room secret and atomically verify that the
-    // service still owns that pairing before sending.
-    use openbitfun_core::service::remote_connect::encryption::encrypt_to_base64;
-    let (enc, nonce) = encrypt_to_base64(&pairing_secret, &identity_str)
-        .map_err(|e| format!("encrypt delegated identity: {e}"))?;
-    if !account_context_matches(account_generation, &session.token).await {
-        return Err("account context changed".to_string());
-    }
-    let expected_token = session.token.clone();
-    let sent = service
-        .send_room_response_if_pairing_secret_authorized(
-            &pairing_secret,
-            &correlation_id,
-            &enc,
-            &nonce,
-            || async move {
-                let account_lease = lock_account_operation(account_generation).await?;
-                if !account_context_matches(account_generation, &expected_token).await {
-                    return Err("account context changed".to_string());
-                }
-                Ok(account_lease)
-            },
-        )
-        .await
-        .map_err(|e| format!("send delegated identity: {e}"))?;
-    if !account_context_matches(account_generation, &session.token).await {
-        return Err("account context changed".to_string());
-    }
-    if !sent {
-        return Err("paired device changed".to_string());
-    }
-    log::info!("Delegated identity sent to paired device (corr={correlation_id})");
-
-    Ok(identity_str)
-}
-
 /// Result of an auto-sync operation, returned to the frontend.
 fn resolve_requested_local_workspace_path(workspace_path: Option<&str>) -> Result<String, String> {
     let requested = workspace_path
@@ -3478,67 +3196,26 @@ mod sync_state_tests {
     }
 
     #[test]
-    fn account_control_status_preserves_legacy_room_payloads() {
-        let legacy = serde_json::json!({
-            "is_connected": false,
-            "pairing_state": "waiting_for_scan",
-            "active_method": "OpenBitFunServer",
-            "peer_device_name": null,
-            "peer_user_id": null,
-            "bot_connected": null,
-            "bot_verbose_mode": false,
-        });
-        let mut status: RemoteConnectStatusResponse =
-            serde_json::from_value(legacy.clone()).unwrap();
-        assert!(!status.account_control_connected);
-        assert!(status.account_control_relay_url.is_none());
-        status.account_control_connected = true;
-        status.account_control_relay_url = Some("https://relay.example/base".into());
-        status.account_control_clients = Some(vec![
-            openbitfun_services_integrations::remote_connect::RemoteControlClient {
-                id: "phone".into(),
-                name: "Safari".into(),
-            },
-        ]);
-        status.account_control_has_unidentified_clients = Some(true);
-        let mut serialized = serde_json::to_value(&status).unwrap();
-        assert_eq!(serialized["pairing_state"], "waiting_for_scan");
-        assert_eq!(serialized["is_connected"], false);
-        assert_eq!(
-            serialized
-                .as_object_mut()
-                .unwrap()
-                .remove("account_control_connected"),
-            Some(serde_json::json!(true))
-        );
-        assert_eq!(
-            serialized
-                .as_object_mut()
-                .unwrap()
-                .remove("account_control_relay_url"),
-            Some(serde_json::json!("https://relay.example/base"))
-        );
-        let round_trip: RemoteConnectStatusResponse =
-            serde_json::from_value(serialized.clone()).unwrap();
-        assert_eq!(
-            round_trip.account_control_clients,
-            status.account_control_clients
-        );
-        assert_eq!(
-            serialized
-                .as_object_mut()
-                .unwrap()
-                .remove("account_control_clients"),
-            Some(serde_json::json!([{"id": "phone", "name": "Safari"}]))
-        );
-        assert_eq!(
-            serialized
-                .as_object_mut()
-                .unwrap()
-                .remove("account_control_has_unidentified_clients"),
-            Some(serde_json::json!(true))
-        );
-        assert_eq!(serialized, legacy);
+    fn relay_status_has_one_account_device_contract_for_both_endpoints() {
+        for (method, endpoint) in [
+            (
+                serde_json::json!("openbitfun_server"),
+                "https://remote.openbitfun.com/v/1.0.0",
+            ),
+            (
+                serde_json::json!({"lan":{"ip":"192.168.1.2"}}),
+                "http://192.168.1.2:9700",
+            ),
+        ] {
+            let payload = serde_json::json!({
+                "relay_connected": true, "relay_url": endpoint, "active_method": method,
+                "clients": [{"id":"phone","name":"Safari"}],
+                "bot_connected": null, "bot_verbose_mode": false,
+            });
+            let status: RemoteConnectStatusResponse =
+                serde_json::from_value(payload.clone()).unwrap();
+            assert_eq!(serde_json::to_value(status).unwrap(), payload);
+        }
     }
 
     #[test]
@@ -3547,21 +3224,6 @@ mod sync_state_tests {
             normalize_relay_url("https://relay.example.com///").unwrap(),
             "https://relay.example.com"
         );
-    }
-
-    #[test]
-    fn account_boundaries_rotate_invitations_but_preserve_connected_rooms() {
-        assert!(pairing_room_requires_rotation(
-            &PairingState::WaitingForScan
-        ));
-        assert!(pairing_room_requires_rotation(&PairingState::Handshaking));
-        assert!(pairing_room_requires_rotation(&PairingState::Verifying));
-        assert!(pairing_room_requires_rotation(&PairingState::Failed {
-            reason: "verification failed".to_string(),
-        }));
-        assert!(!pairing_room_requires_rotation(&PairingState::Connected));
-        assert!(!pairing_room_requires_rotation(&PairingState::Idle));
-        assert!(!pairing_room_requires_rotation(&PairingState::Disconnected));
     }
 
     #[test]

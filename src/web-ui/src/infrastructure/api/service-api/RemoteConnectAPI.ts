@@ -44,11 +44,9 @@ export function remotePairingFailureReason(
     : null;
 }
 
-/** Fresh results use Rust's externally tagged enum; restored status uses a Debug string. */
 export type RemoteConnectionMethod =
-  | string
-  | { lan: { ip: string | null } }
-  | { custom_server: { url: string } };
+  | 'openbitfun_server' | 'bot_feishu' | 'bot_telegram' | 'bot_weixin'
+  | { lan: { ip: string | null } };
 
 export interface ConnectionResult {
   method: RemoteConnectionMethod;
@@ -61,18 +59,10 @@ export interface ConnectionResult {
 }
 
 export interface RemoteConnectStatus {
-  is_connected: boolean;
-  pairing_state: RemotePairingState;
-  active_method: string | null;
-  peer_device_name: string | null;
-  peer_user_id: string | null;
-  /** Added by hosts that track authenticated account-route control heartbeats. */
-  account_control_connected?: boolean;
-  /** Relay of the live account route; independent of the temporary QR invitation. */
-  account_control_relay_url?: string | null;
-  /** Heartbeat leases for browser pages, not a count of physical devices. */
-  account_control_clients?: Array<{ id: string; name: string }>;
-  account_control_has_unidentified_clients?: boolean;
+  relay_connected: boolean;
+  relay_url: string | null;
+  active_method: RemoteConnectionMethod | null;
+  clients: Array<{ id: string; name: string }>;
   bot_connected: string | null;
   bot_verbose_mode: boolean;
 }
@@ -188,10 +178,10 @@ class RemoteConnectAPIService {
     }
   }
 
-  async startConnection(method: string, customServerUrl?: string, lanIp?: string): Promise<ConnectionResult> {
+  async startConnection(method: string, lanIp?: string): Promise<ConnectionResult> {
     try {
       return await this.adapter.request<ConnectionResult>('remote_connect_start', {
-        request: { method, custom_server_url: customServerUrl ?? null, lan_ip: lanIp ?? null },
+        request: { method, lan_ip: lanIp ?? null },
       });
     } catch (e) {
       log.error('startConnection failed', e);
@@ -444,16 +434,7 @@ class RemoteConnectAPIService {
     }
   }
 
-  async accountDelegateToPaired(correlationId: string): Promise<string> {
-    try {
-      return await this.adapter.request<string>('account_delegate_to_paired', {
-        correlationId,
-      });
-    } catch (e) {
-      log.warn('accountDelegateToPaired failed', e);
-      throw e;
-    }
-  }
+
 }
 
 export const remoteConnectAPI = new RemoteConnectAPIService();

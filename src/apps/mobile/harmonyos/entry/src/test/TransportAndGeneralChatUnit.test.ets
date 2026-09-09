@@ -1,4 +1,4 @@
-import { accountDeviceIdFromLink } from '../main/ets/services/AccountDeviceLink';
+import { accountDeviceLink } from '../main/ets/services/AccountDeviceLink';
 import { describe, it, expect } from '@ohos/hypium';
 import { RemoteI18n } from '../main/ets/i18n/RemoteI18n';
 import { ChatSessionController, ChatSessionSnapshot } from '../main/ets/services/ChatSessionController';
@@ -56,7 +56,6 @@ import { MarkdownParser } from '../main/ets/services/MarkdownParser';
 import { RemoteCommandFactory } from '../main/ets/services/RemoteCommandFactory';
 import { toRemoteQuestionAnswer } from '../main/ets/pages/state/ConversationUiModels';
 import { RemoteCrypto, RemoteCryptoCipher } from '../main/ets/services/RemoteCrypto';
-import { RemoteDescriptorParser } from '../main/ets/services/RemoteDescriptorParser';
 import { RemoteActivityLifecycleController } from '../main/ets/services/RemoteActivityLifecycleController';
 import { RemoteChatCommandClient, RemoteChatCommandController } from '../main/ets/services/RemoteChatCommandController';
 import { RemoteChatPollingLifecycleController } from '../main/ets/services/RemoteChatPollingLifecycleController';
@@ -71,11 +70,9 @@ import {
   RemoteModelController,
   RemoteModelPreferenceStore
 } from '../main/ets/services/RemoteModelController';
-import { RemotePairingPolicy } from '../main/ets/services/RemotePairingPolicy';
-import { PairIdentity, RelayHttpClient } from '../main/ets/services/RelayHttpClient';
 import { RemoteResponseMapper } from '../main/ets/services/RemoteResponseMapper';
 import { RemoteSessionClient, RemoteSessionController } from '../main/ets/services/RemoteSessionController';
-import { DelegatedAccountSession, RemoteSessionManager } from '../main/ets/services/RemoteSessionManager';
+import { RemoteSessionManager } from '../main/ets/services/RemoteSessionManager';
 import { RemoteWorkspaceCoordinator } from '../main/ets/services/RemoteWorkspaceCoordinator';
 import { RemoteWorkspaceDataSource } from '../main/ets/services/RemoteWorkspaceRepository';
 import { RemoteToolActionClient, RemoteToolActionController } from '../main/ets/services/RemoteToolActionController';
@@ -133,7 +130,6 @@ import {
   RemoteQuestionAnswerPayload,
   InitialSyncResult,
   InitialSyncResponse,
-  RemoteDescriptor,
   RemoteModelCatalog,
   ReadFileResult,
   RemoteCommand,
@@ -299,12 +295,7 @@ class InMemorySettingsConfigStore extends GeneralChatConfigStore {
 class ScriptedAccountSessionManager extends RemoteSessionManager {
   readonly unreachable: Set<string> = new Set<string>();
   readonly dialled: string[] = [];
-  delegated?: DelegatedAccountSession;
   resets: number = 0;
-
-  delegatedAccountSession(): DelegatedAccountSession | undefined {
-    return this.delegated;
-  }
 
   async connectAccountDevice(
     _accountClient: CloudAccountClient,
@@ -333,93 +324,6 @@ class ScriptedAccountSessionManager extends RemoteSessionManager {
   reset(): void {
     this.resets += 1;
     super.reset();
-  }
-}
-
-class RecordingRoomClient extends RelayHttpClient {
-  readonly events: string[] = [];
-  private descriptorReady: boolean = false;
-
-  bind(descriptor: RemoteDescriptor, _crypto: RemoteCrypto): void {
-    this.descriptorReady = true;
-    this.events.push(`bind:${descriptor.roomId}`);
-  }
-
-  reset(): void {
-    this.descriptorReady = false;
-    this.events.push('reset');
-  }
-
-  async pair(_deviceId: string, _identity: PairIdentity): Promise<InitialSyncResponse> {
-    if (!this.descriptorReady) {
-      throw new Error('Remote descriptor is not configured.');
-    }
-    this.events.push('pair');
-    return {
-      resp: 'initial_sync',
-      has_workspace: true,
-      path: '/workspace',
-      project_name: 'workspace',
-      sessions: [{
-        session_id: 'session-after-retry',
-        name: 'Recovered session',
-        agent_type: 'agentic'
-      }]
-    };
-  }
-
-  async requestDelegatedIdentity(_force: boolean = false): Promise<boolean> {
-    return false;
-  }
-}
-
-/** Holds one room handshake so a newer scan can win the transport generation. */
-class GatedRoomClient extends RelayHttpClient {
-  private readonly sessionId: string;
-  private readonly gated: boolean;
-  private releasePairing: () => void = () => {};
-  private markPairingStarted: () => void = () => {};
-  private readonly pairingGate: Promise<void>;
-  readonly pairingStarted: Promise<void>;
-
-  constructor(sessionId: string, gated: boolean) {
-    super();
-    this.sessionId = sessionId;
-    this.gated = gated;
-    this.pairingGate = new Promise<void>((resolve: () => void) => {
-      this.releasePairing = resolve;
-    });
-    this.pairingStarted = new Promise<void>((resolve: () => void) => {
-      this.markPairingStarted = resolve;
-    });
-  }
-
-  bind(_descriptor: RemoteDescriptor, _crypto: RemoteCrypto): void {
-  }
-
-  reset(): void {
-  }
-
-  async pair(_deviceId: string, _identity: PairIdentity): Promise<InitialSyncResponse> {
-    this.markPairingStarted();
-    if (this.gated) {
-      await this.pairingGate;
-    }
-    return {
-      resp: 'initial_sync',
-      has_workspace: true,
-      path: `/${this.sessionId}`,
-      project_name: this.sessionId,
-      sessions: [{ session_id: this.sessionId, name: this.sessionId, agent_type: 'agentic' }]
-    };
-  }
-
-  async requestDelegatedIdentity(_force: boolean = false): Promise<boolean> {
-    return false;
-  }
-
-  release(): void {
-    this.releasePairing();
   }
 }
 
@@ -645,235 +549,34 @@ class AccountDeviceSwitchHarness {
 
 export default function transportAndGeneralChatUnitTest() {
   describe('Account device links', () => {
-    it('accepts only the official device selector without trusting embedded credentials', 0, () => {
+    it('uses the same device selector for official and LAN endpoints', 0, () => {
+      for (const endpoint of ['https://remote.openbitfun.com/v/1.0.0', 'http://192.168.1.10:9700']) {
+        const parsed = accountDeviceLink(`${endpoint}/#/pair?did=desktop-1`);
+        expect(parsed?.deviceId).assertEqual('desktop-1');
+        expect(parsed?.relayUrl).assertEqual(endpoint);
+      }
+    });
+    it('rejects credentials, legacy rooms, duplicate targets and public lookalikes', 0, () => {
       const prefix = 'https://remote.openbitfun.com/v/1.0.0/#/pair?';
-      expect(accountDeviceIdFromLink(prefix + 'did=desktop-1&pk=untrusted&relay=evil')).assertEqual('desktop-1');
-      expect(accountDeviceIdFromLink(prefix + 'did=desktop-1&did=desktop-2')).assertEqual('');
-      expect(accountDeviceIdFromLink(prefix + 'did=%00')).assertEqual('');
-      expect(accountDeviceIdFromLink(prefix + 'did=%ZZ')).assertEqual('');
-      expect(accountDeviceIdFromLink('https://evil.test/v/1.0.0/#/pair?did=desktop-1')).assertEqual('');
-      expect(accountDeviceIdFromLink('https://remote.openbitfun.com@evil.test/v/1.0.0/#/pair?did=desktop-1')).assertEqual('');
-      expect(accountDeviceIdFromLink(prefix + 'room=old&pk=old')).assertEqual('');
+      for (const suffix of ['did=desktop-1&pk=untrusted', 'did=desktop-1&relay=evil',
+        'did=desktop-1&did=desktop-2', 'did=%00', 'did=%ZZ', 'room=old&pk=old']) {
+        expect(accountDeviceLink(prefix + suffix)).assertUndefined();
+      }
+      expect(accountDeviceLink('https://evil.test/v/1.0.0/#/pair?did=desktop-1')).assertUndefined();
+      expect(accountDeviceLink('https://remote.openbitfun.com@evil.test/v/1.0.0/#/pair?did=desktop-1')).assertUndefined();
     });
   });
 
-  describe('RemoteDescriptorParser', () => {
-    it('parses hash route URLs', 0, () => {
-      const descriptor = RemoteDescriptorParser.parse('https://relay.example.com/r/mobile#/pair?room=room-a&pk=public-key');
-      expect(descriptor.roomId).assertEqual('room-a');
-      expect(descriptor.publicKey).assertEqual('public-key');
-      expect(descriptor.relayUrl).assertEqual('https://relay.example.com');
-    });
-
-    it('normalizes relay websocket URLs', 0, () => {
-      const descriptor = RemoteDescriptorParser.parse('https://app.example.com/#/pair?room=room-b&pk=key-b&relay=wss%3A%2F%2Frelay.example.com%2Fws');
-      expect(descriptor.relayUrl).assertEqual('https://relay.example.com');
-    });
-
-    it('parses account pairing metadata', 0, () => {
-      const descriptor = RemoteDescriptorParser.parse('https://relay.example.com/#/pair?room=room-account&pk=key-account&auth=account&user=alice');
-      expect(descriptor.accountAuth).assertTrue();
-      expect(descriptor.accountUsername).assertEqual('alice');
-    });
-
-    it('parses raw query strings', 0, () => {
-      const descriptor = RemoteDescriptorParser.parse('room=room-c&pk=key%2Bc%3D&relay=http%3A%2F%2F127.0.0.1%3A30333');
-      expect(descriptor.roomId).assertEqual('room-c');
-      expect(descriptor.publicKey).assertEqual('key+c=');
-      expect(descriptor.relayUrl).assertEqual('http://127.0.0.1:30333');
-    });
-
-    it('rejects URLs missing room', 0, () => {
-      let didThrow = false;
-      try {
-        RemoteDescriptorParser.parse('https://relay.example.com/#/pair?pk=key-only');
-      } catch (_err) {
-        didThrow = true;
+  describe('RemoteSessionManager account connection', () => {
+    it('loads account device sessions through either relay endpoint', 0, async () => {
+      const manager = new RemoteSessionManager();
+      for (const endpoint of ['https://remote.openbitfun.com/v/1.0.0', 'http://192.168.1.10:9700']) {
+        const result = await manager.connectAccountDevice(new RecordingAccountDeviceClient(), endpoint,
+          { token: 'token', userId: 'account-user', masterKey: new Uint8Array(32) }, 'desktop-device');
+        expect(result.workspace.path).assertEqual('/account-workspace');
+        expect(result.sessions[0].id).assertEqual('account-device-session');
+        expect(result.authenticatedUserId).assertEqual('account-user');
       }
-      expect(didThrow).assertEqual(true);
-    });
-
-    it('rejects URLs missing pk', 0, () => {
-      let didThrow = false;
-      try {
-        RemoteDescriptorParser.parse('https://relay.example.com/#/pair?room=room-only');
-      } catch (_err) {
-        didThrow = true;
-      }
-      expect(didThrow).assertEqual(true);
-    });
-
-    it('accepts legacy links as v1 and rejects unsupported QR protocol versions', 0, () => {
-      const legacy = RemoteDescriptorParser.parse(
-        'https://relay.example.com/#/pair?room=legacy-room&pk=legacy-key'
-      );
-      expect(legacy.roomId).assertEqual('legacy-room');
-      let didThrow = false;
-      try {
-        RemoteDescriptorParser.parse(
-          'https://relay.example.com/#/pair?room=future-room&pk=future-key&v=2'
-        );
-      } catch (_err) {
-        didThrow = true;
-      }
-      expect(didThrow).assertTrue();
-    });
-  });
-
-  describe('RemoteSessionManager room reconnect', () => {
-    it('keeps the newly scanned descriptor and its initial sessions after a prior room transport', 0, async () => {
-      const roomClient = new RecordingRoomClient();
-      const manager = new RemoteSessionManager(() => roomClient, () => new RemoteCrypto({
-        cipher: new FakeRemoteCryptoCipher(),
-        keyPair: {
-          privateKey: new Uint8Array(32),
-          publicKey: new Uint8Array(32)
-        },
-        randomBytes: fixedRandomBytes
-      }));
-      const identity: PairIdentity = { userId: 'harmony-device' };
-      const first: RemoteDescriptor = {
-        relayUrl: 'https://relay.example.com',
-        roomId: 'expired-room',
-        publicKey: 'expired-key',
-        accountAuth: false,
-        accountUsername: ''
-      };
-      const replacement: RemoteDescriptor = {
-        relayUrl: 'https://relay.example.com',
-        roomId: 'fresh-room',
-        publicKey: 'fresh-key',
-        accountAuth: false,
-        accountUsername: ''
-      };
-
-      await manager.connect(first, identity, 'harmony-device');
-      const result = await manager.connect(replacement, identity, 'harmony-device');
-
-      expect(roomClient.events.join(','))
-        .assertEqual('bind:expired-room,pair,reset,bind:fresh-room,pair');
-      expect(result.sessions.length).assertEqual(1);
-      expect(result.sessions[0].id).assertEqual('session-after-retry');
-    });
-
-    it('replaces room state and loads sessions when switching to an account device', 0, async () => {
-      const roomClient = new RecordingRoomClient();
-      const manager = new RemoteSessionManager(() => roomClient, () => new RemoteCrypto({
-        cipher: new FakeRemoteCryptoCipher(),
-        keyPair: {
-          privateKey: new Uint8Array(32),
-          publicKey: new Uint8Array(32)
-        },
-        randomBytes: fixedRandomBytes
-      }));
-      await manager.connect({
-        relayUrl: 'https://relay.example.com',
-        roomId: 'room-before-account',
-        publicKey: 'room-key',
-        accountAuth: false,
-        accountUsername: ''
-      }, { userId: 'harmony-device' }, 'harmony-device');
-
-      const result = await manager.connectAccountDevice(
-        new RecordingAccountDeviceClient(),
-        'https://relay.example.com',
-        { token: 'token', userId: 'account-user', masterKey: new Uint8Array(32) },
-        'desktop-device'
-      );
-
-      expect(manager.hasRoomChannel()).assertFalse();
-      expect(result.workspace.path).assertEqual('/account-workspace');
-      expect(result.sessions.length).assertEqual(1);
-      expect(result.sessions[0].id).assertEqual('account-device-session');
-    });
-
-    it('does not let a slower old QR handshake replace a newer room', 0, async () => {
-      const slow = new GatedRoomClient('old-session', true);
-      const fast = new GatedRoomClient('new-session', false);
-      const clients: GatedRoomClient[] = [slow, fast];
-      let clientIndex = 0;
-      const manager = new RemoteSessionManager(
-        (): RelayHttpClient => clients[clientIndex++],
-        () => new RemoteCrypto({
-          cipher: new FakeRemoteCryptoCipher(),
-          keyPair: { privateKey: new Uint8Array(32), publicKey: new Uint8Array(32) },
-          randomBytes: fixedRandomBytes
-        })
-      );
-      const identity: PairIdentity = { userId: 'harmony-device' };
-      const oldConnect = manager.connect({
-        relayUrl: 'https://relay.example.com', roomId: 'old-room', publicKey: 'old-key',
-        accountAuth: false, accountUsername: ''
-      }, identity, 'harmony-device');
-      await slow.pairingStarted;
-      const newResult = await manager.connect({
-        relayUrl: 'https://relay.example.com', roomId: 'new-room', publicKey: 'new-key',
-        accountAuth: false, accountUsername: ''
-      }, identity, 'harmony-device');
-      slow.release();
-      let oldRejected = false;
-      try {
-        await oldConnect;
-      } catch (_err) {
-        oldRejected = true;
-      }
-
-      expect(oldRejected).assertTrue();
-      expect(newResult.sessions[0].id).assertEqual('new-session');
-    });
-  });
-
-  describe('RemotePairingPolicy', () => {
-    it('prefills account username from QR only over the default install id', 0, () => {
-      const policy = new RemotePairingPolicy();
-      const projection = policy.projection('https://relay.example.com/#/pair?room=room-a&pk=key-a&auth=account&user=alice');
-
-      expect(projection.requiresAccountAuth).assertTrue();
-      expect(projection.accountUsername).assertEqual('alice');
-      expect(policy.userIdAfterProjection('harmony-device', 'harmony-device', projection)).assertEqual('alice');
-      expect(policy.userIdAfterProjection('manual-user', 'harmony-device', projection)).assertEqual('manual-user');
-    });
-
-    it('blocks passwordless account reconnects and builds encrypted pairing identity', 0, () => {
-      const policy = new RemotePairingPolicy();
-      const descriptor = RemoteDescriptorParser.parse('https://relay.example.com/#/pair?room=room-a&pk=key-a&auth=account&user=alice');
-
-      expect(policy.shouldAutoReconnect({
-        autoReconnectAttempted: false,
-        remoteUrl: 'https://relay.example.com/#/pair?room=room-a&pk=key-a&auth=account&user=alice',
-        userId: 'alice',
-        requiresAccountAuth: true
-      })).assertFalse();
-
-      const identity = policy.identityForConnect(descriptor, '', 'harmony-device', 'secret-password', false);
-      expect(identity.userId).assertEqual('alice');
-      expect(identity.password).assertEqual('secret-password');
-    });
-
-    it('keeps ordinary pairing passwordless and auto reconnectable', 0, () => {
-      const policy = new RemotePairingPolicy();
-      const descriptor = RemoteDescriptorParser.parse('https://relay.example.com/#/pair?room=room-a&pk=key-a');
-      const identity = policy.identityForConnect(descriptor, '', 'harmony-device', '', true);
-
-      expect(identity.userId).assertEqual('harmony-device');
-      expect(identity.password || '').assertEqual('');
-      expect(policy.shouldAutoReconnect({
-        autoReconnectAttempted: false,
-        remoteUrl: 'https://relay.example.com/#/pair?room=room-a&pk=key-a',
-        userId: 'harmony-device',
-        requiresAccountAuth: false
-      })).assertTrue();
-    });
-
-    it('does not prompt for an account password when this phone already has that cloud session', 0, () => {
-      const policy = new RemotePairingPolicy();
-      const descriptor = RemoteDescriptorParser.parse(
-        'https://relay.example.com/#/pair?room=room-a&pk=key-a&auth=account&user=alice'
-      );
-
-      expect(policy.shouldPromptForAccount(descriptor)).assertTrue();
-      expect(policy.shouldPromptForAccount(descriptor, true, 'alice', descriptor.relayUrl)).assertFalse();
-      expect(policy.shouldPromptForAccount(descriptor, true, 'bob', descriptor.relayUrl)).assertFalse();
     });
   });
 
@@ -1397,60 +1100,6 @@ export default function transportAndGeneralChatUnitTest() {
   });
 
   describe('SettingsController', () => {
-    it('migrates a legacy account QR on the same relay to a stable device target', 0, async () => {
-      const harness = new AccountDeviceSwitchHarness();
-
-      const target = await harness.controller.migrateLegacyPairingTarget(
-        'https://relay.example.com/#/pair?room=old-room&pk=old-key&auth=account&user=someone',
-        'desk-a',
-        'Desktop A'
-      );
-
-      expect(target?.deviceId).assertEqual('desk-a');
-      expect(harness.remoteState.controlTargetType).assertEqual('account_device');
-      expect(harness.sessionStore.saved[0].targetDeviceId).assertEqual('desk-a');
-    });
-
-    it('migrates an ordinary QR only when the same desktop is visible in the account', 0, async () => {
-      const harness = new AccountDeviceSwitchHarness(new OfflineAccountClient());
-      await harness.controller.listCloudAccountDevices();
-
-      const target = await harness.controller.migrateLegacyPairingTarget(
-        'https://relay.example.com/#/pair?room=old-room&pk=old-key',
-        'desk-a',
-        'QR name'
-      );
-
-      expect(target?.deviceId).assertEqual('desk-a');
-      expect(target?.deviceName).assertEqual('Desktop A');
-      expect(harness.sessionStore.saved[0].targetDeviceId).assertEqual('desk-a');
-    });
-
-    it('does not migrate an ordinary QR to an unknown account device', 0, async () => {
-      const harness = new AccountDeviceSwitchHarness();
-
-      const target = await harness.controller.migrateLegacyPairingTarget(
-        'https://relay.example.com/#/pair?room=old-room&pk=old-key',
-        'desk-unknown',
-        'Unknown desktop'
-      );
-
-      expect(target === undefined).assertTrue();
-      expect(harness.sessionStore.saved.length).assertEqual(0);
-    });
-
-    it('does not migrate a legacy QR from another relay', 0, async () => {
-      const harness = new AccountDeviceSwitchHarness();
-
-      const target = await harness.controller.migrateLegacyPairingTarget(
-        'https://other-relay.example.com/#/pair?room=old-room&pk=old-key&auth=account&user=someone',
-        'desk-a',
-        'Desktop A'
-      );
-
-      expect(target === undefined).assertTrue();
-      expect(harness.sessionStore.saved.length).assertEqual(0);
-    });
 
     it('keeps an offline account target resumable for the heartbeat', 0, async () => {
       const harness = new AccountDeviceSwitchHarness(new OfflineAccountClient());
@@ -1597,63 +1246,6 @@ export default function transportAndGeneralChatUnitTest() {
       expect(harness.sessionManager.resets).assertEqual(1);
       expect(harness.sessionStore.clears).assertEqual(0);
       expect(harness.cachedRemoteClears).assertEqual(0);
-    });
-
-    it('promotes a delegated QR pairing to the cold-start account target', 0, async () => {
-      const manager = new ScriptedAccountSessionManager();
-      manager.delegated = {
-        relayUrl: 'https://relay.example.com',
-        session: { token: 'delegated', userId: 'u', masterKey: new Uint8Array(32) }
-      };
-      const harness = new AccountDeviceSwitchHarness(new CloudAccountClient(), manager, false);
-
-      await harness.controller.persistDelegatedAccountSession('desk-a', 'Desktop A');
-
-      expect(harness.controller.hasCloudAccountSession()).assertTrue();
-      expect(harness.sessionStore.saved.length).assertEqual(1);
-      expect(harness.sessionStore.saved[0].token).assertEqual('delegated');
-      expect(harness.sessionStore.saved[0].targetDeviceId).assertEqual('desk-a');
-      expect(harness.sessionStore.saved[0].targetDeviceName).assertEqual('Desktop A');
-    });
-
-    it('keeps the phone login while attaching a same-account QR desktop target', 0, async () => {
-      const manager = new ScriptedAccountSessionManager();
-      manager.delegated = {
-        relayUrl: 'https://relay.example.com',
-        session: { token: 'delegated', userId: 'u', masterKey: new Uint8Array(32) }
-      };
-      const harness = new AccountDeviceSwitchHarness(new CloudAccountClient(), manager);
-
-      await harness.controller.persistDelegatedAccountSession('desk-a', 'Desktop A');
-
-      expect(harness.sessionStore.saved.length).assertEqual(1);
-      expect(harness.sessionStore.saved[0].token).assertEqual('t');
-      expect(harness.sessionStore.saved[0].username).assertEqual('someone');
-      expect(harness.sessionStore.saved[0].targetDeviceId).assertEqual('desk-a');
-    });
-
-    it('does not erase a remembered account target after choosing an ordinary room', 0, async () => {
-      const harness = new AccountDeviceSwitchHarness();
-      await harness.controller.selectCloudAccountDevice(harness.device('desk-a'), false);
-      const savesBeforeRoom = harness.sessionStore.saved.length;
-
-      await harness.controller.persistDelegatedAccountSession('desk-b', 'Desktop B');
-
-      expect(harness.controller.preferredCloudTarget()?.deviceId).assertEqual('desk-a');
-      expect(harness.sessionStore.saved.length).assertEqual(savesBeforeRoom);
-    });
-
-    it('does not replace a signed-in account with a different delegated QR identity', 0, async () => {
-      const manager = new ScriptedAccountSessionManager();
-      manager.delegated = {
-        relayUrl: 'https://relay.example.com',
-        session: { token: 'delegated', userId: 'other-user', masterKey: new Uint8Array(32) }
-      };
-      const harness = new AccountDeviceSwitchHarness(new CloudAccountClient(), manager);
-
-      await harness.controller.persistDelegatedAccountSession('desk-a', 'Desktop A');
-
-      expect(harness.sessionStore.saved.length).assertEqual(0);
     });
 
     it('migrates the same desktop from a QR room to the account transport', 0, async () => {

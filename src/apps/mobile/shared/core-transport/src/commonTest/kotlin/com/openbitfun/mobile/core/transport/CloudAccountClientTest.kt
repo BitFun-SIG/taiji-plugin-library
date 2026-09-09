@@ -31,8 +31,8 @@ class CloudAccountClientTest {
         for (url in listOf("https://github.com/login/oauth/authorize?state=test", "https://github.com.evil.example/login/oauth/authorize", "https://github.com/login", "https://user@github.com/login/oauth/authorize", "http://github.com/login/oauth/authorize")) {
             val engine = MockEngine { json("""{"transactionId":"txn","transactionSecret":"secret","authorizationUrl":"$url","expiresAt":9999999999,"pollIntervalSeconds":3}""") }
             val client = CloudAccountClient(relayHttpClient(engine))
-            if (url == "https://github.com/login/oauth/authorize?state=test") assertEquals(url, client.startAuthorization().authorizationUrl)
-            else assertFailsWith<IllegalArgumentException> { client.startAuthorization() }
+            if (url == "https://github.com/login/oauth/authorize?state=test") assertEquals(url, client.startAuthorization(DEFAULT_CLOUD_RELAY_URL).authorizationUrl)
+            else assertFailsWith<IllegalArgumentException> { client.startAuthorization(DEFAULT_CLOUD_RELAY_URL) }
         }
     }
 
@@ -45,8 +45,8 @@ class CloudAccountClientTest {
             json("""{"token":"token-1","user_id":"123"}""")
         }
         val client = CloudAccountClient(relayHttpClient(engine))
-        val first = client.login("verified-identity", "device-1", "Android")
-        val second = client.login("verified-identity", "device-2", "iOS")
+        val first = client.login(DEFAULT_CLOUD_RELAY_URL, "verified-identity", "device-1", "Android", ByteArray(32) { 7 })
+        val second = client.login(DEFAULT_CLOUD_RELAY_URL, "verified-identity", "device-2", "iOS", ByteArray(32) { 11 })
         assertEquals("verified-identity", bodies[0]["access_token"]?.jsonPrimitive?.content)
         assertEquals(Base64.Default.encode(DeviceIdentity.publicKey(first.masterKey)), bodies[0]["public_key"]?.jsonPrimitive?.content)
         assertFalse(first.masterKey.contentEquals(second.masterKey))
@@ -84,7 +84,7 @@ class CloudAccountClientTest {
         )
 
         val devices = client.listDevices(
-            "https://relay.test/relay",
+            "http://192.168.1.2:9700",
             CloudAccountSession("token-1", "user-1", ByteArray(32)),
             "phone-1",
         )
@@ -122,7 +122,7 @@ class CloudAccountClientTest {
             )
         }
         val client = CloudAccountClient(relayHttpClient(engine))
-        val transport = AccountDeviceCommandTransport(client, "https://relay.test/relay", session, "desktop 1")
+        val transport = AccountDeviceCommandTransport(client, "http://192.168.1.2:9700", session, "desktop 1")
 
         val response = transport.send<CommandStatusResponse>(RemoteCommand(cmd = "ping"))
 
@@ -159,7 +159,7 @@ class CloudAccountClientTest {
         }
         val transport = AccountDeviceCommandTransport(
             CloudAccountClient(relayHttpClient(engine)),
-            "https://relay.test/relay",
+            "http://192.168.1.2:9700",
             session,
             "desktop-1",
         )
@@ -182,7 +182,7 @@ class CloudAccountClientTest {
         val engine = MockEngine { respond("upstream is down", HttpStatusCode.ServiceUnavailable) }
         val transport = AccountDeviceCommandTransport(
             CloudAccountClient(relayHttpClient(engine)),
-            "https://relay.test/relay",
+            "http://192.168.1.2:9700",
             session,
             "desktop-1",
         )

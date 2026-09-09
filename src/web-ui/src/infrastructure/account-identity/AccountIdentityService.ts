@@ -134,6 +134,7 @@ export class AccountIdentityService {
   private refreshPromise: Promise<MarketMe | null> | null = null;
   private authPromise: Promise<MarketMe> | null = null;
   private authGeneration = 0;
+  private identityGeneration = 0;
   private stopSync: (() => void) | null = null;
   private stopNativeAccountEvents: (() => void) | null = null;
   private observingHost = false;
@@ -160,9 +161,11 @@ export class AccountIdentityService {
       void this.refresh(false).catch(() => undefined);
     }) ?? null;
     this.attachHostObservation();
+    const generation = this.identityGeneration;
     this.initializePromise = this.refresh()
       .then(() => undefined)
       .catch(error => {
+        if (generation !== this.identityGeneration) return;
         this.setSnapshot({
           resolved: true,
           status: 'signed-out',
@@ -176,8 +179,10 @@ export class AccountIdentityService {
   refresh(broadcastChange = true): Promise<MarketMe | null> {
     if (this.refreshPromise) return this.refreshPromise;
     const previous = this.snapshot;
-    this.refreshPromise = this.dependencies.api.me()
+    const generation = this.identityGeneration;
+    const operation = this.dependencies.api.me()
       .then(me => {
+        if (generation !== this.identityGeneration) return this.snapshot.me;
         this.setSnapshot({
           resolved: true,
           status: me ? 'signed-in' : this.snapshot.status === 'authorizing'
@@ -193,15 +198,17 @@ export class AccountIdentityService {
         return me;
       })
       .finally(() => {
-        this.refreshPromise = null;
+        if (this.refreshPromise === operation) this.refreshPromise = null;
       });
-    return this.refreshPromise;
+    this.refreshPromise = operation;
+    return operation;
   }
 
   signIn(): Promise<MarketMe> {
     if (this.snapshot.me) return Promise.resolve(this.snapshot.me);
     if (this.authPromise) return this.authPromise;
 
+    this.invalidateRefresh();
     const generation = ++this.authGeneration;
     this.setSnapshot({
       ...this.snapshot,
@@ -232,6 +239,7 @@ export class AccountIdentityService {
   cancelSignIn(): void {
     if (this.snapshot.status !== 'authorizing') return;
     this.authGeneration += 1;
+    this.invalidateRefresh();
     this.setSnapshot({
       resolved: true,
       status: this.snapshot.me ? 'signed-in' : 'signed-out',
@@ -241,13 +249,16 @@ export class AccountIdentityService {
 
   async logout(): Promise<void> {
     this.cancelSignIn();
+    this.invalidateRefresh();
     await this.dependencies.api.logout();
+    this.invalidateRefresh();
     this.setSnapshot({ resolved: true, status: 'signed-out', me: null });
     await this.publishIdentityChanged();
   }
 
   dispose(): void {
     this.authGeneration += 1;
+    this.invalidateRefresh();
     this.stopSync?.();
     this.stopSync = null;
     this.stopNativeAccountEvents?.();
@@ -275,11 +286,17 @@ export class AccountIdentityService {
       if (!me) {
         throw new AccountIdentityError('failed', 'OpenBitFun authorized GitHub but returned no account.');
       }
+      this.invalidateRefresh();
       this.setSnapshot({ resolved: true, status: 'signed-in', me });
       await this.publishIdentityChanged();
       return me;
     }
     throw new AccountIdentityError('expired', 'The GitHub authorization expired.');
+  }
+
+  private invalidateRefresh(): void {
+    this.identityGeneration += 1;
+    this.refreshPromise = null;
   }
 
   private ensureCurrentAuth(generation: number): void {

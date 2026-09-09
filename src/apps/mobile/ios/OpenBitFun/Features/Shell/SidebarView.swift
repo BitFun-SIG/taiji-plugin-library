@@ -59,20 +59,9 @@ struct SidebarView: View {
             !model.remoteStatusFilter.isEmpty
     }
 
-    private var directoryEntries: [MobileDeviceDirectoryEntry] {
-        var entries = model.deviceDirectory
-        if let direct = model.directPairingDirectoryEntry,
-           !entries.contains(where: { $0.id == direct.id }) {
-            entries.insert(direct, at: 0)
-        }
-        return entries
-    }
+    private var directoryEntries: [MobileDeviceDirectoryEntry] { model.deviceDirectory }
 
     private var selectedDirectoryEntry: MobileDeviceDirectoryEntry? {
-        if model.directPairingConnected,
-           let direct = directoryEntries.first(where: { $0.id == model.directPairingSidebarDeviceID }) {
-            return direct
-        }
         if let selectedID = model.accountSelectedDeviceID,
            let selected = directoryEntries.first(where: { $0.id == selectedID }) {
             return selected
@@ -267,7 +256,6 @@ struct SidebarView: View {
             }
     }
 
-
     private func openDetails(afterClosing session: ChatSession) {
         compactActionSession = nil
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.24) {
@@ -380,8 +368,7 @@ struct SidebarView: View {
 
     private func selectDirectoryDevice(_ device: MobileDeviceDirectoryEntry) {
         guard device.online, selectedDirectoryEntry?.id != device.id else { return }
-        guard device.id != model.directPairingSidebarDeviceID,
-              let accountDevice = model.accountDevices.first(where: { $0.id == device.id }) else { return }
+        guard let accountDevice = model.accountDevices.first(where: { $0.id == device.id }) else { return }
         model.selectRemoteDevice(accountDevice)
     }
 

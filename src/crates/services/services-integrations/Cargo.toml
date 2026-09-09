@@ -267,6 +267,7 @@ hook-import = [
     "uuid",
 ]
 remote-connect = [
+    "fs2",
     "dep:openbitfun-product-domains",
     "thiserror",
     "dep:hkdf",
@@ -375,6 +376,7 @@ remote-ssh-concrete = [
     "windows",
 ]
 remote-persistence = [
+    "fs2",
     "aes-gcm",
     "anyhow",
     "base64",

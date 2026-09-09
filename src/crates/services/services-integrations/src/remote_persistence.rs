@@ -423,6 +423,8 @@ pub struct BotChatStateRecord {
 
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SavedBotConnectionRecord {
+    #[serde(default)]
+    pub account_user_id: String,
     pub bot_type: String,
     pub chat_id: String,
     pub config: BotConfigRecord,
@@ -887,6 +889,65 @@ pub fn write_weixin_sync_buffer(path: &Path, value: &str) -> Result<()> {
     write_atomic(path, value.as_bytes(), true)
 }
 
+/// Stable per-account, per-relay device key. Candidate logins must not rotate a
+/// public key still used by the active session. A process lock serializes first
+/// creation across Desktop and CLI, and malformed keys remain untouched.
+pub fn load_or_create_device_secret(
+    directory: &Path,
+    relay_url: &str,
+    user_id: &str,
+    device_id: &str,
+) -> Result<[u8; 32]> {
+    let mut scope = Sha256::new();
+    for part in [relay_url.trim_end_matches('/'), user_id, device_id] {
+        scope.update((part.len() as u64).to_le_bytes());
+        scope.update(part.as_bytes());
+    }
+    let name = format!("{:x}", scope.finalize());
+    let keys = directory.join("device-keys");
+    std::fs::create_dir_all(&keys).context("create device key directory")?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&keys, std::fs::Permissions::from_mode(0o700))?;
+    }
+    let mut options = OpenOptions::new();
+    options.read(true).write(true).create(true).truncate(false);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let lock = options.open(keys.join(format!("{name}.lock")))?;
+    fs2::FileExt::lock_exclusive(&lock).context("lock device key")?;
+    let path = keys.join(format!("{name}.key"));
+    match std::fs::read(&path) {
+        Ok(bytes) => bytes
+            .try_into()
+            .map_err(|_| anyhow!("stored device key has an invalid length")),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            // Preserve the key of an already authenticated install on first migration.
+            let previous = read_current_account_session(directory, &MachineBinding::current())?;
+            let secret = previous
+                .filter(|session| {
+                    session.user_id == user_id
+                        && session.relay_url.trim_end_matches('/')
+                            == relay_url.trim_end_matches('/')
+                        && session.device_id.as_deref() == Some(device_id)
+                })
+                .map(|session| session.master_key)
+                .unwrap_or_else(|| {
+                    let mut secret = [0; 32];
+                    OsRng.fill_bytes(&mut secret);
+                    secret
+                });
+            write_private_bytes(&path, &secret)?;
+            Ok(secret)
+        }
+        Err(error) => Err(error).context("read device key"),
+    }
+}
+
 pub fn write_private_bytes(path: &Path, value: &[u8]) -> Result<()> {
     write_atomic(path, value, true)
 }
@@ -1195,5 +1256,49 @@ mod tests {
             .prefix(&format!("remote-persistence-{label}-"))
             .tempdir_in(root)
             .expect("test temporary directory")
+    }
+}
+
+#[cfg(test)]
+mod device_secret_tests {
+    use super::*;
+
+    #[test]
+    fn device_keys_survive_relogin_and_are_scoped_to_account_and_endpoint() {
+        let dir = tempfile::tempdir().unwrap();
+        let key = load_or_create_device_secret(dir.path(), "http://127.0.0.1:9700", "1", "device")
+            .unwrap();
+        assert_eq!(
+            key,
+            load_or_create_device_secret(dir.path(), "http://127.0.0.1:9700/", "1", "device")
+                .unwrap()
+        );
+        assert_ne!(
+            key,
+            load_or_create_device_secret(dir.path(), "http://127.0.0.1:9700", "2", "device")
+                .unwrap()
+        );
+        assert_ne!(
+            key,
+            load_or_create_device_secret(
+                dir.path(),
+                "https://remote.openbitfun.com/v/1.0.0",
+                "1",
+                "device"
+            )
+            .unwrap()
+        );
+        std::thread::scope(|scope| {
+            for _ in 0..8 {
+                let path = dir.path();
+                scope.spawn(move || {
+                    assert_eq!(
+                        key,
+                        load_or_create_device_secret(path, "http://127.0.0.1:9700", "1", "device")
+                            .unwrap()
+                    )
+                });
+            }
+        });
     }
 }

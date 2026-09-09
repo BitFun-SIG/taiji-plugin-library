@@ -481,8 +481,10 @@ private class FakeAccountBackend : AccountBackend {
     var settings: String? = null
     val transportTargets = mutableListOf<String>()
     override suspend fun login(
+        relayUrl: String,
         deviceId: String,
         deviceName: String,
+        deviceSecret: ByteArray,
         onAuthorization: (String) -> Unit,
     ): AccountSessionData {
         loginThrowable?.let { throw it }

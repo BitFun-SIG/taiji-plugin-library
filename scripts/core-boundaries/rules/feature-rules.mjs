@@ -306,7 +306,7 @@ export const optionalDependencyFeatureOwnerRules = [
       { depName: 'chrono', ownerFeatures: ['account-identity', 'git', 'miniapp-market', 'remote-connect', 'remote-ssh-concrete', 'review-platform', 'speech', 'web-tools'] },
       { depName: 'dirs', ownerFeatures: ['account-identity', 'browser-control', 'miniapp-runtime', 'remote-connect', 'remote-ssh-concrete'] },
       { depName: 'dunce', ownerFeatures: ['plugin-source', 'workspace-search'] },
-      { depName: 'fs2', ownerFeatures: ['plugin-source'] },
+      { depName: 'fs2', ownerFeatures: ['plugin-source', 'remote-persistence', 'remote-connect'] },
       { depName: 'futures', ownerFeatures: ['mcp', 'remote-connect', 'review-platform'] },
       { depName: 'futures-util', ownerFeatures: ['speech', 'web-tools'] },
       { depName: 'git2', ownerFeatures: ['git'] },

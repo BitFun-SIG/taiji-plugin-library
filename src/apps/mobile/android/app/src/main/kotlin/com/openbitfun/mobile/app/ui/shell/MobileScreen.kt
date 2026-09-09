@@ -55,22 +55,18 @@ import com.openbitfun.mobile.app.ui.settings.GeneralSettingsScreen
 import com.openbitfun.mobile.app.ui.settings.SettingsScreen
 import com.openbitfun.mobile.app.ui.shell.sidebar.AppSidebar
 import com.openbitfun.mobile.app.viewmodel.AccountViewModel
-import com.openbitfun.mobile.app.viewmodel.PairingViewModel
 import com.openbitfun.mobile.core.feature.account.AccountIntent
 import com.openbitfun.mobile.core.feature.account.AccountUiState
 import com.openbitfun.mobile.core.feature.connection.ConnectionPhase
 import com.openbitfun.mobile.core.feature.connection.RemoteControlPresenter
 import com.openbitfun.mobile.core.feature.connection.RemoteControlSource
 import com.openbitfun.mobile.core.feature.connection.allowsRemoteCommands
-import com.openbitfun.mobile.core.feature.connection.connectionPhase
 import com.openbitfun.mobile.core.feature.layout.ConversationLayoutPolicy
 import com.openbitfun.mobile.core.feature.layout.AdaptiveLayoutInput
 import com.openbitfun.mobile.core.feature.layout.FilePreviewPlacement
 import com.openbitfun.mobile.core.feature.layout.FilePreviewPlacementPolicy
 import com.openbitfun.mobile.core.feature.layout.SettingsPlacementPolicy
 import com.openbitfun.mobile.core.feature.layout.SettingsSheetKind
-import com.openbitfun.mobile.core.feature.pairing.PairingIntent
-import com.openbitfun.mobile.core.feature.pairing.PairingUiState
 import com.openbitfun.mobile.core.feature.session.RemoteSessionUiState
 import com.openbitfun.mobile.core.feature.session.RemoteSessionIntent
 import com.openbitfun.mobile.core.feature.workspace.RemoteFilePreviewUiState
@@ -131,16 +127,11 @@ internal fun MobileScreen() {
     var compactDrawerOpen by rememberSaveable { mutableStateOf(false) }
     val shell = rememberAppShellState()
 
-    val pairingViewModel: PairingViewModel = viewModel(factory = PairingViewModel.Factory)
     val accountViewModel: AccountViewModel = viewModel(factory = AccountViewModel.Factory)
-    val pairingState by pairingViewModel.state.collectAsStateWithLifecycle()
-    val pairingWorkspaceState by pairingViewModel.workspaceState.collectAsStateWithLifecycle()
     val accountWorkspaceState by accountViewModel.workspaceState.collectAsStateWithLifecycle()
     val accountState by accountViewModel.state.collectAsStateWithLifecycle()
-    val pairingRemoteState by pairingViewModel.remoteState.collectAsStateWithLifecycle()
     val accountRemoteState by accountViewModel.remoteState.collectAsStateWithLifecycle()
     val accountPhase by accountViewModel.connectionPhase.collectAsStateWithLifecycle()
-    val pairingPhase: ConnectionPhase = pairingState.connectionPhase()
     val readyAccount = accountState as? AccountUiState.Ready
     val linkContext = androidx.compose.ui.platform.LocalContext.current
     var pendingDeviceLink by rememberSaveable { mutableStateOf<String?>(null) }
@@ -149,12 +140,12 @@ internal fun MobileScreen() {
         when (result.status) {
             com.openbitfun.mobile.core.feature.account.AccountDeviceLinkStatus.READY -> {
                 pendingDeviceLink = null
-                pairingViewModel.dispatch(PairingIntent.Disconnect)
                 accountViewModel.selectDevice(result.deviceId!!)
                 shell.closeRemoteScanner()
             }
             com.openbitfun.mobile.core.feature.account.AccountDeviceLinkStatus.SIGN_IN_REQUIRED -> {
                 pendingDeviceLink = url
+                accountViewModel.dispatch(com.openbitfun.mobile.core.feature.account.AccountIntent.SelectRelay(result.relayUrl!!))
                 shell.closeRemoteScanner()
                 shell.openAccount()
             }
@@ -172,20 +163,8 @@ internal fun MobileScreen() {
     }
 
     val accountUserId = readyAccount?.userId
-    LaunchedEffect(pairingState) {
-        if (pairingState is PairingUiState.Paired) shell.closeRemoteScanner()
-    }
-
-    // Which desktop this phone is driving is the one fact neither store holds on
-    // its own: the pairing store knows a room, the account store knows a device,
-    // and only together do they make one connection with a provenance. The
-    // shared presenter decides which of the two wins, so the sheet renders it
-    // rather than working it out a second time.
-    val controlSummary = remember(pairingState, pairingPhase, readyAccount, accountPhase) {
+    val controlSummary = remember(readyAccount, accountPhase) {
         RemoteControlPresenter.summarize(
-            pairingPhase = pairingPhase,
-            pairedRoomLabel = (pairingState as? PairingUiState.Paired)
-                ?.workspace?.roomLabel.orEmpty(),
             accountDeviceId = readyAccount?.selectedDeviceId.orEmpty(),
             accountDeviceName = readyAccount?.selectedDeviceName.orEmpty(),
             accountPhase = accountPhase,
@@ -193,19 +172,16 @@ internal fun MobileScreen() {
     }
     val phase = controlSummary.phase
     val activeWorkspaceState = when (controlSummary.source) {
-        RemoteControlSource.QR_PAIRING -> pairingWorkspaceState
         RemoteControlSource.ACCOUNT_DEVICE -> accountWorkspaceState
         RemoteControlSource.NONE -> RemoteWorkspaceUiState.Idle
     }
     val activeRemoteState = when (controlSummary.source) {
-        RemoteControlSource.QR_PAIRING -> pairingRemoteState
         RemoteControlSource.ACCOUNT_DEVICE -> accountRemoteState
         RemoteControlSource.NONE -> RemoteSessionUiState.Idle
     }
 
     fun dispatchActiveWorkspace(intent: RemoteWorkspaceIntent) {
         when (controlSummary.source) {
-            RemoteControlSource.QR_PAIRING -> pairingViewModel.dispatchWorkspace(intent)
             RemoteControlSource.ACCOUNT_DEVICE -> accountViewModel.dispatchWorkspace(intent)
             RemoteControlSource.NONE -> Unit
         }
@@ -213,7 +189,6 @@ internal fun MobileScreen() {
 
     fun dispatchActiveSession(intent: RemoteSessionIntent) {
         when (controlSummary.source) {
-            RemoteControlSource.QR_PAIRING -> pairingViewModel.dispatchSession(intent)
             RemoteControlSource.ACCOUNT_DEVICE -> accountViewModel.dispatchSession(intent)
             RemoteControlSource.NONE -> Unit
         }
@@ -320,7 +295,6 @@ internal fun MobileScreen() {
             onQueryChange = shell::search,
             onToggleSearch = shell::toggleSearch,
             onScanDesktop = {
-                pairingViewModel.dispatch(PairingIntent.Disconnect)
                 // The sidebar row opens the choose-connection page, not the
                 // camera: ML Kit's scanner is a full-screen system activity, so
                 // launching it from the drawer would leave the user no way to
@@ -455,28 +429,6 @@ internal fun MobileScreen() {
                             modifier = Modifier,
                         )
 
-                        RemoteControlSource.QR_PAIRING -> PairingScreen(
-                            onDeviceLink = connectDeviceLink,
-                            modifier = Modifier,
-                            settingsPlacement = settingsPlacement,
-                            sessionDetailsPlacement = sessionDetailsPlacement,
-                            viewSettingsPlacement = remoteViewSettingsPlacement,
-                            onOpenRemoteSettings = { shell.openSettings(SettingsMode.REMOTE) },
-                            onOpenSidebar = if (showMenu) {
-                                { compactDrawerOpen = true }
-                            } else {
-                                null
-                            },
-                            onBack = { shell.openRemoteConnect() },
-                            onOpenAccount = { shell.openAccount() },
-                            compact = !wide,
-                            requestedSessionId = shell.remoteSessionId,
-                            creatingSession = shell.remoteCreating,
-                            onOpenSession = shell::openRemoteSession,
-                            onCreateSession = shell::createRemoteSession,
-                            onRemoteHome = shell::closeRemoteSession,
-                        )
-
                         RemoteControlSource.NONE -> if (readyAccount != null) {
                             ConnectAccountDeviceScreen(
                                 state = readyAccount,
@@ -484,7 +436,6 @@ internal fun MobileScreen() {
                                 onRefresh = { accountViewModel.dispatch(AccountIntent.RefreshDevices) },
                                 onSelect = accountViewModel::selectDevice,
                                 onOpenScanner = {
-                                    pairingViewModel.dispatch(PairingIntent.Disconnect)
                                     shell.openRemoteScanner()
                                 },
                                 modifier = Modifier,
@@ -623,12 +574,10 @@ internal fun MobileScreen() {
                 // asking the other one would answer for a connection this
                 // page is not describing, or for none at all.
                 remoteState = when (controlSummary.source) {
-                    RemoteControlSource.QR_PAIRING -> pairingRemoteState
                     RemoteControlSource.ACCOUNT_DEVICE -> accountRemoteState
                     RemoteControlSource.NONE -> RemoteSessionUiState.Idle
                 },
                 onSessionIntent = when (controlSummary.source) {
-                    RemoteControlSource.QR_PAIRING -> pairingViewModel::dispatchSession
                     RemoteControlSource.ACCOUNT_DEVICE -> accountViewModel::dispatchSession
                     RemoteControlSource.NONE -> {
                         {}
@@ -636,15 +585,12 @@ internal fun MobileScreen() {
                 },
                 onClose = shell::dismissSettings,
                 onOpenAccount = shell::openAccount,
-                onDisconnect = { pairingViewModel.dispatch(PairingIntent.Disconnect) },
+                onDisconnect = { accountViewModel.disconnectDevice() },
                 onReconnect = {
                     // A room is re-checked where it stands; a device is asked
                     // for again, which is the same command its row in the
                     // account sends. Neither re-pairs behind the user's back.
                     when (controlSummary.source) {
-                        RemoteControlSource.QR_PAIRING ->
-                            pairingViewModel.dispatch(PairingIntent.Verify)
-
                         RemoteControlSource.ACCOUNT_DEVICE -> {
                             val deviceId = readyAccount?.selectedDeviceId
                             if (deviceId != null) {
@@ -657,7 +603,6 @@ internal fun MobileScreen() {
                 },
                 onConnectByLink = {
                     shell.dismissSettings()
-                    pairingViewModel.dispatch(PairingIntent.Disconnect)
                     shell.openRemoteScanner()
                 },
             )

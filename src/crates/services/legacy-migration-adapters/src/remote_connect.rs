@@ -1394,6 +1394,7 @@ mod tests {
     ) -> BotPersistenceRecord {
         BotPersistenceRecord {
             connections: vec![SavedBotConnectionRecord {
+                account_user_id: String::new(),
                 bot_type: "telegram".to_string(),
                 chat_id: "chat-1".to_string(),
                 config: BotConfigRecord::Telegram {

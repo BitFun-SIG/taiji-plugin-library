@@ -106,4 +106,28 @@ describe('AccountIdentityService', () => {
       sourceId: 'window-a',
     }));
   });
+  it('ignores a profile request started before logout', async () => {
+    const { api, service } = setup(); activeServices.push(service);
+    await service.initialize();
+    let resolve!: (value: typeof profile) => void;
+    api.me.mockImplementationOnce(() => new Promise(done => { resolve = done; }));
+    const stale = service.refresh();
+    await service.logout();
+    resolve(profile);
+    await stale;
+    expect(service.getSnapshot()).toMatchObject({ status: 'signed-out', me: null });
+  });
+
+  it('keeps a late initial profile failure from erasing a newer sign-in', async () => {
+    const { api, service } = setup(); activeServices.push(service);
+    let reject!: (reason: Error) => void;
+    api.me.mockImplementationOnce(() => new Promise((_, fail) => { reject = fail; }));
+    const stale = service.initialize();
+    api.me.mockResolvedValue(profile);
+    await service.signIn();
+    reject(new Error('old network failure'));
+    await stale;
+    expect(service.getSnapshot()).toMatchObject({ status: 'signed-in', me: profile });
+  });
+
 });

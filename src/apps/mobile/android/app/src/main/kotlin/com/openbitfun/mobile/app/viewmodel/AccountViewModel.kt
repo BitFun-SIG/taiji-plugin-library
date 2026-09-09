@@ -89,6 +89,10 @@ internal class AccountViewModel(application: Application) : AndroidViewModel(app
         if (deviceId == activeTarget) bindTarget(deviceId) else store.dispatch(AccountIntent.SelectDevice(deviceId))
     }
 
+    fun disconnectDevice() {
+        bindTarget(null)
+    }
+
     private fun bindTarget(target: String?) {
         remoteJob?.cancel()
         connectionJob?.cancel()

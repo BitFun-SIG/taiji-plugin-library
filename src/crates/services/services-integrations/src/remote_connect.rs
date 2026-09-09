@@ -14,8 +14,6 @@ pub mod device;
 pub mod device_crypto;
 pub mod encryption;
 mod lan;
-mod mobile_web_upload;
-mod ngrok;
 mod page_upload;
 pub mod pairing;
 pub mod qr_generator;
@@ -34,10 +32,6 @@ pub use lan::{
     LocalNetworkInterface,
 };
 use log::info;
-pub use mobile_web_upload::upload_mobile_web_to_relay;
-pub use ngrok::{
-    cleanup_all_ngrok, detect_running_ngrok, is_ngrok_available, start_ngrok_tunnel, NgrokTunnel,
-};
 use openbitfun_core_types::{
     ModelsDevReasoningCatalog, ProviderCatalog, ReasoningCatalogProjection,
 };
@@ -62,7 +56,7 @@ pub use page_upload::{
     update_page_on_relay, PageContentPublishResult, PageInfo, PageOpenLink, PagePublishResult,
     PageSaveVersionResult, PageVersionInfo,
 };
-pub use pairing::{PairingChallenge, PairingProtocol, PairingResponse, PairingState, QrPayload};
+pub use pairing::PairingState;
 pub use qr_generator::QrGenerator;
 pub use relay_client::{
     ensure_rustls_crypto_provider, ConnectionState, RelayClient, RelayEvent, RelayMessage,
@@ -2409,26 +2403,8 @@ pub enum RemoteCommand {
         path: String,
         session_id: Option<String>,
     },
-    /// Ask the paired desktop to delegate its logged-in account identity
-    /// (token + master_key) to this room-channel client so it can call the
-    /// relay device APIs directly. Answered by the host runtime; other hosts
-    /// return an error response.
-    GetDelegatedIdentity,
-    /// Ask the paired desktop to mint a *full* account device credential for a
-    /// separate device that cannot type a password (a watch). The desktop calls
-    /// the relay's `/api/auth/provision-device` with its own device token, then
-    /// returns the minted credential together with the account master key over
-    /// this already-encrypted room channel. The relay never sees the master key.
-    ///
-    /// Unlike `GetDelegatedIdentity` this yields a 30-day full credential rather
-    /// than a 24-hour delegated one, because the provisioned device is a primary
-    /// surface and cannot re-authenticate on its own when the token lapses.
-    ///
-    /// `request_id` is minted by the device being provisioned, not by the
-    /// desktop, so that a retry anywhere along the watch → phone → desktop chain
-    /// replays one idempotent relay request instead of registering a second
-    /// device. Answered by the host runtime; other hosts return an error
-    /// response.
+    /// Provision a separate device through this authenticated controller.
+    /// The target host owns token issuance and idempotent request handling.
     ProvisionPeerDevice {
         /// 32 lowercase hex characters; the relay rejects any other shape.
         device_id: String,
@@ -2665,18 +2641,8 @@ pub enum RemoteResponse {
     },
     /// Event already delivered out-of-band; ack only.
     DeviceEventAccepted,
-    /// Delegated account identity for a paired room-channel client.
-    /// `master_key` is base64-encoded; `device_id` is the delegating host.
-    DelegateIdentity {
-        token: String,
-        user_id: String,
-        master_key: String,
-        device_id: String,
-    },
-    /// A full account device credential minted for a paired client's peer
-    /// device. `master_key` is base64-encoded; `device_id` echoes the *newly
-    /// provisioned* device, not the delegating host — the opposite of
-    /// `DelegateIdentity`, whose `device_id` names the desktop.
+    /// A device credential and its independent private key, delivered only
+    /// over the authenticated encrypted device channel.
     PeerDeviceProvisioned {
         token: String,
         user_id: String,
@@ -2880,15 +2846,7 @@ where
             .await,
         ),
 
-        // Answered by the host runtime (which owns the delegated identity
-        // provider) before dispatch reaches this router; this is the fallback
-        // for hosts that cannot delegate an account identity.
-        RemoteCommand::GetDelegatedIdentity => RemoteResponse::Error {
-            message: "Delegated identity is not available on this host".to_string(),
-        },
-
-        // Same contract as GetDelegatedIdentity above: the host runtime owns the
-        // account credentials and answers before dispatch reaches this router.
+        // The authenticated host owns credential provisioning.
         RemoteCommand::ProvisionPeerDevice { .. } => RemoteResponse::Error {
             message: "Device provisioning is not available on this host".to_string(),
         },

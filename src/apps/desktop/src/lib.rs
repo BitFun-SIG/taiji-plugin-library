@@ -1881,7 +1881,6 @@ pub async fn run() {
             api::remote_connect_api::account_list_devices,
             api::remote_connect_api::account_delete_device,
             api::remote_connect_api::account_device_rpc,
-            api::remote_connect_api::account_delegate_to_paired,
             // OpenBitFun Page API
             api::pages_api::page_publish,
             api::pages_api::page_save_version,

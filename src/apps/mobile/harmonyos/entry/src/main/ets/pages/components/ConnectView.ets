@@ -548,20 +548,9 @@ export struct ConnectView {
 
   private handleScannedRemoteUrl(text: string): void {
     const action = this.onRemoteUrlDetected(text);
-    if (action === DetectedUrlAction.PROMPT_ACCOUNT_PASSWORD) {
-      this.showManualPairing = true;
-      this.onRemoteUrlInputVisibleChange(true);
-      this.pairingStep = ConnectSheetStep.Scan;
-      return;
-    }
     if (action === DetectedUrlAction.SHOW_CLOUD_DEVICES ||
       action === DetectedUrlAction.USE_CLOUD_DEVICE) {
       this.pairingStep = ConnectSheetStep.Account;
-      return;
-    }
-    if (action === DetectedUrlAction.PAIR_NOW) {
-      this.ensureUserId();
-      this.onConnect();
       return;
     }
     this.inlineScanError = this.statusText || RemoteI18n.t('connect.hintInvalidLink');

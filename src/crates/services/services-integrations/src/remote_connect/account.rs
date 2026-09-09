@@ -227,7 +227,11 @@ impl AccountClient {
             .access_token()
             .await?
             .ok_or_else(|| anyhow!("Sign in with GitHub to continue"))?;
-        let device_secret = device_crypto::generate_secret();
+        let device_secret = super::session_store::device_secret(
+            relay_url,
+            &profile.user.github_id.to_string(),
+            &device.device_id,
+        )?;
         let body = serde_json::json!({
             "access_token": access_token,
             "device_id": device.device_id,

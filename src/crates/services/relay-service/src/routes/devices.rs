@@ -61,7 +61,7 @@ pub(crate) async fn validate_user(
     state: &AppState,
     headers: &HeaderMap,
 ) -> Result<AuthToken, StatusCode> {
-    let db = state.db.as_ref().ok_or(StatusCode::NOT_IMPLEMENTED)?;
+    let db = state.db.as_ref();
     let token = headers
         .get(header::AUTHORIZATION)
         .and_then(|v| v.to_str().ok())
@@ -110,7 +110,7 @@ pub async fn device_key(
     if !is_valid_device_id(&target_device_id) {
         return Err(StatusCode::BAD_REQUEST);
     }
-    let db = state.db.as_ref().ok_or(StatusCode::NOT_IMPLEMENTED)?;
+    let db = state.db.as_ref();
     let public_key = sqlx::query_scalar::<_, Option<String>>(
         "SELECT public_key FROM devices WHERE user_id = ?1 AND device_id = ?2
          UNION ALL SELECT k.public_key FROM delegated_device_keys k JOIN auth_tokens t ON t.token = k.token
@@ -118,7 +118,7 @@ pub async fn device_key(
     )
     .bind(&auth.user_id)
     .bind(&target_device_id)
-    .fetch_optional(db.as_ref())
+    .fetch_optional(db)
     .await
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
     .flatten()
@@ -159,7 +159,8 @@ async fn list_devices(
     // Get all registered devices from the DB (online + offline)
     let mut devices = Vec::new();
     let mut hidden_ids: std::collections::HashSet<String> = std::collections::HashSet::new();
-    if let Some(db) = &state.db {
+    {
+        let db = &state.db;
         if let Ok(db_devices) = crate::db::DeviceRow::list_by_user(db, &user_id).await {
             for row in db_devices {
                 if !crate::db::device_kind_is_desktop(row.device_kind.as_deref()) {
@@ -281,7 +282,7 @@ async fn device_rpc(
     Json(body): Json<DeviceRpcRequest>,
 ) -> Result<axum::response::Response, StatusCode> {
     let auth = validate_user(&state, &headers).await?;
-    let db = state.db.as_ref().ok_or(StatusCode::NOT_IMPLEMENTED)?;
+    let db = state.db.as_ref();
     let source_device_id = auth
         .routing_device_id(db)
         .await
@@ -361,7 +362,7 @@ async fn delete_device(
         return Err(StatusCode::BAD_REQUEST);
     }
 
-    let db = state.db.as_ref().ok_or(StatusCode::NOT_IMPLEMENTED)?;
+    let db = state.db.as_ref();
     let _presence_projection_guard = state.device_manager.lock_presence_projection().await;
     let current_auth = crate::db::AuthToken::find(db, &auth.token)
         .await
@@ -421,7 +422,6 @@ async fn delete_device(
 mod tests {
     use super::*;
     use crate::db::{connect, AuthToken, DbPool, DeviceRow, UserRow};
-    use crate::relay::RoomManager;
     use crate::MemoryAssetStore;
     use axum::body::Body;
     use axum::http::Request;
@@ -484,10 +484,9 @@ mod tests {
     async fn http_device_response_requires_expected_principal_and_accepts_large_payload() {
         let ctx = setup_app().await;
         let state = AppState {
-            room_manager: RoomManager::new(),
             start_time: std::time::Instant::now(),
             asset_store: Arc::new(MemoryAssetStore::new()),
-            db: Some(ctx.db.clone()),
+            db: ctx.db.clone(),
             page_data: None,
             page_access_manager: Arc::new(crate::routes::pages::PageAccessManager::new()),
             page_upload_manager: Arc::new(crate::routes::pages::PageUploadManager::new()),
@@ -595,10 +594,9 @@ mod tests {
             .unwrap()
             .token;
         let app = crate::build_relay_router(
-            RoomManager::new(),
             Arc::new(MemoryAssetStore::new()),
             std::time::Instant::now(),
-            Some(db.clone()),
+            db.clone(),
             "test",
         );
 

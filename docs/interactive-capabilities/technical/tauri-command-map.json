@@ -2,12 +2,12 @@
   "schemaVersion": 2,
   "generatedFrom": "src/shared/interactive-capabilities/catalog.json",
   "catalogDigest": "d2afabba9165de3cbb11a6801bf98dd3a434dc5796c17e8097f6e1658c26104a",
-  "commandCount": 644,
+  "commandCount": 643,
   "coverage": {
-    "commandCount": 644,
+    "commandCount": 643,
     "documentedCommandCount": 607,
-    "implementationCommandCount": 37,
-    "implementationDigest": "06ba3cb8318ace09a303531e23f6bb7ec17a114386d991c991ce758752173989"
+    "implementationCommandCount": 36,
+    "implementationDigest": "c9bbc0f2ca3695d8c18cff285386edeba7bcf3b11120adb57509a80b09ee3297"
   },
   "commands": [
     {
@@ -72,20 +72,6 @@
       "rustPath": "api::remote_connect_api::account_connect_devices",
       "sourceFile": "src/apps/desktop/src/api/remote_connect_api.rs",
       "signature": "fn account_connect_devices() -> Result<Vec<OnlineDeviceInfo>, String>",
-      "remoteWorkspacePolicy": "WorkspaceAgnostic"
-    },
-    {
-      "id": "account_delegate_to_paired",
-      "moduleId": "remote_connect",
-      "capabilityId": "feature.remote-connect",
-      "capabilityIds": [
-        "feature.remote-connect"
-      ],
-      "documentedItemIds": [],
-      "visibility": "implementation",
-      "rustPath": "api::remote_connect_api::account_delegate_to_paired",
-      "sourceFile": "src/apps/desktop/src/api/remote_connect_api.rs",
-      "signature": "fn account_delegate_to_paired(correlation_id: String) -> Result<String, String>",
       "remoteWorkspacePolicy": "WorkspaceAgnostic"
     },
     {

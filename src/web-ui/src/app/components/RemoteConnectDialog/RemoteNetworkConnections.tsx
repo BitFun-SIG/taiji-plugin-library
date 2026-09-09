@@ -9,7 +9,8 @@ import { RemotePairingCard } from './RemotePairingCard';
 
 interface RemoteNetworkConnectionsProps {
   status: RemoteConnectStatus | null;
-  method: 'openbitfun_server';
+  method: 'openbitfun_server' | 'lan';
+  settings?: ReactNode;
   title: string;
   relayUrl: string;
   invitation: ConnectionResult | null;
@@ -23,9 +24,9 @@ interface RemoteNetworkConnectionsProps {
   onDisconnect: () => void;
 }
 
-/** Official relay connection and paired controller status. */
+/** Authenticated Relay connection and controller presence, independent of hosting. */
 export function RemoteNetworkConnections({
-  status, method, title, relayUrl, invitation, statusState,
+  status, method, title, relayUrl, settings, invitation, statusState,
   loading, pairingUrlCopied, error, onCopyPairingUrl, onConnect, onCancel,
   onDisconnect,
 }: RemoteNetworkConnectionsProps) {
@@ -38,13 +39,11 @@ export function RemoteNetworkConnections({
     return () => window.clearTimeout(timeout);
   }, [copiedUrl]);
   const connection = selectRemoteNetworkConnection(status, invitation);
-  const account = connection.accountConnected && connection.accountMethod === method
-    && connection.accountRelayUrl === normalizeRelayUrl(relayUrl);
-  const room = connection.roomConnected && connection.roomMethod === method;
-  const clients = account ? status?.account_control_clients ?? [] : [];
-  const unknown = account && (status?.account_control_clients === undefined || status.account_control_has_unidentified_clients !== false);
-  const count = clients.length + (room ? 1 : 0);
-  const connected = account || room;
+  const account = connection.connected && connection.method === method
+    && connection.relayUrl === normalizeRelayUrl(relayUrl);
+  const clients = account ? status?.clients ?? [] : [];
+  const count = clients.length;
+  const connected = account;
   const copied = copiedUrl !== null && copiedUrl === normalizeRelayUrl(relayUrl);
   const copyUrl = async () => {
     const url = normalizeRelayUrl(relayUrl);
@@ -63,7 +62,13 @@ export function RemoteNetworkConnections({
       <div className="openbitfun-remote-connect__network-heading">
         <Icon name="browser" size="lg" aria-hidden="true" />
         <h3>{title}</h3>
+        <span role="status"><StatusPill tone={statusState === 'ready' && connected ? 'success' : 'neutral'}>
+          {t(statusState === 'unavailable' ? 'remoteConnect.statusUnavailable'
+            : statusState === 'loading' ? 'remoteConnect.statusChecking'
+              : connected ? 'remoteConnect.stateConnected' : 'remoteConnect.notConnected')}
+        </StatusPill></span>
       </div>
+      {settings}
       <div className="openbitfun-remote-connect__relay-address">
         <Field controlWidth="fill" label={t('remoteConnect.serverUrl')}>
           <Input
@@ -87,9 +92,7 @@ export function RemoteNetworkConnections({
         <div className="openbitfun-remote-connect__connections-heading">
           <h4 title={t('remoteConnect.clientCountHint')}>{t('remoteConnect.connectedClients')}</h4>
           <span role="status">
-            <StatusPill tone={connected ? 'success' : 'neutral'}>{unknown
-              ? count ? t('remoteConnect.clientCountAtLeast', { count, formattedCount: formatNumber(count) }) : t('remoteConnect.stateConnected')
-              : t('remoteConnect.clientCount', { count, formattedCount: formatNumber(count) })}</StatusPill>
+            <StatusPill tone={connected ? 'success' : 'neutral'}>{t('remoteConnect.clientCount', { count, formattedCount: formatNumber(count) })}</StatusPill>
           </span>
         </div>
         {count > 0 && <ul className="openbitfun-remote-connect__connections-list" tabIndex={count > 3 ? 0 : undefined}>
@@ -98,20 +101,15 @@ export function RemoteNetworkConnections({
             <strong>{client.name || t('remoteConnect.mobileBrowserTitle')}</strong>
             <span>{t('remoteConnect.clientNumber', { number: formatNumber(index + 1) })}</span>
           </li>)}
-          {room && <li>
-            <Icon name="browser" size="sm" aria-hidden="true" />
-            <strong>{status?.peer_device_name || t('remoteConnect.mobileBrowserTitle')}</strong>
-            <span>{t('remoteConnect.pairedClient')}</span>
-          </li>}
+
         </ul>}
-        {unknown && <p className="openbitfun-remote-connect__connections-note">{t('remoteConnect.clientDetailsUnavailable')}</p>}
-        {!connected && <p className="openbitfun-remote-connect__connections-note">{t('remoteConnect.noConnectedClients')}</p>}
+        {count === 0 && <p className="openbitfun-remote-connect__connections-note">{t('remoteConnect.noConnectedClients')}</p>}
       </div>
       {invitation && <div className="openbitfun-remote-connect__relay-invitation">
         <RemotePairingCard
           owner="network"
           qrUrl={invitation.qr_url}
-          connected={connection.invitationAccountConnected}
+          connected={connection.invitationConnected}
           copied={pairingUrlCopied}
           statusState={statusState}
           onCopyUrl={onCopyPairingUrl}
@@ -120,13 +118,14 @@ export function RemoteNetworkConnections({
       <div className="openbitfun-remote-connect__relay-actions">
         {error}
         <div className="openbitfun-remote-connect__relay-action-row">
-          {room ? <Button variant="outline" size="sm" onClick={onDisconnect}>{t('remoteConnect.disconnect')}</Button>
-            : invitation ? <Button variant="fill" size="sm" onClick={onCancel}>{t('remoteConnect.cancelInvitation')}</Button>
-              : <Button variant="primary" size="sm" loading={loading} onClick={onConnect}>
-                {loading ? t('remoteConnect.connecting') : t('remoteConnect.showConnectionCode')}
-              </Button>}
+          {invitation
+            ? <Button variant="fill" size="sm" onClick={onCancel}>{t('remoteConnect.cancelInvitation')}</Button>
+            : <Button variant="primary" size="sm" loading={loading} onClick={onConnect}>
+              {loading ? t('remoteConnect.connecting') : t('remoteConnect.showConnectionCode')}
+            </Button>}
+          {connected && <Button variant="outline" size="sm" onClick={onDisconnect}>{t('remoteConnect.disconnect')}</Button>}
         </div>
-        {account && invitation && <p className="openbitfun-remote-connect__connections-note">{t('remoteConnect.accountConnectedHint')}</p>}
+        {connection.invitationConnected && invitation && <p className="openbitfun-remote-connect__connections-note">{t('remoteConnect.accountConnectedHint')}</p>}
       </div>
     </section>
   </div>;

@@ -1,6 +1,7 @@
-import { generateKeyPair, toB64 } from './E2EEncryption';
+import { generateKeyPair, fromB64, toB64 } from './E2EEncryption';
+import { x25519 } from '@noble/curves/ed25519.js';
 
-export const OFFICIAL_RELAY_URL = 'https://remote.openbitfun.com/v/1.0.0';
+import { pairingRelayUrl } from './pairingLink';
 export interface CloudAccountSession { token: string; userId: string; masterKey: Uint8Array; }
 interface RelayErrorResponse { error?: string; retry_after_secs?: number; }
 export class CloudAccountRequestError extends Error {
@@ -15,7 +16,7 @@ export class CloudAccountRequestError extends Error {
   }
 }
 
-function generateRequestId(): string {
+export function generateRequestId(): string {
   if (typeof crypto.randomUUID === 'function') return crypto.randomUUID();
   const bytes = crypto.getRandomValues(new Uint8Array(16));
   bytes[6] = (bytes[6] & 0x0f) | 0x40;
@@ -78,8 +79,14 @@ interface AuthStart {
 
 /** GitHub identity authorizes a separately keyed browser controller. */
 export class CloudAccountClient {
+  private readonly relayUrl: string;
+  constructor(relayUrl: string) {
+    const endpoint = pairingRelayUrl(relayUrl);
+    if (!endpoint) throw new Error('Invalid Relay URL');
+    this.relayUrl = endpoint;
+  }
   async authorize(popup: Window, signal: AbortSignal): Promise<string> {
-    const start = await requestJson<AuthStart>(OFFICIAL_RELAY_URL, '/api/auth/github/start', {});
+    const start = await requestJson<AuthStart>(this.relayUrl, '/api/auth/github/start', {});
     const url = new URL(start.authorizationUrl);
     if (url.origin !== 'https://github.com' || url.pathname !== '/login/oauth/authorize' || url.username || url.password) {
       throw new Error('Untrusted account authorization URL.');
@@ -90,7 +97,7 @@ export class CloudAccountClient {
       await new Promise<void>((resolve) => setTimeout(resolve, Math.min(30, Math.max(1, start.pollIntervalSeconds)) * 1000));
       if (signal.aborted) break;
       const result = await requestJson<{ status: string; tokens?: { accessToken: string } }>(
-        OFFICIAL_RELAY_URL, '/api/auth/github/poll', {
+        this.relayUrl, '/api/auth/github/poll', {
           transactionId: start.transactionId, transactionSecret: start.transactionSecret,
         },
       );
@@ -101,9 +108,24 @@ export class CloudAccountClient {
   }
 
   async login(accessToken: string, deviceId: string): Promise<CloudAccountSession> {
-    const keys = await generateKeyPair();
+    const storageKey = `openbitfun.mobile.device_key:${this.relayUrl}:${deviceId}`;
+    const saved = sessionStorage.getItem(storageKey);
+    let privateKey: Uint8Array;
+    if (saved) {
+      privateKey = fromB64(saved);
+      if (privateKey.length !== 32) throw new Error('Stored device identity is invalid.');
+    } else {
+      const generated = await generateKeyPair();
+      // Another login in this tab may have created the key while generation yielded.
+      const existing = sessionStorage.getItem(storageKey);
+      privateKey = existing ? fromB64(existing) : generated.privateKey;
+      if (privateKey.length !== 32) throw new Error('Stored device identity is invalid.');
+      if (!existing) sessionStorage.setItem(storageKey, toB64(privateKey));
+      else generated.privateKey.fill(0);
+    }
+    const keys = { privateKey, publicKey: x25519.getPublicKey(privateKey) };
     try {
-      const auth = await requestJson<{ token: string; user_id: string }>(OFFICIAL_RELAY_URL, '/api/auth/login', {
+      const auth = await requestJson<{ token: string; user_id: string }>(this.relayUrl, '/api/auth/login', {
         access_token: accessToken, device_id: deviceId, device_name: 'Mobile Browser',
         device_kind: 'mobile', public_key: toB64(keys.publicKey), request_id: generateRequestId(),
       });

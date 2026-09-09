@@ -130,27 +130,28 @@ public class CloudAccountClient internal constructor(
             it.trim().lowercase()
         }
 
-    public suspend fun startAuthorization(): GitHubAuthorization = request(
-        DEFAULT_CLOUD_RELAY_URL, "/api/auth/github/start", HttpMethod.Post,
+    public suspend fun startAuthorization(relayUrl: String): GitHubAuthorization = request(
+        relayUrl, "/api/auth/github/start", HttpMethod.Post,
         JsonObject.serializer(), JsonObject(emptyMap()), GitHubAuthorization.serializer(), "", RELAY_DEFAULT_TIMEOUT_MS,
     ).also {
         val url = io.ktor.http.Url(it.authorizationUrl)
         require(url.protocol.name == "https" && url.host == "github.com" && url.encodedPath == "/login/oauth/authorize" && url.port == 443 && url.user == null && url.password == null)
     }
 
-    public suspend fun pollAuthorization(start: GitHubAuthorization): GitHubAuthorizationPoll = request(
-        DEFAULT_CLOUD_RELAY_URL, "/api/auth/github/poll", HttpMethod.Post,
+    public suspend fun pollAuthorization(relayUrl: String, start: GitHubAuthorization): GitHubAuthorizationPoll = request(
+        relayUrl, "/api/auth/github/poll", HttpMethod.Post,
         GitHubPollRequest.serializer(), GitHubPollRequest(start.transactionId, start.transactionSecret),
         GitHubAuthorizationPoll.serializer(), "", RELAY_DEFAULT_TIMEOUT_MS,
     )
 
     @OptIn(ExperimentalUuidApi::class)
-    public suspend fun login(accessToken: String, deviceId: String, deviceName: String): CloudAccountSession {
+    public suspend fun login(relayUrl: String, accessToken: String, deviceId: String, deviceName: String, deviceSecret: ByteArray): CloudAccountSession {
         require(accessToken.isNotBlank())
-        val secret = DeviceIdentity.generateSecret()
+        require(deviceSecret.size == 32) { "Invalid device key." }
+        val secret = deviceSecret.copyOf()
         try {
             val auth = request(
-                DEFAULT_CLOUD_RELAY_URL, "/api/auth/login", HttpMethod.Post,
+                relayUrl, "/api/auth/login", HttpMethod.Post,
                 LoginRequest.serializer(), LoginRequest(accessToken, deviceId, deviceName, DEVICE_KIND_MOBILE,
                     Base64.Default.encode(DeviceIdentity.publicKey(secret)), Uuid.random().toString()),
                 AccountAuthResponse.serializer(), "", RELAY_DEFAULT_TIMEOUT_MS,
@@ -173,7 +174,7 @@ public class CloudAccountClient internal constructor(
         selfDeviceId: String = "",
     ): List<CloudAccountDevice> =
         requestWithoutBody(
-            DEFAULT_CLOUD_RELAY_URL,
+            relayUrl,
             "/api/devices",
             HttpMethod.Get,
             ListSerializer(AccountDeviceWire.serializer()),
@@ -203,7 +204,7 @@ public class CloudAccountClient internal constructor(
     ): T {
         val target = targetDeviceId.trim()
         if (target.isEmpty()) throw CloudAccountException(CloudAccountFailure.MALFORMED_RESPONSE)
-        val peer = requestWithoutBody(DEFAULT_CLOUD_RELAY_URL,
+        val peer = requestWithoutBody(relayUrl,
             "/api/devices/" + encodePathSegment(target) + "/key", HttpMethod.Get,
             DeviceKeyWire.serializer(), session.token, RELAY_DEFAULT_TIMEOUT_MS)
         val messageKey = DeviceIdentity.messageKey(session.masterKey, decode(peer.publicKey))
@@ -211,7 +212,7 @@ public class CloudAccountClient internal constructor(
         val plain = RelayJson.encodeToString(RemoteCommand.serializer(), command).encodeToByteArray()
         val encrypted = CloudAccountCipher.encrypt(plain, messageKey, nonce)
         val response = request(
-            DEFAULT_CLOUD_RELAY_URL,
+            relayUrl,
             "/api/devices/" + encodePathSegment(target) + "/rpc",
             HttpMethod.Post,
             EncryptedPayload.serializer(),
@@ -270,7 +271,7 @@ public class CloudAccountClient internal constructor(
         timeoutMs: Long,
     ): Response {
         val response = try {
-            client.request(DEFAULT_CLOUD_RELAY_URL + path) {
+            client.request(requireNotNull(normalizeAccountRelayUrl(relayUrl)) + path) {
                 this.method = method
                 contentType(ContentType.Application.Json)
                 accept(ContentType.Application.Json)
@@ -303,6 +304,8 @@ public class CloudAccountClient internal constructor(
     }
 
     public companion object {
+        public fun generateDeviceSecret(): ByteArray = DeviceIdentity.generateSecret()
+
         public fun create(): CloudAccountClient = CloudAccountClient(relayHttpClient(), TransportLog.None)
 
         public fun create(log: TransportLog): CloudAccountClient = CloudAccountClient(relayHttpClient(), log)
@@ -314,17 +317,7 @@ public class CloudAccountClient internal constructor(
     }
 }
 
-/**
- * Command transport over a signed-in account, i.e. `POST /api/devices/{id}/rpc`.
- *
- * The envelope differs from [RoomRemoteCommandTransport]'s — the key is the
- * account's master key rather than a pairing handshake's — but everything above
- * a transport is written against one contract, so the two failure vocabularies
- * are reconciled here rather than left for each caller to learn: a
- * [CloudAccountException] becomes the [RelayFailure] that says the same thing,
- * and a desktop that answered `{"resp":"error"}` is a rejection rather than a
- * reply, exactly as it is on the paired path.
- */
+/** Device-to-device commands encrypted using authenticated X25519 public keys. */
 public class AccountDeviceCommandTransport public constructor(
     private val client: CloudAccountClient,
     private val relayUrl: String,
@@ -344,8 +337,8 @@ public class AccountDeviceCommandTransport public constructor(
         command: RemoteCommand,
         timeoutMs: Long,
     ): T {
-        val label = "cmd=${command.cmd} request=${shortRequestId(command.requestId.orEmpty())} " +
-            "device=${shortRoomId(targetDeviceId)}"
+        val label = "cmd=${command.cmd} request=${command.requestId.orEmpty().take(12)} " +
+            "device=${targetDeviceId.take(12)}"
         log.info("command start $label")
 
         val response = try {
@@ -367,7 +360,7 @@ public class AccountDeviceCommandTransport public constructor(
 }
 
 private fun CloudAccountFailure.asRelayFailure(): RelayFailure = when (this) {
-    CloudAccountFailure.INVALID_CREDENTIALS, CloudAccountFailure.AUTHENTICATION -> RelayFailure.PairRejected
+    CloudAccountFailure.INVALID_CREDENTIALS, CloudAccountFailure.AUTHENTICATION -> RelayFailure.AuthenticationRequired
     CloudAccountFailure.RATE_LIMITED -> RelayFailure.RateLimited
     CloudAccountFailure.RELAY_UNAVAILABLE -> RelayFailure.RelayUnavailable(HTTP_SERVER_ERROR)
     CloudAccountFailure.NETWORK -> RelayFailure.NetworkUnreachable

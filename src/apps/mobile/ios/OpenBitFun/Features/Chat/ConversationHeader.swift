@@ -22,7 +22,7 @@ struct ConversationHeader: View {
         if model.surface == .local && model.localSessionSelected { return model.localized("本地会话") }
         if model.remoteConnected {
             return model.accountDeviceName
-                ?? model.directPairingDeviceName
+
                 ?? model.localized("已连接桌面端")
         }
         return nil

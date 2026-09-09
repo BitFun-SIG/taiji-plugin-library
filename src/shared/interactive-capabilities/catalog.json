@@ -234,7 +234,6 @@
       "html_preview_release"
     ],
     "githubDeviceRouting": [
-      "account_delegate_to_paired",
       "account_get_credential_hint",
       "account_login",
       "account_token_expired"

@@ -1,3 +1,4 @@
+import { normalizeAccountRelayUrl, OFFICIAL_RELAY_URL } from './AccountDeviceLink';
 import { http } from '@kit.NetworkKit';
 import { CloudAccountCrypto } from './CloudAccountCrypto';
 import { X25519 } from './X25519';
@@ -85,7 +86,7 @@ interface CloudAccountDeviceWire {
 }
 
 /** Default OpenBitFun cloud relay used by the desktop account flow. */
-export const DEFAULT_CLOUD_RELAY_URL: string = 'https://remote.openbitfun.com/v/1.0.0';
+export const DEFAULT_CLOUD_RELAY_URL: string = OFFICIAL_RELAY_URL;
 
 /** Device kinds the relay accepts; mirrors `relay-service/src/db.rs::DEVICE_KINDS`. */
 const DEVICE_KIND_DESKTOP: string = 'desktop';
@@ -127,6 +128,8 @@ function isDesktopDeviceRow(device: CloudAccountDeviceWire, selfDeviceId: string
 }
 
 /** Client for the current desktop relay account protocol. */
+interface DeviceKeyPair { privateKey: Uint8Array; publicKey: Uint8Array; }
+
 export class CloudAccountClient {
   private readonly cipher: HarmonyRemoteCryptoCipher = new HarmonyRemoteCryptoCipher();
 
@@ -134,10 +137,10 @@ export class CloudAccountClient {
 
   cancelAuthorization(): void { this.authorizationGeneration++; }
 
-  async login(deviceId: string, openAuthorization: (url: string) => Promise<boolean>): Promise<CloudAccountSession> {
+  async login(relayUrl: string, deviceId: string, openAuthorization: (url: string) => Promise<boolean>, deviceSecret: Uint8Array): Promise<CloudAccountSession> {
     const generation = ++this.authorizationGeneration;
     const startRequest: Record<string, string> = {};
-    const start = await this.post<GitHubStart>(DEFAULT_CLOUD_RELAY_URL, '/api/auth/github/start', startRequest);
+    const start = await this.post<GitHubStart>(relayUrl, '/api/auth/github/start', startRequest);
     if (generation !== this.authorizationGeneration) throw new Error('Sign-in cancelled.');
     if (!start.authorizationUrl.startsWith('https://github.com/login/oauth/authorize?')) {
       throw new Error('Untrusted account authorization URL.');
@@ -148,17 +151,18 @@ export class CloudAccountClient {
       await new Promise<void>((resolve) => setTimeout(resolve, Math.min(30, Math.max(1, start.pollIntervalSeconds)) * 1000));
       if (generation !== this.authorizationGeneration) break;
       const request: GitHubPollRequest = { transactionId: start.transactionId, transactionSecret: start.transactionSecret };
-      const poll = await this.post<GitHubPoll>(DEFAULT_CLOUD_RELAY_URL, '/api/auth/github/poll', request);
+      const poll = await this.post<GitHubPoll>(relayUrl, '/api/auth/github/poll', request);
       if (generation !== this.authorizationGeneration) break;
       if (poll.status === 'authorized' && poll.tokens?.accessToken) {
-        const keys = X25519.generateKeyPair();
+        if (deviceSecret.length !== 32) throw new Error('Invalid device identity.');
+        const keys: DeviceKeyPair = { privateKey: new Uint8Array(deviceSecret), publicKey: X25519.scalarMultBase(deviceSecret) };
         const body: LoginRequest = {
           access_token: poll.tokens.accessToken, device_id: deviceId, device_name: 'HarmonyOS Phone',
           device_kind: DEVICE_KIND_MOBILE, public_key: Encoding.bytesToBase64(keys.publicKey),
           request_id: Encoding.randomId('').slice(1)
         };
         try {
-          const auth = await this.post<AccountAuthResponse>(DEFAULT_CLOUD_RELAY_URL, '/api/auth/login', body);
+          const auth = await this.post<AccountAuthResponse>(relayUrl, '/api/auth/login', body);
           if (generation !== this.authorizationGeneration) throw new Error('Sign-in cancelled.');
           if (!auth.token || !auth.user_id) throw new Error('Invalid account identity.');
           return { token: auth.token, userId: auth.user_id, masterKey: keys.privateKey };
@@ -287,7 +291,8 @@ export class CloudAccountClient {
     readTimeoutMs: number = 120000
   ): Promise<T> {
     const request = http.createHttp();
-    const base = DEFAULT_CLOUD_RELAY_URL;
+    const base = normalizeAccountRelayUrl(relayUrl);
+    if (!base) throw new Error('Invalid Relay URL');
     // Timed so the watch has something to be slow relative to. Phone and watch
     // reach the same relay and the same desktop, so a gap between them is the
     // client's own cost and a shared floor is the round trip's.

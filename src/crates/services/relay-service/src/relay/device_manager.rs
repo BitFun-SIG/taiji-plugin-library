@@ -1,10 +1,7 @@
 //! Per-user online device registry for account-based device routing.
 //!
-//! This is a **parallel** pathway to `RoomManager`: the existing QR-pairing
-//! flow keeps using rooms (1 desktop per room, unchanged). Account-logged-in
-//! devices register here, scoped by `user_id`, and can route
-//! `device_to_device` messages to each other. The relay never decrypts the
-//! payloads — it only routes by `(user_id, target_device_id)`.
+//! Authenticated devices register by account and device id. The Relay never
+//! decrypts payloads; it routes within the authenticated account directory.
 //!
 //! The manager also supports HTTP RPC: a request can register a pending
 //! response keyed by `correlation_id`, and when a `DeviceMessage` response
@@ -18,7 +15,7 @@ use std::sync::{
 use tokio::sync::{mpsc, oneshot, watch, OwnedSemaphorePermit, Semaphore};
 use tracing::{debug, info};
 
-use crate::relay::room::{ConnId, OutboundMessage};
+use crate::relay::transport::{ConnId, OutboundMessage};
 
 pub const MAX_PENDING_DEVICE_RPCS: usize = 2048;
 pub const MAX_PENDING_DEVICE_RPCS_PER_ACCOUNT: usize = 64;
@@ -127,6 +124,7 @@ impl RpcResponse {
 /// Tracks online devices grouped by `user_id` so that `device_to_device`
 /// messages can be routed within an account without exposing other accounts.
 pub struct DeviceManager {
+    next_connection_id: std::sync::atomic::AtomicU64,
     /// Serializes presence mutations with authoritative snapshot broadcasts.
     ///
     /// DashMap keeps individual registry operations safe, but a presence
@@ -156,8 +154,13 @@ pub struct DeviceManager {
 }
 
 impl DeviceManager {
+    pub fn next_connection_id(&self) -> ConnId {
+        self.next_connection_id.fetch_add(1, Ordering::Relaxed)
+    }
+
     pub fn new() -> Arc<Self> {
         Arc::new(Self {
+            next_connection_id: std::sync::atomic::AtomicU64::new(1),
             presence_gate: Mutex::new(()),
             presence_projection_gate: tokio::sync::Mutex::new(()),
             users: DashMap::new(),

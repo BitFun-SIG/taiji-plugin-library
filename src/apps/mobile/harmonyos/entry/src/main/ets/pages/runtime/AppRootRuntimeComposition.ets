@@ -1,4 +1,4 @@
-import { accountDeviceIdFromLink } from '../../services/AccountDeviceLink';
+import { accountDeviceLink } from '../../services/AccountDeviceLink';
 import {
   ChatMessage,
   RemoteModelCatalog,
@@ -32,7 +32,6 @@ import { LocaleController } from '../viewmodel/LocaleController';
 import { ConversationController } from '../viewmodel/ConversationController';
 import { RemoteLogger } from '../../services/RemoteLogger';
 import { RemoteModelController } from '../../services/RemoteModelController';
-import { RemotePairingPolicy } from '../../services/RemotePairingPolicy';
 import { DetectedUrlAction } from '../../services/ConnectScanDecisionPolicy';
 import { RemoteSessionController } from '../../services/RemoteSessionController';
 import { RemoteSessionListCache } from '../../services/RemoteSessionListCache';
@@ -157,12 +156,9 @@ export abstract class AppRootRuntimeComposition {
   readonly clipboardService: ClipboardService = new ClipboardService();
   readonly qrScanService: QrScanService = new QrScanService();
   readonly imagePickerService: ImagePickerService = new ImagePickerService();
-  readonly remotePairingPolicy: RemotePairingPolicy = new RemotePairingPolicy();
   readonly remoteConnectionCoordinator: RemoteConnectionCoordinator =
     new RemoteConnectionCoordinator(
       this.sessionManager,
-      this.identityStore,
-      this.remotePairingPolicy,
       this.remoteConnectionGate
     );
   readonly generalChatPageState: GeneralChatPageState = new GeneralChatPageState();
@@ -170,64 +166,21 @@ export abstract class AppRootRuntimeComposition {
   readonly deviceDirectoryState: DeviceDirectoryState = new DeviceDirectoryState();
   readonly watchProvisionState: WatchProvisionState = new WatchProvisionState();
   private readonly watchProvisionPort: WatchProvisionPort = {
-    // Two ways to reach a credential, and the phone's own account is the
-    // better one: it works with the desktop asleep. The room channel stays as
-    // the fallback for a phone that only ever scanned a QR code and so has no
-    // account of its own to mint from.
-    canProvision: (): boolean => this.settingsController.canMintWatchCredential() ||
-      this.canProvisionViaDesktop(),
+    canProvision: (): boolean => this.settingsController.canMintWatchCredential(),
     provision: (deviceId: string, deviceName: string, requestId: string, password: string): Promise<WatchProvisionOutcome> =>
       this.provisionWatchDevice(deviceId, deviceName, requestId, password)
   };
   readonly watchProvisionController: WatchProvisionController =
     new WatchProvisionController(this.watchProvisionState, this.watchProvisionPort);
 
-  private canProvisionViaDesktop(): boolean {
-    return (this.remotePageState.connectionState as ConnectionState) === ConnectionState.Connected &&
-      this.sessionManager.hasRoomChannel();
-  }
-
-  /**
-   * Mints the watch's credential, preferring this phone's own account.
-   *
-   * The relay gates minting on holding a device token, which a password login
-   * on this phone produces — the desktop was never uniquely entitled, it was
-   * just the only party the old code asked. Going direct means a watch can be
-   * onboarded with the desktop closed, and skips a 45-second round trip when
-   * it is open.
-   *
-   * `undefined` back from the account path means "not entitled" (a token
-   * delegated by a room pairing rather than a login), which is the one case
-   * worth falling back for. A network failure throws instead, so a blip is not
-   * reported as a missing desktop.
-   */
   private async provisionWatchDevice(
     deviceId: string,
     deviceName: string,
     requestId: string,
     password: string
   ): Promise<WatchProvisionOutcome> {
-    const minted = await this.settingsController.provisionWatchCredential(deviceId, deviceName, requestId, password);
-    if (minted) {
-      return minted;
-    }
-    if (!this.canProvisionViaDesktop()) {
-      return AppRootRuntimeComposition.provisionUnavailable();
-    }
-    const outcome = await this.sessionManager.provisionPeerDevice(deviceId, deviceName, requestId);
-    return {
-      ok: outcome.ok,
-      passwordRequired: false,
-      // The desktop mints against the relay its room lives on, which is not
-      // necessarily the one this phone's account is on.
-      relayUrl: outcome.ok ? this.sessionManager.roomRelayEndpoint() : '',
-      token: outcome.token,
-      userId: outcome.userId,
-      masterKeyBase64: outcome.masterKeyBase64,
-      deviceId: outcome.deviceId,
-      failure: outcome.failure,
-      desktopReported: outcome.desktopReported
-    };
+    return await this.settingsController.provisionWatchCredential(deviceId, deviceName, requestId, password) ||
+      AppRootRuntimeComposition.provisionUnavailable();
   }
 
   private static provisionUnavailable(): WatchProvisionOutcome {
@@ -633,7 +586,6 @@ export abstract class AppRootRuntimeComposition {
     new RemoteConnectionController(
       this.remotePageState,
       this.identityStore,
-      this.remotePairingPolicy,
       this.remoteConnectionCoordinator,
       this.remoteSessionController,
       this.remoteModelController,
@@ -998,13 +950,17 @@ export abstract class AppRootRuntimeComposition {
   private pendingAccountDeviceId: string = '';
 
   handleDetectedRemoteUrl(url: string): string {
-    const deviceId = accountDeviceIdFromLink(url);
-    if (deviceId.length === 0) {
+    const link = accountDeviceLink(url);
+    if (!link) {
       this.remotePageState.setStatusText(RemoteI18n.t('connect.deviceLinkInvalid'));
       this.remotePageState.setConnectionState(ConnectionState.Failed);
       return DetectedUrlAction.INVALID;
     }
+    const deviceId = link.deviceId;
     this.remotePageState.setRemoteUrl(url);
+    if (this.settingsController.cloudRelayEndpoint() !== link.relayUrl) {
+      this.settingsController.selectAccountRelay(link.relayUrl);
+    }
     if (!this.settingsController.hasCloudAccountSession()) {
       this.pendingAccountDeviceId = deviceId;
       this.appShellState.setConnectSheetVisible(false);
@@ -1035,8 +991,5 @@ export abstract class AppRootRuntimeComposition {
       return;
     }
     const action = this.handleDetectedRemoteUrl(text);
-    if (action === DetectedUrlAction.PAIR_NOW) {
-      void this.connect(false, '');
-    }
   }
 }

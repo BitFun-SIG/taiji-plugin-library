@@ -103,7 +103,7 @@ struct SettingsView: View {
     }
 
     private var showsCurrentConnection: Bool {
-        model.remoteConnected || model.accountDeviceName != nil || model.directPairingDeviceName != nil
+        model.remoteConnected || model.accountDeviceName != nil
     }
 
     private var currentConnectionSection: some View {
@@ -117,7 +117,7 @@ struct SettingsView: View {
                     VStack(alignment: .leading, spacing: 3) {
                         Text(
                             model.accountDeviceName
-                                ?? model.directPairingDeviceName
+
                                 ?? model.localized("尚未连接桌面端")
                         )
                         .font(MobileDesignTypography.bodyLarge.font.weight(.medium))

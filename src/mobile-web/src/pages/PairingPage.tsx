@@ -1,9 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import PairingForm from '../components/PairingForm';
-import { accountDeviceIdFromHash, parseScannedPairingLink } from '../services/pairingLink';
+import { accountDeviceIdFromHash, currentRelayUrl, parseScannedPairingLink } from '../services/pairingLink';
 import QrScannerSheet from '../components/QrScannerSheet';
 import { useI18n } from '../i18n';
-import { CloudAccountClient, OFFICIAL_RELAY_URL, type CloudAccountSession } from '../services/CloudAccountClient';
+import { CloudAccountClient, generateRequestId, type CloudAccountSession } from '../services/CloudAccountClient';
 import { loadMatchingCloudAccountSession, saveCloudAccountSession } from '../services/CloudAccountSessionStore';
 import { RelayHttpClient } from '../services/RelayHttpClient';
 import { RemoteSessionManager } from '../services/RemoteSessionManager';
@@ -16,11 +16,11 @@ interface PairingPageProps {
 }
 
 function installId(): string {
-  const key = 'openbitfun.mobile.install_id';
-  const existing = localStorage.getItem(key);
+  const key = 'openbitfun.mobile.controller_id';
+  const existing = sessionStorage.getItem(key);
   if (existing) return existing;
-  const created = crypto.randomUUID();
-  localStorage.setItem(key, created);
+  const created = generateRequestId();
+  sessionStorage.setItem(key, created);
   return created;
 }
 
@@ -28,6 +28,7 @@ function routeKey(): string { return `${window.location.pathname}${window.locati
 
 const PairingPageContent: React.FC<PairingPageProps> = ({ onPaired }) => {
   const { t } = useI18n();
+  const relayUrl = currentRelayUrl();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [scannerOpen, setScannerOpen] = useState(false);
@@ -39,9 +40,8 @@ const PairingPageContent: React.FC<PairingPageProps> = ({ onPaired }) => {
   const targetDeviceId = accountDeviceIdFromHash(window.location.hash) || undefined;
 
   const connect = (session: CloudAccountSession, controllerDeviceId: string, restore: boolean) => {
-    const client = new RelayHttpClient(OFFICIAL_RELAY_URL, '');
-    client.installDirectAccountIdentity({ ...session, deviceId: controllerDeviceId });
-    saveCloudAccountSession({ relayUrl: OFFICIAL_RELAY_URL, username: session.userId,
+    const client = new RelayHttpClient(relayUrl, { ...session, deviceId: controllerDeviceId });
+    saveCloudAccountSession({ relayUrl: relayUrl, username: session.userId,
       controllerDeviceId, session });
     const store = useMobileStore.getState();
     store.resetForDeviceSwitch();
@@ -50,7 +50,7 @@ const PairingPageContent: React.FC<PairingPageProps> = ({ onPaired }) => {
     store.setControlTarget(null);
     store.setConnectionStatus('paired');
     const scope = { accountId: session.userId, controllerDeviceId,
-      relayUrl: OFFICIAL_RELAY_URL, routeKey: routeKey() };
+      relayUrl: relayUrl, routeKey: routeKey() };
     const navigation = restore ? loadMobileNavigation(scope) : null;
     session.masterKey.fill(0);
     onPairedRef.current(client, new RemoteSessionManager(client),
@@ -61,7 +61,7 @@ const PairingPageContent: React.FC<PairingPageProps> = ({ onPaired }) => {
     // Only scanning a target resumes the tab's authenticated controller.
     if (targetDeviceId) {
       const id = installId();
-      const saved = loadMatchingCloudAccountSession(OFFICIAL_RELAY_URL, '', id);
+      const saved = loadMatchingCloudAccountSession(relayUrl, '', id);
       if (saved) connect(saved.session, id, true);
     }
     return () => {
@@ -84,7 +84,7 @@ const PairingPageContent: React.FC<PairingPageProps> = ({ onPaired }) => {
     pending.current = controller;
     setBusy(true); setError(null);
     try {
-      const account = new CloudAccountClient();
+      const account = new CloudAccountClient(relayUrl);
       const accessToken = await account.authorize(authWindow, controller.signal);
       if (generation.current !== attempt) return;
       const id = installId();

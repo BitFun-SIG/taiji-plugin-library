@@ -33,6 +33,7 @@ public sealed interface AccountUiState {
     public data class Authorizing(public val authorizationUrl: String) : AccountUiState
     public data class Ready public constructor(
         public val userId: String,
+        public val relayUrl: String,
         /**
          * The name this session signed in under.
          *
@@ -60,10 +61,11 @@ public sealed interface AccountUiState {
         public constructor(
             userId: String,
             username: String,
+            relayUrl: String = com.openbitfun.mobile.core.transport.DEFAULT_CLOUD_RELAY_URL,
             devices: List<AccountDeviceUi>,
             selectedDeviceId: String?,
             selectedDeviceName: String?,
-        ) : this(userId, username, devices, selectedDeviceId, selectedDeviceName, false, null)
+        ) : this(userId, relayUrl, username, devices, selectedDeviceId, selectedDeviceName, false, null)
     }
     public data class Failed public constructor(
         public val reason: AccountFailureReason,
@@ -75,6 +77,7 @@ public sealed interface AccountUiState {
 public sealed interface AccountIntent {
     public data object Restore : AccountIntent
     public data object Login : AccountIntent
+    public data class SelectRelay(public val relayUrl: String) : AccountIntent
     public data class SelectDevice public constructor(public val deviceId: String) : AccountIntent
 
     /**

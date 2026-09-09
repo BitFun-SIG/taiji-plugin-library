@@ -14,6 +14,7 @@ async function loadSource(relativePath, imports = {}) {
   return { url: `data:text/javascript;base64,${Buffer.from(code).toString('base64')}`, source };
 }
 
+const links = await loadSource('../src/services/pairingLink.ts');
 const selection = await loadSource('../src/services/accountDeviceSelection.ts');
 const { selectAccountDevice } = await import(selection.url);
 const offline = { device_id: 'desktop-a', device_name: 'Offline desktop', online: false };
@@ -74,16 +75,19 @@ test('online selection preserves exact QR targeting and supports later device av
   assert.equal(selectAccountDevice([reconnected, online], 'browser', offline.device_id), reconnected);
 });
 
-test('GitHub login registers an independent device public key at the fixed relay', async () => {
+test('GitHub login registers an independent device public key and reuses the device key across sign-ins', async () => {
   const encryption = await loadSource('../src/services/E2EEncryption.ts');
   const { deriveDeviceMessageKey } = await import(encryption.url);
   const { x25519 } = await import('@noble/curves/ed25519.js');
-  const authModule = await loadSource('../src/services/CloudAccountClient.ts', { './E2EEncryption': encryption.url });
+  const authModule = await loadSource('../src/services/CloudAccountClient.ts', { './E2EEncryption': encryption.url, './pairingLink': links.url });
   const { CloudAccountClient } = await import(authModule.url);
   const originalFetch = globalThis.fetch;
   const originalWindow = globalThis.window;
   const requests = [];
   globalThis.window = { setTimeout, clearTimeout };
+  const originalStorage = globalThis.sessionStorage;
+  const keys = new Map();
+  globalThis.sessionStorage = { getItem: key => keys.get(key) ?? null, setItem: (key, value) => keys.set(key, value) };
   globalThis.fetch = async (url, options) => {
     assert.equal(url, 'https://remote.openbitfun.com/v/1.0.0/api/auth/login');
     const body = JSON.parse(options.body);
@@ -95,16 +99,18 @@ test('GitHub login registers an independent device public key at the fixed relay
     return Response.json({ token: 'test-account-token', user_id: '101' });
   };
   try {
-    const first = await new CloudAccountClient().login('verified-github-token', 'browser');
-    const second = await new CloudAccountClient().login('verified-github-token', 'browser');
+    const first = await new CloudAccountClient('https://remote.openbitfun.com/v/1.0.0').login('verified-github-token', 'browser');
+    const second = await new CloudAccountClient('https://remote.openbitfun.com/v/1.0.0').login('verified-github-token', 'browser');
     assert.equal(first.userId, '101');
-    assert.notDeepEqual(first.masterKey, second.masterKey);
+    assert.deepEqual(first.masterKey, second.masterKey);
+    assert.equal(requests[0].public_key, requests[1].public_key);
     assert.deepEqual(Buffer.from(requests[0].public_key, 'base64'), Buffer.from(x25519.getPublicKey(first.masterKey)));
     assert.deepEqual(deriveDeviceMessageKey(first.masterKey, x25519.getPublicKey(second.masterKey)),
       deriveDeviceMessageKey(second.masterKey, x25519.getPublicKey(first.masterKey)));
     assert.throws(() => deriveDeviceMessageKey(first.masterKey, new Uint8Array(32)));
     assert.equal(Buffer.from(deriveDeviceMessageKey(new Uint8Array(32).fill(7), x25519.getPublicKey(new Uint8Array(32).fill(11)))).toString('hex'), '6e8f5da837e91e9ddb09c5aa7dee229e731fc94499d29d10dcf5f1437193f56c');
   } finally {
+    globalThis.sessionStorage = originalStorage;
     globalThis.fetch = originalFetch;
     if (originalWindow === undefined) delete globalThis.window;
     else globalThis.window = originalWindow;
@@ -126,12 +132,12 @@ test('account UI entry precedes discovery and mounts no remote workspace surface
   assert.match(devices, /if \(!d.online \|\| switchingId\) return/);
   assert.match(devices, /automaticSelectionAttemptedRef\.current = true/);
   assert.match(devices, /selectDevice\(target, false\)/, 'initial account selection must not require a new peer command');
-  assert.ok(devices.indexOf('await client.sendDeviceRpc') < devices.indexOf('client.setPairedDeviceId(d.device_id)'));
+  assert.ok(devices.indexOf('await client.sendDeviceRpc') < devices.indexOf('client.setTargetDeviceId(d.device_id)'));
 });
 
 test('authorization follows the central GitHub OAuth URL and rejects lookalike destinations', async () => {
   const encryption = await loadSource('../src/services/E2EEncryption.ts');
-  const authModule = await loadSource('../src/services/CloudAccountClient.ts', { './E2EEncryption': encryption.url });
+  const authModule = await loadSource('../src/services/CloudAccountClient.ts', { './E2EEncryption': encryption.url, './pairingLink': links.url });
   const { CloudAccountClient } = await import(authModule.url);
   const previous = { fetch: globalThis.fetch, window: globalThis.window, setTimeout: globalThis.setTimeout };
   globalThis.window = { setTimeout: previous.setTimeout, clearTimeout };
@@ -153,7 +159,7 @@ test('authorization follows the central GitHub OAuth URL and rejects lookalike d
         return Response.json({ status: 'authorized', tokens: { accessToken: 'verified' } });
       };
       const popup = { location: { href: 'about:blank' } };
-      const result = new CloudAccountClient().authorize(popup, new AbortController().signal);
+      const result = new CloudAccountClient('https://remote.openbitfun.com/v/1.0.0').authorize(popup, new AbortController().signal);
       if (authorizationUrl === 'https://github.com/login/oauth/authorize?state=test') {
         assert.equal(await result, 'verified');
         assert.equal(popup.location.href, authorizationUrl);
@@ -173,23 +179,20 @@ test('authorization follows the central GitHub OAuth URL and rejects lookalike d
 });
 
 
-test('scanned device links accept only the official authority and a unique device id', async () => {
-  const encryption = await loadSource('../src/services/E2EEncryption.ts');
-  const auth = await loadSource('../src/services/CloudAccountClient.ts', { './E2EEncryption': encryption.url });
-  const link = await loadSource('../src/services/pairingLink.ts', { './CloudAccountClient': auth.url });
-  const { parseScannedPairingLink, accountDeviceIdFromHash } = await import(link.url);
-  const base = 'https://remote.openbitfun.com/v/1.0.0/';
-  assert.equal(parseScannedPairingLink(`${base}#/pair?did=desktop-1&pk=untrusted&relay=https://evil.example`, base), `${base}#/pair?did=desktop-1`);
-  for (const value of [
-    'https://evil.example/v/1.0.0/#/pair?did=desktop',
-    'https://remote.openbitfun.com.evil.example/v/1.0.0/#/pair?did=desktop',
-    'https://user@remote.openbitfun.com/v/1.0.0/#/pair?did=desktop',
-    'http://remote.openbitfun.com/v/1.0.0/#/pair?did=desktop',
-    'https://remote.openbitfun.com/relay/#/pair?did=desktop',
-    `${base}#/pair?did=a&did=b`, `${base}#/pair?did=%2Fother`,
-    `${base}#/pair?room=room&pk=key`, `${base}#/pair?did=..`,
-    'javascript:alert(1)',
-  ]) assert.equal(parseScannedPairingLink(value, base), null, value);
+test('official and local invitations share strict device-only targeting', async () => {
+  const { parseScannedPairingLink, accountDeviceIdFromHash } = await import(links.url);
+  for (const base of ['https://remote.openbitfun.com/v/1.0.0/', 'http://192.168.1.9:9700/']) {
+    assert.equal(parseScannedPairingLink(`${base}#/pair?did=desktop-1`, base), `${base}#/pair?did=desktop-1`);
+    for (const hash of ['did=a&did=b', 'did=a&pk=untrusted', 'did=a&relay=https://evil.example',
+      'did=%2Fother', 'room=room&pk=key', 'did=..']) {
+      assert.equal(parseScannedPairingLink(`${base}#/pair?${hash}`, base), null);
+    }
+  }
+  for (const base of ['https://evil.example/', 'https://remote.openbitfun.com.evil.example/v/1.0.0/',
+    'https://user@remote.openbitfun.com/v/1.0.0/', 'http://remote.openbitfun.com/v/1.0.0/',
+    'https://remote.openbitfun.com/relay/']) {
+    assert.equal(parseScannedPairingLink(`${base}#/pair?did=desktop`, 'http://localhost/'), null);
+  }
   assert.equal(accountDeviceIdFromHash('#/pair?did=desktop'), 'desktop');
   assert.equal(accountDeviceIdFromHash('#/chat?did=desktop'), null);
 });

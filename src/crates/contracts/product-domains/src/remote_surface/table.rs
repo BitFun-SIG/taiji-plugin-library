@@ -88,7 +88,6 @@ pub(super) const OPERATIONS: &[OperationDefinition] = &[
     op("accept_operation",                                           Unaudited,   Proxied,          CLI_NOT_IMPLEMENTED),
     op("accept_session",                                             Unaudited,   Proxied,          CLI_NOT_IMPLEMENTED),
     op("account_connect_devices",                                    Agnostic,    ControllerLocal,  REFUSED),
-    op("account_delegate_to_paired",                                 Agnostic,    ControllerLocal,  REFUSED),
     op("account_delete_device",                                      Agnostic,    ControllerLocal,  REFUSED),
     op("account_device_rpc",                                         Agnostic,    ControllerLocal,  REFUSED),
     op("account_execute_on_device",                                  Agnostic,    ControllerLocal,  REFUSED),
