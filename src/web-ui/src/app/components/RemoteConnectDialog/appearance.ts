@@ -41,7 +41,6 @@ export const remoteAccountPanelAppearanceDescriptor: AppearanceSurfaceDescriptor
     { id: 'scroll' },
     { id: 'form' },
     { id: 'actions' },
-    { id: 'server' },
     { id: 'deviceList' },
     { id: 'deviceCard' },
   ],

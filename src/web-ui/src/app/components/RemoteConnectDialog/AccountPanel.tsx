@@ -6,10 +6,9 @@ import { useI18n } from '@/infrastructure/i18n';
 import {
   confirmDanger,
 } from '@/infrastructure/confirm-dialog';
-import { Server, LogIn, Monitor } from 'lucide-react';
+import { LogIn, Monitor } from 'lucide-react';
 import { remoteConnectAPI } from '@/infrastructure/api/service-api/RemoteConnectAPI';
 import type {
-  AccountHint,
   AccountDeviceInfo,
   OnlineDeviceInfo,
 } from '@/infrastructure/api/service-api/RemoteConnectAPI';
@@ -21,7 +20,6 @@ import {
   isRelayUnreachable,
 } from '@/infrastructure/account/accountErrorUtils';
 import { useNotification } from '@/shared/notification-system';
-import { copyTextToClipboard } from '@/shared/utils/textSelection';
 import { createLogger } from '@/shared/utils/logger';
 import './AccountPanel.scss';
 
@@ -71,7 +69,7 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
   onCloseDialog,
 }) => {
   const { t, formatRelativeTime } = useI18n('common');
-  const { success, warning } = useNotification();
+  const { success } = useNotification();
   const { peerMode, switchToDevice, switchToLocal } = usePeerDeviceMode();
   const identity = useAccountIdentity();
   const username = identity.me?.user.login ?? '';
@@ -84,9 +82,6 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
   /** True after either device presence or a list_devices response is available. */
   const [devicesReady, setDevicesReady] = useState(false);
   const [relayError, setRelayError] = useState<string | null>(null);
-  /** Relay URL of the current account session, shown in the devices view. */
-  const [accountRelayUrl, setAccountRelayUrl] = useState('');
-  const [copiedServerUrl, setCopiedServerUrl] = useState(false);
   /** Account epoch whose presence events may update the device list. */
   const [activeAccountEpoch, setActiveAccountEpoch] = useState<number | null>(null);
   const refreshTimer = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -129,24 +124,11 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
     setLocalDeviceId(null);
     setDevicesReady(false);
     setRelayError(null);
-    setAccountRelayUrl('');
-    setCopiedServerUrl(false);
     refreshInFlightRef.current = null;
     deviceRoutingReadyRef.current = false;
     deviceListFailureCountRef.current = 0;
     if (refreshTimer.current) { clearInterval(refreshTimer.current); refreshTimer.current = null; }
   }, []);
-
-  const handleCopyRelayUrl = useCallback(async () => {
-    if (!accountRelayUrl) return;
-    const copied = await copyTextToClipboard(accountRelayUrl);
-    if (copied) {
-      setCopiedServerUrl(true);
-      window.setTimeout(() => setCopiedServerUrl(false), 1500);
-    } else {
-      warning(t('accountLogin.copyServerFailed'));
-    }
-  }, [accountRelayUrl, t, warning]);
 
   const handleSessionExpired = useCallback(async (_error: unknown, expectedEpoch: number) => {
     if (!isAccountEpochCurrent(expectedEpoch)) return;
@@ -380,11 +362,6 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
     remoteConnectAPI.getDeviceInfo().then((info) => {
       if (isAccountEpochCurrent(epoch)) setLocalDeviceId(info.device_id);
     }).catch((e) => { log.warn('getDeviceInfo failed', e); });
-    remoteConnectAPI.accountGetCredentialHint().then((hint: AccountHint | null) => {
-      if (hint && isAccountEpochCurrent(epoch)) {
-        setAccountRelayUrl(hint.relay_url);
-      }
-    });
     remoteConnectAPI.accountStatus().then(async (status) => {
       if (isAccountEpochCurrent(epoch) && status.logged_in && status.user_id) {
         setActiveAccountEpoch(epoch);
@@ -435,12 +412,10 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
 
   /** Show the authenticated device list and connect routing. */
   const completeLogin = useCallback((
-    relayUrl: string,
     accountEpoch: number,
   ) => {
     if (!isAccountEpochCurrent(accountEpoch)) return;
     setActiveAccountEpoch(accountEpoch);
-    setAccountRelayUrl(relayUrl);
     setView('devices');
     void initializeDevices();
   }, [initializeDevices, isAccountEpochCurrent]);
@@ -453,10 +428,8 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
       if (!isAccountEpochCurrent(epoch)) return;
       await remoteConnectAPI.accountLogin();
       if (!isAccountEpochCurrent(epoch)) return;
-      const hint = await remoteConnectAPI.accountGetCredentialHint();
-      if (!isAccountEpochCurrent(epoch)) return;
       success(t('accountLogin.loginSuccess', { user_id: me.user.login }));
-      completeLogin(hint?.relay_url ?? '', epoch);
+      completeLogin(epoch);
     } catch (e: unknown) {
       if (isAccountEpochCurrent(epoch)) setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -573,7 +546,6 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
     switchToDevice,
     switchToLocal,
     t,
-    warning,
   ]);
 
   return (
@@ -594,55 +566,39 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
 
         {view === 'login' && (
           <ScrollArea className="account-panel__scroll" data-openbitfun-component="remote-account-panel" data-openbitfun-part="scroll">
-            <p className="account-panel__value-prop">{t('accountLogin.loginValueProp')}</p>
-            <div className="account-panel__form" data-openbitfun-component="remote-account-panel" data-openbitfun-part="form">
+            <div className="account-panel__login-card" data-openbitfun-component="remote-account-panel" data-openbitfun-part="form">
+              <span className="account-panel__login-icon" aria-hidden="true"><Icon name="user" size="lg" /></span>
+              <p className="account-panel__value-prop">{t('accountLogin.loginValueProp')}</p>
               <p className="account-panel__security-note">{t('accountLogin.securityNote')}</p>
-            </div>
-            <div className="account-panel__actions" data-openbitfun-component="remote-account-panel" data-openbitfun-part="actions">
-              <Button
-                variant="primary"
-                size="sm"
-                leadingIcon={<LogIn />}
-                onClick={handleLogin}
-                disabled={loading}
-              >
-                {loading ? t('accountLogin.processing') : t('accountLogin.login')}
-              </Button>
+              <div className="account-panel__actions" data-openbitfun-component="remote-account-panel" data-openbitfun-part="actions">
+                <Button variant="primary" size="sm" leadingIcon={<LogIn />} onClick={handleLogin} loading={loading}>
+                  {loading ? t('accountLogin.processing') : t('accountLogin.login')}
+                </Button>
+              </div>
             </div>
           </ScrollArea>
         )}
 
         {view === 'devices' && (
           <ScrollArea className="account-panel__scroll" data-openbitfun-component="remote-account-panel" data-openbitfun-part="scroll">
+            <div className="account-panel__identity-line">
+              <Icon name="user" size="lg" aria-hidden="true" />
+              <span className="account-panel__identity-copy">
+                <span className="account-panel__identity-label">{t('accountLogin.signedInAccount')}</span>
+                <OverflowText className="account-panel__identity-name" title={username}>{username.trim()}</OverflowText>
+              </span>
+              <Button variant="text" size="sm" onClick={handleLogout} disabled={loading}>
+                {t('accountLogin.logout')}
+              </Button>
+            </div>
+            <div className="account-panel__section-heading">
+              <h3>{t('accountLogin.linkedDevices')}</h3>
+              <Button variant="text" size="sm" leadingIcon={<Icon name="refresh" size="sm" />}
+                onClick={relayError ? handleRetryConnect : refreshDevices} disabled={loading}>
+                {t(relayError ? 'accountLogin.retryConnect' : 'accountLogin.refreshDevices')}
+              </Button>
+            </div>
             <div className="account-panel__devices-card">
-              {username.trim() && (
-                <div className="account-panel__identity-line">
-                  <Icon name="user" size="lg" />
-                  <span className="account-panel__server-copy">
-                    <span className="account-panel__server-label">{t('accountLogin.signedInAccount')}</span>
-                    <span className="account-panel__identity-name">{username.trim()}</span>
-                  </span>
-                </div>
-              )}
-              {accountRelayUrl && (
-                <div className="account-panel__server-line" data-openbitfun-component="remote-account-panel" data-openbitfun-part="server">
-                  <Server size={20} aria-hidden="true" />
-                  <span className="account-panel__server-copy">
-                    <span className="account-panel__server-label">{t('accountLogin.authServer')}</span>
-                    <OverflowText className="account-panel__server-url" title={accountRelayUrl}>
-                      {accountRelayUrl}
-                    </OverflowText>
-                  </span>
-                  <IconButton
-                    aria-label={t('accountLogin.copyServerUrl')}
-                    icon={copiedServerUrl ? <Icon name="check-line" size="lg" /> : <Icon name="duplicate" size="lg" />}
-                    onClick={handleCopyRelayUrl}
-                    size="sm"
-                    title={t('accountLogin.copyServerUrl')}
-                    variant="quiet"
-                  />
-                </div>
-              )}
               {relayError && (
                 <div className="account-panel__error-banner" data-openbitfun-component="remote-account-panel" data-openbitfun-part="error">
                   <Alert
@@ -696,11 +652,7 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
                           {isLocal && <StatusPill tone="neutral" className="account-panel__device-badge">{t('accountLogin.thisDevice')}</StatusPill>}
                         </span>
                         <span className="account-panel__device-meta">
-                          <span className="account-panel__device-id">
-                            {d.device_id.slice(0, 8)}
-                          </span>
                           <span className="account-panel__device-status">
-                            {' · '}
                             {d.online
                               ? t('accountLogin.online')
                               : d.last_seen_at
@@ -719,40 +671,12 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
                       icon={<Icon name="delete" size="sm" />}
                       onClick={(e) => { e.stopPropagation(); handleDeleteDevice(d.device_id, displayName); }}
                       size="sm"
-                      tone="danger"
                       title={removeLabel}
                       variant="quiet"
                     />
                   </div>
                   );
                 })}
-              </div>
-              <div className="account-panel__actions" data-openbitfun-component="remote-account-panel" data-openbitfun-part="actions">
-                {relayError && (
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    leadingIcon={<Icon name="refresh" size="lg" />}
-                    onClick={handleRetryConnect}
-                    disabled={loading}
-                  >
-                    {t('accountLogin.retryConnect')}
-                  </Button>
-                )}
-                {!relayError && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    leadingIcon={<Icon name="refresh" size="lg" />}
-                    onClick={refreshDevices}
-                    disabled={loading}
-                  >
-                    {t('accountLogin.refreshDevices')}
-                  </Button>
-                )}
-                <Button variant="outline" size="sm" onClick={handleLogout} disabled={loading}>
-                  {t('accountLogin.logout')}
-                </Button>
               </div>
             </div>
           </ScrollArea>

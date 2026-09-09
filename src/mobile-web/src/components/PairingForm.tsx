@@ -29,7 +29,7 @@ const PairingForm: React.FC<PairingFormProps> = ({ busy, error, onSignIn, onCanc
         </MobileButton>
         {busy
           ? <MobileButton appearance="plain" onClick={onCancel}>{t('common.cancel')}</MobileButton>
-          : <MobileButton appearance="plain" className="pairing-page__scan-action" onClick={onOpenScanner}>
+          : <MobileButton appearance="secondary" block className="pairing-page__scan-action" onClick={onOpenScanner}>
             {t('pairing.scanAction')}
           </MobileButton>}
       </div>

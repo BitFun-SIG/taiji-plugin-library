@@ -53,11 +53,21 @@ export function RemoteNetworkConnections({
         </StatusPill></span>
       </div>
       {settings && <div className="openbitfun-remote-connect__relay-settings">{settings}</div>}
-      <div className="openbitfun-remote-connect__connections-content">
+      {invitation && <div className="openbitfun-remote-connect__relay-invitation">
+        <RemotePairingCard
+          owner="network"
+          qrUrl={invitation.qr_url}
+          connected={connection.invitationConnected}
+          copied={pairingUrlCopied}
+          statusState={statusState}
+          onCopyUrl={onCopyPairingUrl}
+        />
+      </div>}
+      {(count > 0 || !invitation) && <div className="openbitfun-remote-connect__connections-content">
         <div className="openbitfun-remote-connect__connections-heading">
           <h4 title={t('remoteConnect.clientCountHint')}>{t('remoteConnect.connectedClients')}</h4>
           <span role="status">
-            <StatusPill tone={connected ? 'success' : 'neutral'}>{t('remoteConnect.clientCount', { count, formattedCount: formatNumber(count) })}</StatusPill>
+            <StatusPill tone={count > 0 ? 'success' : 'neutral'}>{t('remoteConnect.clientCount', { count, formattedCount: formatNumber(count) })}</StatusPill>
           </span>
         </div>
         {count > 0 && <ul className="openbitfun-remote-connect__connections-list" tabIndex={count > 3 ? 0 : undefined}>
@@ -69,16 +79,6 @@ export function RemoteNetworkConnections({
 
         </ul>}
         {count === 0 && <p className="openbitfun-remote-connect__connections-note">{t('remoteConnect.noConnectedClients')}</p>}
-      </div>
-      {invitation && <div className="openbitfun-remote-connect__relay-invitation">
-        <RemotePairingCard
-          owner="network"
-          qrUrl={invitation.qr_url}
-          connected={connection.invitationConnected}
-          copied={pairingUrlCopied}
-          statusState={statusState}
-          onCopyUrl={onCopyPairingUrl}
-        />
       </div>}
       <div className="openbitfun-remote-connect__relay-actions">
         {error}

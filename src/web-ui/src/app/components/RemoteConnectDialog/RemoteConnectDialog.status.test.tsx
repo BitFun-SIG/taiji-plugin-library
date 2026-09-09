@@ -210,7 +210,7 @@ describe('Remote Connect shared status through the real dialog and sidebar', () 
     expect(boundary.startConnection).toHaveBeenCalledWith(method, method === 'lan' ? '192.168.1.2' : undefined);
     expect(dialog().textContent).toContain(invitation(relay).qr_url);
     expect(cardStatus()).toBe('remoteConnect.stateWaiting');
-    expect(element('[data-openbitfun-part="connections"]').textContent).toContain('remoteConnect.clientCount:0');
+    expect(element('[data-openbitfun-part="connections"]').textContent).not.toContain('remoteConnect.noConnectedClients');
     expect(attachedMobile()).toBeNull();
     expect(dialog().textContent).not.toContain('remoteConnect.accountConnectedHint');
     boundary.backend = { ...boundary.backend!, clients: [{ id: 'phone', name: 'Safari · iOS' }, { id: 'browser', name: 'Chrome' }] };

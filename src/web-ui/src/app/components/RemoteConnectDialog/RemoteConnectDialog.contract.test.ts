@@ -56,7 +56,7 @@ describe('Remote Connect safety contracts', () => {
     expect(dialogSource).not.toContain('remote-connect-group-');
   });
 
-  it('keeps persistent connection context beside a single task surface', () => {
+  it('keeps persistent navigation beside a single task surface', () => {
     expect(dialogSource).toContain('size="2xl"');
     expect(dialogSource).toContain('className="openbitfun-remote-connect-dialog"');
     expect(dialogSource).toContain('className="openbitfun-remote-connect-dialog__header"');
@@ -64,7 +64,8 @@ describe('Remote Connect safety contracts', () => {
     expect(dialogSource).toContain('data-openbitfun-part="sidebar"');
     expect(dialogSource).toContain('data-openbitfun-part="sidebarBrand"');
     expect(dialogSource).toContain('data-openbitfun-part="main"');
-    expect(dialogSource).toContain("t('remoteConnect.overviewIntro')");
+    expect(dialogSource).toContain('className="openbitfun-remote-connect__navigation"');
+    expect(dialogSource).toContain("aria-current={activeView === view ? 'page' : undefined}");
   });
 
   it('keeps the dialog height stable while selected content scrolls inside it', () => {
@@ -106,12 +107,6 @@ describe('Remote Connect safety contracts', () => {
   });
 
   it('uses the real monochrome app marks for every chat provider', () => {
-    const overviewBrandStyle = dialogStyleSource.slice(
-      dialogStyleSource.indexOf('.openbitfun-remote-connect__chat-brand-item'),
-      dialogStyleSource.indexOf(
-        "[data-openbitfun-component='remote-connect-dialog'][data-openbitfun-part='overviewAction'][data-openbitfun-group='account']",
-      ),
-    );
     const identityBrandStyle = dialogStyleSource.slice(
       dialogStyleSource.indexOf('.openbitfun-remote-connect__bot-identity-icon'),
       dialogStyleSource.indexOf('.openbitfun-remote-connect__bot-identity-title'),
@@ -133,7 +128,7 @@ describe('Remote Connect safety contracts', () => {
     );
 
     expect(dialogSource).toContain('<ChatAppBrandIcon app={botTab} size={28} />');
-    expect(dialogSource).toContain('openbitfun-remote-connect__chat-brand-group');
+    expect(dialogSource).toContain('icon: <Icon name="side-chat" size="md" />');
     expect(dialogSource).toContain('<ChatAppBrandIcon app={brand} size={15} />');
     expect(chatAppBrandIconSource).toContain("app === 'telegram'");
     expect(chatAppBrandIconSource).toContain("app === 'feishu'");
@@ -141,8 +136,6 @@ describe('Remote Connect safety contracts', () => {
     expect(chatAppBrandIconSource.match(/fill="currentColor"/g)).toHaveLength(5);
     expect(deviceStatusControlSource).toContain('chatAppBrandFromIdentity(identity)');
     expect(deviceStatusControlSource).toContain('<ChatAppBrandIcon app={chatApp} size={size} />');
-    expect(overviewBrandStyle).toContain('border: 0');
-    expect(overviewBrandStyle).toContain('background: transparent');
     expect(identityBrandStyle).not.toContain('background:');
     expect(connectedBrandStyle).not.toContain('background:');
     expect(footerMessageBrandStyle).toContain('border: 0');

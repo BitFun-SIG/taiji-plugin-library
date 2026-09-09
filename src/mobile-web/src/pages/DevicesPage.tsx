@@ -283,7 +283,6 @@ const DevicesPage: React.FC<Props> = ({ client, onBack, onDeviceSelected = onBac
                     : d.last_seen_at
                       ? t('devices.lastSeen', { time: formatRelativeTime(d.last_seen_at * 1000) })
                       : t('devices.offline')}
-                  <span className="devices-page__device-id">{d.device_id.slice(0, 8)}</span>
                 </span>
               )}
               trailing={isSwitching ? (
@@ -366,7 +365,7 @@ const DevicesPage: React.FC<Props> = ({ client, onBack, onDeviceSelected = onBac
         />}
       />
 
-      {accountLanding && <MobileBanner>{t('devices.accountReady')}</MobileBanner>}
+      {accountLanding && <p className="devices-page__description">{t('devices.accountReady')}</p>}
       {error && <MobileBanner className="devices-page__error" tone="danger">{error}</MobileBanner>}
 
       <div className="devices-page__body">

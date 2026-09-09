@@ -3,6 +3,9 @@ import PairingForm from '../components/PairingForm';
 import { accountDeviceIdFromHash, currentRelayUrl, parseScannedPairingLink } from '../services/pairingLink';
 import QrScannerSheet from '../components/QrScannerSheet';
 import { useI18n } from '../i18n';
+import { useTheme } from '../theme';
+import logoMarkDark from '../assets/openbitfun-mark-dark.png';
+import logoMarkLight from '../assets/openbitfun-mark-light.png';
 import { CloudAccountClient, generateRequestId, type CloudAccountSession } from '../services/CloudAccountClient';
 import { loadMatchingCloudAccountSession, saveCloudAccountSession } from '../services/CloudAccountSessionStore';
 import { RelayHttpClient } from '../services/RelayHttpClient';
@@ -28,6 +31,7 @@ function routeKey(): string { return `${window.location.pathname}${window.locati
 
 const PairingPageContent: React.FC<PairingPageProps> = ({ onPaired }) => {
   const { t } = useI18n();
+  const { isDark } = useTheme();
   const relayUrl = currentRelayUrl();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -106,10 +110,10 @@ const PairingPageContent: React.FC<PairingPageProps> = ({ onPaired }) => {
   };
 
   return <div className="pairing-page"><div className="pairing-page__shell">
-    <aside className="pairing-page__hero"><div className="pairing-page__hero-copy">
-      <div className="pairing-page__eyebrow">{t('pairing.secureRemote')}</div>
-      <h2>{t('pairing.heroTitle')}</h2><p>{t('pairing.heroDescription')}</p>
-    </div></aside>
+    <div className="pairing-page__brand">
+      <img src={isDark ? logoMarkLight : logoMarkDark} alt="" width="28" height="28" />
+      <span>OpenBitFun</span>
+    </div>
     <section className="pairing-page__panel">
       <PairingForm busy={busy} error={error} onSignIn={() => void signIn()} onCancel={cancel}
         onOpenScanner={() => setScannerOpen(true)} />

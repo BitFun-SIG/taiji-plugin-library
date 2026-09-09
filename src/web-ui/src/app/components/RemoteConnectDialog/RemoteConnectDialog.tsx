@@ -845,11 +845,9 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
           <ChatAppBrandIcon app={botTab} size={28} />
         </span>
         <h3 className="openbitfun-remote-connect__bot-identity-title">{label}</h3>
-        <p className="openbitfun-remote-connect__bot-identity-description">
-          {botTab === 'weixin'
-            ? t('remoteConnect.botWeixinIntro')
-            : t('remoteConnect.desc_bot')}
-        </p>
+        {botTab === 'weixin' && <p className="openbitfun-remote-connect__bot-identity-description">
+          {t('remoteConnect.botWeixinIntro')}
+        </p>}
       </div>
     );
   };
@@ -1390,19 +1388,7 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
           })}
           {renderOverviewAction({
             view: 'bot',
-            icon: (
-              <span className="openbitfun-remote-connect__chat-brand-group">
-                {BOT_TABS.map(tab => (
-                  <span
-                    className="openbitfun-remote-connect__chat-brand-item"
-                    data-connected={isBotConnected && connectedBotTab === tab.id ? 'true' : undefined}
-                    key={tab.id}
-                  >
-                    <ChatAppBrandIcon app={tab.id} size={15} />
-                  </span>
-                ))}
-              </span>
-            ),
+            icon: <Icon name="side-chat" size="md" />,
             title: t('remoteConnect.chatAppsTitle'),
             description: t('remoteConnect.chatAppsDescription'),
             statusLabel: statusState === 'unavailable'
@@ -1421,6 +1407,14 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
         </div>
       </section>}
     </ScrollArea>
+  );
+
+  const renderNavigationItem = (view: ActiveView, label: string, icon: React.ReactNode) => (
+    <button type="button" className="openbitfun-remote-connect__navigation-item"
+      aria-current={activeView === view ? 'page' : undefined}
+      onClick={() => handleViewChange(view)}>
+      <span aria-hidden="true">{icon}</span><span>{label}</span>
+    </button>
   );
 
   const renderViewHeader = () => {
@@ -1457,7 +1451,7 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
           className="openbitfun-remote-connect__view-page-header"
           description={description}
           level={2}
-          size="md"
+          size="sm"
           title={<span id="remote-connect-view-title">{title}</span>}
         />
       </div>
@@ -1570,20 +1564,18 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
               <h2 id="remote-connect-center-title" className="openbitfun-remote-connect__sidebar-title">
                 {t('remoteConnect.centerTitle')}
               </h2>
-              <span className="openbitfun-remote-connect__title-extra">
-                <Button
-                  className="openbitfun-remote-connect__disclaimer-trigger"
-                  onClick={() => setShowDisclaimer(true)}
-                  size="sm"
-                  variant="outline"
-                >
-                  {t('remoteConnect.disclaimerReview')}
-                </Button>
-              </span>
-              <p className="openbitfun-remote-connect__sidebar-description">
-                {t('remoteConnect.overviewIntro')}
-              </p>
             </div>
+            <nav className="openbitfun-remote-connect__navigation" aria-label={t('remoteConnect.centerTitle')}>
+              {renderNavigationItem('overview', t('remoteConnect.overviewTitle'), <MonitorSmartphone size={18} />)}
+              {renderNavigationItem('account', t('remoteConnect.myDevicesTitle'), <Monitor size={18} />)}
+              {accountLoggedIn && renderNavigationItem('network', t('remoteConnect.mobileBrowserTitle'), <Smartphone size={18} />)}
+              {accountLoggedIn && renderNavigationItem('bot', t('remoteConnect.chatAppsTitle'), <Icon name="side-chat" size="sm" />)}
+            </nav>
+            <span className="openbitfun-remote-connect__title-extra">
+              <Button className="openbitfun-remote-connect__disclaimer-trigger" onClick={() => setShowDisclaimer(true)} size="xs" variant="text">
+                {t('remoteConnect.disclaimerReview')}
+              </Button>
+            </span>
           </aside>
 
           <main
@@ -1623,6 +1615,7 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
                     <TabGroup
                       aria-label={t('remoteConnect.chatAppsTitle')}
                       className="openbitfun-remote-connect__tab-group"
+                      size="sm"
                       items={botTabItems}
                       onValueChange={handleBotTabValueChange}
                       value={botTab}
