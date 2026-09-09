@@ -280,6 +280,10 @@ The Web UI's legacy Select implementation is retired. Like retired Button and
 Switch overrides, legacy `components.select` Appearance rules are ignored at
 the existing read-only migration boundary; original packages are not rewritten.
 Selection visuals now come from the public field/menu semantic tokens.
+SearchField sizes its decorative wrapper through Input's icon slot, so default
+catalog icons and native SVGs occupy the same region. Shortcut hints and clear
+actions can coexist; disabled and read-only fields disable the clear action.
+
 Choose `size` explicitly when composing form rows: selectors default to `md`,
 while `Input` defaults to `sm`. The shared `control.height.sm/md/lg` tokens and
 active density own the actual heights; consumers must not replace them with

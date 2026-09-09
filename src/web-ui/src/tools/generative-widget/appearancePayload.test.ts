@@ -34,6 +34,12 @@ const BUTTON_THEME_VARIABLE_NAMES = [
   '--openbitfun-component-button-text-content-disabled',
   '--openbitfun-component-button-text-content-hover',
 ] as const;
+// Field editing borders and hints have dedicated semantics; preserve the shared
+// contract fingerprint while asserting these two additions by their exact names.
+const FIELD_STATE_THEME_VARIABLE_NAMES = [
+  '--openbitfun-color-field-border-active',
+  '--openbitfun-color-field-placeholder',
+] as const;
 const RETIRED_WIDGET_VARIABLE_NAMES = [
   '--background-primary',
   '--bg-primary',
@@ -77,8 +83,13 @@ describe('generated widget appearance payload contract', () => {
     expect(WIDGET_APPEARANCE_VAR_NAMES).toEqual(CANONICAL_THEME_VARIABLE_NAMES);
     expect(new Set(WIDGET_APPEARANCE_VAR_NAMES).size).toBe(WIDGET_APPEARANCE_VAR_NAMES.length);
     const buttonNames = WIDGET_APPEARANCE_VAR_NAMES.filter(name => name.startsWith('--openbitfun-component-button-'));
-    const sharedNames = WIDGET_APPEARANCE_VAR_NAMES.filter(name => !name.startsWith('--openbitfun-component-button-'));
+    const fieldStateNames = WIDGET_APPEARANCE_VAR_NAMES.filter(name => FIELD_STATE_THEME_VARIABLE_NAMES.some(fieldName => fieldName === name));
+    const sharedNames = WIDGET_APPEARANCE_VAR_NAMES.filter(name => (
+      !name.startsWith('--openbitfun-component-button-')
+      && !FIELD_STATE_THEME_VARIABLE_NAMES.some(fieldName => fieldName === name)
+    ));
     expect(buttonNames).toEqual(BUTTON_THEME_VARIABLE_NAMES);
+    expect(fieldStateNames).toEqual(FIELD_STATE_THEME_VARIABLE_NAMES);
     expect({
       count: sharedNames.length,
       hash: hashNames(sharedNames),
@@ -137,6 +148,8 @@ describe('generated widget appearance payload contract', () => {
       '--openbitfun-color-action-primary-pressed': '#202020',
       '--openbitfun-component-button-primary-background': '#303030',
       '--openbitfun-component-button-fill-background': 'rgba(0, 0, 0, 0.08)',
+      '--openbitfun-color-field-border-active': 'rgba(0, 0, 0, 0.20)',
+      '--openbitfun-color-field-placeholder': 'rgba(0, 0, 0, 0.40)',
       '--openbitfun-color-status-danger-surface': 'rgba(200, 0, 0, 0.12)',
       '--openbitfun-color-status-danger-border': '#303030',
       '--openbitfun-shadow-raised': '0 1px 2px #404040',

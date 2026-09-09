@@ -4,6 +4,48 @@ import { APPEARANCE_THEME_TOKEN_NAMES } from './catalog';
 import { composeAppearancePackage } from './composeAppearancePackage';
 
 describe('composeAppearancePackage', () => {
+  it('preserves legacy field colors and explicit hint overrides across old-payload round trips', () => {
+    const original: AppearancePackage = {
+      schema: 'openbitfun.appearance', schemaVersion: 2,
+      id: 'example.legacy-fields', name: 'Legacy fields', version: '1.0.0', mode: 'light',
+      renderers: {
+        'theme-tokens': {
+          version: 1,
+          settings: {
+            tokens: {
+              '--openbitfun-color-field-border': '#123456',
+              '--openbitfun-color-field-border-focus': '#654321',
+              '--openbitfun-color-content-muted': '#778899',
+            },
+            scopes: { chrome: { '--openbitfun-color-content-muted': '#556677', '--openbitfun-color-field-border-focus': '#445566' } },
+          },
+        },
+      },
+    };
+    const payload = JSON.stringify(original);
+    const resolved = composeAppearancePackage(JSON.parse(payload));
+    const settings = resolved.renderers!['theme-tokens']!.settings;
+    expect(settings.tokens).toMatchObject({
+      '--openbitfun-color-field-border': '#123456',
+      '--openbitfun-color-field-border-focus': '#654321',
+      '--openbitfun-color-field-border-active': '#654321',
+      '--openbitfun-color-field-placeholder': '#778899',
+    });
+    expect(settings.scopes?.chrome?.['--openbitfun-color-field-placeholder']).toBe('#556677');
+    expect(settings.scopes?.chrome?.['--openbitfun-color-field-border-active']).toBe('#445566');
+    expect(composeAppearancePackage(JSON.parse(JSON.stringify(resolved))).renderers?.['theme-tokens']).toEqual(resolved.renderers?.['theme-tokens']);
+    expect(JSON.stringify(original)).toBe(payload);
+
+    original.renderers!['theme-tokens']!.settings.tokens['--openbitfun-color-field-placeholder'] = '#112233';
+    original.renderers!['theme-tokens']!.settings.tokens['--openbitfun-color-field-border-active'] = '#223344';
+    original.renderers!['theme-tokens']!.settings.scopes!.chrome!['--openbitfun-color-field-placeholder'] = '#334455';
+    original.renderers!['theme-tokens']!.settings.scopes!.chrome!['--openbitfun-color-field-border-active'] = '#556688';
+    const explicit = composeAppearancePackage(original).renderers!['theme-tokens']!.settings;
+    expect(explicit.tokens['--openbitfun-color-field-placeholder']).toBe('#112233');
+    expect(explicit.tokens['--openbitfun-color-field-border-active']).toBe('#223344');
+    expect(explicit.scopes?.chrome?.['--openbitfun-color-field-placeholder']).toBe('#334455');
+    expect(explicit.scopes?.chrome?.['--openbitfun-color-field-border-active']).toBe('#556688');
+  });
   it('keeps explicit legacy Button colors through a package round trip without requiring new tokens', () => {
     const original: AppearancePackage = {
       schema: 'openbitfun.appearance', schemaVersion: 2,

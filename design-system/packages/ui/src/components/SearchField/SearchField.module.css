@@ -18,13 +18,22 @@
     border-color: var(--openbitfun-color-border-default);
   }
 
+  .field [data-openbitfun-part="trailing"] {
+    gap: var(--openbitfun-space-1);
+  }
+
   .root .clear {
     /* The clear action is already composited inside Input's field surface. */
     --_icon-button-background: transparent;
     --_icon-button-background-hover: transparent;
     --_icon-button-background-active: transparent;
+    --_icon-button-content: var(--openbitfun-color-field-placeholder);
 
     background: transparent;
+  }
+
+  .root .clear:disabled {
+    --_icon-button-content: var(--openbitfun-color-content-disabled);
   }
 
   .root[data-variant="embedded"] .field,
@@ -133,6 +142,13 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
+  }
+
+  .icon > :where(svg, img),
+  .icon > [data-openbitfun-component="icon"] {
+    display: block;
+    inline-size: 100%;
+    block-size: 100%;
   }
 
   .shortcut {

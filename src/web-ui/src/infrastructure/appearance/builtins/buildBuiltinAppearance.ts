@@ -76,6 +76,15 @@ function themeValuesToCssTokens(
       .map(([name, value]) => [themeCssVariables[name], String(value)]),
   ) as Record<AppearanceThemeTokenName, string>;
   if (palette.id === DEFAULT_LIGHT_APPEARANCE_ID || palette.id === DEFAULT_DARK_APPEARANCE_ID) {
+    if (palette.id === DEFAULT_LIGHT_APPEARANCE_ID) {
+      // Default light fields use the published neutral states in both root and
+      // chrome. Branded palettes and imported overrides retain their own colors.
+      for (const name of Object.keys(themes.light) as ThemeTokenName[]) {
+        if (name.startsWith('color.field.')) {
+          tokens[themeCssVariables[name] as AppearanceThemeTokenName] = String(themes.light[name]);
+        }
+      }
+    }
     return tokens;
   }
   // Branded presets retain their existing action palette; the default product
@@ -153,6 +162,8 @@ function createThemeTokenValues(palette: AppearancePalette): Record<ThemeTokenNa
     'color.field.border': colors.border.base,
     'color.field.borderHover': colors.border.medium,
     'color.field.borderFocus': colors.accent[500],
+    'color.field.borderActive': colors.accent[500],
+    'color.field.placeholder': colors.text.muted,
     'color.focus.ring': colors.accent[500],
     'color.status.info.content': colors.semantic.info,
     'color.status.info.surface': colors.semantic.infoBg,
@@ -236,6 +247,8 @@ function createChromeThemeTokens(
     'color.field.border': chrome.border.base,
     'color.field.borderHover': chrome.border.medium,
     'color.field.borderFocus': chrome.accent[500],
+    'color.field.borderActive': chrome.accent[500],
+    'color.field.placeholder': chrome.text.muted,
     'color.focus.ring': chrome.accent[500],
     'color.scrollbar.thumb': scrollbar.thumb,
     'color.scrollbar.thumbHover': scrollbar.thumbHover,

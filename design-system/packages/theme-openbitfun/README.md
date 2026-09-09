@@ -28,6 +28,24 @@ The same data is available as `@openbitfun/theme-openbitfun/reference-colors.jso
 
 ## Surface and state roles
 
+`color.field.*` owns shared field surfaces and state borders. Light uses neutral
+8% borders, with 20% hover and active Input/SearchField borders. The dedicated
+`color.field.borderActive` owns the editing border because Input's design differs
+from the stronger focus treatment used by other controls. These text
+fields use one unchanged border for both pointer and keyboard focus; native
+`:focus-visible` must not substitute the stronger generic focus palette or add
+a second ring. Dark and high-contrast modes retain their own focus color, and forced
+colors use Highlight. `color.field.borderFocus` retains its 3:1 contract for
+other controls that consume that stronger focus treatment.
+`color.field.placeholder` separates
+40% empty hints and decorative adornments from general secondary prose; dark
+and high-contrast modes retain their readable muted content colors. The default
+light Web UI consumes these published values in root and chrome scopes. Named
+presets keep their own palette, and imported packages that only supply
+`color.content.muted` retain that field hint color unless explicitly overridden.
+Old packages that supply `color.field.borderFocus` retain that editing border
+unless they explicitly provide `color.field.borderActive`.
+
 `component.button.*` owns Button's state palette. Its light fill stays at black
 8% while the shared neutral actions retain their 5/8/10% feedback; its primary
 background uses black 80/60/90% and disabled content 20%. Outline and text variants

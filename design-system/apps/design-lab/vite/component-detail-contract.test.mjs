@@ -419,14 +419,24 @@ test("ConfirmDialog preview exposes semantic, destructive, preview, and pending 
 test("Input, KeyHint, and SearchField previews expose composable slot and state contracts", async () => {
   const source = await readFile(detailSource, "utf8");
 
-  assert.match(source, /case "Input":\s*case "SearchField":\s*return \["default", "hover", "focus-visible", "invalid", "disabled"\] as const/);
+  assert.match(source, /case "Input":\s*case "SearchField":\s*return \["default", "filled", "hover", "focus-visible", "read-only", "invalid", "disabled"\] as const/);
   assert.match(source, /case "Select":\s*return \["default", "hover", "focus-visible", "open", "invalid", "disabled"\] as const/);
   assert.match(source, /component\.name === "Input"/);
   assert.match(source, /component\.name === "KeyHint"/);
   assert.match(source, /component\.name === "SearchField"/);
-  assert.match(source, /trailing=\{<Icon name="eye" size="lg" aria-hidden="true" \/>\}/);
-  assert.match(source, /leadingIcon=\{<Icon name="search" size="lg" aria-hidden="true" \/>\}/);
-  assert.match(source, /shortcut=\{<KeyHint icon=\{<Icon name="command-mac" size="lg" aria-hidden="true" \/>\}>K<\/KeyHint>\}/);
+  assert.match(source, /trailing=\{<Icon name="eye" \/>\}/);
+  assert.match(source, /leadingIcon=\{<Icon name="search" \/>\}/);
+  assert.match(source, /shortcut=\{<KeyHint icon=\{<Icon name="command-mac" \/>\}>K<\/KeyHint>\}/);
+  assert.match(source, /onClear=\{\(\) => setValue\(""\)\}/);
+  assert.match(source, /readOnly=\{state === "read-only"\}/);
+
+  const styles = await readFile(stylesSource, "utf8");
+  const fieldFocus = styles.match(/\[data-openbitfun-component="input"\]\.lab-force-focus,[^{]+\{([^}]+)\}/)?.[1];
+  assert.ok(fieldFocus, "Input and SearchField must share their preview focus treatment");
+  assert.match(fieldFocus, /border-color: var\(--openbitfun-color-field-border-active\)/);
+  assert.match(fieldFocus, /box-shadow: none/);
+  assert.doesNotMatch(fieldFocus, /border-width:|outline:|--openbitfun-focus-width/);
+  assert.doesNotMatch(styles, /input\.lab-force-focus\s*\{/);
 });
 
 test("ScrollArea preview exposes direction and native scrollbar visibility contracts", async () => {
