@@ -1016,7 +1016,7 @@ const ChatPage: React.FC<ChatPageProps> = ({
   return (
     <div className={`chat-page${wideLayout ? ' chat-page--wide' : ''}`} style={{ '--chat-composer-height': `${composerHeight}px` } as React.CSSProperties}>
       <ChatHeader
-        deviceName={controlTarget && !controlTarget.isHome ? controlTarget.deviceName || undefined : undefined}
+        deviceName={controlTarget ? controlTarget.deviceName || undefined : undefined}
         displayName={displayName}
         gitBranch={gitBranch}
         isStreaming={isStreaming}

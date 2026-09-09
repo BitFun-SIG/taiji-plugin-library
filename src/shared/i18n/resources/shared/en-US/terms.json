@@ -33,7 +33,6 @@
   },
   "connectionMethods": {
     "lan": "LAN",
-    "ngrok": "Ngrok",
     "openbitfunServer": "OpenBitFun Server",
     "customServer": "Custom Server",
     "botFeishu": "Feishu Bot",

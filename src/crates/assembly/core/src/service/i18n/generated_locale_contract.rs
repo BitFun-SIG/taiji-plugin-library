@@ -114,11 +114,6 @@ pub const GENERATED_SHARED_TERMS: &[GeneratedSharedTermEntry] = &[
     },
     GeneratedSharedTermEntry {
         locale: LocaleId::ZhCN,
-        key: "connectionMethods.ngrok",
-        value: "Ngrok",
-    },
-    GeneratedSharedTermEntry {
-        locale: LocaleId::ZhCN,
         key: "connectionMethods.openbitfunServer",
         value: "OpenBitFun Server",
     },
@@ -284,11 +279,6 @@ pub const GENERATED_SHARED_TERMS: &[GeneratedSharedTermEntry] = &[
     },
     GeneratedSharedTermEntry {
         locale: LocaleId::ZhTW,
-        key: "connectionMethods.ngrok",
-        value: "Ngrok",
-    },
-    GeneratedSharedTermEntry {
-        locale: LocaleId::ZhTW,
         key: "connectionMethods.openbitfunServer",
         value: "OpenBitFun Server",
     },
@@ -451,11 +441,6 @@ pub const GENERATED_SHARED_TERMS: &[GeneratedSharedTermEntry] = &[
         locale: LocaleId::EnUS,
         key: "connectionMethods.lan",
         value: "LAN",
-    },
-    GeneratedSharedTermEntry {
-        locale: LocaleId::EnUS,
-        key: "connectionMethods.ngrok",
-        value: "Ngrok",
     },
     GeneratedSharedTermEntry {
         locale: LocaleId::EnUS,

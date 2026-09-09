@@ -59,20 +59,9 @@ struct SidebarView: View {
             !model.remoteStatusFilter.isEmpty
     }
 
-    private var directoryEntries: [MobileDeviceDirectoryEntry] {
-        var entries = model.deviceDirectory
-        if let direct = model.directPairingDirectoryEntry,
-           !entries.contains(where: { $0.id == direct.id }) {
-            entries.insert(direct, at: 0)
-        }
-        return entries
-    }
+    private var directoryEntries: [MobileDeviceDirectoryEntry] { model.deviceDirectory }
 
     private var selectedDirectoryEntry: MobileDeviceDirectoryEntry? {
-        if model.directPairingConnected,
-           let direct = directoryEntries.first(where: { $0.id == model.directPairingSidebarDeviceID }) {
-            return direct
-        }
         if let selectedID = model.accountSelectedDeviceID,
            let selected = directoryEntries.first(where: { $0.id == selectedID }) {
             return selected
@@ -90,7 +79,6 @@ struct SidebarView: View {
                 ScrollView(showsIndicators: false) {
                     VStack(alignment: .leading, spacing: 0) {
                         workspaceSection
-                        recentSection
                     }
                     .padding(.bottom, model.accountUser == nil && !model.remoteConnected ? 142 : 84)
                 }
@@ -112,15 +100,14 @@ struct SidebarView: View {
                 session: session,
                 presentation: .bottomSheet,
                 canViewDetails: true,
-                canArchive: model.surface == .local,
-                canExport: model.surface == .local,
+                canArchive: false,
+                canExport: false,
                 canDelete: true,
                 onViewDetails: { openDetails(afterClosing: session) },
-                onArchive: { if model.surface == .local { model.archiveLocalSession(session) } },
-                onExport: { if model.surface == .local { model.exportLocalSession(session) } },
+                onArchive: {},
+                onExport: {},
                 onDelete: {
-                    if model.surface == .remote { model.deleteRemoteSession(session) }
-                    else { model.deleteLocalSession(session) }
+                    model.deleteRemoteSession(session)
                 },
                 onClose: { compactActionSession = nil }
             )
@@ -226,11 +213,11 @@ struct SidebarView: View {
 
     private var signedOutHeader: some View {
         HStack(spacing: 8) {
-            Button { model.newLocalChat() } label: {
+            Button { model.connectRemote() } label: {
                 HStack(spacing: 8) {
                     Image(systemName: "square.and.pencil")
                         .font(.system(size: 17, weight: .medium))
-                    Text(model.localized("聊天"))
+                    Text(model.localized("连接桌面端"))
                         .font(.system(size: 15, weight: .medium))
                 }
                 .foregroundStyle(OpenBitFunTheme.ink)
@@ -267,60 +254,6 @@ struct SidebarView: View {
             .onChange(of: search) { value in
                 if model.surface == .remote { model.searchRemoteSessions(value) }
             }
-    }
-
-    private var recentSection: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text(model.localized("最近对话"))
-                .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(OpenBitFunTheme.muted)
-                .padding(.top, 16)
-                .padding(.bottom, 6)
-            if shownRecentSessions.isEmpty {
-                Text(model.localized(search.isEmpty ? "暂无最近会话" : "没有匹配的会话"))
-                    .font(.system(size: 13))
-                    .foregroundStyle(OpenBitFunTheme.muted)
-                    .padding(.horizontal, 12)
-                    .frame(height: 44, alignment: .leading)
-            }
-            ForEach(shownRecentSessions) { session in
-                SidebarRecentRow(
-                    model: model,
-                    session: session,
-                    selected: model.surface == .local && session.id == model.selectedSessionID,
-                    onOpen: {
-                        model.surface = .local
-                        model.select(session)
-                    },
-                    onActions: {
-                        model.surface = .local
-                        if permanent { onPermanentActions?(session) }
-                        else { compactActionSession = session }
-                    }
-                )
-            }
-            if visibleRecentCount < recentSessions.count && search.isEmpty {
-                Button {
-                    visibleRecentCount = min(visibleRecentCount + 6, recentSessions.count)
-                } label: {
-                    HStack(spacing: 8) {
-                    Text(verbatim: "···")
-                        Text(
-                            model.localizedFormat(
-                                "还有 %lld 个会话",
-                                Int64(recentSessions.count - visibleRecentCount)
-                            )
-                        )
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                .buttonStyle(.plain)
-                .font(.system(size: 13))
-                .foregroundStyle(OpenBitFunTheme.muted)
-                .frame(height: 40, alignment: .leading)
-                .padding(.leading, 12)
-            }
-        }
     }
 
     private func openDetails(afterClosing session: ChatSession) {
@@ -435,8 +368,7 @@ struct SidebarView: View {
 
     private func selectDirectoryDevice(_ device: MobileDeviceDirectoryEntry) {
         guard device.online, selectedDirectoryEntry?.id != device.id else { return }
-        guard device.id != model.directPairingSidebarDeviceID,
-              let accountDevice = model.accountDevices.first(where: { $0.id == device.id }) else { return }
+        guard let accountDevice = model.accountDevices.first(where: { $0.id == device.id }) else { return }
         model.selectRemoteDevice(accountDevice)
     }
 
@@ -649,7 +581,7 @@ struct SidebarView: View {
                     withAnimation(.easeOut(duration: 0.18)) { remoteChatsCollapsed.toggle() }
                 } label: {
                     HStack(spacing: 8) {
-                        Text(model.localized("聊天"))
+                        Text(model.localized("连接桌面端"))
                             .font(.system(size: 14, weight: .medium))
                             .foregroundStyle(OpenBitFunTheme.muted)
                         Text(verbatim: "\(sessions.count)")
@@ -819,7 +751,7 @@ struct SidebarView: View {
             if model.accountUser == nil {
                 SignedOutConnectionActions(
                     scanTitle: model.localized("扫码连接"),
-                    accountTitle: model.localized("登录 OpenBitFun 账号"),
+                    accountTitle: model.localized("使用 GitHub 登录"),
                     onScan: model.scanRemote,
                     onOpenAccount: { model.accountSheetOpen = true; model.drawerOpen = false },
                     showScan: !model.remoteConnected
@@ -832,10 +764,10 @@ struct SidebarView: View {
 
     private var authenticatedFooter: some View {
         HStack(spacing: 0) {
-            Button { model.newLocalChat() } label: {
+            Button { model.connectRemote() } label: {
                 HStack(spacing: 9) {
                     ReferenceImage(assetName: "SidebarEditGlyph", width: 24, height: 24)
-                    Text(model.localized("聊天"))
+                    Text(model.localized("连接桌面端"))
                         .font(.system(size: 15, weight: .medium))
                         .foregroundStyle(OpenBitFunTheme.ink)
                 }

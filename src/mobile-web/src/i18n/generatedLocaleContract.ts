@@ -70,7 +70,6 @@ export const SHARED_TERMS_BY_LOCALE = {
     },
     "connectionMethods": {
       "lan": "局域网",
-      "ngrok": "Ngrok",
       "openbitfunServer": "OpenBitFun Server",
       "customServer": "自定义服务器",
       "botFeishu": "飞书机器人",
@@ -120,7 +119,6 @@ export const SHARED_TERMS_BY_LOCALE = {
     },
     "connectionMethods": {
       "lan": "區域網路",
-      "ngrok": "Ngrok",
       "openbitfunServer": "OpenBitFun Server",
       "customServer": "自訂伺服器",
       "botFeishu": "飛書機器人",
@@ -170,7 +168,6 @@ export const SHARED_TERMS_BY_LOCALE = {
     },
     "connectionMethods": {
       "lan": "LAN",
-      "ngrok": "Ngrok",
       "openbitfunServer": "OpenBitFun Server",
       "customServer": "Custom Server",
       "botFeishu": "Feishu Bot",

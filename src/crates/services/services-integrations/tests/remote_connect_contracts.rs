@@ -32,9 +32,8 @@ use openbitfun_services_integrations::remote_connect::{
     remote_workspace_updated_response, resolve_remote_agent_type, resolve_remote_cancel_decision,
     resolve_remote_execution_image_contexts, resolve_remote_file_chunk_range,
     resolve_remote_workspace_path, should_send_remote_model_catalog, submit_remote_dialog,
-    ActiveTurnSnapshot, ChatImageAttachment, ChatMessage, ChatMessageItem, DeviceIdentity,
-    ImageAttachment, KeyPair, PairingChallenge, PairingProtocol, PairingResponse, PairingState,
-    QrGenerator, QrPayload, RelayMessage, RemoteAssistantWorkspaceFacts, RemoteCancelDecision,
+    ActiveTurnSnapshot, ChatImageAttachment, ChatMessage, ChatMessageItem, ImageAttachment,
+    QrGenerator, RelayMessage, RemoteAssistantWorkspaceFacts, RemoteCancelDecision,
     RemoteCancelRuntimeHost, RemoteCancelTaskRequest, RemoteChatHistoryRound,
     RemoteChatHistoryTextItem, RemoteChatHistoryThinkingItem, RemoteChatHistoryToolCall,
     RemoteChatHistoryToolItem, RemoteChatHistoryTurn, RemoteCommand, RemoteCommandRuntimeHost,
@@ -55,104 +54,26 @@ use openbitfun_services_integrations::remote_connect::{
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
-#[tokio::test]
-async fn remote_connect_pairing_primitives_live_in_services_owner() {
-    let desktop = DeviceIdentity {
-        device_id: "desktop-id".to_string(),
-        device_name: "Desktop".to_string(),
-        mac_address: "00:11:22:33:44:55".to_string(),
-    };
-    let mobile = DeviceIdentity {
-        device_id: "mobile-id".to_string(),
-        device_name: "Mobile".to_string(),
-        mac_address: "66:77:88:99:AA:BB".to_string(),
-    };
-
-    let mut protocol = PairingProtocol::new(desktop);
-    let payload = protocol
-        .initiate("https://relay.example.com")
-        .await
-        .unwrap();
-    assert_eq!(protocol.state().await, PairingState::WaitingForScan);
-    assert_eq!(payload.url, "https://relay.example.com");
-
-    let mobile_keypair = KeyPair::generate();
-    let challenge = protocol
-        .on_peer_joined(&mobile_keypair.public_key_base64())
-        .await
-        .unwrap();
-    let response = PairingProtocol::answer_challenge(
-        &challenge,
-        &mobile,
-        Some("install-1".to_string()),
-        Some("user-1".to_string()),
-    );
-
-    assert!(protocol.verify_response(&response).await.unwrap());
-    assert_eq!(protocol.state().await, PairingState::Connected);
-}
-
 #[test]
-fn remote_connect_qr_and_relay_primitives_live_in_services_owner() {
-    let payload = QrPayload {
-        room_id: "room 1".to_string(),
-        url: "https://relay.example.com/socket".to_string(),
-        device_id: "device/id".to_string(),
-        device_name: "Desktop Device".to_string(),
-        public_key: "public/key".to_string(),
-        version: 1,
+fn relay_invitations_and_authentication_use_the_same_protocol_for_all_endpoints() {
+    for endpoint in [
+        "https://remote.openbitfun.com/v/1.0.0",
+        "http://192.168.1.8:9700",
+    ] {
+        assert_eq!(
+            QrGenerator::build_device_url(endpoint, "desktop-1").unwrap(),
+            format!("{endpoint}/#/pair?did=desktop-1")
+        );
+    }
+    let message = RelayMessage::AuthConnect {
+        token: "test-token".into(),
+        device_name: "Desktop".into(),
+        device_kind: "desktop".into(),
     };
-
-    let url = QrGenerator::build_url(&payload, "https://mobile.example.com/", "zh-CN", None);
-    assert!(url.starts_with("https://mobile.example.com/#/pair?"));
-    assert!(url.contains("relay=wss%3A%2F%2Frelay.example.com%2Fsocket"));
-    assert!(url.contains("lang=zh-CN"));
-    assert!(!url.contains("auth=account"));
-
-    let account_url = QrGenerator::build_url(
-        &payload,
-        "https://mobile.example.com/",
-        "zh-CN",
-        Some("alice"),
+    assert_eq!(
+        serde_json::to_value(message).unwrap()["type"],
+        "auth_connect"
     );
-    assert!(account_url.contains("auth=account"));
-    assert!(account_url.contains("user=alice"));
-
-    let auth_only_url =
-        QrGenerator::build_url(&payload, "https://mobile.example.com/", "zh-CN", Some(""));
-    assert!(auth_only_url.contains("auth=account"));
-    assert!(!auth_only_url.contains("user="));
-
-    let with_password = PairingProtocol::answer_challenge_with_password(
-        &PairingChallenge {
-            challenge: "abc".to_string(),
-            timestamp: 1,
-        },
-        &DeviceIdentity {
-            device_id: "m1".to_string(),
-            device_name: "Phone".to_string(),
-            mac_address: "00:00:00:00:00:00".to_string(),
-        },
-        Some("install-1".to_string()),
-        Some("alice".to_string()),
-        Some("secret".to_string()),
-    );
-    let json = serde_json::to_value(&with_password).expect("serialize pairing response");
-    assert_eq!(json["user_id"], "alice");
-    assert_eq!(json["password"], "secret");
-    let parsed: PairingResponse =
-        serde_json::from_value(json).expect("deserialize pairing response");
-    assert_eq!(parsed.password.as_deref(), Some("secret"));
-
-    let message = RelayMessage::CreateRoom {
-        room_id: Some(payload.room_id),
-        device_id: payload.device_id,
-        device_type: "desktop".to_string(),
-        public_key: payload.public_key,
-    };
-    let json = serde_json::to_value(message).expect("serialize relay message");
-    assert_eq!(json["type"], "create_room");
-    assert_eq!(json["device_type"], "desktop");
 }
 
 #[test]
@@ -2287,26 +2208,6 @@ fn remote_connect_command_wire_shape_lives_in_owner_contract() {
     assert_eq!(poll["since_version"], 7);
     assert_eq!(poll["known_msg_count"], 3);
     assert_eq!(poll["known_model_catalog_version"], 11);
-
-    let get_identity = serde_json::to_value(RemoteCommand::GetDelegatedIdentity)
-        .expect("serialize get delegated identity command");
-    assert_eq!(get_identity["cmd"], "get_delegated_identity");
-    let parsed: RemoteCommand = serde_json::from_str(r#"{"cmd":"get_delegated_identity"}"#)
-        .expect("parse get delegated identity command");
-    assert_eq!(parsed, RemoteCommand::GetDelegatedIdentity);
-
-    let identity = serde_json::to_value(RemoteResponse::DelegateIdentity {
-        token: "token-1".to_string(),
-        user_id: "user-1".to_string(),
-        master_key: "bWFzdGVyLWtleQ==".to_string(),
-        device_id: "device-1".to_string(),
-    })
-    .expect("serialize delegate identity response");
-    assert_eq!(identity["resp"], "delegate_identity");
-    assert_eq!(identity["token"], "token-1");
-    assert_eq!(identity["user_id"], "user-1");
-    assert_eq!(identity["master_key"], "bWFzdGVyLWtleQ==");
-    assert_eq!(identity["device_id"], "device-1");
 }
 
 #[test]

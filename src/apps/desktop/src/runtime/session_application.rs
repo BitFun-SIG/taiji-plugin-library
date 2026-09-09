@@ -273,8 +273,6 @@ fn choose_remote_ssh_host(
 #[async_trait]
 pub(crate) trait DesktopSessionHostEffects: Send + Sync {
     async fn release_session(&self, session_id: &str);
-    fn notify_session_changed(&self, session_id: &str, workspace_path: &str);
-    fn notify_session_deleted(&self, session_id: &str);
 }
 
 #[derive(Clone)]
@@ -618,7 +616,6 @@ impl DesktopSessionApplication {
                 "At least one session metadata field is required".to_string(),
             ));
         }
-        let workspace_path = request.workspace_path.clone();
         let scope = self.resolved_scope(request).await;
         self.ensure_runtime_ownership(&scope)?;
         let storage_path = self.storage_path(&scope);
@@ -629,8 +626,6 @@ impl DesktopSessionApplication {
             })
             .await
             .map_err(|error| DesktopSessionApplicationError::Core(error.to_string()))?;
-        self.host_effects
-            .notify_session_changed(&session_id, &workspace_path);
         Ok(())
     }
 
@@ -754,8 +749,6 @@ impl DesktopSessionApplication {
                 })
                 .await
                 .map_err(desktop_runtime_session_error)?;
-            self.host_effects
-                .notify_session_changed(&session_id, &scope.workspace_path);
             return Ok(normalized_title);
         }
 
@@ -773,7 +766,6 @@ impl DesktopSessionApplication {
             .update_loaded_session_title(&session_id, &title)
             .await
             .map_err(desktop_core_session_error)?;
-        self.host_effects.notify_session_changed(&session_id, "");
         Ok(updated_title)
     }
 
@@ -941,7 +933,6 @@ async fn delete_session_with_host_effects(
         })
         .await
         .map_err(|error| DesktopSessionApplicationError::Runtime(error.into_message()))?;
-    host_effects.notify_session_deleted(&session_id);
     Ok(())
 }
 
@@ -1158,12 +1149,6 @@ mod tests {
         async fn release_session(&self, _session_id: &str) {
             self.events.lock().unwrap().push("release");
         }
-
-        fn notify_session_changed(&self, _session_id: &str, _workspace_path: &str) {}
-
-        fn notify_session_deleted(&self, _session_id: &str) {
-            self.events.lock().unwrap().push("relay_delete");
-        }
     }
 
     fn delete_test_scope() -> ResolvedDesktopSessionScope {
@@ -1378,7 +1363,7 @@ mod tests {
 
         assert_eq!(
             events.lock().unwrap().as_slice(),
-            ["release", "durable_delete", "relay_delete"]
+            ["release", "durable_delete"]
         );
         assert_eq!(
             workspace_path.lock().unwrap().as_deref(),

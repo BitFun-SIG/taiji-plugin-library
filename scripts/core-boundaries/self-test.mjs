@@ -3855,8 +3855,7 @@ export function runManifestParserSelfTest({
         'pub mod relay_client',
         'pub use device::DeviceIdentity',
         'pub use encryption::{decrypt_from_base64, encrypt_to_base64, KeyPair}',
-        'PairingProtocol',
-        'QrPayload',
+        'PairingState',
         'pub use qr_generator::QrGenerator',
         'RelayClient',
         'RelayMessage',
@@ -3935,8 +3934,8 @@ export function runManifestParserSelfTest({
     {
       path: 'src/crates/services/services-integrations/tests/remote_connect_contracts.rs',
       contracts: [
-        'remote_connect_pairing_primitives_live_in_services_owner',
-        'remote_connect_qr_and_relay_primitives_live_in_services_owner',
+        'relay_invitations_and_authentication_use_the_same_protocol_for_all_endpoints',
+        'remote_connect_lan_url_builder_lives_in_services_owner',
         'remote_connect_command_wire_shape_lives_in_owner_contract',
         'remote_connect_response_wire_shape_lives_in_owner_contract',
         'remote_connect_model_catalog_delta_preserves_poll_invalidation_policy',

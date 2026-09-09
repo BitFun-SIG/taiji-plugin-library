@@ -6254,8 +6254,8 @@ export const requiredContentRules = [
         message: 'missing remote-connect encryption compatibility export',
       },
       {
-        regex: /pub use pairing::\{[\s\S]*\bPairingChallenge\b[\s\S]*\bPairingProtocol\b[\s\S]*\bPairingResponse\b[\s\S]*\bPairingState\b[\s\S]*\bQrPayload\b[\s\S]*\}/,
-        message: 'missing remote-connect pairing compatibility export',
+        regex: /pub use pairing::PairingState/,
+        message: 'missing remote-connect bot pairing state export',
       },
       {
         regex: /\bpub use qr_generator::QrGenerator\b/,
@@ -6655,12 +6655,12 @@ export const requiredContentRules = [
     reason: 'remote-connect owner crate must keep focused behavior contracts',
     patterns: [
       {
-        regex: /\bremote_connect_pairing_primitives_live_in_services_owner\b/,
-        message: 'missing remote-connect pairing/encryption owner contract test',
+        regex: /\brelay_invitations_and_authentication_use_the_same_protocol_for_all_endpoints\b/,
+        message: 'missing authenticated relay invitation owner contract test',
       },
       {
-        regex: /\bremote_connect_qr_and_relay_primitives_live_in_services_owner\b/,
-        message: 'missing remote-connect QR/relay owner contract test',
+        regex: /\bremote_connect_lan_url_builder_lives_in_services_owner\b/,
+        message: 'missing relay endpoint owner contract test',
       },
       {
         regex: /\bremote_connect_command_wire_shape_lives_in_owner_contract\b/,
@@ -10086,5 +10086,13 @@ export const requiredContentRules = [
         message: 'appearance market IdentityVerifier must initialize the ring provider first',
       },
     ],
+  },
+  {
+    path: 'src/crates/services/relay-service/src/identity.rs',
+    reason: 'standalone Relay must bind its reviewed ring configuration to the identity client',
+    patterns: [{
+      regex: /let tls = rustls::ClientConfig::builder_with_provider\(Arc::new\(\s*rustls::crypto::ring::default_provider\(\),?\s*\)\)[\s\S]*?\.tls_backend_preconfigured\(tls\)/,
+      message: 'Relay identity verification requires an explicit client-scoped ring config',
+    }],
   },
 ];

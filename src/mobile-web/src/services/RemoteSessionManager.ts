@@ -232,7 +232,7 @@ export class RemoteSessionManager {
   }
 
   get controlTargetDeviceId(): string | null {
-    return this.client.pairedDeviceId;
+    return this.client.targetDeviceId;
   }
 
   supportsHostCapability(capability: string): boolean {
@@ -272,24 +272,10 @@ export class RemoteSessionManager {
     const relayOptions = options.timeoutMs === undefined
       ? { retryable }
       : { retryable, timeoutMs: options.timeoutMs };
-    // The QR-paired desktop keeps the proven room channel. Only a switched
-    // control target (another same-account device) is reached through the
-    // relay device RPC API using the delegated identity.
     const targetDeviceId = target.deviceId;
-    const isRemoteTarget =
-      !!targetDeviceId
-      && targetDeviceId !== target.homeDeviceId;
+    if (!targetDeviceId) throw new Error('Select an account device to continue');
     try {
-      let resp: T;
-      if (isRemoteTarget && targetDeviceId) {
-        resp = await this.client.sendDeviceRpc<T>(
-          targetDeviceId,
-          cmdWithId,
-          relayOptions,
-        );
-      } else {
-        resp = await this.client.sendCommand<T>(cmdWithId, relayOptions);
-      }
+      const resp = await this.client.sendDeviceRpc<T>(targetDeviceId, cmdWithId, relayOptions);
       this.ensureControlTargetCurrent(target);
       const respAny = resp as any;
       if (respAny.resp === 'error') {

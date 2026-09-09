@@ -724,11 +724,11 @@ fn delegated_session(
     }
     let mut master_key = [0u8; 32];
     master_key.copy_from_slice(&key_vec);
-    Some(crate::service::remote_connect::AccountSession {
+    Some(crate::service::remote_connect::AccountSession::new(
         token,
-        user_id: String::new(),
+        String::new(),
         master_key,
-    })
+    ))
 }
 
 async fn list_devices(state: &mut BotChatState, s: &'static BotStrings) -> HandleResult {

@@ -26,7 +26,6 @@ openbitfun-runtime-ports = { path = "../../contracts/runtime-ports", optional = 
 aes-gcm = { workspace = true, optional = true }
 aes = { workspace = true, optional = true }
 anyhow = { workspace = true, optional = true }
-argon2 = { workspace = true, optional = true }
 async-trait = { workspace = true, optional = true }
 base64 = { workspace = true, optional = true }
 openbitfun-services-core = { path = "../services-core", optional = true }
@@ -56,6 +55,7 @@ rmcp = { workspace = true, optional = true }
 rustls = { workspace = true, optional = true }
 rustls-native-certs = { version = "0.8", optional = true }
 sha2 = { workspace = true, optional = true }
+hkdf = { workspace = true, optional = true }
 sherpa-onnx = { workspace = true, optional = true }
 sse-stream = { workspace = true, optional = true }
 thiserror = { workspace = true, optional = true }
@@ -199,7 +199,18 @@ miniapp-runtime = [
     "uuid",
     "which",
 ]
+account-identity = [
+    "dep:openbitfun-product-domains",
+    "openbitfun-services-core/tls-provider",
+    "openbitfun-services-core/credential-vault",
+    "openbitfun-services-core/product-identity",
+    "chrono", "dirs", "thiserror",
+    "dep:keyring-core", "dep:windows-native-keyring-store", "dep:zbus-secret-service-keyring-store",
+    "reqwest", "reqwest/json", "reqwest/rustls-no-provider",
+    "tokio/rt", "tokio/sync",
+]
 miniapp-market = [
+    "account-identity",
     "openbitfun-services-core/tls-provider",
     "openbitfun-product-domains/appearance-market",
     "openbitfun-services-core/credential-vault",
@@ -256,11 +267,15 @@ hook-import = [
     "uuid",
 ]
 remote-connect = [
+    "fs2",
+    "dep:openbitfun-product-domains",
+    "thiserror",
+    "dep:hkdf",
+    "account-identity",
     "remote-persistence",
     "anyhow",
     "aes",
     "aes-gcm",
-    "argon2",
     "async-trait",
     "base64",
     "dep:openbitfun-agent-tools",
@@ -361,6 +376,7 @@ remote-ssh-concrete = [
     "windows",
 ]
 remote-persistence = [
+    "fs2",
     "aes-gcm",
     "anyhow",
     "base64",

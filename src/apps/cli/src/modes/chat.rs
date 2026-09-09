@@ -21,7 +21,7 @@ use std::time::{Duration, Instant};
 use tokio::sync::broadcast::error::TryRecvError;
 
 use openbitfun_events::{AgenticEvent, ToolEventData, ToolEventIdentity};
-use openbitfun_product_domains::account::{AccountSnapshotProjection, SettingsSyncStatus};
+use openbitfun_product_domains::account::AccountSnapshotProjection;
 use openbitfun_product_domains::agent_catalog::{SkillSummary, SubagentSummary};
 use openbitfun_product_domains::native_hooks::{
     NativeHookOverview, NativeHookRuleSummary as NativeHookRuleView,
@@ -444,7 +444,7 @@ fn terminal_event_allowed_while_local_effect_pending(event: &Event) -> bool {
 }
 
 const SESSION_OPERATION_SLOW_NOTICE: Duration = Duration::from_secs(15);
-const SHARED_TUI_CHAT_STATUS: &str = "Shared TUI preview: this view controls sessions, including deleting an idle Session, turns, the current Session name, current Session Agent mode, and declarative context via /reload [skills|instructions]. Model, Skill, Subagent, and MCP management use this CLI process's local compatibility owner; MCP process state and tool registration are local to this CLI process and do not reconfigure an already-running Shared Runtime Host. Local extension, account-sync, usage, and other management remain Embedded.";
+const SHARED_TUI_CHAT_STATUS: &str = "Shared TUI preview: this view controls sessions, including deleting an idle Session, turns, the current Session name, current Session Agent mode, and declarative context via /reload [skills|instructions]. Model, Skill, Subagent, and MCP management use this CLI process's local compatibility owner; MCP process state and tool registration are local to this CLI process and do not reconfigure an already-running Shared Runtime Host. Local extension, account, usage, and other management remain Embedded.";
 
 #[derive(Default)]
 struct NonKeyEventOutcome {

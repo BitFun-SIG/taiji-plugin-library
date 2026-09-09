@@ -60,7 +60,6 @@ import { fileSystemAppearanceDescriptor } from '@/tools/file-system/appearance';
 import { gitToolAppearanceDescriptor } from '@/tools/git/appearance';
 import { terminalToolAppearanceDescriptor } from '@/tools/terminal/appearance';
 import { workspaceToolAppearanceDescriptor } from '@/tools/workspace/appearance';
-import { relayDeployAppearanceDescriptor } from '@/features/relay-deploy/appearance';
 import { marketAccountControlsAppearanceDescriptor } from '@/features/market-account/appearance';
 import { sshRemoteAppearanceDescriptor } from '@/features/ssh-remote/appearance';
 import { workbenchAppearanceDescriptor } from '@/app/appearance';
@@ -342,7 +341,6 @@ export function createDefaultAppearanceRegistry(): AppearanceRegistry {
     .registerComponent(remoteConnectDisclaimerAppearanceDescriptor)
     .registerComponent(diffFullscreenViewerAppearanceDescriptor)
     .registerComponent(notificationButtonAppearanceDescriptor)
-    .registerComponent(relayDeployAppearanceDescriptor)
     .registerComponent(marketAccountControlsAppearanceDescriptor)
     .registerComponent(sshRemoteAppearanceDescriptor)
     .registerComponent(aboutDialogAppearanceDescriptor)

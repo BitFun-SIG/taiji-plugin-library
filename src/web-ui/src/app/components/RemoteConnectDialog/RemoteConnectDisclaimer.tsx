@@ -45,7 +45,6 @@ export const RemoteConnectDisclaimerContent: React.FC<RemoteConnectDisclaimerCon
             <li>{t('remoteConnect.disclaimerItemDataUsage')}</li>
             <li>{t('remoteConnect.disclaimerItemCredentials')}</li>
             <li>{t('remoteConnect.disclaimerItemQrCode')}</li>
-            <li>{t('remoteConnect.disclaimerItemNgrok')}</li>
             <li>{t('remoteConnect.disclaimerItemSelfHosted')}</li>
             <li>{t('remoteConnect.disclaimerItemNetwork')}</li>
             <li>{t('remoteConnect.disclaimerItemBot')}</li>

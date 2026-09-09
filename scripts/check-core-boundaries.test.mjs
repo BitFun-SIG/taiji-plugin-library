@@ -305,6 +305,16 @@ test('TLS source boundaries reject bypasses of the centralized provider owner', 
   );
 });
 
+test('standalone Relay TLS exception cannot install a process provider', () => {
+  const providerRule = forbiddenContentUnderRules.find(rule => rule.reason.includes('only owner allowed to install'));
+  const relayPath = 'src/crates/services/relay-service/src/identity.rs';
+  assert.ok(providerRule.patterns[0].allowPaths.includes(relayPath));
+  const scopedRule = forbiddenContentUnderRules.find(rule => rule.path === relayPath && rule.reason.includes('client-scoped'));
+  assert.ok(scopedRule);
+  assert.ok(scopedRule.patterns.some(pattern => pattern.regex.test('provider.install_default()')));
+  assert.ok(scopedRule.patterns.every(pattern => !pattern.regex.test('ClientConfig::builder_with_provider(provider)')));
+});
+
 test('Core and ACP defaults preserve their explicit assembly contracts', async () => {
   const [coreManifest, acpManifest] = await Promise.all([
     readFile(new URL('../src/crates/assembly/core/Cargo.toml', import.meta.url), 'utf8'),

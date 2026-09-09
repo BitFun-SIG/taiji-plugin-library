@@ -35,7 +35,6 @@ import com.openbitfun.mobile.core.protocol.SendMessageResponse
 import com.openbitfun.mobile.core.protocol.SessionItemResponse
 import com.openbitfun.mobile.core.protocol.SessionListResponse
 import com.openbitfun.mobile.core.protocol.WorkspaceInfoResponse
-import com.openbitfun.mobile.core.transport.PairedRoom
 import com.openbitfun.mobile.core.transport.RemoteCommandTransport
 import com.openbitfun.mobile.core.transport.send
 import com.openbitfun.mobile.core.feature.workspace.RemoteWorkspaceIntent
@@ -1467,9 +1466,6 @@ public class RemoteSessionStore internal constructor(
          */
         private const val FILTER_PAGE_SIZE: Int = 100
 
-        internal fun create(scope: CoroutineScope, room: PairedRoom): RemoteSessionStore =
-            RemoteSessionStore(scope, room.transport)
-
         internal fun create(scope: CoroutineScope, transport: RemoteCommandTransport): RemoteSessionStore =
             RemoteSessionStore(scope, transport)
 
@@ -1480,12 +1476,7 @@ public class RemoteSessionStore internal constructor(
             persistence: MobilePersistenceStores?,
         ): RemoteSessionStore = RemoteSessionStore(scope, transport, deviceKey, persistence)
 
-        internal fun create(
-            scope: CoroutineScope,
-            room: PairedRoom,
-            deviceKey: String?,
-            persistence: MobilePersistenceStores?,
-        ): RemoteSessionStore = RemoteSessionStore(scope, room.transport, deviceKey, persistence)
+
     }
 }
 

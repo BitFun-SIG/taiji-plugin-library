@@ -27,7 +27,6 @@ const apiMocks = vi.hoisted(() => ({
   restoreSessionView: vi.fn(),
   restoreSessionWithTurns: vi.fn(),
   loadSessionTurnWindow: vi.fn(),
-  accountFetchSessionTurns: vi.fn(),
   cancelSession: vi.fn(),
   cancelDispatchJob: vi.fn(),
   onPermissionRequestEvent: vi.fn(() => () => {}),
@@ -104,7 +103,6 @@ vi.mock('@/features/dispatch/dispatchApi', () => ({
 
 vi.mock('@/infrastructure/api/service-api/RemoteConnectAPI', () => ({
   remoteConnectAPI: {
-    accountFetchSessionTurns: apiMocks.accountFetchSessionTurns,
   },
 }));
 
@@ -1485,7 +1483,6 @@ describe('FlowChatStore historical session hydration state', () => {
     apiMocks.restoreSessionWithTurns.mockReset();
     apiMocks.loadSessionTurns.mockReset();
     apiMocks.loadSessionTurnWindow.mockReset();
-    apiMocks.accountFetchSessionTurns.mockResolvedValue(false);
     vi.stubGlobal('CustomEvent', class {
       type: string;
       detail: unknown;
@@ -1591,12 +1588,8 @@ describe('FlowChatStore historical session hydration state', () => {
     });
   });
 
-  it('checks relay history completeness before restoring Core context', async () => {
+  it('restores history directly from the execution host', async () => {
     const order: string[] = [];
-    apiMocks.accountFetchSessionTurns.mockImplementationOnce(async () => {
-      order.push('relay');
-      return true;
-    });
     apiMocks.restoreSessionView.mockImplementationOnce(async () => {
       order.push('restore');
       return {
@@ -1625,31 +1618,11 @@ describe('FlowChatStore historical session hydration state', () => {
 
     await flowChatStore.loadSessionHistory('history-1', 'D:/workspace/OpenBitFun');
 
-    expect(order).toEqual(['relay', 'restore']);
+    expect(order).toEqual(['restore']);
   });
 
-  it('fails closed before Core restore when relay history is incomplete', async () => {
-    apiMocks.accountFetchSessionTurns.mockRejectedValueOnce(new Error('relay unavailable'));
-    flowChatStore.setState(() => ({
-      sessions: new Map([
-        ['history-1', createSession({
-          sessionId: 'history-1',
-          isHistorical: true,
-          historyState: 'metadata-only',
-        })],
-      ]),
-      activeSessionId: 'history-1',
-    }));
 
-    await expect(
-      flowChatStore.loadSessionHistory('history-1', 'D:/workspace/OpenBitFun')
-    ).rejects.toThrow('relay unavailable');
-
-    expect(apiMocks.restoreSessionView).not.toHaveBeenCalled();
-    expect(flowChatStore.getState().sessions.get('history-1')?.historyState).toBe('failed');
-  });
-
-  it('skips cloud turn fetch in Peer Device Mode and restores from the peer host', async () => {
+  it('restores history from the peer host in Peer Device Mode', async () => {
     peerModeFlagMock.active = true;
     apiMocks.restoreSessionView.mockResolvedValueOnce({
       session: {
@@ -1676,7 +1649,6 @@ describe('FlowChatStore historical session hydration state', () => {
 
     await flowChatStore.loadSessionHistory('history-1', '/Users/host/project');
 
-    expect(apiMocks.accountFetchSessionTurns).not.toHaveBeenCalled();
     expect(apiMocks.restoreSessionView).toHaveBeenCalled();
     expect(flowChatStore.getState().sessions.get('history-1')?.historyState).not.toBe('failed');
   });
@@ -3318,7 +3290,6 @@ describe('FlowChatStore historical session hydration state', () => {
 
     await flowChatStore.loadSessionHistory('session-1', '/source');
 
-    expect(apiMocks.accountFetchSessionTurns).not.toHaveBeenCalled();
     expect(apiMocks.restoreSessionView).not.toHaveBeenCalled();
     expect(apiMocks.restoreSessionWithTurns).not.toHaveBeenCalled();
     expect(apiMocks.restoreSession).not.toHaveBeenCalled();
@@ -6807,7 +6778,6 @@ describe('FlowChatStore reconcile snapshot content safety', () => {
   beforeEach(() => {
     peerModeFlagMock.active = false;
     apiMocks.restoreSessionView.mockReset();
-    apiMocks.accountFetchSessionTurns.mockResolvedValue(false);
     vi.stubGlobal('CustomEvent', class {
       type: string;
       detail: unknown;
@@ -7051,7 +7021,6 @@ describe('FlowChatStore device surfaces', () => {
     apiMocks.restoreSessionView.mockReset();
     apiMocks.restoreSessionWithTurns.mockReset();
     apiMocks.listSessionsPage.mockReset();
-    apiMocks.accountFetchSessionTurns.mockResolvedValue(false);
   });
 
   afterEach(() => {
