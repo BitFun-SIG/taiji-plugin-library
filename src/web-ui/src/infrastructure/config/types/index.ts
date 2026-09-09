@@ -402,6 +402,8 @@ export interface SkillInfo {
   name: string;
   description: string;
   path: string;
+  /** Relative Markdown entry; legacy directory bundles use SKILL.md. */
+  entryFile?: string;
   level: SkillLevel;
   sourceSlot: string;
   /** Provider-neutral ecosystem identity shared by related discovery slots. */

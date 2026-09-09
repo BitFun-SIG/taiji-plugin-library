@@ -99,6 +99,7 @@ mod implicit_invocation_policy_tests {
             source_id: "codex".to_string(),
             source_label: "Codex".to_string(),
             installation_source: None,
+            entry_file: None,
             dir_name: name.to_string(),
             is_builtin: false,
             group_key: None,
@@ -686,7 +687,8 @@ impl SkillRegistry {
             });
         }
 
-        let skill_md_path = PathBuf::from(&info.path).join("SKILL.md");
+        let skill_md_path =
+            PathBuf::from(&info.path).join(info.entry_file.as_deref().unwrap_or("SKILL.md"));
         fs::read_to_string(&skill_md_path)
             .await
             .map_err(|error| OpenBitFunError::tool(format!("Failed to read skill file: {}", error)))
@@ -752,6 +754,32 @@ impl SkillRegistry {
         entries
     }
 
+    fn user_skill_root_path(
+        spec: &openbitfun_agent_runtime::skills::SkillRootSpec,
+        home: &Path,
+    ) -> PathBuf {
+        let variable = match spec.slot {
+            "home.dsh" => Some("DSH_HOME"),
+            "home.pi" => Some("PI_CODING_AGENT_DIR"),
+            _ => None,
+        };
+        let root = variable
+            .and_then(|name| std::env::var(name).ok())
+            .filter(|value| !value.trim().is_empty());
+        let root = root
+            .map(|value| {
+                if value == "~" {
+                    home.to_path_buf()
+                } else if let Some(suffix) = value.strip_prefix("~/") {
+                    home.join(suffix)
+                } else {
+                    PathBuf::from(value)
+                }
+            })
+            .unwrap_or_else(|| home.join(spec.parent));
+        root.join(spec.subdir)
+    }
+
     fn get_user_skill_roots() -> Vec<SkillRootEntry> {
         let mut entries = Vec::new();
         let mut priority = 0usize;
@@ -761,7 +789,7 @@ impl SkillRegistry {
 
         if let Some(home) = home_dir.as_deref() {
             for spec in USER_HOME_SKILL_ROOTS {
-                let path = home.join(spec.parent).join(spec.subdir);
+                let path = Self::user_skill_root_path(spec, home);
                 if spec.parent == ".opencode" {
                     deferred_home_entries.push((
                         path,
@@ -850,7 +878,7 @@ impl SkillRegistry {
         let home_dir = dirs::home_dir();
         if let Some(home) = home_dir.as_deref() {
             roots.extend(USER_HOME_SKILL_ROOTS.iter().map(|spec| {
-                LocalSkillWatchRoot::recursive(home.join(spec.parent).join(spec.subdir))
+                LocalSkillWatchRoot::recursive(Self::user_skill_root_path(spec, home))
             }));
         }
 
@@ -1784,6 +1812,8 @@ impl SkillRegistry {
             &info.source_slot,
         )
         .map_err(|error| OpenBitFunError::tool(error.to_string()))?;
+        data.path = info.path;
+        data.entry_file = info.entry_file;
         data.key = info.key;
         data.source_slot = info.source_slot;
         data.source_id = info.source_id;
@@ -1825,6 +1855,8 @@ impl SkillRegistry {
             &info.source_slot,
         )
         .map_err(|error| OpenBitFunError::tool(error.to_string()))?;
+        data.path = info.path;
+        data.entry_file = info.entry_file;
         data.key = info.key;
         data.source_slot = info.source_slot;
         data.source_id = info.source_id;
@@ -1858,6 +1890,8 @@ impl SkillRegistry {
             &info.source_slot,
         )
         .map_err(|error| OpenBitFunError::tool(error.to_string()))?;
+        data.path = info.path;
+        data.entry_file = info.entry_file;
         data.key = info.key;
         data.source_slot = info.source_slot;
         data.source_id = info.source_id;
@@ -1899,6 +1933,8 @@ impl SkillRegistry {
             &info.source_slot,
         )
         .map_err(|error| OpenBitFunError::tool(error.to_string()))?;
+        data.path = info.path;
+        data.entry_file = info.entry_file;
         data.key = info.key;
         data.source_slot = info.source_slot;
         data.source_id = info.source_id;
@@ -1959,7 +1995,11 @@ impl SkillRegistry {
         match info.level {
             SkillLocation::User => Self::read_local_skill_markdown(info).await,
             SkillLocation::Project => {
-                let skill_md_path = format!("{}/SKILL.md", info.path.trim_end_matches('/'));
+                let skill_md_path = format!(
+                    "{}/{}",
+                    info.path.trim_end_matches('/'),
+                    info.entry_file.as_deref().unwrap_or("SKILL.md")
+                );
                 remote_fs
                     .read_file_text(&skill_md_path)
                     .await
