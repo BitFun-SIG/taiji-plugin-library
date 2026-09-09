@@ -30,7 +30,7 @@ import { OverflowText,
 } from '@openbitfun/ui';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
-import { Monitor, MonitorSmartphone, Smartphone } from 'lucide-react';
+import { MessageCircle, Monitor, MonitorSmartphone, Smartphone } from 'lucide-react';
 import { useI18n } from '@/infrastructure/i18n';
 import { getLocaleFallbackChain, type LocaleId } from '@/infrastructure/i18n/presets';
 import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
@@ -1569,7 +1569,7 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
               {renderNavigationItem('overview', t('remoteConnect.overviewTitle'), <MonitorSmartphone size={18} />)}
               {renderNavigationItem('account', t('remoteConnect.myDevicesTitle'), <Monitor size={18} />)}
               {accountLoggedIn && renderNavigationItem('network', t('remoteConnect.mobileBrowserTitle'), <Smartphone size={18} />)}
-              {accountLoggedIn && renderNavigationItem('bot', t('remoteConnect.chatAppsTitle'), <Icon name="side-chat" size="sm" />)}
+              {accountLoggedIn && renderNavigationItem('bot', t('remoteConnect.chatAppsTitle'), <MessageCircle size={18} />)}
             </nav>
             <span className="openbitfun-remote-connect__title-extra">
               <Button className="openbitfun-remote-connect__disclaimer-trigger" onClick={() => setShowDisclaimer(true)} size="xs" variant="text">

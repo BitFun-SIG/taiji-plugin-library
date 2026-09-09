@@ -98,7 +98,14 @@
   text-align: left;
   cursor: pointer;
 
-  > span:first-child { display: inline-flex; flex-shrink: 0; }
+  > span:first-child {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+  }
   > span:last-child { min-width: 0; white-space: nowrap; }
   &[aria-current] {
     background: var(--openbitfun-color-action-neutral-surface);
