@@ -2,6 +2,7 @@ use crate::service::coordination_persistence::{
     initialize_coordination_schema, validate_coordination_agent_id,
 };
 use crate::util::errors::{OpenBitFunError, OpenBitFunResult};
+use openbitfun_core_types::agent_identity::{canonical_agent_id, HarnessId};
 use rusqlite::{params, Connection, OptionalExtension, Transaction, TransactionBehavior};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -346,8 +347,8 @@ ORDER BY swarm_nodes.created_at_ms ASC, agents.agent_pk ASC
                 .map_err(db_error)?;
             transaction
                 .execute(
-                    "INSERT OR IGNORE INTO swarm_nodes (session_id, root_session_id, parent_session_id, agent_type, depth, created_at_ms) VALUES (?1, ?1, NULL, 'Ultra', 0, ?2)",
-                    params![root_session_id, unix_time_ms() as i64],
+                    "INSERT OR IGNORE INTO swarm_nodes (session_id, root_session_id, parent_session_id, agent_type, depth, created_at_ms) VALUES (?1, ?1, NULL, ?2, 0, ?3)",
+                    params![root_session_id, HarnessId::Ultimate.as_str(), unix_time_ms() as i64],
                 )
                 .map_err(db_error)?;
 
@@ -355,7 +356,14 @@ ORDER BY swarm_nodes.created_at_ms ASC, agents.agent_pk ASC
                 .query_row(
                     "SELECT root_session_id, depth, agent_type FROM swarm_nodes WHERE session_id = ?1",
                     params![parent_session_id],
-                    |row| Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?, row.get::<_, String>(2)?)),
+                    |row| {
+                        let agent_type = row.get::<_, String>(2)?;
+                        Ok((
+                            row.get::<_, String>(0)?,
+                            row.get::<_, i64>(1)?,
+                            canonical_agent_id(&agent_type).to_owned(),
+                        ))
+                    },
                 )
                 .optional()
                 .map_err(db_error)?
@@ -1425,6 +1433,64 @@ PRAGMA user_version = 2;
                 .expect("existing agent should remain addressable"),
             "existing-child"
         );
+    }
+
+    #[tokio::test]
+    async fn swarm_root_identity_preserves_legacy_trees_and_writes_canonical_new_roots() {
+        let (_root, store) = test_store();
+        store
+            .with_connection(|connection| {
+                connection
+                    .execute_batch(
+                        "INSERT INTO swarm_trees VALUES ('legacy-root', 1);
+                         INSERT INTO swarm_nodes VALUES ('legacy-root', 'legacy-root', NULL, 'Ultra', 0, 1);
+                         INSERT INTO swarm_nodes VALUES ('existing-planner', 'legacy-root', 'legacy-root', 'SwarmPlanner', 1, 1);",
+                    )
+                    .map_err(db_error)
+            })
+            .await
+            .expect("seed a legacy tree");
+
+        store
+            .reserve_swarm_child("legacy-root", "new-planner", "Ultimate", "SwarmPlanner", 1)
+            .await
+            .expect("a legacy root remains usable after an upgrade");
+        store
+            .reserve_swarm_child(
+                "current-root",
+                "current-planner",
+                "Ultimate",
+                "SwarmPlanner",
+                1,
+            )
+            .await
+            .expect("create a tree with the canonical identity");
+
+        assert_eq!(
+            store
+                .swarm_depth_for_session("existing-planner")
+                .await
+                .unwrap(),
+            Some(1)
+        );
+        store
+            .with_connection(|connection| {
+                for (session_id, expected) in
+                    [("legacy-root", "Ultra"), ("current-root", "Ultimate")]
+                {
+                    let stored_identity: String = connection
+                        .query_row(
+                            "SELECT agent_type FROM swarm_nodes WHERE session_id = ?1",
+                            params![session_id],
+                            |row| row.get(0),
+                        )
+                        .map_err(db_error)?;
+                    assert_eq!(stored_identity, expected);
+                }
+                Ok(())
+            })
+            .await
+            .expect("legacy rows remain intact and new rows use canonical identities");
     }
 
     #[tokio::test]

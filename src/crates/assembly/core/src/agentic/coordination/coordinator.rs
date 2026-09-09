@@ -15634,7 +15634,7 @@ mod tests {
         session_manager
             .update_session_agent_binding(
                 &session_id,
-                "AGENTIC",
+                "STANDARD",
                 SessionAgentRouteOwner::External,
                 Some("test:external".to_string()),
             )

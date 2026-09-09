@@ -355,6 +355,7 @@ remote-ssh-concrete = [
     "anyhow",
     "async-trait",
     "base64",
+    "dep:openbitfun-core-types",
     "openbitfun-services-core/tls-provider",
     "dep:openbitfun-runtime-ports",
     "chrono",
