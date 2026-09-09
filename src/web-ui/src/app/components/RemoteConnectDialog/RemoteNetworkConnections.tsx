@@ -1,10 +1,8 @@
-import { Button, Field, Icon, IconButton, Input, StatusPill } from '@openbitfun/ui';
-import { useEffect, useState, type ReactNode } from 'react';
+import { Button, Icon, StatusPill } from '@openbitfun/ui';
+import type { ReactNode } from 'react';
 import type { ConnectionResult, RemoteConnectStatus } from '@/infrastructure/api/service-api/RemoteConnectAPI';
 import { useI18n } from '@/infrastructure/i18n';
 import { normalizeRelayUrl, selectRemoteNetworkConnection } from '@/infrastructure/remote-connect/remoteConnectionState';
-import { copyTextToClipboard } from '@/shared/utils/textSelection';
-import { useNotification } from '@/shared/notification-system';
 import { RemotePairingCard } from './RemotePairingCard';
 
 interface RemoteNetworkConnectionsProps {
@@ -31,26 +29,12 @@ export function RemoteNetworkConnections({
   onDisconnect,
 }: RemoteNetworkConnectionsProps) {
   const { t, formatNumber } = useI18n('common');
-  const { error: notifyError } = useNotification();
-  const [copiedUrl, setCopiedUrl] = useState<string | null>(null);
-  useEffect(() => {
-    if (!copiedUrl) return;
-    const timeout = window.setTimeout(() => setCopiedUrl(null), 2000);
-    return () => window.clearTimeout(timeout);
-  }, [copiedUrl]);
   const connection = selectRemoteNetworkConnection(status, invitation);
   const account = connection.connected && connection.method === method
     && connection.relayUrl === normalizeRelayUrl(relayUrl);
   const clients = account ? status?.clients ?? [] : [];
   const count = clients.length;
   const connected = account;
-  const copied = copiedUrl !== null && copiedUrl === normalizeRelayUrl(relayUrl);
-  const copyUrl = async () => {
-    const url = normalizeRelayUrl(relayUrl);
-    if (!url) return;
-    if (await copyTextToClipboard(url)) setCopiedUrl(url);
-    else notifyError(t('remoteConnect.copyServerUrlFailed'));
-  };
 
   return <div className="openbitfun-remote-connect__body openbitfun-remote-connect__body--network">
     <section
@@ -68,26 +52,7 @@ export function RemoteNetworkConnections({
               : connected ? 'remoteConnect.stateConnected' : 'remoteConnect.notConnected')}
         </StatusPill></span>
       </div>
-      {settings}
-      <div className="openbitfun-remote-connect__relay-address">
-        <Field controlWidth="fill" label={t('remoteConnect.serverUrl')}>
-          <Input
-            type="url"
-            value={relayUrl}
-            readOnly
-            size="sm"
-            trailing={<IconButton
-              variant="quiet"
-              size="sm"
-              aria-label={copied ? t('remoteConnect.serverUrlCopied') : t('remoteConnect.copyServerUrl')}
-              title={copied ? t('remoteConnect.serverUrlCopied') : t('remoteConnect.copyServerUrl')}
-              disabled={!normalizeRelayUrl(relayUrl)}
-              icon={<Icon name={copied ? 'check-line' : 'duplicate'} size="sm" />}
-              onClick={() => void copyUrl()}
-            />}
-          />
-        </Field>
-      </div>
+      {settings && <div className="openbitfun-remote-connect__relay-settings">{settings}</div>}
       <div className="openbitfun-remote-connect__connections-content">
         <div className="openbitfun-remote-connect__connections-heading">
           <h4 title={t('remoteConnect.clientCountHint')}>{t('remoteConnect.connectedClients')}</h4>

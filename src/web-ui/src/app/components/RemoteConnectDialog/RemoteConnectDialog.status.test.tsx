@@ -219,9 +219,8 @@ describe('Remote Connect shared status through the real dialog and sidebar', () 
     expect(cardStatus()).toBe('remoteConnect.stateConnected');
     expect(dialog().textContent).toContain('remoteConnect.accountConnectedHint');
     expect(attachedMobile()).not.toBeNull();
-    expect((element('input[type="url"]') as HTMLInputElement).value).toBe(relay);
-    await click(element('button[aria-label="remoteConnect.copyServerUrl"]'));
-    expect(boundary.copyText).toHaveBeenCalledWith(relay);
+    await click(element('button[aria-label="remoteConnect.copyUrl"]'));
+    expect(boundary.copyText).toHaveBeenCalledWith(invitation(relay).qr_url);
     await clickText('remoteConnect.cancelInvitation');
     expect(document.querySelector('[data-openbitfun-part="pairingCard"]')).toBeNull();
     expect(boundary.stopConnection).not.toHaveBeenCalled();

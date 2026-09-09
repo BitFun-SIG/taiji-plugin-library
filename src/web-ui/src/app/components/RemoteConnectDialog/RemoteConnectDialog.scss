@@ -1182,8 +1182,12 @@
   }
 }
 
-.openbitfun-remote-connect__relay-address {
-  padding: var(--openbitfun-space-4) var(--openbitfun-space-5);
+.openbitfun-remote-connect__relay-card > .openbitfun-remote-connect__network-heading {
+  padding-bottom: var(--openbitfun-space-4);
+}
+
+.openbitfun-remote-connect__relay-settings {
+  padding: 0 var(--openbitfun-space-5) var(--openbitfun-space-4);
 }
 
 .openbitfun-remote-connect__connections-content {
