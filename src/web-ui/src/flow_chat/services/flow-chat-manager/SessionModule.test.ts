@@ -286,28 +286,60 @@ describe('resolveAgentTypeForSessionCreation', () => {
     vi.clearAllMocks();
   });
 
-  it('uses the configured default mode for internal agentic session creation', async () => {
-    configApiMocks.getConfig.mockResolvedValue('PlannerPlus');
+  it('uses the configured fixed mode when the caller requests the default', async () => {
+    configApiMocks.getConfig.mockResolvedValue({
+      default_mode_strategy: 'fixed',
+      default_mode_id: 'PlannerPlus',
+    });
     agentApiMocks.getAvailableModes.mockResolvedValue([
       { id: 'agentic' },
       { id: 'PlannerPlus' },
     ]);
 
-    await expect(resolveAgentTypeForSessionCreation('agentic', null)).resolves.toBe('PlannerPlus');
+    await expect(resolveAgentTypeForSessionCreation(undefined, null)).resolves.toBe('PlannerPlus');
   });
 
-  it('does not override explicit non-agentic modes', async () => {
+  it('does not override any explicit mode, including the Standard Harness id', async () => {
     await expect(resolveAgentTypeForSessionCreation('Cowork', null)).resolves.toBe('Cowork');
+    await expect(resolveAgentTypeForSessionCreation('agentic', null)).resolves.toBe('agentic');
 
     expect(configApiMocks.getConfig).not.toHaveBeenCalled();
     expect(agentApiMocks.getAvailableModes).not.toHaveBeenCalled();
   });
 
+  it('follows the most recent explicit ChatInput selection', async () => {
+    configApiMocks.getConfig.mockResolvedValue({
+      default_mode_strategy: 'follow_last',
+      default_mode_id: 'Ultra',
+      last_mode_id: 'Creative',
+    });
+    agentApiMocks.getAvailableModes.mockResolvedValue([
+      { id: 'agentic' },
+      { id: 'Creative' },
+      { id: 'Ultra' },
+    ]);
+
+    await expect(resolveAgentTypeForSessionCreation(undefined, null)).resolves.toBe('Creative');
+  });
+
+  it('preserves the fixed meaning of legacy default_mode_id config', async () => {
+    configApiMocks.getConfig.mockResolvedValue({ default_mode_id: 'PlannerPlus' });
+    agentApiMocks.getAvailableModes.mockResolvedValue([
+      { id: 'agentic' },
+      { id: 'PlannerPlus' },
+    ]);
+
+    await expect(resolveAgentTypeForSessionCreation(undefined, null)).resolves.toBe('PlannerPlus');
+  });
+
   it('falls back to agentic when the configured default mode is unavailable', async () => {
-    configApiMocks.getConfig.mockResolvedValue('MissingMode');
+    configApiMocks.getConfig.mockResolvedValue({
+      default_mode_strategy: 'fixed',
+      default_mode_id: 'MissingMode',
+    });
     agentApiMocks.getAvailableModes.mockResolvedValue([{ id: 'agentic' }]);
 
-    await expect(resolveAgentTypeForSessionCreation('agentic', null)).resolves.toBe('agentic');
+    await expect(resolveAgentTypeForSessionCreation(undefined, null)).resolves.toBe('agentic');
   });
 });
 

@@ -123,10 +123,8 @@ import { openBtwSessionInAuxPane, selectActiveBtwSessionTab } from '../services/
 import { resolveSessionRelationship } from '../utils/sessionMetadata';
 import { isProjectedSessionEmpty } from '../utils/flowChatTurnIdentity';
 import {
-  DEFAULT_CHAT_INPUT_MODE_CONFIG_PATH,
   canSwitchSessionMainAgent,
   isChatInputActionVisibleForTarget,
-  normalizeUserDefaultChatInputModeId,
   resolveAvailableChatInputMode,
   resolveChatInputCanUseSkills,
   resolveChatInputMainAgentModes,
@@ -136,6 +134,10 @@ import {
   resolveSessionAssistantWorkspace,
   hasCompleteThreadGoalTools,
 } from '../utils/chatInputMode';
+import {
+  chatInputModePreferenceService,
+  resolveConfiguredChatInputDefaultModeId,
+} from '../services/ChatInputModePreferenceService';
 import {
   resolveComposerExecutionLevelSelection,
   resolveChatInputExecutionLevelPolicy,
@@ -2907,21 +2909,29 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   React.useEffect(() => {
     let cancelled = false;
 
-    (async () => {
-      try {
-        const value = await configAPI.getConfig(DEFAULT_CHAT_INPUT_MODE_CONFIG_PATH, {
-          skipRetryOnNotFound: true,
-        });
-        if (!cancelled) {
-          setUserDefaultModeId(normalizeUserDefaultChatInputModeId(value));
-        }
-      } catch (error) {
-        log.warn('Failed to load default chat input mode preference', { error });
+    const publishPreference = (
+      preference: Awaited<ReturnType<typeof chatInputModePreferenceService.getPreference>>,
+    ) => {
+      if (!cancelled) {
+        setUserDefaultModeId(resolveConfiguredChatInputDefaultModeId(preference));
       }
-    })();
+    };
+
+    void chatInputModePreferenceService.getPreference()
+      .then(publishPreference)
+      .catch(error => {
+        log.warn('Failed to load default chat input mode preference', { error });
+      });
+    const unsubscribe = chatInputModePreferenceService.subscribe(
+      publishPreference,
+      error => {
+        log.warn('Failed to refresh default chat input mode preference', { error });
+      },
+    );
 
     return () => {
       cancelled = true;
+      unsubscribe();
     };
   }, []);
 
@@ -2933,11 +2943,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       if (sessionId && mode) {
         log.debug('Session switched, syncing mode', { sessionId, mode });
         dispatchMode({ type: 'SET_CURRENT_MODE', payload: mode });
-        try {
-          sessionStorage.setItem('openbitfun:flowchat:lastMode', mode);
-        } catch {
-          // ignore
-        }
       }
     };
 
@@ -2975,11 +2980,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         publishModeSelection(nextMode);
       } else {
         dispatchMode({ type: 'SET_CURRENT_MODE', payload: nextMode });
-        try {
-          sessionStorage.setItem('openbitfun:flowchat:lastMode', nextMode);
-        } catch {
-          // ignore
-        }
       }
     }
   }, [
@@ -4323,12 +4323,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       type: 'SET_CURRENT_MODE',
       payload: modeId,
     });
-
-    try {
-      sessionStorage.setItem('openbitfun:flowchat:lastMode', modeId);
-    } catch {
-      // ignore
-    }
   }, [effectiveTargetSessionId]);
 
   const sessionModeSelectionTarget = useMemo(() => effectiveTargetSessionId && effectiveTargetSession
@@ -4346,6 +4340,16 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       log.error('Failed to update Session agent mode', { error, modeId });
       notificationService.error(t('chatInput.modeChangeFailed'));
   }, [t]);
+  const rememberCommittedHarnessMode = useCallback((modeId: string) => {
+    void chatInputModePreferenceService.rememberMode(modeId)
+      .then(preference => {
+        setUserDefaultModeId(resolveConfiguredChatInputDefaultModeId(preference));
+      })
+      .catch(error => {
+        log.warn('Failed to remember ChatInput Harness selection', { error, modeId });
+        notificationService.warning(t('chatInput.harness.rememberFailed'));
+      });
+  }, [t]);
   const {
     isModeChangePending,
     publishModeSelection,
@@ -4354,6 +4358,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     sessionModeSelectionTarget,
     publishSessionModeSelection,
     reportModeSelectionFailure,
+    rememberCommittedHarnessMode,
   );
 
   const requestHarnessProfileChange = useCallback(async (profileId: SelectableHarnessProfileId) => {
@@ -4436,6 +4441,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         flowChatSessionConfigForCurrentWorkspace(workspace),
         modeId,
       );
+      rememberCommittedHarnessMode(modeId);
       const composer = sessionComposerStore.getState();
       composer.setValue(newSessionId, transferredDraft.value);
       composer.setContexts(newSessionId, transferredDraft.contexts);
@@ -4469,7 +4475,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     } finally {
       setIsHarnessSessionCreating(false);
     }
-  }, [isHarnessSessionCreating, replaceContexts, workspace]);
+  }, [isHarnessSessionCreating, rememberCommittedHarnessMode, replaceContexts, workspace]);
   
   const interruptedTurnRecovery = useMemo(
     () => selectInterruptedTurnRecovery(effectiveTargetSession, {

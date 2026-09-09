@@ -742,6 +742,7 @@
       "profileChangeOutcomeUnknown": "OpenBitFun cannot confirm whether the Harness changed. Refresh the session before trying again.",
       "profileUnavailable": "This Harness is not supported by the current OpenBitFun Host.",
       "profileChangeFailed": "Failed to change Harness. Try again.",
+      "rememberFailed": "The Harness changed, but this selection could not be remembered. New sessions may continue using the previous default.",
       "otherAgentsTitle": "Agents",
       "otherAgentsEmpty": "No main Agents are available",
       "unavailable": "Unavailable",

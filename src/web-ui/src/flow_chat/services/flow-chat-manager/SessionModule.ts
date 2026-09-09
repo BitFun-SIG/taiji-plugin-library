@@ -48,9 +48,11 @@ import {
   recordHistorySessionDiagnosticEvent,
 } from '../historySessionDiagnostics';
 import {
-  DEFAULT_CHAT_INPUT_MODE_CONFIG_PATH,
-  normalizeUserDefaultChatInputModeId,
-} from '../../utils/chatInputMode';
+  CHAT_INPUT_MODE_PREFERENCE_CONFIG_PATH,
+  normalizeChatInputModePreference,
+  resolveConfiguredChatInputDefaultModeId,
+} from '../ChatInputModePreferenceService';
+import type { AppFlowChatConfig } from '@/infrastructure/config/types';
 import {
   requireSessionProjectWorkspacePath,
   sessionProjectWorkspacePath,
@@ -555,18 +557,23 @@ export const resolveAgentTypeForSessionCreation = async (
   }
 
   const normalizedRequestedMode = requestedMode?.trim();
-  if (normalizedRequestedMode && normalizedRequestedMode !== 'agentic') {
+  // A provided mode is an explicit caller decision. Only an omitted mode asks
+  // this owner to resolve the user's default preference. In particular,
+  // `agentic` is the real Standard Harness id, not a default-mode sentinel.
+  if (normalizedRequestedMode) {
     return normalizedRequestedMode;
   }
 
   try {
-    const configuredDefaultMode = normalizeUserDefaultChatInputModeId(
-      await configAPI.getConfig(DEFAULT_CHAT_INPUT_MODE_CONFIG_PATH, {
-        skipRetryOnNotFound: true,
-      }),
+    const configuredDefaultMode = resolveConfiguredChatInputDefaultModeId(
+      normalizeChatInputModePreference(
+        await configAPI.getConfig(CHAT_INPUT_MODE_PREFERENCE_CONFIG_PATH, {
+          skipRetryOnNotFound: true,
+        }) as AppFlowChatConfig | undefined,
+      ),
     );
     if (!configuredDefaultMode) {
-      return normalizedRequestedMode || 'agentic';
+      return 'agentic';
     }
 
     const availableModes = await agentAPI.getAvailableModes({
@@ -590,7 +597,7 @@ export const resolveAgentTypeForSessionCreation = async (
     });
   }
 
-  return normalizedRequestedMode || 'agentic';
+  return 'agentic';
 };
 
 function requireSessionWorkspacePath(
