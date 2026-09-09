@@ -25,6 +25,7 @@ fn builtin_skill(dir_name: &str) -> SkillInfo {
         source_id: "openbitfun".to_string(),
         source_label: "OpenBitFun".to_string(),
         installation_source: None,
+        entry_file: None,
         dir_name: dir_name.to_string(),
         is_builtin: true,
         group_key: builtin_skill_group_key(dir_name).map(str::to_string),
@@ -47,6 +48,7 @@ fn custom_user_skill(dir_name: &str) -> SkillInfo {
         source_id: "openbitfun".to_string(),
         source_label: "OpenBitFun".to_string(),
         installation_source: None,
+        entry_file: None,
         dir_name: dir_name.to_string(),
         is_builtin: false,
         group_key: None,
@@ -284,6 +286,7 @@ fn project_skill(dir_name: &str) -> SkillInfo {
         source_id: "openbitfun".to_string(),
         source_label: "OpenBitFun".to_string(),
         installation_source: None,
+        entry_file: None,
         dir_name: dir_name.to_string(),
         is_builtin: false,
         group_key: None,
@@ -458,6 +461,8 @@ fn skill_discovery_root_facts_are_runtime_owned() {
             (".cursor", "cursor", "cursor", "Cursor"),
             (".opencode", "opencode", "opencode", "OpenCode"),
             (".agents", "agents", "agent-skills", "Agent Skills"),
+            (".dsh", "dsh", "deepseek-harness", "DeepSeek Harness"),
+            (".pi", "pi", "pi", "PI"),
         ]
     );
 
@@ -473,6 +478,8 @@ fn skill_discovery_root_facts_are_runtime_owned() {
             (".cursor", "home.cursor", "cursor", "Cursor"),
             (".opencode", "home.opencode", "opencode", "OpenCode"),
             (".agents", "home.agents", "agent-skills", "Agent Skills"),
+            (".dsh", "home.dsh", "deepseek-harness", "DeepSeek Harness"),
+            (".pi/agent", "home.pi", "pi", "PI"),
         ]
     );
     assert_eq!(
@@ -501,6 +508,46 @@ fn skill_source_identity_is_serialized_without_changing_slot_identity() {
     assert_eq!(value["sourceLabel"], "OpenBitFun");
     assert_eq!(value["allowUserInvocation"], false);
     assert_eq!(value["argumentHint"], "[file]");
+}
+
+#[test]
+fn legacy_skill_payload_keeps_directory_entry_and_round_trips_without_new_fields() {
+    let legacy = serde_json::to_value(project_skill("review")).unwrap();
+    assert!(legacy.get("entryFile").is_none());
+    let restored: SkillInfo = serde_json::from_value(legacy.clone()).unwrap();
+    assert!(restored.entry_file.is_none());
+    assert_eq!(serde_json::to_value(restored).unwrap(), legacy);
+    let mut flat = legacy;
+    flat["entryFile"] = serde_json::json!("review.md");
+    let restored: SkillInfo = serde_json::from_value(flat.clone()).unwrap();
+    assert_eq!(restored.entry_file.as_deref(), Some("review.md"));
+    assert_eq!(serde_json::to_value(restored).unwrap(), flat);
+}
+
+#[test]
+fn pi_name_fallback_and_dsh_invocation_metadata_follow_the_source_dialect() {
+    let pi = SkillData::from_markdown_for_source_slot(
+        "/project/.pi/skills".into(),
+        "---\nname: 42\ndescription: PI skill\n---\nbody",
+        SkillLocation::Project,
+        true,
+        "pi",
+    )
+    .unwrap();
+    assert_eq!(pi.name, "skills");
+    for content in [
+        "---\nname: Bad_Name\ndescription: DSH\n---\nbody",
+        "---\nname: good-name\ndescription: DSH\ndisableModelInvocation: true\n---\nbody",
+    ] {
+        assert!(SkillData::from_markdown_for_source_slot(
+            "/project/.dsh/skills/review".into(),
+            content,
+            SkillLocation::Project,
+            true,
+            "dsh"
+        )
+        .is_err());
+    }
 }
 
 #[test]

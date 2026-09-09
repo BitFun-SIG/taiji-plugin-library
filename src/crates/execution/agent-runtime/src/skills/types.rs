@@ -44,6 +44,8 @@ pub(crate) enum SkillSourceDialect {
     AgentSkills,
     ClaudeCode,
     Codex,
+    Pi,
+    DeepSeekHarness,
 }
 
 #[derive(Debug, Clone, thiserror::Error, PartialEq, Eq)]
@@ -79,6 +81,9 @@ pub struct SkillInfo {
     pub name: String,
     pub description: String,
     pub path: String,
+    /// Markdown entry relative to `path`; absent in legacy directory bundles.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub entry_file: Option<String>,
     pub level: SkillLocation,
     pub source_slot: String,
     /// Ecosystem identity shared by all roots owned by the same source.
@@ -149,6 +154,7 @@ pub struct SkillData {
     pub content: String,
     pub location: SkillLocation,
     pub path: String,
+    pub entry_file: Option<String>,
     pub source_slot: String,
     pub source_id: String,
     pub source_label: String,
@@ -423,6 +429,10 @@ impl SkillData {
 
         let declared_name = metadata
             .get("name")
+            .filter(|value| {
+                dialect != SkillSourceDialect::Pi
+                    || value.as_str().is_some_and(|name| !name.is_empty())
+            })
             .map(|value| {
                 value.as_str().map(str::to_string).ok_or_else(|| {
                     SkillParseError::InvalidFormat("Field 'name' must be a string".to_string())
@@ -431,11 +441,35 @@ impl SkillData {
             .transpose()?;
         let name = match dialect {
             SkillSourceDialect::ClaudeCode => dir_name.clone(),
-            SkillSourceDialect::Codex => declared_name.unwrap_or_else(|| dir_name.clone()),
-            SkillSourceDialect::AgentSkills => {
+            SkillSourceDialect::Codex | SkillSourceDialect::Pi => {
+                declared_name.unwrap_or_else(|| dir_name.clone())
+            }
+            SkillSourceDialect::AgentSkills | SkillSourceDialect::DeepSeekHarness => {
                 declared_name.ok_or(SkillParseError::MissingField("name"))?
             }
         };
+        if dialect == SkillSourceDialect::DeepSeekHarness {
+            if name.is_empty()
+                || name.split('-').any(|part| {
+                    part.is_empty()
+                        || !part
+                            .chars()
+                            .all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit())
+                })
+            {
+                return Err(SkillParseError::InvalidFormat(
+                    "DeepSeek Harness skill names must use lowercase kebab-case".into(),
+                ));
+            }
+            if ["disableModelInvocation", "modelInvocable", "userInvocable"]
+                .iter()
+                .any(|key| metadata.get(*key).is_some())
+            {
+                return Err(SkillParseError::InvalidFormat(
+                    "DeepSeek Harness requires canonical invocation metadata keys".into(),
+                ));
+            }
+        }
 
         let description = if dialect == SkillSourceDialect::ClaudeCode {
             claude_description(&metadata, &body)?
@@ -446,6 +480,13 @@ impl SkillData {
                 .map(str::to_string)
                 .ok_or(SkillParseError::MissingField("description"))?
         };
+        if matches!(
+            dialect,
+            SkillSourceDialect::Pi | SkillSourceDialect::DeepSeekHarness
+        ) && description.trim().is_empty()
+        {
+            return Err(SkillParseError::MissingField("description"));
+        }
         let argument_names = if dialect == SkillSourceDialect::ClaudeCode {
             reject_unsupported_claude_semantics(&metadata, &body)?;
             claude_argument_names(&metadata)?
@@ -467,6 +508,7 @@ impl SkillData {
             content: skill_content,
             location,
             path,
+            entry_file: None,
             source_slot: String::new(),
             source_id: String::new(),
             source_label: String::new(),
