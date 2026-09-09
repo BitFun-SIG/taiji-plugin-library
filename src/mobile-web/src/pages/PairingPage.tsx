@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import PairingForm from '../components/PairingForm';
-import { accountDeviceIdFromHash, currentRelayUrl, parseScannedPairingLink } from '../services/pairingLink';
-import QrScannerSheet from '../components/QrScannerSheet';
+import { accountDeviceIdFromHash, currentRelayUrl } from '../services/pairingLink';
 import { useI18n } from '../i18n';
 import { useTheme } from '../theme';
 import logoMarkDark from '../assets/openbitfun-mark-dark.png';
@@ -35,7 +34,6 @@ const PairingPageContent: React.FC<PairingPageProps> = ({ onPaired }) => {
   const relayUrl = currentRelayUrl();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [scannerOpen, setScannerOpen] = useState(false);
   const generation = useRef(0);
   const pending = useRef<AbortController | null>(null);
   const popup = useRef<Window | null>(null);
@@ -62,7 +60,7 @@ const PairingPageContent: React.FC<PairingPageProps> = ({ onPaired }) => {
   };
 
   useEffect(() => {
-    // Only scanning a target resumes the tab's authenticated controller.
+    // Only opening a target invitation resumes the tab's authenticated controller.
     if (targetDeviceId) {
       const id = installId();
       const saved = loadMatchingCloudAccountSession(relayUrl, '', id);
@@ -115,15 +113,9 @@ const PairingPageContent: React.FC<PairingPageProps> = ({ onPaired }) => {
       <span>OpenBitFun</span>
     </div>
     <section className="pairing-page__panel">
-      <PairingForm busy={busy} error={error} onSignIn={() => void signIn()} onCancel={cancel}
-        onOpenScanner={() => setScannerOpen(true)} />
+      <PairingForm busy={busy} error={error} onSignIn={() => void signIn()} onCancel={cancel} />
     </section>
-  </div>{scannerOpen && <QrScannerSheet onClose={() => setScannerOpen(false)} onDetected={(url) => {
-    const trustedLink = parseScannedPairingLink(url);
-    if (!trustedLink) { setError(t('pairing.invalidScannedCode')); return; }
-    setScannerOpen(false);
-    window.location.assign(trustedLink);
-  }} />}</div>;
+  </div></div>;
 };
 
 const PairingPage: React.FC<PairingPageProps> = (props) => {

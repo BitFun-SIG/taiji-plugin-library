@@ -180,18 +180,20 @@ test('authorization follows the central GitHub OAuth URL and rejects lookalike d
 
 
 test('official and local invitations share strict device-only targeting', async () => {
-  const { parseScannedPairingLink, accountDeviceIdFromHash } = await import(links.url);
+  const { currentRelayUrl, pairingRelayUrl, accountDeviceIdFromHash } = await import(links.url);
   for (const base of ['https://remote.openbitfun.com/v/1.0.0/', 'http://192.168.1.9:9700/']) {
-    assert.equal(parseScannedPairingLink(`${base}#/pair?did=desktop-1`, base), `${base}#/pair?did=desktop-1`);
+    const url = new URL(`${base}#/pair?did=desktop-1`);
+    assert.equal(currentRelayUrl(url), base.replace(/\/$/, ''));
+    assert.equal(accountDeviceIdFromHash(url.hash), 'desktop-1');
     for (const hash of ['did=a&did=b', 'did=a&pk=untrusted', 'did=a&relay=https://evil.example',
       'did=%2Fother', 'room=room&pk=key', 'did=..']) {
-      assert.equal(parseScannedPairingLink(`${base}#/pair?${hash}`, base), null);
+      assert.equal(accountDeviceIdFromHash(`#/pair?${hash}`), null);
     }
   }
   for (const base of ['https://evil.example/', 'https://remote.openbitfun.com.evil.example/v/1.0.0/',
     'https://user@remote.openbitfun.com/v/1.0.0/', 'http://remote.openbitfun.com/v/1.0.0/',
     'https://remote.openbitfun.com/relay/']) {
-    assert.equal(parseScannedPairingLink(`${base}#/pair?did=desktop`, 'http://localhost/'), null);
+    assert.equal(pairingRelayUrl(base), null);
   }
   assert.equal(accountDeviceIdFromHash('#/pair?did=desktop'), 'desktop');
   assert.equal(accountDeviceIdFromHash('#/chat?did=desktop'), null);

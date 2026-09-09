@@ -45,13 +45,3 @@ export function accountDeviceIdFromHash(hash: string): string | null {
     || !/^[A-Za-z0-9_.-]{1,128}$/.test(ids[0]) || ['.', '..'].includes(ids[0])) return null;
   return ids[0];
 }
-
-export function parseScannedPairingLink(value: string, baseHref = window.location.href): string | null {
-  try {
-    const url = new URL(value.trim(), baseHref);
-    if (url.username || url.password || url.search) return null;
-    const endpoint = pairingRelayUrl(`${url.origin}${url.pathname}`);
-    const id = accountDeviceIdFromHash(url.hash);
-    return endpoint && id ? `${endpoint}/#/pair?did=${encodeURIComponent(id)}` : null;
-  } catch { return null; }
-}

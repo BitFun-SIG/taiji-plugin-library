@@ -7,11 +7,10 @@ interface PairingFormProps {
   error: string | null;
   onSignIn: () => void;
   onCancel: () => void;
-  onOpenScanner: () => void;
 }
 
-/** Presentation for the global GitHub sign-in and device scanner. */
-const PairingForm: React.FC<PairingFormProps> = ({ busy, error, onSignIn, onCancel, onOpenScanner }) => {
+/** Presentation for the global GitHub sign-in. */
+const PairingForm: React.FC<PairingFormProps> = ({ busy, error, onSignIn, onCancel }) => {
   const { t } = useI18n();
   return (
     <form className="pairing-page__form" onSubmit={(event) => { event.preventDefault(); onSignIn(); }}>
@@ -27,11 +26,7 @@ const PairingForm: React.FC<PairingFormProps> = ({ busy, error, onSignIn, onCanc
         <MobileButton appearance="primary" block className="pairing-page__retry" type="submit" disabled={busy}>
           {t('pairing.githubSignIn')}
         </MobileButton>
-        {busy
-          ? <MobileButton appearance="plain" onClick={onCancel}>{t('common.cancel')}</MobileButton>
-          : <MobileButton appearance="secondary" block className="pairing-page__scan-action" onClick={onOpenScanner}>
-            {t('pairing.scanAction')}
-          </MobileButton>}
+        {busy && <MobileButton appearance="plain" onClick={onCancel}>{t('common.cancel')}</MobileButton>}
       </div>
     </form>
   );
