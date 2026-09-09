@@ -180,6 +180,10 @@
       "lineHeight": { "$value": "{lineHeight.tight}" },
       "letterSpacing": { "$value": "{letterSpacing.normal}" }
     },
+    "statusPill": {
+      "$description": "Short status leading: 14px at 11px, scaling with typography.",
+      "lineHeight": { "$type": "number", "$value": 1.2727272727272727 }
+    },
     "fieldHelper": {
       "$description": "Field helper leading: 16px at the default 11px type size, scaling with user typography.",
       "lineHeight": { "$type": "number", "$value": 1.4545454545454546 }
@@ -291,6 +295,13 @@
       }
     },
     "code": {
+      "meta": {
+        "fontFamily": { "$value": "{font.family.mono}" },
+        "fontSize": { "$value": "{font.size.meta}" },
+        "fontWeight": { "$value": "{font.weight.regular}" },
+        "lineHeight": { "$value": "{lineHeight.tight}" },
+        "letterSpacing": { "$value": "{letterSpacing.normal}" }
+      },
       "sm": {
         "fontFamily": { "$value": "{font.family.mono}" },
         "fontSize": { "$value": "{font.size.xs}" },
@@ -618,11 +629,11 @@
     "launcherButton": {
       "$description": "Geometry for a shell-edge launcher with an icon and short label.",
       "$type": "dimension",
-      "minInlineSize": { "$value": "104px" },
+      "minInlineSize": { "$value": "72px" },
       "blockSize": { "$value": "{control.height.md}" },
-      "paddingInline": { "$value": "14px" },
-      "gap": { "$value": "{space.2}" },
-      "iconSize": { "$value": "16px" },
+      "paddingInline": { "$value": "10px" },
+      "gap": { "$value": "{space.1}" },
+      "iconSize": { "$value": "12px" },
       "radius": { "$value": "{radius.lg}" }
     },
     "changeCount": {
@@ -635,7 +646,7 @@
     "statusPill": {
       "$type": "dimension",
       "gap": { "$value": "2px" },
-      "paddingBlock": { "$value": "3px" },
+      "paddingBlock": { "$value": "2px" },
       "paddingInline": { "$value": "6px" },
       "radius": { "$value": "{radius.pill}" },
       "iconSize": { "$value": "14px" }

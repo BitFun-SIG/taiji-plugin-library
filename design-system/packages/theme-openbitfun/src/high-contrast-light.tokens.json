@@ -19,6 +19,12 @@
     }
   },
   "color": {
+    "keyHint": {
+      "content": { "$type": "color", "$value": "{color.content.muted}" }
+    },
+    "numberBadge": {
+      "background": { "$type": "color", "$value": "{color.action.neutral.surface}" }
+    },
     "actionCard": {
       "background": { "$type": "color", "$value": "{color.action.neutral.surface}" }
     },

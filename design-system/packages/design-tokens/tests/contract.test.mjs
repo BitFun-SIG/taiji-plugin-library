@@ -114,7 +114,7 @@ test("StatusPill geometry preserves compact semantic status anatomy", async () =
   const systemDocument = await readSource("system.tokens.json");
 
   assert.equal(tokens["control.statusPill.gap"], "2px");
-  assert.equal(tokens["control.statusPill.paddingBlock"], "3px");
+  assert.equal(tokens["control.statusPill.paddingBlock"], "2px");
   assert.equal(tokens["control.statusPill.paddingInline"], "6px");
   assert.equal(tokens["control.statusPill.iconSize"], "14px");
   assert.equal(systemDocument.control.statusPill.radius.$value, "{radius.pill}");
@@ -145,11 +145,11 @@ test("ActionCard geometry preserves compact and descriptive entry compositions",
 test("LauncherButton geometry preserves the shell-edge action contract", async () => {
   const systemDocument = await readSource("system.tokens.json");
 
-  assert.equal(tokens["control.launcherButton.minInlineSize"], "104px");
+  assert.equal(tokens["control.launcherButton.minInlineSize"], "72px");
   assert.equal(tokens["control.launcherButton.blockSize"], "40px");
-  assert.equal(tokens["control.launcherButton.paddingInline"], "14px");
-  assert.equal(tokens["control.launcherButton.gap"], "8px");
-  assert.equal(tokens["control.launcherButton.iconSize"], "16px");
+  assert.equal(tokens["control.launcherButton.paddingInline"], "10px");
+  assert.equal(tokens["control.launcherButton.gap"], "4px");
+  assert.equal(tokens["control.launcherButton.iconSize"], "12px");
   assert.equal(
     systemDocument.control.launcherButton.radius.$value,
     "{radius.lg}",

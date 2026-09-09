@@ -19,6 +19,9 @@
     }
   },
   "color": {
+    "numberBadge": {
+      "background": { "$type": "color", "$value": "{color.action.neutral.surfaceHover}" }
+    },
     "actionCard": {
       "background": { "$type": "color", "$value": "rgba(0, 0, 0, 0.03)" }
     },
@@ -60,10 +63,11 @@
       }
     },
     "keyHint": {
-      "background": { "$type": "color", "$value": "{color.action.neutral.surface}" }
+      "content": { "$type": "color", "$value": "{color.content.secondary}" },
+      "background": { "$type": "color", "$value": "{color.action.neutral.surfaceHover}" }
     },
     "scrollbar": {
-      "thumb": { "$type": "color", "$value": "{color.action.neutral.surfaceHover}" },
+      "thumb": { "$type": "color", "$value": "{color.action.neutral.surfacePressed}" },
       "thumbHover": { "$type": "color", "$value": "{color.action.neutral.surfacePressed}" }
     },
     "content": {
@@ -196,7 +200,7 @@
       },
       "launcher": {
         "$description": "Shell-edge launcher states: neutral at rest, then cyan-tinted with cyan content on hover and press.",
-        "background": { "$type": "color", "$value": "{color.action.neutral.surfacePressed}" },
+        "background": { "$type": "color", "$value": "{color.action.neutral.surfaceHover}" },
         "backgroundHover": { "$type": "color", "$value": "color-mix(in srgb, {color.control.highlight.background} 20%, transparent)" },
         "backgroundPressed": { "$type": "color", "$value": "color-mix(in srgb, {color.control.highlight.background} 30%, transparent)" },
         "content": { "$type": "color", "$value": "{color.action.neutral.content}" },
@@ -205,7 +209,7 @@
         "contentDisabled": { "$type": "color", "$value": "{color.action.neutral.contentDisabled}" }
       },
       "switch": {
-        "track": { "$type": "color", "$value": "{ref.color.neutral.250}" },
+        "track": { "$type": "color", "$value": "{color.action.neutral.surfacePressed}" },
         "trackChecked": { "$type": "color", "$value": "{color.control.highlight.background}" },
         "thumb": { "$type": "color", "$value": "{ref.color.neutral.0}" }
       }

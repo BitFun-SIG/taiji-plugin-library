@@ -16,6 +16,8 @@ import {
   MenuPopover,
   MultiSelect,
   NumberInput,
+  NumberBadge,
+  LauncherButton,
   PageHeader,
   SearchField,
   Select,
@@ -35,6 +37,17 @@ import {
   DialogTitle,
 } from "@openbitfun/ui";
 import { useI18n } from "../i18n";
+
+export function IndicatorsPattern() {
+  const { t } = useI18n();
+  const [enabled, setEnabled] = useState(false);
+  return <Toolbar bordered={false} leadingOverflow="scroll" data-openbitfun-pattern="inline-indicators" leading={<>
+    <ToolbarGroup><NumberBadge value={0} /><NumberBadge value={18} /><NumberBadge value="1234" /></ToolbarGroup>
+    <ToolbarGroup><KeyHint icon="Ctrl">K</KeyHint><KeyHint icon={<Icon name="command-mac" />}>K</KeyHint></ToolbarGroup>
+    <ToolbarGroup><StatusPill emphasis leading={<Icon name="unselected" />}>Ask</StatusPill><StatusPill tone="success">{t("patterns.device.online")}</StatusPill></ToolbarGroup>
+    <ToolbarGroup><Switch aria-label={t("patterns.settings.pointer")} checked={enabled} onCheckedChange={setEnabled} /><LauncherButton leadingIcon={<Icon name="session" />}>Hello</LauncherButton></ToolbarGroup>
+  </>} />;
+}
 
 export function FormTypographyPattern() {
   const { t } = useI18n();

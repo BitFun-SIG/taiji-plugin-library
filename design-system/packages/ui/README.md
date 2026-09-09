@@ -259,7 +259,7 @@ Use `canonicalIconNames` for galleries and pickers. `iconNames` also keeps the
 legacy `download`, `circle` and `turn` entries for compatibility; prefer
 `arrow-down`, `unselected` and `<NumberBadge value={18} />` respectively.
 `turn` is only the old empty background, not a complete numbered marker.
-`NumberBadge` owns a 24px slot, a 20px surface and 11px medium text; longer
+`NumberBadge` owns a 24px filled surface and 11px regular text; longer
 values grow horizontally. Callers supply formatted values and contextual
 accessible labels. `ToolbarBadge` delegates to the same anatomy.
 
@@ -421,3 +421,5 @@ Dialog titles use 24px bold type with their own 29px line box and normal trackin
 Extra-large (`xl`) dialogs have an 800px maximum width and continue shrinking within the viewport gutter. Provider editing uses the floating footer; small workspace creation retains its attached footer and existing button/input sizes. The Lab workspace pattern uses local sample paths and callbacks only.
 
 PageHeader `md` uses the settings title with a primary 15px description; `display` uses the welcome heading and medium 17px introduction with a 12px gap. ActionCard uses 12px padding, section-heading typography (15px semibold), and a primary 13px single-line action description. Its inset outline does not inflate the 62px medium minimum height; longer content keeps the independent sibling actions and OverflowText behavior.
+
+KeyHint uses 10px text on a 10px line and 2px block padding. StatusPill uses a 14px line with 2px block padding; opt into `emphasis` for short mode labels such as Ask, while ordinary status descriptions retain readable content colors. LauncherButton owns a 72px minimum width, 40px height, 10px side padding, 4px gap, 12px icon and 11px monospace text. Product shells may retain a deliberate compact greeting that expands into this geometry.

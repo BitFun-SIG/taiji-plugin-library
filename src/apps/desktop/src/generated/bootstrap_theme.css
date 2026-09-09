@@ -84,8 +84,10 @@
     --openbitfun-color-identity-harness-standard: #1aa73e;
     --openbitfun-color-identity-harness-ultimate: #ff8c00;
     --openbitfun-color-key-hint-background: rgba(255, 255, 255, 0.1);
+    --openbitfun-color-key-hint-content: #858585;
     --openbitfun-color-link-default: #60a5fa;
     --openbitfun-color-link-hover: #93c5fd;
+    --openbitfun-color-number-badge-background: rgba(255, 255, 255, 0.1);
     --openbitfun-color-overlay-scrim: rgba(0, 0, 0, 0.56);
     --openbitfun-color-scrollbar-thumb: rgba(255, 255, 255, 0.12);
     --openbitfun-color-scrollbar-thumb-hover: rgba(255, 255, 255, 0.15);

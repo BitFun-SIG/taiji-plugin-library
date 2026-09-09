@@ -79,3 +79,5 @@ in both root and chrome; generic palette projection previously reduced product
 menu labels to secondary text (60%). Explicit imported action colors still win.
 
 Action cards own `color.actionCard.background`: the light entry surface is black at 3% opacity. `surface.subtle` is a transient navy tint and `field.groupBackground` belongs to form groups, so neither represents this persistent action surface. Other modes retain their neutral action surface. Product Appearance preserves explicit legacy neutral-surface overrides in root and chrome.
+
+Compact indicators own `color.numberBadge.background` and `color.keyHint.content` so reference light values (8% fill and 60% text) can coexist with existing dark/contrast values and explicit legacy Appearance overrides. The light Switch off track and resting scrollbar thumb use 10% black; KeyHint and Launcher resting fills use 8%. Long status labels keep content colors; StatusPill emphasis is opt-in.
