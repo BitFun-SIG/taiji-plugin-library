@@ -1388,7 +1388,7 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
           })}
           {renderOverviewAction({
             view: 'bot',
-            icon: <Icon name="side-chat" size="md" />,
+            icon: <MessageCircle size={18} />,
             title: t('remoteConnect.chatAppsTitle'),
             description: t('remoteConnect.chatAppsDescription'),
             statusLabel: statusState === 'unavailable'

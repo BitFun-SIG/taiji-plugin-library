@@ -128,7 +128,7 @@ describe('Remote Connect safety contracts', () => {
     );
 
     expect(dialogSource).toContain('<ChatAppBrandIcon app={botTab} size={28} />');
-    expect(dialogSource).toContain('icon: <Icon name="side-chat" size="md" />');
+    expect(dialogSource).toContain('icon: <MessageCircle size={18} />');
     expect(dialogSource).toContain('<ChatAppBrandIcon app={brand} size={15} />');
     expect(chatAppBrandIconSource).toContain("app === 'telegram'");
     expect(chatAppBrandIconSource).toContain("app === 'feishu'");
