@@ -81,7 +81,7 @@ describe('builtin appearance preset output', () => {
     expect(light['--openbitfun-component-button-content']).toBe('rgba(0, 0, 0, 0.80)');
     expect(light['--openbitfun-component-button-text-content']).toBe('#059cb0');
     expect(light['--openbitfun-color-action-primary-background']).toBe('#101a27');
-    expect(light['--openbitfun-color-action-neutral-content']).toBe('rgba(0, 0, 0, 0.60)');
+    expect(light['--openbitfun-color-action-neutral-content']).toBe('rgba(0, 0, 0, 0.80)');
   });
 
   it('preserves the action colors of branded presets through the Button contract', () => {
@@ -91,6 +91,17 @@ describe('builtin appearance preset output', () => {
       expect(tokens['--openbitfun-component-button-primary-background']).toBe(tokens['--openbitfun-color-action-primary-background']);
       expect(tokens['--openbitfun-component-button-text-content']).toBe(tokens['--openbitfun-color-accent-default']);
       expect(tokens['--openbitfun-component-button-content']).toBe(tokens['--openbitfun-color-action-neutral-content']);
+    }
+  });
+
+  it('keeps menu label and caption colors consistent between the public light theme and product portals', () => {
+    const settings = getBuiltinAppearance('openbitfun-light')!.renderers!['theme-tokens']!.settings;
+    for (const tokens of [settings.tokens, ...(settings.scopes?.chrome ? [settings.scopes.chrome] : [])]) {
+      expect(tokens['--openbitfun-color-action-neutral-content']).toBe(themes.light['color.action.neutral.content']);
+      expect(tokens['--openbitfun-color-content-caption']).toBe(themes.light['color.content.caption']);
+    }
+    for (const palette of builtinAppearancePalettes.filter(p => p.id !== 'openbitfun-light')) {
+      expect(getBuiltinAppearanceThemeTokens(palette.id)['--openbitfun-color-action-neutral-content']).toBe(palette.colors.text.secondary);
     }
   });
 

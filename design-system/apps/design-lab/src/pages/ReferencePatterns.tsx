@@ -171,9 +171,13 @@ export function NestedMenuPattern() {
   const [position, setPosition] = useState<{ x: number; y: number } | undefined>();
   const [lastAction, setLastAction] = useState("");
   const [pinned, setPinned] = useState(false);
+  const [scrolling, setScrolling] = useState(false);
   return <Card appearance="subtle" padding="md" gap="md" data-openbitfun-pattern="nested-menu" onContextMenu={event => { event.preventDefault(); setPosition({ x: event.clientX, y: event.clientY }); setOpen(true); }}>
     <PageHeader level={3} size="sm" title={t("patterns.menu.title")} description={t("patterns.menu.hint")} />
     <Button ref={anchorRef} aria-haspopup="menu" aria-expanded={open} leadingIcon={<Icon name="more" />} onClick={() => { setPosition(undefined); setOpen(!open); }}>{t("patterns.menu.open")}</Button>
+    <Field label={t("detail.option.scrolling")} orientation="horizontal">
+      <Switch checked={scrolling} onCheckedChange={setScrolling} />
+    </Field>
     <MenuPopover aria-label={t("patterns.menu.title")} open={open} onClose={() => setOpen(false)} anchorRef={position ? undefined : anchorRef} position={position} items={[
       { id: "open", label: t("patterns.actions.openFiles"), icon: <Icon name="files" />, shortcut: <KeyHint>Ctrl O</KeyHint>, onSelect: () => setLastAction(t("patterns.actions.openFiles")) },
       { id: "tools", label: t("patterns.navigation.tools"), icon: <Icon name="extension" />, submenu: [
@@ -185,6 +189,7 @@ export function NestedMenuPattern() {
       ] },
       { id: "separator", label: "", separator: true },
       { id: "pin", label: t("patterns.menu.pin"), role: "menuitemcheckbox", checked: pinned, icon: <Icon name={pinned ? "check-line" : "pin"} />, onSelect: () => { setPinned(!pinned); setLastAction(t("patterns.menu.pin")); } },
+      ...(scrolling ? Array.from({ length: 18 }, (_, index) => ({ id: `file-${index}`, label: `${t("patterns.actions.openFiles")} — workspace-${index + 1}`, icon: <Icon name="files" />, onSelect: () => setLastAction(`workspace-${index + 1}`) })) : []),
     ]} />
     <p className="pattern-feedback" role="status">{lastAction ? t("patterns.menu.lastAction", { action: lastAction }) : t("patterns.menu.keyboard")}</p>
   </Card>;

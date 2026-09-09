@@ -227,7 +227,7 @@ test("NavigationPanel tokens preserve the grouped sidebar composition contract",
   const systemDocument = await readSource("system.tokens.json");
 
   assert.equal(tokens["layout.navigationPanel.inlineSize"], "216px");
-  assert.equal(tokens["layout.navigationPanel.headingHeight"], "22px");
+  assert.equal(tokens["layout.navigationPanel.headingHeight"], "24px");
   assert.equal(tokens["layout.navigationPanel.itemHeight"], "30px");
   assert.equal(tokens["layout.navigationPanel.itemIconSize"], "14px");
   assert.equal(tokens["layout.navigationPanel.footerHeight"], "40px");

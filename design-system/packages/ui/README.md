@@ -405,3 +405,11 @@ FormSection descriptions use primary content with 16px leading at 13px. Both
 leading roles scale with user typography. FieldGroup uses the form group tint,
 retaining its existing row padding, dividers, and radius. The Patterns form
 specimen shows both orientations and long values over a tinted container.
+
+Menus keep contiguous 30px rows with no additional list or heading-to-item gap;
+separators own their 8px vertical margins. Their keyboard focus indicator is
+inset so scrolling does not clip it or require extra permanent padding.
+ActionItem hover and pressed surfaces use the semantic neutral hover fill;
+pressed text remains semibold. Menu and navigation captions consume the final
+caption color directly, avoiding a second opacity multiplier. The nested-menu
+Pattern includes a scrolling toggle for keyboard and submenu verification.
