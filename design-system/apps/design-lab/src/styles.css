@@ -2987,6 +2987,11 @@ body,
   container-type: inline-size;
 }
 
+.pattern-workspace-path {
+  overflow-wrap: anywhere;
+  color: var(--openbitfun-color-content-secondary);
+}
+
 .pattern-provider-fields [data-openbitfun-component="disclosure"] [data-openbitfun-part="content-inner"] {
   display: grid;
   gap: var(--openbitfun-space-3);
