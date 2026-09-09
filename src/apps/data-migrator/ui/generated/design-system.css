@@ -103,7 +103,7 @@
     --openbitfun-control-launcher-button-min-inline-size: 104px;
     --openbitfun-control-launcher-button-padding-inline: 14px;
     --openbitfun-control-launcher-button-radius: var(--openbitfun-radius-lg);
-    --openbitfun-control-segmented-control-gap: 2px;
+    --openbitfun-control-segmented-control-gap: var(--openbitfun-space-1);
     --openbitfun-control-segmented-control-icon-size: 12px;
     --openbitfun-control-segmented-control-icon-size-md: 14px;
     --openbitfun-control-segmented-control-padding: 2px;
@@ -112,9 +112,10 @@
     --openbitfun-control-segmented-control-pill-segment-radius: var(--openbitfun-radius-sm);
     --openbitfun-control-segmented-control-radius: var(--openbitfun-radius-pill);
     --openbitfun-control-segmented-control-segment-gap: var(--openbitfun-space-1);
-    --openbitfun-control-segmented-control-segment-height: 22px;
-    --openbitfun-control-segmented-control-segment-height-md: 28px;
+    --openbitfun-control-segmented-control-segment-height: 24px;
+    --openbitfun-control-segmented-control-segment-height-md: 30px;
     --openbitfun-control-segmented-control-segment-padding-inline: var(--openbitfun-space-2);
+    --openbitfun-control-segmented-control-segment-padding-inline-md: var(--openbitfun-space-3);
     --openbitfun-control-segmented-control-segment-radius: var(--openbitfun-radius-pill);
     --openbitfun-control-select-content-gap: var(--openbitfun-space-2);
     --openbitfun-control-select-indicator-size: 14px;
@@ -137,9 +138,11 @@
     --openbitfun-control-tab-group-item-action-inset: var(--openbitfun-space-2);
     --openbitfun-control-tab-group-item-action-size: var(--openbitfun-space-5);
     --openbitfun-control-tab-group-item-gap: 6px;
+    --openbitfun-control-tab-group-item-gap-sm: var(--openbitfun-space-1);
     --openbitfun-control-tab-group-item-height: var(--openbitfun-control-height-md);
     --openbitfun-control-tab-group-item-height-sm: 30px;
     --openbitfun-control-tab-group-item-icon-size: 16px;
+    --openbitfun-control-tab-group-item-icon-size-sm: 14px;
     --openbitfun-control-tab-group-item-padding-block-sm: 7px;
     --openbitfun-control-tab-group-item-padding-inline: var(--openbitfun-space-4);
     --openbitfun-control-tab-group-item-padding-inline-sm: var(--openbitfun-space-3);

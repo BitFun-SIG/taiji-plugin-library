@@ -141,14 +141,14 @@ function ProviderFields() {
 
 export function SceneToolbarPattern() {
   const { t } = useI18n();
-  const [tabs, setTabs] = useState(["README.md", "models.ts", "design-system"]);
+  const [tabs, setTabs] = useState(["README.md", "models.ts", "design-system/packages/ui/src/components/TabGroup/TabGroup.tsx"]);
   const [active, setActive] = useState("README.md");
   const [search, setSearch] = useState(false);
   const [details, setDetails] = useState(false);
   const nextTab = useRef(1);
   const close = (value: string) => { const next = tabs.filter(tab => tab !== value); setTabs(next); if (active === value) setActive(next[0] ?? ""); };
   return <Card appearance="raised" data-openbitfun-pattern="scene-toolbar" className="pattern-scene-toolbar">
-    <Toolbar leadingOverflow="scroll" leading={<TabGroup aria-label={t("patterns.toolbar.tabs")} value={active} onValueChange={setActive} items={tabs.map(value => ({ value, label: value, id: `pattern-tab-${value}`, panelId: `pattern-panel-${value}`, icon: <Icon name="files" size="sm" />, endAction: <IconButton aria-label={`${t("components.preview.close")}: ${value}`} icon={<Icon name="xmark" />} variant="quiet" size="xs" onClick={() => close(value)} /> }))} />}
+    <Toolbar leadingOverflow="scroll" leading={<TabGroup size="sm" aria-label={t("patterns.toolbar.tabs")} value={active} onValueChange={setActive} items={tabs.map(value => ({ value, label: value, id: `pattern-tab-${value}`, panelId: `pattern-panel-${value}`, icon: value === "README.md" ? undefined : <Icon name="files" />, endAction: <IconButton aria-label={`${t("components.preview.close")}: ${value}`} icon={<Icon name="xmark" />} variant="quiet" size="xs" onClick={() => close(value)} /> }))} />}
       trailing={<ToolbarGroup>
         <ChangeCount additions={12} deletions={3} />
         <ToolbarSeparator />
