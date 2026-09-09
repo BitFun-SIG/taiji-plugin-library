@@ -203,7 +203,7 @@ async fn list_devices(
 
 #[derive(Deserialize)]
 pub struct DeviceRpcRequest {
-    /// Opaque ciphertext encrypted client-side with the account master_key.
+    /// Opaque ciphertext encrypted client-side with the device-pair key.
     /// The relay never decrypts this — it only routes.
     pub encrypted_data: String,
     pub nonce: String,

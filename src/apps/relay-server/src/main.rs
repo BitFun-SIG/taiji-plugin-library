@@ -106,9 +106,7 @@ async fn main() -> anyhow::Result<()> {
     }
     // Re-apply after installing the optional fallback so static files receive
     // the same browser hardening as relay API responses.
-    app = app.layer(axum::middleware::from_fn(
-        openbitfun_relay_service::relay_security_headers,
-    ));
+    app = app.layer(axum::middleware::from_fn(host_security_headers));
 
     info!("Room web upload dir: {}", cfg.room_web_dir);
     info!("Asset store capacity: {} bytes", cfg.asset_store_max_bytes);
@@ -123,6 +121,23 @@ async fn main() -> anyhow::Result<()> {
     )
     .await?;
     Ok(())
+}
+
+// The trusted mobile document needs camera access for its QR scanner. Keep
+// uploaded content and API responses under the shared restrictive policy.
+async fn host_security_headers(
+    request: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> axum::response::Response {
+    let controller_document = matches!(request.uri().path(), "/" | "/index.html");
+    let mut response = openbitfun_relay_service::relay_security_headers(request, next).await;
+    if controller_document {
+        response.headers_mut().insert(
+            "permissions-policy",
+            axum::http::HeaderValue::from_static("camera=(self), microphone=(), geolocation=()"),
+        );
+    }
+    response
 }
 
 async fn require_isolated_page_origins(
