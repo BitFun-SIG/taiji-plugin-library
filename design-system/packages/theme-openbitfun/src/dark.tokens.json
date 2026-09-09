@@ -175,6 +175,7 @@
       }
     },
     "field": {
+      "groupBackground": { "$description": "Grouped form tint; independent of opaque tertiary containers and transient subtle feedback.", "$type": "color", "$value": "{color.surface.tertiary}" },
       "borderActive": { "$type": "color", "$value": "{color.field.borderFocus}" },
       "placeholder": { "$type": "color", "$value": "{color.content.muted}" },
       "background": { "$type": "color", "$value": "{ref.color.neutral.900}" },

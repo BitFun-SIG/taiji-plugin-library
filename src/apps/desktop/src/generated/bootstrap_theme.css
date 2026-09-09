@@ -63,6 +63,7 @@
     --openbitfun-color-field-border-active: #858585;
     --openbitfun-color-field-border-focus: #858585;
     --openbitfun-color-field-border-hover: rgba(255, 255, 255, 0.24);
+    --openbitfun-color-field-group-background: #0e0e10;
     --openbitfun-color-field-placeholder: #858585;
     --openbitfun-color-focus-ring: #60a5fa;
     --openbitfun-color-identity-assistant-border: color-mix(in srgb, #ec4899 15%, transparent);
