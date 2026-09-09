@@ -12,8 +12,14 @@ under that root owned by UID/GID 10001 before starting Compose.
 
 The Linux host network plus explicit `127.0.0.1:19700` listener lets the service
 verify the immediate proxy peer before trusting its overwritten forwarded IP.
-Do not publish this listener on a public interface. Install the versioned Nginx
-location from the owner guide after the container passes its health check.
+Do not publish this listener on a public interface. Install `nginx-http.conf` in the Nginx http context and include
+`nginx-location.conf` in the existing remote server after the container passes
+its health check. The new location accepts the existing explicit WAF origin
+ranges and loopback; direct origin requests from other peers receive 403.
+Forwarded client IPs are recursively resolved only for those trusted WAF
+peers. Keep the range list synchronized with the WAF control plane. Raise
+`worker_connections` to 8192 and retain a file descriptor limit of at least
+16384; validate with `nginx -t` before a graceful reload.
 
 Published Pages are disabled with an explicit 503 until both isolated public
 and sign-in origins are configured. This prevents uploaded content from sharing
