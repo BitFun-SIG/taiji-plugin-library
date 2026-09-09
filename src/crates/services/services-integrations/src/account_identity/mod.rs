@@ -10,7 +10,7 @@ use openbitfun_product_domains::account::GitHubUser;
 use reqwest::{RequestBuilder, Response, StatusCode};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
-pub const DEFAULT_ACCOUNT_API_URL: &str = "https://market.openbitfun.com/miniapp/api/v1";
+pub const DEFAULT_ACCOUNT_API_URL: &str = "https://auth.openbitfun.com/api/v1";
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DesktopAuthStart {
@@ -136,7 +136,8 @@ impl AccountIdentityClient {
     }
 
     pub async fn from_environment() -> Result<Self, MarketClientError> {
-        let base_url = std::env::var("OPENBITFUN_MINIAPP_MARKET_API_URL")
+        let base_url = std::env::var("OPENBITFUN_ACCOUNT_API_URL")
+            .or_else(|_| std::env::var("OPENBITFUN_MINIAPP_MARKET_API_URL"))
             .unwrap_or_else(|_| DEFAULT_ACCOUNT_API_URL.to_string());
         Self::new(base_url).await
     }
@@ -152,7 +153,7 @@ impl AccountIdentityClient {
         if parsed.scheme() != "https" && !local_http {
             return Err(local_error(
                 "invalid_market_url",
-                "The OpenBitFun account API must use HTTPS.",
+                "The GitHub account API must use HTTPS.",
             ));
         }
         let client = crate::reqwest_client_builder()
@@ -325,7 +326,7 @@ async fn response_error(response: Response) -> MarketClientError {
         },
         Err(_) => local_error(
             "market_request_failed",
-            format!("The OpenBitFun account service returned HTTP {status}."),
+            format!("The GitHub account service returned HTTP {status}."),
         ),
     }
 }

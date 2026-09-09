@@ -54,10 +54,10 @@ pub struct PairingResponse {
     pub device_name: String,
     #[serde(default)]
     pub mobile_install_id: Option<String>,
-    /// Local pairing user id, or OpenBitFun account username when account auth is required.
+    /// Local pairing user id, or GitHub account username when account auth is required.
     #[serde(default)]
     pub user_id: Option<String>,
-    /// OpenBitFun account access_token when the paired desktop is logged in. Never log this field.
+    /// GitHub account access_token when the paired desktop is logged in. Never log this field.
     #[serde(default)]
     pub access_token: Option<String>,
 }

@@ -262,7 +262,7 @@ struct PairingSheet: View {
             Spacer(minLength: 12)
             SignedOutConnectionActions(
                 scanTitle: model.localized("扫码连接"),
-                accountTitle: model.localized("登录 OpenBitFun 账号"),
+                accountTitle: model.localized("使用 GitHub 登录"),
                 onScan: {
                     scanError = nil
                     step = .scan

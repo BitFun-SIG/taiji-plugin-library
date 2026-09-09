@@ -25,15 +25,15 @@
     <string name="settings_theme_light">Light</string>
     <string name="settings_theme_dark">Dark</string>
     <string name="account_title">Account</string>
-    <string name="account_login_title">Sign in to OpenBitFun</string>
-    <string name="account_login_body">Sign in to OpenBitFun to connect to your computers and control their sessions.</string>
+    <string name="account_login_title">Sign in with GitHub</string>
+    <string name="account_login_body">Sign in with GitHub to connect to your computers and control their sessions.</string>
     <string name="account_login_server">Sign-in server</string>
     <string name="account_username_placeholder">OpenBitFun username</string>
     <string name="account_password_placeholder">OpenBitFun password</string>
     <string name="account_relay_url_placeholder">Relay URL, for example https://relay.example.com</string>
     <string name="account_signing_in">Signing in…</string>
     <string name="account_profile_title">Profile</string>
-    <string name="account_openbitfun_account">OpenBitFun account</string>
+    <string name="account_openbitfun_account">GitHub account</string>
     <string name="account_signed_in_body">This connection is verified by account %1$s. Your password is not stored on this phone.</string>
     <string name="account_connect">Connect</string>
     <string name="account_device_current_control">Controlling</string>
@@ -342,7 +342,7 @@
     <string name="sidebar_untitled">Untitled session</string>
     <string name="sidebar_new_chat">Chat</string>
     <string name="sidebar_signed_out_new_chat">New chat</string>
-    <string name="sidebar_sign_in">Sign in to OpenBitFun account</string>
+    <string name="sidebar_sign_in">Sign in with GitHub</string>
     <string name="sidebar_scan_to_connect">Scan to connect</string>
     <string name="connect_choose_connection">Choose how to connect</string>
     <string name="shell_open_sidebar">Open sidebar</string>

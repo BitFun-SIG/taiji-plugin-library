@@ -1,7 +1,7 @@
 # OpenBitFun Relay Server
 
-The official Relay connects devices signed in to the same OpenBitFun account.
-GitHub is the global account identity shared with the marketplaces. Users sign in
+The official Relay connects devices signed in to the same GitHub identity.
+GitHub is the shared identity shared with the marketplaces. Users sign in
 from OpenBitFun; they do not create a Relay account or deploy a server.
 
 Clients use `https://remote.openbitfun.com/v/1.0.0`. This release is deployed with
@@ -17,6 +17,51 @@ Sessions and files are read from the owning online device on demand.
 
 SSH and Docker workspace connections remain independent of Relay login.
 
+## For community developers and forks
+
+Self-hosting is supported through source and deployment scripts. The official
+app uses a fixed official endpoint; it has no deployment wizard or editable
+Relay URL. A private Relay therefore needs a matching client build.
+
+1. Fork this workspace and read `CONTRIBUTING.md`. Build the Relay and mobile
+   controller from the same revision. Keep your fork's changes in source control.
+2. Select your HTTPS endpoint in `product-domains/src/account.rs`, then align
+   the frontend constants in `src/web-ui/src/infrastructure/remote-connect/remoteConnectionState.ts`
+   and `src/mobile-web/src/services/CloudAccountClient.ts`. Native clients have
+   matching constants in KMP `core-transport/CloudAccountClient.kt` and HarmonyOS
+   `services/CloudAccountClient.ets`; update the HarmonyOS account-link parser too.
+   Search for `https://remote.openbitfun.com/v/1.0.0` to verify every runtime
+   reference and corresponding test before building your distribution.
+3. Decide who owns identity. You can retain the official GitHub identity
+   authority, or run the [shared identity service](../../../deploy/miniapp-market/README.md)
+   with your own GitHub OAuth application. For an independent authority, change
+   `IDENTITY_ME_URL` in `relay-service/src/identity.rs` and
+   `DEFAULT_ACCOUNT_API_URL` in `services-integrations/src/account_identity/mod.rs`
+   together, and adapt the market sign-in links and callback/completion host.
+   `OPENBITFUN_ACCOUNT_API_URL` overrides the desktop/CLI identity API for
+   development; the previous `OPENBITFUN_MINIAPP_MARKET_API_URL` alias remains
+   readable. Relay never accepts an identity authority from a client request.
+4. Use separate persistent data and asset directories, configure exact browser
+   CORS origins, then put the service behind your own TLS reverse proxy. Build
+   and exercise two devices using the same GitHub identity before distributing
+   your fork. The public web controller must come from that matching build.
+
+The scripts remain in this directory: `deploy.sh` deploys on the machine where
+it runs, `common.sh` contains Docker/health helpers, and `mirror.sh` and
+`release-download.sh` support mirrors and published images. Inspect
+`bash deploy.sh --help` first. For fork code use
+`bash deploy.sh --build-from-source --global-mirror`; the default image path
+pulls a published upstream release, so it will not include your modifications.
+An empty account database is normal: successful GitHub verification creates an
+identity. Do not run retired `add-user` or password-reset commands.
+
+The legacy script uses its own Compose project and defaults. For a fresh
+versioned deployment, prefer the isolated [v1 Compose project](../../../deploy/relay-v1/README.md)
+and adapt its host paths, bind port, proxy host, and trusted upstream ranges to
+your infrastructure. Never reuse production data directories or an existing
+container name for a development deployment. There is no need to restore the
+removed deployment wizard to operate these scripts.
+
 ## Operator startup
 
 This directory owns the official service binary and maintenance tools. The
@@ -25,7 +70,7 @@ shared HTTP/WebSocket implementation lives in `src/crates/services/relay-service
 Set `RELAY_DB_PATH` to a persistent SQLite database before starting the service.
 Startup fails if it is missing; anonymous public relay mode is unsupported.
 The service validates OpenBitFun access tokens against the fixed GitHub identity
-authority at `https://market.openbitfun.com/miniapp/api/v1/me`.
+authority at `https://auth.openbitfun.com/api/v1/me`.
 
 ```bash
 cargo build --release -p openbitfun-relay-server

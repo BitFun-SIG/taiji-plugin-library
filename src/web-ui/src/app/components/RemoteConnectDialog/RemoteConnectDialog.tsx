@@ -671,6 +671,11 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
   // ── Connection handlers ──────────────────────────────────────────
 
   const handleConnect = useCallback(async () => {
+    if (!accountLoggedIn) {
+      setActiveView('account');
+      return;
+    }
+
     if (!hasAgreedDisclaimer) {
       setShowDisclaimer(true);
       return;
@@ -762,7 +767,7 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
         setLoading(false);
       }
     }
-  }, [activeView, networkTab, botTab, tgToken, feishuAppId, feishuAppSecret, weixinIlinkToken, weixinBaseUrl, weixinBotAccountId, selectedLanIp, startPolling, t, hasAgreedDisclaimer]);
+  }, [accountLoggedIn, activeView, networkTab, botTab, tgToken, feishuAppId, feishuAppSecret, weixinIlinkToken, weixinBaseUrl, weixinBotAccountId, selectedLanIp, startPolling, t, hasAgreedDisclaimer]);
 
   const handleStartWeixinQr = useCallback(async () => {
     if (!hasAgreedDisclaimer) {
@@ -1532,7 +1537,7 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
         </div>
       </section>
 
-      <section
+      {accountLoggedIn && <section
         className="openbitfun-remote-connect__overview-section"
         data-openbitfun-component="remote-connect-dialog"
         data-openbitfun-part="overviewSection"
@@ -1602,7 +1607,7 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
             state: isBotConnected ? 'connected' : undefined,
           })}
         </div>
-      </section>
+      </section>}
     </ScrollArea>
   );
 
@@ -1712,6 +1717,12 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
   const handleDisclaimerClose = disclaimerIsGate
     ? handleDialogClose
     : () => setShowDisclaimer(false);
+
+  useEffect(() => {
+    if (!accountLoggedIn && (activeView === 'network' || activeView === 'bot')) {
+      handleViewChange('overview');
+    }
+  }, [accountLoggedIn, activeView, handleViewChange]);
 
   return (
     <>

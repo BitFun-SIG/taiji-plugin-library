@@ -620,16 +620,14 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn invalid_login_does_not_advance_the_account_generation() {
+    async fn rejected_account_transition_does_not_advance_the_generation() {
         let runtime = test_runtime();
         let generation = runtime.account_context_generation();
 
-        let error = runtime
-            .login_with_credentials("", "user", "password")
+        assert!(runtime
+            .begin_account_transition_if_current(generation + 1)
             .await
-            .expect_err("empty relay URL must be rejected");
-
-        assert!(error.to_string().contains("Auth Server is required"));
+            .is_none());
         assert_eq!(runtime.account_context_generation(), generation);
     }
 }

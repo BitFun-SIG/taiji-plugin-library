@@ -81,7 +81,11 @@ pub(crate) enum CompletedOAuth {
         csrf_token: String,
         expires_at: i64,
     },
-    Desktop,
+    Desktop {
+        session_token: String,
+        csrf_token: String,
+        expires_at: i64,
+    },
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -274,7 +278,7 @@ impl AuthService {
                 &mut transaction,
                 "desktop",
                 Some(&transaction_id),
-                "/miniapp/auth/desktop-complete",
+                "https://auth.openbitfun.com/complete",
             )
             .await?;
         transaction.commit().await.map_err(MarketError::internal)?;
@@ -372,6 +376,14 @@ impl AuthService {
             .upsert_github_user(github_user.id, &github_user.login, &github_user.avatar_url)
             .await?;
 
+        self.finish_verified_oauth(flow, user.internal_id).await
+    }
+
+    async fn finish_verified_oauth(
+        &self,
+        flow: OAuthFlowRecord,
+        user_id: i64,
+    ) -> MarketResult<CompletedOAuth> {
         if flow.flow_kind == "desktop" {
             let transaction_id = flow.transaction_id.ok_or_else(|| {
                 MarketError::internal("Desktop OAuth flow is missing its transaction")
@@ -381,7 +393,7 @@ impl AuthService {
                  SET status = 'authorized', user_id = ?, updated_at = ?
                  WHERE id = ? AND status = 'pending' AND expires_at > ?",
             )
-            .bind(user.internal_id)
+            .bind(user_id)
             .bind(Utc::now().timestamp())
             .bind(&transaction_id)
             .bind(Utc::now().timestamp())
@@ -394,15 +406,23 @@ impl AuthService {
                     "The desktop authorization request has expired.",
                 ));
             }
-            return Ok(CompletedOAuth::Desktop);
         }
 
+        // Every GitHub authorization establishes the same browser identity.
+        // Device token delivery remains bound to its one-use polling secret.
         let session_token = random_token(32);
         let csrf_token = random_token(24);
         let expires_at = (Utc::now() + Duration::days(WEB_SESSION_DAYS)).timestamp();
         self.db
-            .create_web_session(user.internal_id, &session_token, &csrf_token, expires_at)
+            .create_web_session(user_id, &session_token, &csrf_token, expires_at)
             .await?;
+        if flow.flow_kind == "desktop" {
+            return Ok(CompletedOAuth::Desktop {
+                session_token,
+                csrf_token,
+                expires_at,
+            });
+        }
         Ok(CompletedOAuth::Web {
             return_to: flow.return_to,
             session_token,
@@ -904,6 +924,75 @@ mod tests {
             .await
             .unwrap_err();
         assert_eq!(error.code, "github_response_size");
+    }
+
+    #[tokio::test]
+    async fn desktop_authorization_creates_shared_browser_session_and_one_use_device_tokens() {
+        let temporary = tempfile::tempdir().unwrap();
+        let database = Database::open(&temporary.path().join("market.sqlite"))
+            .await
+            .unwrap();
+        let service = AuthService::new(test_config(temporary.path()), database.clone()).unwrap();
+        let user = database.upsert_github_user(42, "alice", "").await.unwrap();
+        let started = service.start_desktop_oauth().await.unwrap();
+        let url = Url::parse(&started.authorization_url).unwrap();
+        let state = url
+            .query_pairs()
+            .find(|(key, _)| key == "state")
+            .unwrap()
+            .1
+            .into_owned();
+        let flow = service.consume_oauth_flow(&state).await.unwrap();
+        let completed = service
+            .finish_verified_oauth(flow, user.internal_id)
+            .await
+            .unwrap();
+        let CompletedOAuth::Desktop {
+            session_token,
+            csrf_token,
+            expires_at,
+        } = completed
+        else {
+            panic!("desktop completion expected")
+        };
+        let mut headers = HeaderMap::new();
+        service
+            .append_web_session_cookies(&mut headers, &session_token, &csrf_token, expires_at)
+            .unwrap();
+        let cookies: Vec<_> = headers
+            .get_all(header::SET_COOKIE)
+            .iter()
+            .map(|v| v.to_str().unwrap())
+            .collect();
+        assert_eq!(cookies.len(), 4);
+        assert!(cookies.iter().any(|v| v.contains("Path=/miniapp;")));
+        assert!(cookies.iter().any(|v| v.contains("Path=/skin;")));
+        assert!(cookies.iter().all(|v| !v.contains("Domain=")));
+        let mut request_headers = HeaderMap::new();
+        request_headers.insert(
+            header::COOKIE,
+            format!("openbitfun_market_session={session_token}")
+                .parse()
+                .unwrap(),
+        );
+        assert!(service.require_auth(&request_headers).await.is_ok());
+        assert!(service.consume_oauth_flow(&state).await.is_err());
+        let first = service
+            .poll_desktop(DesktopAuthPollRequest {
+                transaction_id: started.transaction_id.clone(),
+                transaction_secret: started.transaction_secret.clone(),
+            })
+            .await
+            .unwrap();
+        assert!(first.tokens.is_some());
+        let replay = service
+            .poll_desktop(DesktopAuthPollRequest {
+                transaction_id: started.transaction_id,
+                transaction_secret: started.transaction_secret,
+            })
+            .await
+            .unwrap();
+        assert!(replay.tokens.is_none());
     }
 
     #[tokio::test]

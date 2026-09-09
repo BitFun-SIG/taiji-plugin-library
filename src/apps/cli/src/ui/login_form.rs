@@ -1,4 +1,4 @@
-//! Full-viewport OpenBitFun account panel (Login / Account status).
+//! Full-viewport GitHub account panel (Login / Account status).
 //!
 //! Opened by `/login`. When already logged in, shows account info and connected devices instead of the credential form.
 
@@ -231,7 +231,7 @@ impl LoginFormState {
         let outer = Block::default()
             .borders(Borders::ALL)
             .border_style(theme.style(StyleKind::Primary))
-            .title(" OpenBitFun Account ")
+            .title(" GitHub Account ")
             .title_alignment(Alignment::Center);
         let inner = outer.inner(area);
         frame.render_widget(outer, area);

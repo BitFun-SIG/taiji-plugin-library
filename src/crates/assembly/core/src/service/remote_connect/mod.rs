@@ -58,7 +58,6 @@ pub use remote_server::RemoteServer;
 use anyhow::Result;
 use embedded_relay_host::EmbeddedRelayHost;
 use log::{debug, error, info, warn};
-use openbitfun_services_integrations::remote_connect::upload_mobile_web_to_relay;
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
@@ -381,6 +380,7 @@ pub struct RemoteConnectService {
     device_relay_lifecycle: Arc<Mutex<()>>,
     device_connection_generation: AtomicU64,
     active_device_connection_id: Arc<RwLock<Option<u64>>>,
+    authenticated_device_id: Arc<RwLock<Option<String>>>,
     /// Latest online-device presence for the account (P2).
     online_devices: Arc<RwLock<Vec<relay_client::DevicePresenceEntry>>>,
     /// Callback that provides a delegated identity and its host account lease
@@ -395,7 +395,7 @@ pub struct RemoteConnectService {
     peer_device_provision_fn: Arc<RwLock<Option<PeerDeviceProvisionFn>>>,
     /// Non-secret username embedded in the QR when the desktop is logged in.
     account_pairing_username: Arc<RwLock<Option<String>>>,
-    /// When set, pairing requires OpenBitFun account username+password and the
+    /// When set, pairing requires legacy account credentials and the
     /// verifier returns the canonical account `user_id` on success.
     account_pairing_verifier: Arc<RwLock<Option<AccountPairingVerifierFn>>>,
 }
@@ -483,6 +483,7 @@ impl RemoteConnectService {
             device_relay_lifecycle: Arc::new(Mutex::new(())),
             device_connection_generation: AtomicU64::new(0),
             active_device_connection_id: Arc::new(RwLock::new(None)),
+            authenticated_device_id: Arc::new(RwLock::new(None)),
             online_devices: Arc::new(RwLock::new(Vec::new())),
             delegated_identity_fn: Arc::new(RwLock::new(None)),
             peer_device_provision_fn: Arc::new(RwLock::new(None)),
@@ -645,7 +646,7 @@ impl RemoteConnectService {
                 .is_some_and(|value| !value.is_empty())
             {
                 return Err(
-                    "Desktop signed out of the OpenBitFun account; sign in again and refresh the QR code"
+                    "Desktop signed out of the GitHub account; sign in again and refresh the QR code"
                         .to_string(),
                 );
             }
@@ -696,12 +697,12 @@ impl RemoteConnectService {
         let provider = delegated_identity_fn.read().await.clone();
         let Some(get_identity) = provider else {
             return AuthorizedCredentialResolution::error(
-                "Desktop is not logged into a OpenBitFun account",
+                "Desktop is not logged into a GitHub account",
             );
         };
         let Some(authorization) = get_identity().await else {
             return AuthorizedCredentialResolution::error(
-                "Desktop is not logged into a OpenBitFun account",
+                "Desktop is not logged into a GitHub account",
             );
         };
         if authorization.user_id != trusted_identity.user_id {
@@ -753,7 +754,7 @@ impl RemoteConnectService {
         let provider = peer_device_provision_fn.read().await.clone();
         let Some(provision) = provider else {
             return AuthorizedCredentialResolution::error(
-                "Desktop is not logged into a OpenBitFun account",
+                "Desktop is not logged into a GitHub account",
             );
         };
         let authorization = match provision(
@@ -836,12 +837,35 @@ impl RemoteConnectService {
 
     /// Start a remote connection with the given method.
     ///
-    /// For relay methods (LAN / ngrok / OpenBitFun Server / Custom Server) this
-    /// tears down any existing relay and starts a new one.
+    /// LAN and ngrok replace the existing pairing room. The official Relay
+    /// returns an invitation for the already authenticated device route.
     /// For bot methods, this starts the bot pairing flow without affecting
     /// any running relay connection.
     pub async fn start(&self, method: ConnectionMethod) -> Result<ConnectionResult> {
         info!("Starting remote connect: {method:?}");
+
+        // The official service is account-only. Never create an anonymous
+        // room or upload a room-specific web bundle for this transport.
+        if method == ConnectionMethod::OpenBitFunServer {
+            let _lifecycle = self.device_relay_lifecycle.lock().await;
+            let authenticated = self.authenticated_device_id.read().await;
+            let device_id = authenticated.as_deref().ok_or_else(|| {
+                anyhow::anyhow!(
+                    "Sign in with GitHub and connect this device before creating an invitation"
+                )
+            })?;
+            let qr_url =
+                QrGenerator::build_device_url(&self.config.openbitfun_server_url, device_id)?;
+            return Ok(ConnectionResult {
+                method,
+                qr_data: Some(QrGenerator::generate_png_base64_from_url(&qr_url)?),
+                qr_svg: Some(QrGenerator::generate_svg_from_url(&qr_url)?),
+                qr_url: Some(qr_url),
+                bot_pairing_code: None,
+                bot_link: None,
+                pairing_state: PairingState::WaitingForScan,
+            });
+        }
 
         match &method {
             ConnectionMethod::BotFeishu
@@ -858,7 +882,6 @@ impl RemoteConnectService {
         self.stop_relay_inner().await;
 
         let result: Result<ConnectionResult> = async {
-        let static_dir = self.config.mobile_web_dir.as_deref();
 
         let relay_url = match &method {
             ConnectionMethod::Lan { ip } => {
@@ -891,10 +914,6 @@ impl RemoteConnectService {
                 *self.ngrok_tunnel.write().await = Some(tunnel);
                 url
             }
-            ConnectionMethod::OpenBitFunServer => validate_relay_base_url(&self.config.openbitfun_server_url)?
-                .as_str()
-                .trim_end_matches('/')
-                .to_string(),
             _ => unreachable!(),
         };
 
@@ -920,7 +939,7 @@ impl RemoteConnectService {
             .await?;
 
         // Wait for RoomCreated before HTTP upload / QR generation so the relay
-        // has registered the room (avoids upload 404 races on OpenBitFun/Custom).
+        // has registered the local pairing room.
         // Mirror start_device_connection's AuthOk wait pattern.
         {
             let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(10);
@@ -953,33 +972,7 @@ impl RemoteConnectService {
             }
         }
 
-        let web_app_url: String = match &method {
-            ConnectionMethod::Lan { .. } | ConnectionMethod::Ngrok => relay_url.clone(),
-            ConnectionMethod::OpenBitFunServer => {
-                if let Some(web_dir) = static_dir {
-                    match upload_mobile_web_to_relay(&relay_url, &qr_payload.room_id, web_dir).await
-                    {
-                        Ok(()) => {
-                            let url = format!(
-                                "{}/r/{}",
-                                relay_url.trim_end_matches('/'),
-                                qr_payload.room_id
-                            );
-                            info!("Uploaded mobile-web to relay: {url}");
-                            url
-                        }
-                        Err(e) => {
-                            error!("Failed to upload mobile-web to relay: {e}; falling back to server-hosted version");
-                            self.config.web_app_url.clone()
-                        }
-                    }
-                } else {
-                    info!("No mobile_web_dir configured; using server-hosted mobile web");
-                    self.config.web_app_url.clone()
-                }
-            }
-            _ => self.config.web_app_url.clone(),
-        };
+        let web_app_url = relay_url.clone();
 
         let client_language = crate::service::config::get_app_language_code().await;
         let account_username = self.account_pairing_username.read().await.clone();
@@ -1955,6 +1948,8 @@ impl RemoteConnectService {
             + 1;
         *device_client_arc.write().await = Some(client);
         *active_connection_id.write().await = Some(connection_id);
+        *self.authenticated_device_id.write().await = Some(authenticated_device_id.clone());
+        let authenticated_id = self.authenticated_device_id.clone();
         // Spawn event forwarder that updates presence state; the raw event stream
         // is also forwarded to a new channel for the caller to consume.
         let (forward_tx, forward_rx) = tokio::sync::mpsc::unbounded_channel();
@@ -1981,6 +1976,7 @@ impl RemoteConnectService {
                 *active = None;
                 drop(active);
                 *device_client_arc.write().await = None;
+                *authenticated_id.write().await = None;
                 online_arc.write().await.clear();
             }
         });
@@ -1995,6 +1991,7 @@ impl RemoteConnectService {
     }
 
     async fn stop_device_connection_inner(&self) {
+        *self.authenticated_device_id.write().await = None;
         *self.active_device_connection_id.write().await = None;
         if let Some(client) = self.device_relay_client.write().await.take() {
             client.disconnect().await;

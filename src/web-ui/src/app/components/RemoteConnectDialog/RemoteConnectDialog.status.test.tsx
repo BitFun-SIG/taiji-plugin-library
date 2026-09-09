@@ -13,6 +13,7 @@ import { setRemoteConnectDisclaimerAgreed } from './remoteConnectDisclaimerStora
 const boundary = vi.hoisted(() => ({
   backend: null as RemoteConnectStatus | null,
   hasWorkspace: true,
+  loggedIn: true,
   getStatus: vi.fn(),
   startConnection: vi.fn(),
   stopConnection: vi.fn(),
@@ -57,7 +58,7 @@ vi.mock('@/infrastructure/i18n/hooks/useI18n', () => ({
 }));
 vi.mock('@/infrastructure/contexts/WorkspaceContext', () => ({ useCurrentWorkspace: () => ({ hasWorkspace: boundary.hasWorkspace }) }));
 vi.mock('@/infrastructure/account/useAccountLoginState', () => ({
-  useAccountLoginState: () => ({ loggedIn: true, deviceName: 'Workstation' }),
+  useAccountLoginState: () => ({ loggedIn: boundary.loggedIn, deviceName: 'Workstation' }),
 }));
 vi.mock('@/infrastructure/appearance/runtime/AppearanceOverlayHost', () => ({ getAppearanceOverlayHost: () => document.body }));
 vi.mock('@/infrastructure/peer-device/peerDeviceContextState', () => ({ usePeerDeviceModeOptional: () => null }));
@@ -65,10 +66,8 @@ vi.mock('@/features/dispatch/dispatchJobStore', () => ({ useDispatchJobStore: (s
 vi.mock('@/shared/notification-system', () => ({ useNotification: () => ({ success: vi.fn(), warning: vi.fn(), error: vi.fn() }) }));
 vi.mock('@/infrastructure/confirm-dialog', () => ({ confirmWarning: vi.fn().mockResolvedValue(true) }));
 vi.mock('./AccountPanel', () => ({ AccountPanel: () => null }));
-vi.mock('@/features/relay-deploy', () => ({ RelayDeployWizard: () => null }));
 
-const relayA = 'https://relay.example.test/remote/a';
-const relayB = 'https://relay.example.test/remote/b';
+const relayA = 'https://remote.openbitfun.com/v/1.0.0';
 
 function status(overrides: Partial<RemoteConnectStatus> = {}): RemoteConnectStatus {
   return {
@@ -82,9 +81,9 @@ function status(overrides: Partial<RemoteConnectStatus> = {}): RemoteConnectStat
 
 function invitation(relay = relayA): ConnectionResult {
   return {
-    method: { custom_server: { url: relay } },
+    method: 'open_bit_fun_server',
     qr_data: null, qr_svg: null,
-    qr_url: `https://mobile.example.test/#/pair?relay=${encodeURIComponent(relay)}`,
+    qr_url: `${relay}/#/pair?did=desktop`,
     bot_pairing_code: null, bot_link: null, pairing_state: 'waiting_for_scan',
   };
 }
@@ -129,16 +128,9 @@ async function clickText(key: string) {
 async function tick(ms = 2000) { await act(async () => { await vi.advanceTimersByTimeAsync(ms); }); }
 async function render(initialGroup?: 'network' | 'bot') { await act(async () => { root.render(<Harness initialGroup={initialGroup} />); }); }
 async function openNetwork() { await click(overviewNetwork()); }
-async function generateInvitation(relay = relayA) {
+async function generateInvitation() {
   await openNetwork();
-  await click(element('#remote-connect-network-tab-custom_server'));
-  if (relay !== relayA) {
-    const input = element('input[placeholder="https://relay.example.com:9700"]') as HTMLInputElement;
-    await act(async () => {
-      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, relay);
-      input.dispatchEvent(new Event('input', { bubbles: true }));
-    });
-  }
+  await click(element('#remote-connect-network-tab-openbitfun_server'));
   await clickText('remoteConnect.showConnectionCode');
 }
 async function closeDialog() {
@@ -162,12 +154,13 @@ beforeEach(() => {
   });
   setRemoteConnectDisclaimerAgreed();
   boundary.hasWorkspace = true;
+  boundary.loggedIn = true;
   boundary.copyText.mockResolvedValue(true);
   boundary.backend = status();
   boundary.getStatus.mockImplementation(async () => ({ ...boundary.backend! }));
   boundary.getFormState.mockResolvedValue({ custom_server_url: relayA });
   boundary.startConnection.mockImplementation(async (_method: string, relay: string) => {
-    boundary.backend = { ...boundary.backend!, active_method: `CustomServer { url: "${relay}" }`, pairing_state: 'waiting_for_scan' };
+    boundary.backend = { ...boundary.backend!, active_method: 'OpenBitFunServer', pairing_state: 'waiting_for_scan' };
     return invitation(relay);
   });
   boundary.stopConnection.mockImplementation(async () => {
@@ -190,9 +183,26 @@ afterEach(async () => {
 });
 
 describe('Remote Connect shared status through the real dialog and sidebar', () => {
+  it.each([undefined, 'network', 'bot'] as const)('hides connection methods while signed out, including contextual %s entry', async group => {
+    boundary.loggedIn = false;
+    await render(group);
+    expect(document.querySelector('#remote-connect-access-title')).toBeNull();
+    expect(document.querySelector('#remote-connect-network-tabpanel')).toBeNull();
+    expect(document.querySelector('#remote-connect-bot-tabpanel')).toBeNull();
+    expect(boundary.startConnection).not.toHaveBeenCalled();
+  });
+
+  it('closes connection setup when GitHub signs out', async () => {
+    await render('network');
+    expect(element('#remote-connect-network-tabpanel')).toBeDefined();
+    boundary.loggedIn = false;
+    await render('network');
+    expect(document.querySelector('#remote-connect-access-title')).toBeNull();
+    expect(document.querySelector('#remote-connect-network-tabpanel')).toBeNull();
+  });
+
   it.each([
-    ['openbitfun_server', 'https://remote.openbitfun.com/relay'],
-    ['custom_server', relayA],
+    ['openbitfun_server', relayA],
   ] as const)('shows the same live clients and relay URL for %s', async (method, relay) => {
     boundary.backend = status({
       account_control_connected: true,
@@ -204,6 +214,7 @@ describe('Remote Connect shared status through the real dialog and sidebar', () 
       account_control_has_unidentified_clients: false,
     });
     await render('network');
+    await click(element('#remote-connect-network-tab-openbitfun_server'));
     const connections = element('[data-openbitfun-part="connections"]');
     expect(connections.textContent).toContain('remoteConnect.clientCount:2');
     expect(connections.querySelectorAll('li')).toHaveLength(2);
@@ -226,14 +237,13 @@ describe('Remote Connect shared status through the real dialog and sidebar', () 
     expect(element('[data-openbitfun-part="connections"]').querySelectorAll('li')).toHaveLength(0);
   });
 
-  it('does not invent a total for old clients or mix account clients into another relay tab', async () => {
+  it('does not invent a total for old clients', async () => {
     boundary.backend = status({ account_control_connected: true, account_control_relay_url: relayA });
     await render('network');
+    await click(element('#remote-connect-network-tab-openbitfun_server'));
     expect(element('[data-openbitfun-part="connections"]').textContent).toContain('remoteConnect.clientDetailsUnavailable');
     expect(dialog().textContent).not.toContain('remoteConnect.clientCount:');
-    await click(element('#remote-connect-network-tab-openbitfun_server'));
-    expect(element('[data-openbitfun-part="connections"]').textContent).toContain('remoteConnect.clientCount:0');
-    expect(element('[data-openbitfun-part="connections"]').querySelectorAll('li')).toHaveLength(0);
+
   });
 
   it('allows connection setup and shows live status without a selected workspace', async () => {
@@ -303,6 +313,7 @@ describe('Remote Connect shared status through the real dialog and sidebar', () 
     await click(element('[data-testid="reopen-remote-connect"]'));
     expect(overviewNetwork().textContent).toContain('remoteConnect.stateConnected');
     await openNetwork();
+    await click(element('#remote-connect-network-tab-openbitfun_server'));
     expect(cardStatus()).toBe('remoteConnect.stateConnected');
     expect((element('input[type="url"]') as HTMLInputElement).value).toBe(relayA);
     expect(dialog().textContent).not.toContain('remoteConnect.disconnect');
@@ -338,25 +349,13 @@ describe('Remote Connect shared status through the real dialog and sidebar', () 
     expect(attachedMobile()).not.toBeNull();
   });
 
-  it('keeps configuration selectable beside an account connection and does not mark another relay path connected', async () => {
-    boundary.backend = status({ account_control_connected: true, account_control_relay_url: relayA });
-    await render();
-    await openNetwork();
-    await click(element('#remote-connect-network-tab-lan'));
-    await tick(4000);
-    expect(element('#remote-connect-network-tab-lan').getAttribute('aria-selected')).toBe('true');
-    await clickText('remoteConnect.backToOverview');
-    await generateInvitation(relayB);
-    expect(boundary.startConnection).toHaveBeenCalledWith('custom_server', relayB, undefined);
-    expect(cardStatus()).toBe('remoteConnect.stateWaiting');
-    await tick(4000);
-    expect(cardStatus()).toBe('remoteConnect.stateWaiting');
-    expect(element('#remote-connect-network-tab-custom_server').getAttribute('aria-selected')).toBe('true');
-    expect((element('#remote-connect-network-tab-lan') as HTMLButtonElement).disabled).toBe(true);
-    expect(attachedMobile()).not.toBeNull();
-    await clickText('remoteConnect.cancelAndBack');
-    expect(overviewNetwork().textContent).toContain('remoteConnect.stateConnected');
-    expect(boundary.backend!.account_control_relay_url).toBe(relayA);
+  it('keeps the official endpoint fixed and the deployment wizard absent', async () => {
+    await render('network');
+    await click(element('#remote-connect-network-tab-openbitfun_server'));
+    expect((element('input[type="url"]') as HTMLInputElement).value).toBe(relayA);
+    expect((element('input[type="url"]') as HTMLInputElement).readOnly).toBe(true);
+    expect(document.querySelector('#remote-connect-network-tab-custom_server')).toBeNull();
+    expect(dialog().textContent).not.toContain('relayDeploy');
   });
 
   it('keeps legacy room disconnect explicit and independent of a coexisting account route and WeChat', async () => {
@@ -385,7 +384,7 @@ describe('Remote Connect shared status through the real dialog and sidebar', () 
     boundary.backend = status({ bot_connected: null });
     await render();
     await openNetwork();
-    await click(element('#remote-connect-network-tab-custom_server'));
+    await click(element('#remote-connect-network-tab-openbitfun_server'));
     await click(element('#remote-connect-network-tab-lan'));
     boundary.backend = { ...boundary.backend!, account_control_connected: true, account_control_relay_url: relayA };
     await tick(4000);
@@ -436,6 +435,7 @@ describe('Remote Connect shared status through the real dialog and sidebar', () 
     expect(overviewNetwork().textContent).toContain('remoteConnect.statusUnavailable');
     expect(overviewNetwork().textContent).not.toContain('remoteConnect.notConnected');
     await openNetwork();
+    await click(element('#remote-connect-network-tab-openbitfun_server'));
     expect(cardStatus()).toBe('remoteConnect.statusUnavailable');
     await tick();
     expect(cardStatus()).toBe('remoteConnect.stateConnected');

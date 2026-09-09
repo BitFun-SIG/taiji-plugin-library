@@ -25,7 +25,7 @@ struct AccountSettingsView: View {
 
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 0) {
-                    Text(model.localized("登录 OpenBitFun 账号"))
+                    Text(model.localized("使用 GitHub 登录"))
                         .font(MobileDesignTypography.displayMedium.font)
                         .foregroundStyle(OpenBitFunTheme.ink)
                         .multilineTextAlignment(.center)
@@ -171,7 +171,7 @@ struct AccountSettingsView: View {
 
                     VStack(alignment: .leading, spacing: 10) {
                         HStack {
-                            Text(model.localized("OpenBitFun 账号"))
+                            Text(model.localized("GitHub 账号"))
                                 .font(.system(size: 17, weight: .bold))
                                 .foregroundStyle(OpenBitFunTheme.ink)
                             Spacer()

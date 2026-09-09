@@ -1324,8 +1324,8 @@ fn page_login_form_response(
     <div class="mark" aria-hidden="true">B</div>
     <p class="eyebrow">OPENBITFUN PAGE</p>
     <h1>登录后访问</h1>
-    <p>此页面受访问权限保护，请使用 OpenBitFun 账号登录。</p>
-    <p class="secondary">This Page is protected. Sign in with your OpenBitFun account.</p>
+    <p>此页面受访问权限保护，请使用 GitHub 账号登录。</p>
+    <p class="secondary">This Page is protected. Sign in with your GitHub account.</p>
     <p class="access">{access_description}</p>
     <form data-page-login-form{login_state_attribute}>
       <p data-page-login-error class="error" role="alert" hidden></p>

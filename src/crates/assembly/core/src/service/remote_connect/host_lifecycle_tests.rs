@@ -224,3 +224,47 @@ async fn relay_stop_waits_for_an_in_progress_start_to_settle() {
     assert_eq!(host.stop_while_starting.load(Ordering::SeqCst), 0);
     assert!(!host.active.load(Ordering::SeqCst));
 }
+
+#[tokio::test]
+async fn official_invitation_requires_device_auth_without_starting_an_anonymous_room() {
+    let host = Arc::new(RecordingEmbeddedRelayHost::default());
+    let service = RemoteConnectService::new(RemoteConnectConfig::default(), host.clone()).unwrap();
+    let error = tokio::time::timeout(
+        std::time::Duration::from_secs(1),
+        service.start(ConnectionMethod::OpenBitFunServer),
+    )
+    .await
+    .expect("must fail immediately without waiting for RoomCreated")
+    .unwrap_err();
+    assert!(error.to_string().contains("Sign in with GitHub"));
+    assert_eq!(host.start_calls.load(Ordering::SeqCst), 0);
+    assert_eq!(host.stop_calls.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn official_invitation_uses_auth_ok_identity_and_expires_with_device_routing() {
+    let host = Arc::new(RecordingEmbeddedRelayHost::default());
+    let service = RemoteConnectService::new(RemoteConnectConfig::default(), host.clone()).unwrap();
+    // This is the in-memory fact written only after AuthOk. A different stored
+    // machine identity must never override the token-bound device target.
+    *service.authenticated_device_id.write().await = Some("authenticated-host-1".into());
+    let result = service
+        .start(ConnectionMethod::OpenBitFunServer)
+        .await
+        .unwrap();
+    assert_eq!(
+        result.qr_url.as_deref(),
+        Some("https://remote.openbitfun.com/v/1.0.0/#/pair?did=authenticated-host-1")
+    );
+    assert!(result
+        .qr_data
+        .as_ref()
+        .is_some_and(|value| !value.is_empty()));
+    assert_eq!(host.start_calls.load(Ordering::SeqCst), 0);
+    assert_eq!(host.stop_calls.load(Ordering::SeqCst), 0);
+    service.stop_device_connection().await;
+    assert!(service
+        .start(ConnectionMethod::OpenBitFunServer)
+        .await
+        .is_err());
+}

@@ -5,7 +5,7 @@ use axum::http::StatusCode;
 use serde::Deserialize;
 use std::{sync::Arc, time::Duration};
 
-pub(crate) const IDENTITY_ME_URL: &str = "https://market.openbitfun.com/miniapp/api/v1/me";
+pub(crate) const IDENTITY_ME_URL: &str = "https://auth.openbitfun.com/api/v1/me";
 
 #[derive(Clone)]
 pub(crate) struct IdentityVerifier {

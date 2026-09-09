@@ -9,6 +9,23 @@ use super::pairing::QrPayload;
 pub struct QrGenerator;
 
 impl QrGenerator {
+    /// Account-device invitations carry only a target id. Identity and public
+    /// keys are resolved through the authenticated same-account directory.
+    pub fn build_device_url(web_app_url: &str, device_id: &str) -> Result<String> {
+        if device_id.is_empty()
+            || device_id.len() > 128
+            || !device_id
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'))
+        {
+            return Err(anyhow!("Invalid account device id"));
+        }
+        let mut url = super::account::validate_relay_base_url(web_app_url)?;
+        url.set_path(&format!("{}/", url.path().trim_end_matches('/')));
+        url.set_fragment(Some(&format!("/pair?did={device_id}")));
+        Ok(url.to_string())
+    }
+
     /// Build the URL that the QR code points to.
     /// `web_app_url` = where the mobile web app is hosted.
     /// `payload.url` = the relay server that the mobile WebSocket should connect to.
@@ -123,5 +140,23 @@ mod tests {
             QrGenerator::build_url(&payload, "https://mobile.example.com", "zh-CN", Some(""));
         assert!(auth_only.contains("auth=account"));
         assert!(!auth_only.contains("user="));
+    }
+}
+
+#[cfg(test)]
+mod account_device_tests {
+    use super::QrGenerator;
+    #[test]
+    fn invitation_uses_only_the_authenticated_device_target() {
+        assert_eq!(
+            QrGenerator::build_device_url("https://remote.openbitfun.com/v/1.0.0", "host-1")
+                .unwrap(),
+            "https://remote.openbitfun.com/v/1.0.0/#/pair?did=host-1"
+        );
+        for id in ["", "host&relay=evil", "../host", "host/other"] {
+            assert!(
+                QrGenerator::build_device_url("https://remote.openbitfun.com/v/1.0.0", id).is_err()
+            );
+        }
     }
 }

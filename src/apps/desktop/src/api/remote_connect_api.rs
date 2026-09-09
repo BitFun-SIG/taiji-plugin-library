@@ -1282,7 +1282,7 @@ async fn register_delegated_identity_providers() {
                         .await
                         .map_err(|_| "Desktop account changed; try again".to_string())?;
                     let context = account_context.read().await.clone().ok_or_else(|| {
-                        "Desktop is not logged into a OpenBitFun account".to_string()
+                        "Desktop is not logged into a GitHub account".to_string()
                     })?;
                     if !account_context_matches(generation, &context.session.token).await {
                         return Err("Desktop account changed; try again".to_string());
@@ -1975,9 +1975,17 @@ fn parse_connection_method(
 pub async fn remote_connect_start(
     request: StartRemoteConnectRequest,
 ) -> Result<ConnectionResult, String> {
-    let _room_boundary_guard = ACCOUNT_ROOM_BOUNDARY_LOCK.lock().await;
     ensure_service().await?;
     let method = parse_connection_method(&request.method, request.lan_ip)?;
+    if method == ConnectionMethod::OpenBitFunServer {
+        // Register the already signed-in GitHub identity on demand. This must
+        // run before the room boundary lock because login owns that lock too.
+        if read_account_context().await.is_err() {
+            account_login(AccountAuthRequest {}).await?;
+        }
+        account_connect_devices().await?;
+    }
+    let _room_boundary_guard = ACCOUNT_ROOM_BOUNDARY_LOCK.lock().await;
 
     let holder = get_service_holder();
     let guard = holder.read().await;

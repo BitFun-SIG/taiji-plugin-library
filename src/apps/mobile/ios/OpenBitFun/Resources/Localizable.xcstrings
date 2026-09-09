@@ -2631,12 +2631,12 @@
         }
       }
     },
-    "登录 OpenBitFun 账号": {
+    "使用 GitHub 登录": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sign in to OpenBitFun"
+            "value": "Sign in with GitHub"
           }
         }
       }
@@ -2931,12 +2931,12 @@
         }
       }
     },
-    "此桌面要求使用 OpenBitFun 账号验证身份。": {
+    "此桌面要求使用 GitHub 账号验证身份。": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "This desktop requires your OpenBitFun account to verify your identity."
+            "value": "This desktop requires your GitHub account to verify your identity."
           }
         }
       }
@@ -2981,12 +2981,12 @@
         }
       }
     },
-    "OpenBitFun 账号": {
+    "GitHub 账号": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "OpenBitFun account"
+            "value": "GitHub account"
           }
         }
       }
@@ -4631,16 +4631,6 @@
         }
       }
     },
-    "登录 OpenBitFun": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Sign in to OpenBitFun"
-          }
-        }
-      }
-    },
     "登录后即可同步设备、会话和远程控制状态。": {
       "localizations": {
         "en": {
@@ -5071,12 +5061,12 @@
         }
       }
     },
-    "桌面端已登录 OpenBitFun 账号，需要验证同一账号后继续连接。": {
+    "桌面端已使用 GitHub 登录，需要验证同一账号后继续连接。": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "The desktop is signed in to a OpenBitFun account. Verify the same account to continue."
+            "value": "The desktop is signed in to a GitHub account. Verify the same account to continue."
           }
         }
       }
@@ -5091,12 +5081,12 @@
         }
       }
     },
-    "请输入 OpenBitFun 账号密码完成配对": {
+    "请使用 GitHub 登录后连接设备": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Enter the OpenBitFun account password to finish pairing"
+            "value": "Sign in with GitHub to connect this device"
           }
         }
       }
@@ -7121,12 +7111,12 @@
         }
       }
     },
-    "请输入 OpenBitFun 账号密码。": {
+    "请使用 GitHub 登录以继续。": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Enter the OpenBitFun account password."
+            "value": "Sign in with GitHub to continue."
           }
         }
       }
@@ -7341,12 +7331,12 @@
         }
       }
     },
-    "把这块手表加入你的 OpenBitFun 账号？": {
+    "把这块手表加入你的 GitHub 账号？": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Add this watch to your OpenBitFun account?"
+            "value": "Add this watch to your GitHub account?"
           }
         }
       }

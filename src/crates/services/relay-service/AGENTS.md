@@ -23,6 +23,11 @@ and embedded hosts.
 - Do not depend on assembly, interface, or application crates.
 - Standalone and embedded hosts must construct the same router from this crate.
 - Do not introduce host-specific APIs or duplicate the relay runtime per host.
+- The independently built identity verifier supplies a ring `ClientConfig` to
+  its own Reqwest client. This narrow standalone exception must not install or
+  replace the process-wide provider; embedded product hosts retain the
+  `services-core::tls_provider` owner. Boundary checks require the explicit
+  client binding and forbid `install_default` in this verifier.
 
 ## Verification
 

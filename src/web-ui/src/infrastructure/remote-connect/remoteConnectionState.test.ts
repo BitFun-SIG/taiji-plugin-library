@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { ConnectionResult, RemoteConnectStatus } from '../api/service-api/RemoteConnectAPI';
 import { remoteNetworkMethod, selectRemoteNetworkConnection } from './remoteConnectionState';
 
-const officialRelay = 'https://remote.openbitfun.com/relay';
+const officialRelay = 'https://remote.openbitfun.com/v/1.0.0';
 const customRelay = 'https://relay.example.test/remote/a';
 
 function status(overrides: Partial<RemoteConnectStatus> = {}): RemoteConnectStatus {
@@ -31,6 +31,13 @@ function invitation(relay = customRelay): ConnectionResult {
 }
 
 describe('remote connection presentation facts', () => {
+  it('recognizes authenticated official device invitations without a legacy room or relay parameter', () => {
+    const account = status({ account_control_connected: true, account_control_relay_url: officialRelay });
+    const deviceInvitation = { ...invitation(), method: 'open_bit_fun_server', qr_url: `${officialRelay}/#/pair?did=desktop-1` };
+    expect(selectRemoteNetworkConnection(account, deviceInvitation).invitationAccountConnected).toBe(true);
+    expect(selectRemoteNetworkConnection(account, { ...deviceInvitation, qr_url: 'https://evil.example/#/pair?did=desktop-1' }).invitationAccountConnected).toBe(false);
+  });
+
   it('keeps a live account route connected after the unused QR room is removed', () => {
     const selected = selectRemoteNetworkConnection(status({
       pairing_state: 'idle',

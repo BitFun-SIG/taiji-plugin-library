@@ -40,7 +40,7 @@ pub struct AccountLoginProjection {
     pub status_message: String,
 }
 
-/// Verified GitHub profile for the global OpenBitFun account.
+/// Verified GitHub profile for the global GitHub account.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GitHubUser {

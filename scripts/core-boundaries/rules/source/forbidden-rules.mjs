@@ -4440,9 +4440,22 @@ export const forbiddenContentUnderRules = [
     patterns: [
       {
         regex: /\brustls::crypto::(?:ring|aws_lc_rs)\b/,
-        allowPaths: ['src/crates/services/services-core/src/tls_provider.rs'],
+        allowPaths: [
+          'src/crates/services/services-core/src/tls_provider.rs',
+          // Independently built Relay binds ring to one client; the separate
+          // rule below still forbids process-wide installation in that owner.
+          'src/crates/services/relay-service/src/identity.rs',
+        ],
         message: 'delegate built-in Rustls provider selection to services-core::tls_provider',
       },
     ],
+  },
+  {
+    path: 'src/crates/services/relay-service/src/identity.rs',
+    reason: 'standalone Relay identity TLS must remain client-scoped',
+    patterns: [{
+      regex: /\binstall_default\b/,
+      message: 'Relay must not install or replace the process-wide TLS provider',
+    }],
   },
 ];

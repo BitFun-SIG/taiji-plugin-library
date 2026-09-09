@@ -50,9 +50,17 @@ export function relayUrlFromMethod(method: RemoteConnectionMethod | null | undef
 function invitationRelayUrl(invitation: ConnectionResult): string | null {
   if (invitation.qr_url) {
     try {
-      const hash = new URL(invitation.qr_url).hash;
+      const url = new URL(invitation.qr_url);
+      const hash = url.hash;
       const query = hash.slice(hash.indexOf('?') + 1);
-      return normalizeRelayUrl(new URLSearchParams(query).get('relay'));
+      const params = new URLSearchParams(query);
+      const relay = params.get('relay');
+      if (relay !== null) return normalizeRelayUrl(relay);
+      // Only the canonical official device link omits the relay parameter.
+      const isDeviceLink = remoteNetworkMethod(invitation.method) === 'openbitfun_server'
+        && `${url.origin}${url.pathname}` === `${OFFICIAL_RELAY_URL}/`
+        && hash.startsWith('#/pair?') && /^[A-Za-z0-9_.-]{1,128}$/.test(params.get('did') ?? '');
+      return isDeviceLink ? OFFICIAL_RELAY_URL : null;
     } catch {
       return null;
     }
