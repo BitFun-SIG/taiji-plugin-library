@@ -742,6 +742,7 @@
       "profileChangeOutcomeUnknown": "暂时无法确认 Harness 是否已切换，请刷新会话后再重试。",
       "profileUnavailable": "当前 OpenBitFun Host 不支持该 Harness。",
       "profileChangeFailed": "切换 Harness 失败，请重试。",
+      "rememberFailed": "Harness 已切换，但未能记住本次选择。之后的新会话可能继续使用原默认设置。",
       "otherAgentsTitle": "智能体",
       "otherAgentsEmpty": "当前没有可用的主智能体",
       "unavailable": "不可用",

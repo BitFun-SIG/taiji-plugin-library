@@ -117,7 +117,9 @@ export interface AppLoggingConfig {
 }
 
 export interface AppFlowChatConfig {
+  default_mode_strategy?: 'follow_last' | 'fixed' | null;
   default_mode_id?: string | null;
+  last_mode_id?: string | null;
   show_permission_mode_control?: boolean;
 }
 
@@ -623,7 +625,9 @@ export type ConfigPath =
   | 'app.auto_update'
   | 'app.telemetry'
   | 'app.flow_chat'
+  | 'app.flow_chat.default_mode_strategy'
   | 'app.flow_chat.default_mode_id'
+  | 'app.flow_chat.last_mode_id'
   | 'app.flow_chat.show_permission_mode_control'
   | 'app.sidebar'
   | 'app.sidebar.width'

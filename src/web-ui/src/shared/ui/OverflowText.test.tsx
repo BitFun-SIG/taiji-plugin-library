@@ -172,6 +172,14 @@ describe('overflow text full-content access', () => {
     expect(tooltip()?.textContent).toBe(longLabel);
   });
 
+  it('ignores harmless vertical ink overflow for a fully visible single-line label', () => {
+    availableWidth = 1000;
+    vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(10);
+    vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockReturnValue(11);
+    render(<OverflowText>Short</OverflowText>);
+    expect(host.querySelector('[data-overflow]')?.getAttribute('data-overflow')).toBe('false');
+  });
+
   it('leaves short, fully visible labels without a tooltip', () => {
     render(<button data-overflow-trigger><OverflowText>Short</OverflowText></button>);
     hover(host.querySelector('button')!);
