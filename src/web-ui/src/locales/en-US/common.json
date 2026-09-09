@@ -51,12 +51,12 @@
     "hideChatPanel": "Hide Chat Panel",
     "switchToToolbar": "Floating window mode",
     "modeSwitchAriaLabel": "View mode switch",
-    "modeCowork": "Cowork",
+    "modeCowork": "$t(shared:agents.Cowork)",
     "modeCoder": "Coder",
     "switchToCowork": "Switch to Cowork mode",
     "switchToCoder": "Switch to Coder mode",
-    "hideAgentic": "Hide Agentic",
-    "activateAgentic": "Activate Agentic",
+    "hideAgentic": "Hide Agent",
+    "activateAgentic": "Activate Agent",
     "switchWorkspace": "Switch Workspace",
     "recentWorkspaces": "Recent Projects",
     "noRecentWorkspaces": "No Recent Projects",
@@ -179,7 +179,7 @@
       },
       "badges": {
         "userMessage": "You",
-        "assistantMessage": "Assistant"
+        "assistantMessage": "$t(shared:agents.Claw)"
       },
       "footer": {
         "navigate": "Navigate",
@@ -292,7 +292,7 @@
       "chooseAssistant": "Choose assistant",
       "newAssistantSessionFor": "New session with {{assistantName}}",
       "modeCode": "Code",
-      "modeCowork": "Cowork",
+      "modeCowork": "$t(shared:agents.Cowork)",
       "noSessions": "No sessions",
       "viewToggle": {
         "label": "Session display",
@@ -480,7 +480,7 @@
         "workspacePath": "Enter workspace path",
         "session": "Select or enter a session ID",
         "optionalSession": "Leave blank to create a new session",
-        "agentType": "For example: agentic, Cowork, or Claw",
+        "agentType": "For example: Standard, Cowork, or Claw",
         "name": "For example: Daily global news briefing",
         "anchorMs": "Leave blank to use creation time",
         "timezone": "For example: Asia/Shanghai",
@@ -1496,7 +1496,7 @@
     "miniApps": "Mini App",
     "browser": "Browser",
     "insights": "Insights",
-    "assistant": "Assistant",
+    "assistant": "$t(shared:agents.Claw)",
     "todos": "Task Board",
     "shell": "Shell",
     "panelView": "Panel View"

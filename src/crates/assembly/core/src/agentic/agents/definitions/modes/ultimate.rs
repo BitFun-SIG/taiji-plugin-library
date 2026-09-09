@@ -2,17 +2,17 @@ use crate::agentic::agents::{Agent, UserContextPolicy};
 use async_trait::async_trait;
 
 /// The user-facing entry point for the Swarm planner.
-pub struct UltraMode {
+pub struct UltimateHarness {
     default_tools: Vec<String>,
 }
 
-impl Default for UltraMode {
+impl Default for UltimateHarness {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl UltraMode {
+impl UltimateHarness {
     pub fn new() -> Self {
         Self {
             default_tools: [
@@ -43,18 +43,18 @@ impl UltraMode {
 }
 
 #[async_trait]
-impl Agent for UltraMode {
+impl Agent for UltimateHarness {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
     fn id(&self) -> &str {
-        "Ultra"
+        "Ultimate"
     }
     fn name(&self) -> &str {
-        "Ultra"
+        "Ultimate"
     }
     fn description(&self) -> &str {
-        "Swarm planning mode for decomposing complex work into coordinated worker and review tasks. It may issue many model requests concurrently, increasing API cost and provider rate-limit pressure."
+        "Ultimate Harness for decomposing complex work into coordinated worker and review tasks. It may issue many model requests concurrently, increasing API cost and provider rate-limit pressure."
     }
     fn prompt_template_name(&self, _model_name: Option<&str>) -> &str {
         "ultra_mode"

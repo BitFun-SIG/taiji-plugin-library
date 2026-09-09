@@ -30,6 +30,8 @@ import { normalizePath } from '@/shared/utils/pathUtils';
 // ==================== Store State Types ====================
 
 interface CanvasStoreState {
+  /** Live content scope, committed with workspace swaps and excluded from snapshots. */
+  workspaceKey?: string;
   primaryGroup: EditorGroupState;
   secondaryGroup: EditorGroupState;
   tertiaryGroup: EditorGroupState;
@@ -155,6 +157,7 @@ type CanvasStore = CanvasStoreState & CanvasStoreActions;
 // ==================== Initial State ====================
 
 const initialState: CanvasStoreState = {
+  workspaceKey: undefined,
   primaryGroup: createEditorGroupState(),
   secondaryGroup: createEditorGroupState(),
   tertiaryGroup: createEditorGroupState(),
@@ -1204,8 +1207,9 @@ function rememberAgentSnapshot(key: string, snapshot: CanvasStoreState): void {
   }
 }
 
-function applyEmptyAgentCanvas(): void {
+function applyEmptyAgentCanvas(workspaceKey?: string): void {
   useAgentCanvasStore.setState({
+    workspaceKey,
     primaryGroup: createEditorGroupState(),
     secondaryGroup: createEditorGroupState(),
     tertiaryGroup: createEditorGroupState(),
@@ -1259,6 +1263,7 @@ export function switchAgentCanvasWorkspace(
 
   if (nextSnapshotClone) {
     useAgentCanvasStore.setState({
+      workspaceKey: to,
       primaryGroup: nextSnapshotClone.primaryGroup,
       secondaryGroup: nextSnapshotClone.secondaryGroup,
       tertiaryGroup: nextSnapshotClone.tertiaryGroup,
@@ -1271,7 +1276,7 @@ export function switchAgentCanvasWorkspace(
       maxClosedTabsHistory: nextSnapshotClone.maxClosedTabsHistory,
     });
   } else {
-    applyEmptyAgentCanvas();
+    applyEmptyAgentCanvas(to);
   }
 
   lastAgentCanvasSwitchTargetKey = to;

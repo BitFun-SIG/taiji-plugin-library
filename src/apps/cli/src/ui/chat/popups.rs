@@ -796,11 +796,11 @@ mod tests {
         let mut view = ChatView::new(Theme::dark(), Vec::new());
         view.show_agent_selector(
             vec![AgentItem {
-                id: "agentic".to_string(),
+                id: "Standard".to_string(),
                 route_key: None,
                 description: "General purpose".to_string(),
             }],
-            Some("agentic".to_string()),
+            Some("Standard".to_string()),
             true,
             true,
         );
@@ -816,11 +816,11 @@ mod tests {
         let mut view = ChatView::new(Theme::dark(), Vec::new());
         view.show_agent_modes_only(
             vec![AgentItem {
-                id: "agentic".to_string(),
+                id: "Standard".to_string(),
                 route_key: None,
                 description: "General purpose".to_string(),
             }],
-            Some("agentic".to_string()),
+            Some("Standard".to_string()),
             true,
         );
 
@@ -829,7 +829,7 @@ mod tests {
         let state = ChatState::new(
             "session".to_string(),
             "Session".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             Some("D:/workspace/current".to_string()),
         );
         let mut terminal = Terminal::new(TestBackend::new(80, 20)).expect("test terminal");

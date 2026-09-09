@@ -55,8 +55,8 @@
     "modeCoder": "Coder",
     "switchToCowork": "切換到 Cowork 模式",
     "switchToCoder": "切換到 Coder 模式",
-    "hideAgentic": "隱藏 Agentic",
-    "activateAgentic": "激活 Agentic",
+    "hideAgentic": "隱藏 Agent",
+    "activateAgentic": "激活 Agent",
     "switchWorkspace": "切換工作區",
     "recentWorkspaces": "最近項目",
     "noRecentWorkspaces": "暫無最近項目",
@@ -117,7 +117,7 @@
       "resultsLabel": "搜尋結果",
       "clear": "清除搜尋",
       "groupWorkspaces": "項目",
-      "groupAssistants": "助理",
+      "groupAssistants": "$t(shared:agents.Claw)",
       "groupSessions": "所有會話",
       "empty": "未找到相關結果",
       "searching": "正在搜尋…",
@@ -141,7 +141,7 @@
         "sessions": "會話",
         "files": "檔案",
         "workspaces": "項目",
-        "assistants": "助理",
+        "assistants": "$t(shared:agents.Claw)",
         "capabilities": "功能",
         "settings": "$t(shared:features.settings)"
       },
@@ -179,7 +179,7 @@
       },
       "badges": {
         "userMessage": "你",
-        "assistantMessage": "助理"
+        "assistantMessage": "$t(shared:agents.Claw)"
       },
       "footer": {
         "navigate": "選擇",
@@ -480,7 +480,7 @@
         "workspacePath": "請輸入工作區路徑",
         "session": "請選擇或輸入會話 ID",
         "optionalSession": "留空則建立新會話後執行",
-        "agentType": "例如：agentic、Cowork 或 Claw",
+        "agentType": "例如：Standard、Cowork 或 Claw",
         "name": "例如：每日全球新聞簡報",
         "anchorMs": "留空則使用建立時刻",
         "timezone": "例如：Asia/Shanghai",
@@ -582,7 +582,7 @@
       "collapseSessions": "收起會話列表",
       "groups": {
         "projects": "項目",
-        "assistants": "助理"
+        "assistants": "$t(shared:agents.Claw)"
       },
       "remote": {
         "tooltip": "遠端項目 · {{connection}}（{{host}}）\n連線狀態：{{status}}",
@@ -1496,7 +1496,7 @@
     "miniApps": "小應用",
     "browser": "瀏覽器",
     "insights": "洞察",
-    "assistant": "助理",
+    "assistant": "$t(shared:agents.Claw)",
     "todos": "任務看板",
     "shell": "Shell",
     "panelView": "面板視圖"

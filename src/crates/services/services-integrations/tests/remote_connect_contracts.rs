@@ -1214,7 +1214,7 @@ async fn remote_connect_dialog_runtime_owns_restore_prewarm_and_submit_order() {
     let submitted = host.submitted();
     assert_eq!(submitted.session_id, "session-1");
     assert_eq!(submitted.content, "hello");
-    assert_eq!(submitted.resolved_agent_type, "agentic");
+    assert_eq!(submitted.resolved_agent_type, "Standard");
     assert_eq!(
         submitted
             .binding_workspace
@@ -1901,7 +1901,7 @@ fn remote_connect_session_response_helpers_own_pagination_and_timestamps() {
         RemoteSessionMetadata {
             session_id: "session-1".to_string(),
             name: "first".to_string(),
-            agent_type: "agentic".to_string(),
+            agent_type: "Standard".to_string(),
             created_at_ms: 1_700_000_000_000,
             last_active_at_ms: 1_700_000_001_000,
             turn_count: 3,
@@ -2032,7 +2032,7 @@ fn remote_connect_session_response_helpers_own_pagination_and_timestamps() {
 fn remote_connect_session_create_contract_preserves_workspace_binding() {
     let request = build_remote_session_create_request(
         "Remote Session",
-        "agentic",
+        "Standard",
         Some("D:/workspace/project"),
         RemoteSessionWorkspaceIdentity::new(
             Some("ssh-1".to_string()),
@@ -2042,7 +2042,7 @@ fn remote_connect_session_create_contract_preserves_workspace_binding() {
     );
 
     assert_eq!(request.session_name, "Remote Session");
-    assert_eq!(request.agent_type, "agentic");
+    assert_eq!(request.agent_type, "Standard");
     assert_eq!(
         request.workspace_path.as_deref(),
         Some("D:/workspace/project")
@@ -2054,20 +2054,20 @@ fn remote_connect_session_create_contract_preserves_workspace_binding() {
 
 #[test]
 fn remote_connect_agent_type_mapping_preserves_current_mobile_aliases() {
-    assert_eq!(resolve_remote_agent_type(Some("code")), "agentic");
-    assert_eq!(resolve_remote_agent_type(Some("agentic")), "agentic");
-    assert_eq!(resolve_remote_agent_type(Some("Agentic")), "agentic");
-    assert_eq!(resolve_remote_agent_type(Some("balanced")), "agentic");
-    assert_eq!(resolve_remote_agent_type(Some("standard")), "agentic");
+    assert_eq!(resolve_remote_agent_type(Some("code")), "Standard");
+    assert_eq!(resolve_remote_agent_type(Some("Standard")), "Standard");
+    assert_eq!(resolve_remote_agent_type(Some("Standard")), "Standard");
+    assert_eq!(resolve_remote_agent_type(Some("balanced")), "Standard");
+    assert_eq!(resolve_remote_agent_type(Some("standard")), "Standard");
     assert_eq!(resolve_remote_agent_type(Some("minimal")), "minimal");
-    assert_eq!(resolve_remote_agent_type(Some("ultimate")), "Ultra");
-    assert_eq!(resolve_remote_agent_type(Some("Ultra")), "Ultra");
+    assert_eq!(resolve_remote_agent_type(Some("ultimate")), "Ultimate");
+    assert_eq!(resolve_remote_agent_type(Some("Ultimate")), "Ultimate");
     assert_eq!(resolve_remote_agent_type(Some("cowork")), "Cowork");
     assert_eq!(resolve_remote_agent_type(Some("Cowork")), "Cowork");
-    assert_eq!(resolve_remote_agent_type(Some("plan")), "agentic");
-    assert_eq!(resolve_remote_agent_type(Some("Plan")), "agentic");
-    assert_eq!(resolve_remote_agent_type(Some("unknown")), "agentic");
-    assert_eq!(resolve_remote_agent_type(None), "agentic");
+    assert_eq!(resolve_remote_agent_type(Some("plan")), "Standard");
+    assert_eq!(resolve_remote_agent_type(Some("Plan")), "Standard");
+    assert_eq!(resolve_remote_agent_type(Some("unknown")), "Standard");
+    assert_eq!(resolve_remote_agent_type(None), "Standard");
 }
 
 #[test]

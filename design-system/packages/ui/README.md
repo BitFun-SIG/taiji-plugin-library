@@ -35,6 +35,12 @@ text buttons keep those hit targets while omitting the visible pill background
 and radius. Use native hover, pressed, focus, disabled, and loading behavior in
 addition to Design Lab's state specimens.
 
+Hover and press feedback keeps controls at their resting size on desktop and
+mobile. Use semantic surface, border, content, shadow, and opacity states;
+do not add press scaling in components or host-wide semantic selectors.
+Explicit content zoom, loading indicators, and enter/exit motion remain owned
+by the component that needs them.
+
 ## Native scrollbars
 
 `styles.css` owns scrollbar presentation inside `ThemeRoot` (or

@@ -663,7 +663,7 @@ describe('BtwSessionPanel review action bar integration', () => {
       sessionId: 'deep-review-child',
       toolCallId: 'direct-child-tool',
       projectId: 'project-1',
-      agentId: 'agentic',
+      agentId: 'Standard',
       action: 'edit',
       resources: ['src/main.rs'],
       source: { kind: 'tool_call', identity: 'Write' },

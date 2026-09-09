@@ -488,7 +488,7 @@ const LINEAGE_SETTLEMENT_RETRY_MAX: Duration = Duration::from_secs(1);
 pub(crate) struct ChatMode {
     config: CliConfig,
     keymap: ResolvedKeymap,
-    /// Current agent type (e.g. "agentic", "Cowork", "DeepResearch")
+    /// Current agent type (e.g. "Standard", "Cowork", "DeepResearch")
     agent_type: String,
     workspace: Option<String>,
     local_cwd: std::path::PathBuf,
@@ -567,7 +567,7 @@ pub(crate) struct ChatMode {
 /// Map agent_type to a display name for status messages
 fn agent_display_name(agent_type: &str) -> &'static str {
     match agent_type {
-        "agentic" => "Fang",
+        "Standard" => "Fang",
         _ => "AI Assistant",
     }
 }

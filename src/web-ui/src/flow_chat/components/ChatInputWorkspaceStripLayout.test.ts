@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { HARNESS_PRESENTATION } from '@/shared/agents/harnessPresentation';
 
 function readLocalFile(name: string): string {
   return readFileSync(fileURLToPath(new URL(`./${name}`, import.meta.url)), 'utf8')
@@ -329,7 +330,7 @@ describe('composer context track layout', () => {
       'composer.setValue(newSessionId, transferredDraft.value)',
     );
     expect(chatInput).not.toContain('data-testid="chat-input-agent-mode-chip"');
-    expect(chatInput).not.toContain("modeState.current !== 'agentic'");
+    expect(chatInput).not.toContain("modeState.current !== 'Standard'");
     expect(chatInput).toContain('!isMultiLine && executionLevelPolicy.userConfigurable ? (');
   });
 
@@ -502,11 +503,16 @@ describe('composer context track layout', () => {
     const component = readLocalFile('HarnessProfileSelector.tsx');
     const stylesheet = readLocalFile('HarnessProfileSelector.scss');
 
-    expect(component).toMatch(/minimal: 'minimal',[\s\S]*?balanced: 'standard',[\s\S]*?ultimate: 'ultimate',[\s\S]*?creative: 'creative',/);
+    expect(HARNESS_PRESENTATION).toEqual({
+      Minimal: { icon: 'minimal', gear: 1 },
+      Standard: { icon: 'standard', gear: 2 },
+      Ultimate: { icon: 'ultimate', gear: 3 },
+      Creative: { icon: 'creative', gear: 'creative' },
+    });
     expect(component).toContain(
-      'data-harness-density={densityProfile ? PROFILE_GEARS[densityProfile] : 0}',
+      'data-harness-density={densityProfile ? HARNESS_PRESENTATION[densityProfile].gear : 0}',
     );
-    expect(component).toContain('name={PROFILE_ICONS[profile]}');
+    expect(component).toContain('name={HARNESS_PRESENTATION[profile].icon}');
     expect(component).not.toContain('className="openbitfun-harness-selector__density-core"');
     expect(component).toContain('<HarnessProfileMark profile={id} />');
     expect(component).toContain('<HarnessProfileMark profile={knownSelectedProfile} />');

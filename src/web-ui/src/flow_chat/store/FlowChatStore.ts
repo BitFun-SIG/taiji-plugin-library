@@ -324,14 +324,14 @@ function sameDispatchTargetIdentity(
 // Retired built-in ids remain readable for historical sessions and older peer
 // hosts; new-session selection filters them from the current Agent catalog.
 const VALID_AGENT_TYPES = new Set([
-  'agentic',
+  'Standard',
   'Multitask',
   'debug',
   'Plan',
   'Cowork',
   'Claw',
   'DeepResearch',
-  'Ultra',
+  'Ultimate',
 ]);
 const METADATA_LIST_RECENT_DEDUPE_TTL_MS = 1000;
 const HISTORICAL_SESSION_INITIAL_REMOTE_TAIL_TURN_COUNT = 3;
@@ -4092,7 +4092,7 @@ export class FlowChatStore {
         error: null,
         historyState: 'new',
         maxContextTokens: maxContextTokens || 128128,
-        mode: mode || 'agentic',
+        mode: mode || 'Standard',
         lastUserDialogMode: undefined,
         lastSubmittedMode: undefined,
         workspacePath,
@@ -4181,7 +4181,7 @@ export class FlowChatStore {
         lastFinishedAt: undefined,
         error: null,
         maxContextTokens: 128128,
-        mode: mode || 'agentic',
+        mode: mode || 'Standard',
         lastUserDialogMode: undefined,
         lastSubmittedMode: undefined,
         isHistorical: false,
@@ -4249,7 +4249,7 @@ export class FlowChatStore {
     });
     
     window.dispatchEvent(new CustomEvent('openbitfun:session-switched', {
-      detail: { sessionId, mode: sessionMode || 'agentic' }
+      detail: { sessionId, mode: sessionMode || 'Standard' }
     }));
 
     if (targetSessionExists && previousSessionId !== sessionId) {
@@ -4260,7 +4260,7 @@ export class FlowChatStore {
   /**
    * Update session mode
    * @param sessionId Session ID
-   * @param mode Mode ID (e.g., 'agentic', 'Plan')
+   * @param mode Mode ID (e.g., 'Standard', 'Plan')
    */
   public updateSessionMode(sessionId: string, mode: string): void {
     this.setState(prev => {
@@ -6922,8 +6922,8 @@ export class FlowChatStore {
             return prev;
           }
 
-          const rawAgentType = metadata.agentType || 'agentic';
-          const validatedAgentType = isValidPersistedAgentType(rawAgentType) ? rawAgentType : 'agentic';
+          const rawAgentType = metadata.agentType || 'Standard';
+          const validatedAgentType = isValidPersistedAgentType(rawAgentType) ? rawAgentType : 'Standard';
           const restoredCurrentTokenUsage = isAcpAgentType(validatedAgentType)
             ? undefined
             : deriveRestoredCurrentTokenUsage(persistedCurrentContextUsage);
@@ -7383,8 +7383,8 @@ export class FlowChatStore {
               return prev;
             }
 
-            const rawAgentType = metadata.agentType || 'agentic';
-            const validatedAgentType = isValidPersistedAgentType(rawAgentType) ? rawAgentType : 'agentic';
+            const rawAgentType = metadata.agentType || 'Standard';
+            const validatedAgentType = isValidPersistedAgentType(rawAgentType) ? rawAgentType : 'Standard';
             const restoredCurrentTokenUsage = isAcpAgentType(validatedAgentType)
               ? undefined
               : deriveRestoredCurrentTokenUsage(persistedCurrentContextUsage);

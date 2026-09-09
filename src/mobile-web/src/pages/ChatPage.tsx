@@ -65,7 +65,7 @@ const ChatPage: React.FC<ChatPageProps> = ({
   sessionMgr,
   sessionId,
   sessionName,
-  agentType: sessionAgentType = 'agentic',
+  agentType: sessionAgentType = 'Standard',
   onBack,
   autoFocus,
   wideLayout = false,

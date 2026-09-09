@@ -50,7 +50,7 @@ const AppContent: React.FC = () => {
   const [page, setPage] = useState<Page>('pairing');
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [activeSessionName, setActiveSessionName] = useState<string>('Session');
-  const [activeSessionAgentType, setActiveSessionAgentType] = useState('agentic');
+  const [activeSessionAgentType, setActiveSessionAgentType] = useState('Standard');
   const [chatAutoFocus, setChatAutoFocus] = useState(false);
   const [compactSidebarOpen, setCompactSidebarOpen] = useState(false);
   const isWideLayout = useWideLayout();
@@ -154,7 +154,7 @@ const AppContent: React.FC = () => {
         clearTimeout(timerRef.current);
         setActiveSessionId(null);
         setActiveSessionName('Session');
-        setActiveSessionAgentType('agentic');
+        setActiveSessionAgentType('Standard');
         setChatAutoFocus(false);
         setPrevPage(null);
         setNavDir(null);
@@ -229,7 +229,7 @@ const AppContent: React.FC = () => {
     sessionId: string,
     sessionName?: string,
     isNew?: boolean,
-    agentType = 'agentic',
+    agentType = 'Standard',
   ) => {
     setActiveSessionId(sessionId);
     setActiveSessionName(sessionName || 'Session');
@@ -275,7 +275,7 @@ const AppContent: React.FC = () => {
     }
     setActiveSessionId(null);
     setActiveSessionName('Session');
-    setActiveSessionAgentType('agentic');
+    setActiveSessionAgentType('Standard');
     setChatAutoFocus(false);
     setPrevPage(null);
     setNavDir(null);
@@ -298,7 +298,7 @@ const AppContent: React.FC = () => {
     setSessionMgr(null);
     setActiveSessionId(null);
     setActiveSessionName('Session');
-    setActiveSessionAgentType('agentic');
+    setActiveSessionAgentType('Standard');
     setChatAutoFocus(false);
     setCompactSidebarOpen(false);
     setPrevPage(null);

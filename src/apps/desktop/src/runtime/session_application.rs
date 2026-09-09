@@ -1232,7 +1232,7 @@ mod tests {
         let mut restored = Session::new_with_id(
             "session-1".to_string(),
             "Restored".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             Default::default(),
         );
         let mut live = restored.clone();
@@ -1257,7 +1257,7 @@ mod tests {
         let mut restored = Session::new_with_id(
             "session-1".to_string(),
             "Restored".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             Default::default(),
         );
 
@@ -1424,7 +1424,7 @@ mod tests {
 
         let mut incoming = current.clone();
         incoming.session_name = "Renamed".to_string();
-        incoming.agent_type = "agentic".to_string();
+        incoming.agent_type = "Standard".to_string();
         incoming.model_name = "stale-model".to_string();
         incoming.memory_mode = SessionMemoryMode::Enabled;
         incoming.status = SessionStatus::Active;
@@ -1487,7 +1487,7 @@ mod tests {
         let mut current = SessionMetadata::new(
             "session".to_string(),
             "Current".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             "primary".to_string(),
         );
         current.review_action_state = Some(json!({ "phase": "review_completed" }));

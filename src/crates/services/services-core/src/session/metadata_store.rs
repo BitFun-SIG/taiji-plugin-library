@@ -624,7 +624,7 @@ mod tests {
         let mut metadata = SessionMetadata::new(
             session_id.to_string(),
             format!("Session {session_id}"),
-            "agentic".to_string(),
+            "Standard".to_string(),
             "model".to_string(),
         );
         metadata.last_active_at = last_active_at;

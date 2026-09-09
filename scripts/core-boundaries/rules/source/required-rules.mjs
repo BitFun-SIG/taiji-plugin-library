@@ -1506,12 +1506,12 @@ export const requiredContentRules = [
       'agent-runtime must own shared mode config profile facts that are runtime-visible and product-neutral',
     patterns: [
       {
-        regex: /\bpub const SHARED_CODING_MODE_PROMPT_TEMPLATE\b/,
-        message: 'missing shared coding-mode prompt template fact',
+        regex: /\bpub const STANDARD_HARNESS_PROMPT_TEMPLATE\b/,
+        message: 'missing Standard Harness prompt template fact',
       },
       {
-        regex: /\bpub const SHARED_CODING_MODE_CONFIG_PROFILE_ID\b/,
-        message: 'missing shared coding-mode config profile id',
+        regex: /\bpub const STANDARD_HARNESS_CONFIG_ID\b/,
+        message: 'missing Standard Harness config profile id',
       },
       {
         regex: /\bpub fn resolve_mode_config_profile_id\b/,
@@ -1526,8 +1526,8 @@ export const requiredContentRules = [
         message: 'missing mode presentation rank',
       },
       {
-        regex: /\bpub fn shared_coding_mode_user_context_policy\b/,
-        message: 'missing shared coding-mode user-context policy',
+        regex: /\bpub fn standard_harness_user_context_policy\b/,
+        message: 'missing Standard Harness user-context policy',
       },
       {
         regex: /\bpub enum SubagentListScope\b/,
@@ -1593,7 +1593,7 @@ export const requiredContentRules = [
       },
       {
         regex: /\bshared_coding_modes_resolve_to_the_same_config_profile\b/,
-        message: 'missing shared coding-mode profile regression',
+        message: 'missing Standard Harness profile regression',
       },
       {
         regex:
@@ -3111,7 +3111,7 @@ export const requiredContentRules = [
       'core agent mode module must keep old import paths while agent-runtime owns shared mode profile facts',
     patterns: [
       {
-        regex: /pub use openbitfun_agent_runtime::agents::\{[\s\S]*mode_presentation_rank[\s\S]*resolve_mode_config_profile_id[\s\S]*shared_coding_mode_user_context_policy[\s\S]*SHARED_CODING_MODE_PROMPT_TEMPLATE[\s\S]*\};/,
+        regex: /pub use openbitfun_agent_runtime::agents::\{[\s\S]*mode_presentation_rank[\s\S]*resolve_mode_config_profile_id[\s\S]*standard_harness_user_context_policy[\s\S]*STANDARD_HARNESS_PROMPT_TEMPLATE[\s\S]*\};/,
         message: 'missing agent-runtime shared mode profile compatibility re-export',
       },
     ],

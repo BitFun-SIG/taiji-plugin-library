@@ -471,7 +471,7 @@
   },
   "message": {
     "user": "User",
-    "assistant": "Assistant",
+    "assistant": "$t(shared:agents.Claw)",
     "system": "System",
     "thinking": "Thinking...",
     "generating": "Generating...",
@@ -630,7 +630,7 @@
   "agent": {
     "title": "Agent",
     "select": "Select Agent",
-    "default": "Default Assistant",
+    "default": "$t(shared:agents.default)",
     "coding": "Coding Assistant",
     "review": "Review",
     "architect": "Architect",
@@ -726,7 +726,6 @@
     "harness": {
       "selectorTooltip": "Current execution: {{name}}",
       "fixedTooltip": "This session uses {{name}} and is now fixed.",
-      "activateBalanced": "Switch to Standard Harness",
       "compatibilityShort": "Legacy",
       "comingSoon": "In development",
       "comingSoonNotice": "The {{name}} Harness execution framework is in development.",
@@ -749,12 +748,23 @@
       "unavailable": "Unavailable",
       "agentUnavailable": "{{name}} is not available with the current Host or settings.",
       "profiles": {
-        "minimal": { "name": "Minimal" },
-        "balanced": { "name": "Standard" },
-        "ultimate": { "name": "Ultimate" },
-        "creative": { "name": "Creative" },
-        "other": { "name": "Agents" }
-      }
+        "other": {
+          "name": "Agents"
+        },
+        "Minimal": {
+          "name": "$t(shared:agents.Minimal)"
+        },
+        "Standard": {
+          "name": "$t(shared:agents.Standard)"
+        },
+        "Ultimate": {
+          "name": "$t(shared:agents.Ultimate)"
+        },
+        "Creative": {
+          "name": "$t(shared:agents.Creative)"
+        }
+      },
+      "activateStandard": "Switch to Standard Harness"
     },
     "agents": {
       "available": "Available",
@@ -762,9 +772,15 @@
       "comingSoon": "In development",
       "comingSoonNotice": "Direct {{name}} Agent invocation is in development.",
       "reviewUnavailable": "Review Agent needs an active session with reviewable changes.",
-      "review": { "name": "Review" },
-      "cowork": { "name": "Cowork" },
-      "computerUse": { "name": "Computer Use" }
+      "review": {
+        "name": "Review"
+      },
+      "cowork": {
+        "name": "$t(shared:agents.Cowork)"
+      },
+      "computerUse": {
+        "name": "$t(shared:agents.ComputerUse)"
+      }
     },
     "addBoostTooltip": "Directives, context, images, or skills",
     "modeChangeFailed": "Failed to change the agent mode. Try again.",
@@ -839,7 +855,6 @@
     "boostSkillsEmpty": "No enabled skills",
     "openSkillsLibrary": "Manage skills…",
     "insertSkillLine": "Please use the Skill tool with command \"{{name}}\".",
-    "resetToAgentic": "Remove selected Agent",
     "defaultModeSetTooltip": "Use {{mode}} as the default mode for new chats",
     "defaultModeUnsetTooltip": "Default mode override is active. Click to clear it.",
     "defaultModeSet": "{{mode}} is now the default mode for new chats.",
@@ -927,20 +942,22 @@
     "sendingToMain": "Main session: {{title}}",
     "sendingToBtw": "Side session: {{title}}",
     "modeDescriptions": {
-      "agentic": "Full-featured AI assistant with access to all tools for comprehensive software development tasks",
       "Claw": "Personal assistant mode for dedicated assistant workspaces and everyday task support",
       "Cowork": "Collaborative mode: clarify first, track progress lightly, verify outcomes anytime",
       "ComputerUse": "Dedicated desktop automation agent for perceiving and operating apps, browsers, and OS UI",
       "DeepResearch": "Deep research with parallel sub-agents: dispatches multiple agents to investigate concurrently, producing comprehensive sourced reports",
-      "Ultra": "Swarm planning mode for complex work; it can issue many concurrent model requests, increasing API cost and provider rate-limit pressure"
+      "Standard": "Full-featured AI assistant with access to all tools for comprehensive software development tasks",
+      "Ultimate": "Swarm planning mode for complex work; it can issue many concurrent model requests, increasing API cost and provider rate-limit pressure"
     },
     "modeNames": {
-      "agentic": "Agentic",
-      "Claw": "Claw",
-      "Cowork": "Cowork",
-      "ComputerUse": "Computer Use",
-      "DeepResearch": "Deep Research",
-      "Ultra": "Ultra"
+      "Claw": "$t(shared:agents.Claw)",
+      "Cowork": "$t(shared:agents.Cowork)",
+      "ComputerUse": "$t(shared:agents.ComputerUse)",
+      "DeepResearch": "$t(shared:agents.DeepResearch)",
+      "Standard": "$t(shared:agents.Standard)",
+      "Ultimate": "$t(shared:agents.Ultimate)",
+      "Minimal": "$t(shared:agents.Minimal)",
+      "Creative": "$t(shared:agents.Creative)"
     },
     "openFolder": "Open folder…",
     "selectWorkspaceTitle": "Select workspace directory",
@@ -1976,7 +1993,7 @@
       "executing": "Executing...",
       "subAgentFailed": "Sub-agent task execution failed",
       "subAgentTaskFailed": "Sub-agent task failed",
-      "failed": "Failed",
+      "failed": "$t(shared:statuses.failed)",
       "confirmDelegate": "Confirm Delegate",
       "cancel": "Cancel",
       "task": "Task",
@@ -2009,9 +2026,9 @@
       "waitingForModelResponse": "Waiting for model response...",
       "status": {
         "pending": "Pending",
-        "running": "Running",
+        "running": "$t(shared:statuses.running)",
         "completed": "Completed",
-        "failed": "Failed"
+        "failed": "$t(shared:statuses.failed)"
       },
       "loadingMore": "Loading more output...",
       "loading": "Loading task details...",
@@ -2199,10 +2216,10 @@
       "pending": "Pending",
       "paramsReceiving": "Receiving params",
       "preparing": "Preparing",
-      "running": "Running",
+      "running": "$t(shared:statuses.running)",
       "completed": "Completed",
-      "error": "Failed",
-      "cancelled": "Cancelled"
+      "error": "$t(shared:statuses.failed)",
+      "cancelled": "$t(shared:statuses.cancelled)"
     },
     "toolbar": {
       "executing": "Executing...",
@@ -2401,7 +2418,7 @@
         "editorTitle": "Review Report"
       },
       "reviewModes": {
-        "standard": "Standard",
+        "standard": "$t(shared:agents.Standard)",
         "deep": "Strict"
       },
       "remediationActions": {
