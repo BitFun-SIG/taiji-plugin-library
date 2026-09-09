@@ -17,8 +17,8 @@ Connect to this host from mobile, a bot, or another OpenBitFun device to inspect
 
 ## 完整功能清单 / Everything included
 
-- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 选择局域网、Ngrok 或官方 Relay
-  - Choose LAN, Ngrok, or the official Relay
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 选择局域网或官方 Relay
+  - Choose LAN or the official Relay
 - **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 启动、停止 Remote Connect 并查看实时连接状态和设备信息
   - Start or stop Remote Connect and inspect live status and device information
 - **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 查看局域网 IP、网络信息与可分享的连接配置

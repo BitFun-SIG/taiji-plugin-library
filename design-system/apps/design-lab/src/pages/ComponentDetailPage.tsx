@@ -349,14 +349,14 @@ export function ComponentDetailPage({
   const [fieldShowControlTrailing, setFieldShowControlTrailing] = useState(false);
   const [pageHeaderAlign, setPageHeaderAlign] = useState<PageHeaderAlign>("start");
   const [cardContentAlign, setCardContentAlign] = useState<CardContentAlignment>("start");
-  const [pageHeaderSize, setPageHeaderSize] = useState<PageHeaderSize>("lg");
+  const [pageHeaderSize, setPageHeaderSize] = useState<PageHeaderSize>("md");
   const [scrollAreaOrientation, setScrollAreaOrientation] = useState<ScrollAreaOrientation>("vertical");
   const [activityItemAppearance, setActivityItemAppearance] = useState<ActivityItemAppearance>("surface");
   const [activityShowDetail, setActivityShowDetail] = useState(false);
   const [pageHeaderRequired, setPageHeaderRequired] = useState(false);
   const [actionItemShowMetadata, setActionItemShowMetadata] = useState(false);
-  const [actionCardSize, setActionCardSize] = useState<ActionCardSize>("sm");
-  const [tabGroupSize, setTabGroupSize] = useState<TabGroupSize>("md");
+  const [actionCardSize, setActionCardSize] = useState<ActionCardSize>("md");
+  const [tabGroupSize, setTabGroupSize] = useState<TabGroupSize>("sm");
   const [toolbarSize, setToolbarSize] = useState<ToolbarSize>("sm");
   const [previewState, setPreviewState] = useState(
     component.name === "Card"
@@ -615,7 +615,7 @@ export function ComponentDetailPage({
     }
     if (component.name === "SegmentedControl") {
       const defaultMode = previewState === "unselected" ? "agent" : "chat";
-      return `import { Icon, SegmentedControl } from "@openbitfun/ui";\n\n<SegmentedControl\n  aria-label="${t("components.preview.segmentedLabel")}"\n  defaultValue="${defaultMode}"\n  onValueChange={setMode}\n  options={[\n    { icon: <Icon name="session" />, label: "${t("components.preview.segmentedChat")}", value: "chat" },\n    { label: "${t("components.preview.segmentedAgent")}", value: "agent" },\n  ]}\n/>`;
+      return `import { Icon, SegmentedControl } from "@openbitfun/ui";\n\n<SegmentedControl\n  size="md"\n  aria-label="${t("components.preview.segmentedLabel")}"\n  defaultValue="${defaultMode}"\n  onValueChange={setMode}\n  options={[\n    { icon: <Icon name="session" />, label: "${t("components.preview.segmentedChat")}", value: "chat" },\n    { label: "${t("components.preview.segmentedAgent")}", value: "agent" },\n  ]}\n/>`;
     }
     if (component.name === "StatusPill") {
       return `import { Icon, StatusPill } from "@openbitfun/ui";\n\n<StatusPill leading={<Icon name="unselected" />} tone="${previewState}">\n  Ask\n</StatusPill>`;
@@ -817,7 +817,7 @@ export function ComponentDetailPage({
             </DialogHeading>
             <DialogClose />
           </DialogHeader>
-          <DialogBody className="component-dialog-example__body">{renderDialogConfigurationContent()}</DialogBody>
+          <DialogBody>{renderDialogConfigurationContent()}</DialogBody>
           <DialogFooter appearance="floating">
             <Button onClick={closePreview} variant="fill">
               {t("components.preview.modalCancel")}
@@ -1886,8 +1886,9 @@ export function ComponentDetailPage({
       const defaultMode = state === "unselected" ? "agent" : "chat";
       return (
         <SegmentedControl
+          size="md"
           aria-label={t("components.preview.segmentedLabel")}
-          data-openbitfun-preview-state={state === "hover" ? "hover" : undefined}
+          data-openbitfun-preview-state={state === "hover" || state === "active" ? state : undefined}
           defaultValue={defaultMode}
           disabled={state === "disabled"}
           key={state}
@@ -1915,7 +1916,7 @@ export function ComponentDetailPage({
       return (
         <TabGroup
           aria-label={t("components.preview.tabGroupLabel")}
-          data-openbitfun-preview-state={state === "hover" ? "hover" : undefined}
+          data-openbitfun-preview-state={state === "hover" || state === "active" ? state : undefined}
           defaultValue={defaultTab}
           items={[
             {

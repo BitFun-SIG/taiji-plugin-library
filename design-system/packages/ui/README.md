@@ -397,3 +397,27 @@ Tool-specific data shaping, localization, host actions, stores, and heavy
 renderers remain in the consuming product and enter through semantic props,
 callbacks, and slots. Bespoke product workflows remain product-owned rather
 than being forced into a standard package view.
+
+Field labels follow their orientation: horizontal labels use the 13px semibold
+label role, while vertical labels use the 11px regular meta role. Field helpers
+use secondary content with 16px leading at the default 11px font size;
+FormSection descriptions use primary content with 16px leading at 13px. Both
+leading roles scale with user typography. FieldGroup uses the form group tint,
+retaining its existing row padding, dividers, and radius. The Patterns form
+specimen shows both orientations and long values over a tinted container.
+
+Menus keep contiguous 30px rows with no additional list or heading-to-item gap;
+separators own their 8px vertical margins. Their keyboard focus indicator is
+inset so scrolling does not clip it or require extra permanent padding.
+ActionItem hover and pressed surfaces use the semantic neutral hover fill;
+pressed text remains semibold. Menu and navigation captions consume the final
+caption color directly, avoiding a second opacity multiplier. The nested-menu
+Pattern includes a scrolling toggle for keyboard and submenu verification.
+
+Compact tabs use `size="sm"` (30px, 14px icons, 4px icon gap); standard tabs retain 40px and 16px icons. Tabs share the outline-button surface contract and keep selection separate from pointer press. `SegmentedControl size="md"` uses a borderless 36px bar with 30px segments, 3px inset, 4px gaps and 12px segment padding. The default `sm` bar keeps its 28px outer height; separate pills retain their existing heights. Mobile controls own their touch geometry independently.
+
+Dialog titles use 24px bold type with their own 29px line box and normal tracking. `DialogHeader` and `DialogFooter` omit separators by default; pass `separator` for a deliberate divider. A direct `DialogBody` sibling of `DialogFooter appearance="floating"` owns the trailing scroll inset automatically. The floating footer provides the 68px centered action area and a masked blur/gradient using the current theme surface; reduced transparency and forced colors use an opaque fallback. Keep scrollable form content inside `DialogBody` instead of adding a second viewport with independent footer spacing.
+
+Extra-large (`xl`) dialogs have an 800px maximum width and continue shrinking within the viewport gutter. Provider editing uses the floating footer; small workspace creation retains its attached footer and existing button/input sizes. The Lab workspace pattern uses local sample paths and callbacks only.
+
+PageHeader `md` uses the settings title with a primary 15px description; `display` uses the welcome heading and medium 17px introduction with a 12px gap. ActionCard uses 12px padding, section-heading typography (15px semibold), and a primary 13px single-line action description. Its inset outline does not inflate the 62px medium minimum height; longer content keeps the independent sibling actions and OverflowText behavior.

@@ -77,6 +77,29 @@ describe('sceneStore transition snapshots', () => {
     } finally { stop(); }
   });
 
+  it('invalidates pending activation when its workspace tab is retired', async () => {
+    useSceneStore.getState().openSessionScene(sessionTarget);
+    useSceneStore.getState().openScene('terminal');
+    let complete!: (activated: boolean) => void;
+    const activation = new Promise<boolean>(resolve => { complete = resolve; });
+    let isCurrent = () => true;
+    const stop = registerSessionSceneNavigation({
+      current: () => null,
+      isActive: () => false,
+      activate: (_target, current) => { isCurrent = current; return activation; },
+    });
+    try {
+      useSceneStore.getState().activateScene(sessionTabId);
+      useSceneStore.getState().reconcileSessionScenes(new Map());
+      expect(isCurrent()).toBe(false);
+      expect(useSceneStore.getState().pendingTabId).toBeNull();
+      complete(true);
+      await activation;
+      expect(useSceneStore.getState().activeTabId).toBe('terminal');
+      expect(useSceneStore.getState().openTabs.map(tab => tab.id)).toEqual(['terminal']);
+    } finally { stop(); }
+  });
+
   it('keeps recoverable tabs when resource activation is unsuccessful', async () => {
     useSceneStore.getState().openSessionScene(sessionTarget);
     useSceneStore.getState().openScene('terminal');

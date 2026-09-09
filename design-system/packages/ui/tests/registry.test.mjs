@@ -124,6 +124,11 @@ test("every registered component declares states and owned tokens", () => {
           token.startsWith("border.") ||
           token.startsWith("color.") ||
           (component.name === "Button" && token.startsWith("component.button.")) ||
+          (component.name === "TabGroup" && [
+            "component.button.outlineBorder",
+            "component.button.outlineBorderInteractive",
+            "component.button.fillBackground",
+          ].includes(token)) ||
           token.startsWith("control.") ||
           token.startsWith("effect.") ||
           token.startsWith("font.") ||

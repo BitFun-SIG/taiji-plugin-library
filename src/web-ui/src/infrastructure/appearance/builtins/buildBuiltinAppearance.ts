@@ -77,6 +77,11 @@ function themeValuesToCssTokens(
   ) as Record<AppearanceThemeTokenName, string>;
   if (palette.id === DEFAULT_LIGHT_APPEARANCE_ID || palette.id === DEFAULT_DARK_APPEARANCE_ID) {
     if (palette.id === DEFAULT_LIGHT_APPEARANCE_ID) {
+      // Neutral action labels are primary text in the public theme. The generic
+      // palette's secondary text projection used to make product menus too faint.
+      tokens['--openbitfun-color-action-neutral-content'] = String(themes.light['color.action.neutral.content']);
+      tokens['--openbitfun-color-action-card-background'] = String(themes.light['color.actionCard.background']);
+      tokens['--openbitfun-color-content-caption'] = String(themes.light['color.content.caption']);
       // Default light fields use the published neutral states in both root and
       // chrome. Branded palettes and imported overrides retain their own colors.
       for (const name of Object.keys(themes.light) as ThemeTokenName[]) {
@@ -128,6 +133,7 @@ function createThemeTokenValues(palette: AppearancePalette): Record<ThemeTokenNa
     'color.scrollbar.thumb': scrollbar.thumb,
     'color.scrollbar.thumbHover': scrollbar.thumbHover,
     'color.content.primary': colors.text.primary,
+    'color.content.caption': colors.text.muted,
     'color.content.secondary': colors.text.secondary,
     'color.content.muted': colors.text.muted,
     'color.content.disabled': colors.text.disabled,
@@ -142,6 +148,7 @@ function createThemeTokenValues(palette: AppearancePalette): Record<ThemeTokenNa
     'color.action.neutral.content': colors.text.secondary,
     'color.action.neutral.contentDisabled': colors.text.disabled,
     'color.action.neutral.fillBorder': colors.element.base,
+    'color.actionCard.background': colors.element.base,
     'color.action.neutral.surface': colors.element.base,
     'color.action.neutral.surfaceHover': colors.element.medium,
     'color.action.neutral.surfacePressed': colors.element.strong,
@@ -157,6 +164,7 @@ function createThemeTokenValues(palette: AppearancePalette): Record<ThemeTokenNa
     'color.action.quiet.pressed': colors.element.base,
     'color.action.quiet.content': colors.text.secondary,
     'color.selection.surface': colors.element.medium,
+    'color.field.groupBackground': colors.background.tertiary,
     'color.field.background': colors.background.secondary,
     'color.field.backgroundHover': colors.element.subtle,
     'color.field.border': colors.border.base,
@@ -219,6 +227,7 @@ function createChromeThemeTokens(
     'color.surface.chrome': chrome.background.chrome ?? chrome.background.primary,
     'color.surface.subtle': chrome.element.subtle,
     'color.content.primary': chrome.text.primary,
+    'color.content.caption': chrome.text.muted,
     'color.content.secondary': chrome.text.secondary,
     'color.content.muted': chrome.text.muted,
     'color.content.disabled': chrome.text.disabled,
@@ -231,6 +240,7 @@ function createChromeThemeTokens(
     'color.action.neutral.content': chrome.text.secondary,
     'color.action.neutral.contentDisabled': chrome.text.disabled,
     'color.action.neutral.fillBorder': chrome.element.base,
+    'color.actionCard.background': chrome.element.base,
     'color.action.neutral.surface': chrome.element.base,
     'color.action.neutral.surfaceHover': chrome.element.medium,
     'color.action.neutral.surfacePressed': chrome.element.strong,
@@ -242,6 +252,7 @@ function createChromeThemeTokens(
     'color.action.quiet.pressed': chrome.element.base,
     'color.action.quiet.content': chrome.text.secondary,
     'color.selection.surface': chrome.element.medium,
+    'color.field.groupBackground': chrome.background.tertiary,
     'color.field.background': chrome.background.secondary,
     'color.field.backgroundHover': chrome.element.subtle,
     'color.field.border': chrome.border.base,

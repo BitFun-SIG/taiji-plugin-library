@@ -142,9 +142,11 @@ first-line box must use that same font size when deriving row geometry.
 
 User-message timestamps and actions occupy a normal-flow meta row below the
 bubble. Its full height, including the 28px action targets, belongs to the
-measured message even when no valid timestamp is available. Hover and keyboard
-focus change opacity only. The shell's trailing margin remains the item gap;
-the next Turn may remove that gap without removing space occupied by controls.
+measured message even when no valid timestamp is available. The timestamp and
+actions remain visible at rest, without requiring hover or keyboard focus; the
+timestamp stays at the row's leading edge while the actions stay at its trailing
+edge. The shell's trailing margin remains the item gap; the next Turn may remove
+that gap without removing space occupied by controls.
 
 ## A Row's Mount Is Not an Arrival
 

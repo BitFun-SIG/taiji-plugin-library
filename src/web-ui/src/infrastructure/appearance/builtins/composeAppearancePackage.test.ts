@@ -4,6 +4,28 @@ import { APPEARANCE_THEME_TOKEN_NAMES } from './catalog';
 import { composeAppearancePackage } from './composeAppearancePackage';
 
 describe('composeAppearancePackage', () => {
+  it('preserves legacy action-card backgrounds in root and chrome across old-payload round trips', () => {
+    const original: AppearancePackage = {
+      schema: 'openbitfun.appearance', schemaVersion: 2,
+      id: 'example.legacy-cards', name: 'Legacy cards', version: '1.0.0', mode: 'light',
+      renderers: { 'theme-tokens': { version: 1, settings: {
+        tokens: { '--openbitfun-color-action-neutral-surface': '#123456' },
+        scopes: { chrome: { '--openbitfun-color-action-neutral-surface': '#654321' } },
+      } } },
+    };
+    const payload = JSON.stringify(original);
+    const resolved = composeAppearancePackage(JSON.parse(payload));
+    const settings = resolved.renderers!['theme-tokens']!.settings;
+    expect(settings.tokens['--openbitfun-color-action-card-background']).toBe('#123456');
+    expect(settings.scopes?.chrome?.['--openbitfun-color-action-card-background']).toBe('#654321');
+    expect(composeAppearancePackage(JSON.parse(JSON.stringify(resolved))).renderers?.['theme-tokens']).toEqual(resolved.renderers?.['theme-tokens']);
+    expect(JSON.stringify(original)).toBe(payload);
+    original.renderers!['theme-tokens']!.settings.tokens['--openbitfun-color-action-card-background'] = '#112233';
+    original.renderers!['theme-tokens']!.settings.scopes!.chrome!['--openbitfun-color-action-card-background'] = '#334455';
+    const explicit = composeAppearancePackage(original).renderers!['theme-tokens']!.settings;
+    expect(explicit.tokens['--openbitfun-color-action-card-background']).toBe('#112233');
+    expect(explicit.scopes?.chrome?.['--openbitfun-color-action-card-background']).toBe('#334455');
+  });
   it('preserves legacy field colors and explicit hint overrides across old-payload round trips', () => {
     const original: AppearancePackage = {
       schema: 'openbitfun.appearance', schemaVersion: 2,
@@ -16,8 +38,9 @@ describe('composeAppearancePackage', () => {
               '--openbitfun-color-field-border': '#123456',
               '--openbitfun-color-field-border-focus': '#654321',
               '--openbitfun-color-content-muted': '#778899',
+              '--openbitfun-color-surface-tertiary': '#abcdef',
             },
-            scopes: { chrome: { '--openbitfun-color-content-muted': '#556677', '--openbitfun-color-field-border-focus': '#445566' } },
+            scopes: { chrome: { '--openbitfun-color-content-muted': '#556677', '--openbitfun-color-field-border-focus': '#445566', '--openbitfun-color-surface-tertiary': '#aabbcc' } },
           },
         },
       },
@@ -25,12 +48,16 @@ describe('composeAppearancePackage', () => {
     const payload = JSON.stringify(original);
     const resolved = composeAppearancePackage(JSON.parse(payload));
     const settings = resolved.renderers!['theme-tokens']!.settings;
+    expect(settings.tokens['--openbitfun-color-content-caption']).toBe('#778899');
+    expect(settings.scopes?.chrome?.['--openbitfun-color-content-caption']).toBe('#556677');
     expect(settings.tokens).toMatchObject({
       '--openbitfun-color-field-border': '#123456',
       '--openbitfun-color-field-border-focus': '#654321',
       '--openbitfun-color-field-border-active': '#654321',
       '--openbitfun-color-field-placeholder': '#778899',
+      '--openbitfun-color-field-group-background': '#abcdef',
     });
+    expect(settings.scopes?.chrome?.['--openbitfun-color-field-group-background']).toBe('#aabbcc');
     expect(settings.scopes?.chrome?.['--openbitfun-color-field-placeholder']).toBe('#556677');
     expect(settings.scopes?.chrome?.['--openbitfun-color-field-border-active']).toBe('#445566');
     expect(composeAppearancePackage(JSON.parse(JSON.stringify(resolved))).renderers?.['theme-tokens']).toEqual(resolved.renderers?.['theme-tokens']);
@@ -40,7 +67,15 @@ describe('composeAppearancePackage', () => {
     original.renderers!['theme-tokens']!.settings.tokens['--openbitfun-color-field-border-active'] = '#223344';
     original.renderers!['theme-tokens']!.settings.scopes!.chrome!['--openbitfun-color-field-placeholder'] = '#334455';
     original.renderers!['theme-tokens']!.settings.scopes!.chrome!['--openbitfun-color-field-border-active'] = '#556688';
+    original.renderers!['theme-tokens']!.settings.tokens['--openbitfun-color-field-group-background'] = '#123abc';
+    original.renderers!['theme-tokens']!.settings.scopes!.chrome!['--openbitfun-color-field-group-background'] = '#456def';
+    original.renderers!['theme-tokens']!.settings.tokens['--openbitfun-color-content-caption'] = '#abcdef';
+    original.renderers!['theme-tokens']!.settings.scopes!.chrome!['--openbitfun-color-content-caption'] = '#fedcba';
     const explicit = composeAppearancePackage(original).renderers!['theme-tokens']!.settings;
+    expect(explicit.tokens['--openbitfun-color-content-caption']).toBe('#abcdef');
+    expect(explicit.scopes?.chrome?.['--openbitfun-color-content-caption']).toBe('#fedcba');
+    expect(explicit.tokens['--openbitfun-color-field-group-background']).toBe('#123abc');
+    expect(explicit.scopes?.chrome?.['--openbitfun-color-field-group-background']).toBe('#456def');
     expect(explicit.tokens['--openbitfun-color-field-placeholder']).toBe('#112233');
     expect(explicit.tokens['--openbitfun-color-field-border-active']).toBe('#223344');
     expect(explicit.scopes?.chrome?.['--openbitfun-color-field-placeholder']).toBe('#334455');

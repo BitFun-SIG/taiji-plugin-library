@@ -202,7 +202,12 @@ export const useSceneStore = create<SceneState>((set, get) => ({
     const retainedActiveId = activeId && tabs.has(activeId) ? activeId : null;
     const mappedHistory = state.navHistory.map(id => remapped.get(id) ?? id);
     const navHistory = mappedHistory.filter(id => tabs.has(id));
+    const retiredPendingTab = state.pendingTabId !== null
+      && state.openTabs.some(tab => tab.id === state.pendingTabId)
+      && !remapped.has(state.pendingTabId);
+    if (retiredPendingTab) navigationRequest++;
     set({
+      ...(retiredPendingTab ? { pendingTabId: null } : {}),
       openTabs: nextTabs,
       activeTabId: retainedActiveId,
       navHistory,

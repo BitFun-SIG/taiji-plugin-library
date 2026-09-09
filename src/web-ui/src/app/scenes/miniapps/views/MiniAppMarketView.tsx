@@ -312,7 +312,7 @@ const MiniAppMarketView: React.FC<MiniAppMarketViewProps> = ({ tabs }) => {
             />
           )}
         >
-          <SegmentedControl
+          <SegmentedControl size="md"
             className="miniapp-market-native__categories"
             options={CATEGORIES.map((value) => ({
               label: categoryLabel(value, t),

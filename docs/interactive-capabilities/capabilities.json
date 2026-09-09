@@ -4,7 +4,7 @@
   "title": "OpenBitFun Playbook",
   "origin": "https://playbook.openbitfun.com",
   "source": "src/shared/interactive-capabilities/catalog.json",
-  "digest": "d2afabba9165de3cbb11a6801bf98dd3a434dc5796c17e8097f6e1658c26104a",
+  "digest": "896281a3cd5cac2b50ec607988e04624224444911ddb2d58ba59a5d7d06493c5",
   "ownerDigest": "c0e5c187cf62bc6ed06196ce8520b3eb427bf268cf24659b72d2552fb1d99c54",
   "searchAcceptance": [
     {
@@ -138,11 +138,11 @@
     "features": 22,
     "settings": 21,
     "userFacing": 43,
-    "documentedItems": 318,
+    "documentedItems": 319,
     "controlCoverage": {
       "direct": 48,
       "delegated": 61,
-      "interactive": 209,
+      "interactive": 210,
       "unsupported": 0
     }
   },
@@ -14675,6 +14675,7 @@
       "id": "setting.workspace.session:query",
       "capabilityId": "setting.workspace.session",
       "itemIds": [
+        "default-agent-harness",
         "automatic-titles",
         "title-model",
         "accelerated-search",
@@ -14803,6 +14804,52 @@
       "valueSource": {
         "kind": "static"
       },
+      "presentationTarget": {
+        "kind": "settings",
+        "pageId": "workspace.session"
+      }
+    },
+    {
+      "id": "setting.workspace.session:open:default-agent-harness",
+      "capabilityId": "setting.workspace.session",
+      "itemIds": [
+        "default-agent-harness"
+      ],
+      "kind": "open",
+      "risk": "ui",
+      "executionHost": "presentationSurface",
+      "availability": {
+        "desktop": {
+          "available": true
+        },
+        "cli": {
+          "available": false,
+          "reason": "This delivery profile has no live presentation surface"
+        },
+        "peer": {
+          "available": true,
+          "requiredCapabilities": [
+            "product_control_v1",
+            "product_control_presentation_v1"
+          ]
+        },
+        "remoteControl": {
+          "available": true
+        },
+        "detachedDispatch": {
+          "available": false,
+          "reason": "This delivery profile has no live presentation surface"
+        }
+      },
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "openReason": "unstructuredInteraction",
       "presentationTarget": {
         "kind": "settings",
         "pageId": "workspace.session"
@@ -23652,25 +23699,25 @@
         "GitHub"
       ],
       "highlightsZh": [
-        "通过局域网、Ngrok 或官方 Relay 连接",
+        "通过局域网或官方 Relay 连接",
         "接入飞书、Telegram 或微信 Bot",
         "使用 GitHub 身份管理设备并进入 Peer Device Mode"
       ],
       "highlightsEn": [
-        "Connect through LAN, Ngrok, or the official Relay",
+        "Connect through LAN or the official Relay",
         "Use Feishu, Telegram, or WeChat bots",
         "Use GitHub identity to manage devices and enter Peer Device Mode"
       ],
       "items": [
         {
           "id": "connection-methods",
-          "titleZh": "选择局域网、Ngrok 或官方 Relay",
-          "titleEn": "Choose LAN, Ngrok, or the official Relay",
+          "titleZh": "选择局域网或官方 Relay",
+          "titleEn": "Choose LAN or the official Relay",
           "control": {
             "kind": "open",
             "reasonCode": "unstructuredInteraction",
-            "reasonZh": "连接方式受实时设备状态影响；打开连接入口，由用户完成选择。",
-            "reasonEn": "Connection choices depend on live device state; open the connection entry for the user to choose."
+            "reasonZh": "“选择局域网或官方 Relay”需要结合当前网络与设备状态，确认目标主机后才能连接；Agent 打开连接入口，由用户完成选择。",
+            "reasonEn": "“Choose LAN or the official Relay” depends on the current network and device state and requires the user to confirm the target host; the Agent opens the connection entry for that choice."
           }
         },
         {
@@ -23788,14 +23835,14 @@
         "WeChat",
         "multi-device",
         "peer device",
-        "通过局域网、Ngrok 或官方 Relay 连接",
+        "通过局域网或官方 Relay 连接",
         "接入飞书、Telegram 或微信 Bot",
         "使用 GitHub 身份管理设备并进入 Peer Device Mode",
-        "Connect through LAN, Ngrok, or the official Relay",
+        "Connect through LAN or the official Relay",
         "Use Feishu, Telegram, or WeChat bots",
         "Use GitHub identity to manage devices and enter Peer Device Mode",
-        "选择局域网、Ngrok 或官方 Relay",
-        "Choose LAN, Ngrok, or the official Relay",
+        "选择局域网或官方 Relay",
+        "Choose LAN or the official Relay",
         "启动、停止 Remote Connect 并查看实时连接状态和设备信息",
         "Start or stop Remote Connect and inspect live status and device information",
         "查看局域网 IP、网络信息与可分享的连接配置",
@@ -26951,11 +26998,13 @@
       "categoryId": "assistant",
       "titleZh": "会话与工作区设置",
       "titleEn": "Session & workspace settings",
-      "summaryZh": "控制会话标题生成、工作区加速搜索和与项目上下文相关的行为。",
-      "summaryEn": "Control session-title generation, accelerated workspace search, and project-context behavior.",
+      "summaryZh": "控制默认 Agent Harness、会话标题生成、工作区加速搜索和与项目上下文相关的行为。",
+      "summaryEn": "Control the default Agent Harness, session-title generation, accelerated workspace search, and project-context behavior.",
       "keywordsZh": [
         "会话设置",
         "工作区设置",
+        "默认 Harness",
+        "上次选择",
         "标题生成",
         "项目搜索",
         "索引"
@@ -26963,21 +27012,36 @@
       "keywordsEn": [
         "session settings",
         "workspace settings",
+        "default Harness",
+        "last selection",
         "title generation",
         "project search",
         "index"
       ],
       "highlightsZh": [
+        "跟随上次选择或固定默认 Harness",
         "自动生成会话标题",
         "本地工作区加速搜索",
         "会话使用的标题模型"
       ],
       "highlightsEn": [
+        "Follow the last selection or fix a default Harness",
         "Automatic session titles",
         "Accelerated local-workspace search",
         "Model used for session titles"
       ],
       "items": [
+        {
+          "id": "default-agent-harness",
+          "titleZh": "让普通新会话跟随 ChatInput 上次选择，或固定使用指定 Harness",
+          "titleEn": "Make regular new sessions follow the last ChatInput selection or use a fixed Harness",
+          "control": {
+            "kind": "open",
+            "reasonCode": "unstructuredInteraction",
+            "reasonZh": "“让普通新会话跟随 ChatInput 上次选择，或固定使用指定 Harness”由会话设置页中的关联控件共同管理，目前没有一个能确定完成整个流程的单一结构化 Command；Agent 会打开精确入口，并把选择保留在用户可见界面。",
+            "reasonEn": "“Make regular new sessions follow the last ChatInput selection or use a fixed Harness” is managed by related controls on the session settings page and currently has no single structured Command that can deterministically complete the whole workflow; the Agent opens the exact entry and keeps the selection visible to the user."
+          }
+        },
         {
           "id": "automatic-titles",
           "titleZh": "启用或停用根据会话内容自动生成标题",
@@ -27043,18 +27107,22 @@
       "stepsZh": [
         "打开设置",
         "进入“工作区 > 会话与工作区”",
-        "调整标题或搜索选项"
+        "调整默认 Harness、标题或搜索选项"
       ],
       "stepsEn": [
         "Open Settings",
         "Go to Workspace > Session & Workspace",
-        "Tune title or search controls"
+        "Tune the default Harness, title, or search controls"
       ],
       "agentExamplesZh": [
+        "让新会话跟随 ChatInput 上一次选择的 Harness",
+        "把新会话固定为 Ultimate Harness",
         "关闭自动生成会话标题",
         "启用工作区加速搜索"
       ],
       "agentExamplesEn": [
+        "Make new sessions follow the last Harness selected in ChatInput",
+        "Fix Ultimate as the Harness for new sessions",
         "Turn off automatic session titles",
         "Enable accelerated workspace search"
       ],
@@ -27093,20 +27161,28 @@
         "AI & collaboration",
         "会话设置",
         "工作区设置",
+        "默认 Harness",
+        "上次选择",
         "标题生成",
         "项目搜索",
         "索引",
         "session settings",
         "workspace settings",
+        "default Harness",
+        "last selection",
         "title generation",
         "project search",
         "index",
+        "跟随上次选择或固定默认 Harness",
         "自动生成会话标题",
         "本地工作区加速搜索",
         "会话使用的标题模型",
+        "Follow the last selection or fix a default Harness",
         "Automatic session titles",
         "Accelerated local-workspace search",
         "Model used for session titles",
+        "让普通新会话跟随 ChatInput 上次选择，或固定使用指定 Harness",
+        "Make regular new sessions follow the last ChatInput selection or use a fixed Harness",
         "启用或停用根据会话内容自动生成标题",
         "Enable or disable automatic titles generated from session content",
         "让标题模型继承主模型、快速模型或使用指定模型",
@@ -27117,8 +27193,12 @@
         "Inspect index status and rebuild the workspace index when needed",
         "远程工作区明确降级搜索实现，不把远程路径回退到本机",
         "Use an explicit remote-workspace search path without silently falling back to local files",
+        "让新会话跟随 ChatInput 上一次选择的 Harness",
+        "把新会话固定为 Ultimate Harness",
         "关闭自动生成会话标题",
         "启用工作区加速搜索",
+        "Make new sessions follow the last Harness selected in ChatInput",
+        "Fix Ultimate as the Harness for new sessions",
         "Turn off automatic session titles",
         "Enable accelerated workspace search"
       ],

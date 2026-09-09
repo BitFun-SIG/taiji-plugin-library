@@ -1,12 +1,12 @@
 {
   "schemaVersion": 1,
   "generatedFrom": "src/shared/interactive-capabilities/catalog.json",
-  "catalogDigest": "d2afabba9165de3cbb11a6801bf98dd3a434dc5796c17e8097f6e1658c26104a",
-  "count": 209,
+  "catalogDigest": "896281a3cd5cac2b50ec607988e04624224444911ddb2d58ba59a5d7d06493c5",
+  "count": 210,
   "reasonCounts": {
     "externalAuth": 4,
     "secretEntry": 5,
-    "unstructuredInteraction": 182,
+    "unstructuredInteraction": 183,
     "visualSelection": 18
   },
   "entries": [
@@ -1847,11 +1847,11 @@
     {
       "capabilityId": "feature.remote-connect",
       "itemId": "connection-methods",
-      "titleZh": "选择局域网、Ngrok 或官方 Relay",
-      "titleEn": "Choose LAN, Ngrok, or the official Relay",
+      "titleZh": "选择局域网或官方 Relay",
+      "titleEn": "Choose LAN or the official Relay",
       "reasonCode": "unstructuredInteraction",
-      "reasonZh": "连接方式受实时设备状态影响；打开连接入口，由用户完成选择。",
-      "reasonEn": "Connection choices depend on live device state; open the connection entry for the user to choose.",
+      "reasonZh": "“选择局域网或官方 Relay”需要结合当前网络与设备状态，确认目标主机后才能连接；Agent 打开连接入口，由用户完成选择。",
+      "reasonEn": "“Choose LAN or the official Relay” depends on the current network and device state and requires the user to confirm the target host; the Agent opens the connection entry for that choice.",
       "presentationTarget": {
         "kind": "event",
         "eventName": "openbitfun:open-remote-connect"
@@ -2822,6 +2822,23 @@
         "command:reset_memory",
         "source:src/web-ui/src/locales/zh-CN/settings/memory.json#actions.resetSettings",
         "command:reset_config"
+      ]
+    },
+    {
+      "capabilityId": "setting.workspace.session",
+      "itemId": "default-agent-harness",
+      "titleZh": "让普通新会话跟随 ChatInput 上次选择，或固定使用指定 Harness",
+      "titleEn": "Make regular new sessions follow the last ChatInput selection or use a fixed Harness",
+      "reasonCode": "unstructuredInteraction",
+      "reasonZh": "“让普通新会话跟随 ChatInput 上次选择，或固定使用指定 Harness”由会话设置页中的关联控件共同管理，目前没有一个能确定完成整个流程的单一结构化 Command；Agent 会打开精确入口，并把选择保留在用户可见界面。",
+      "reasonEn": "“Make regular new sessions follow the last ChatInput selection or use a fixed Harness” is managed by related controls on the session settings page and currently has no single structured Command that can deterministically complete the whole workflow; the Agent opens the exact entry and keeps the selection visible to the user.",
+      "presentationTarget": {
+        "kind": "settings",
+        "pageId": "workspace.session"
+      },
+      "evidence": [
+        "source:src/web-ui/src/infrastructure/config/components/DefaultHarnessConfig.tsx#DefaultHarnessConfig",
+        "source:src/web-ui/src/locales/zh-CN/settings/runtime.json#defaultHarness.title"
       ]
     },
     {
