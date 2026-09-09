@@ -40,12 +40,11 @@ struct ComposerBar: View {
 
     private var canSend: Bool {
         hasContent && !model.busy && !model.isSending &&
-            (model.surface == .local || model.connectionPhase != .disconnected)
+            model.connectionPhase != .disconnected
     }
 
     private var primaryActionKind: ComposerPrimaryAction {
         if speech.isListening { return .stopListening }
-        if model.isSending, model.surface == .local { return .stopTurn }
         if hasContent { return canSend ? .send : .sendBlocked }
         if model.isSending { return .stopTurn }
         return model.busy ? .voiceBlocked : .voice
@@ -231,7 +230,6 @@ struct ComposerBar: View {
             .onSubmit {
                 if canSend { model.send() }
             }
-            .onChange(of: model.draft) { _ in model.syncDraftToCore() }
             if showsSupplementalVoice, !expanded {
                 supplementalVoiceAction
             }
@@ -509,7 +507,6 @@ struct ComposerBar: View {
                 model.draft = [existing, transcript]
                     .filter { !$0.isEmpty }
                     .joined(separator: existing.isEmpty ? "" : " ")
-                model.syncDraftToCore()
             },
             onFailure: { message in model.showToast(model.localized(message)) }
         )

@@ -5,8 +5,8 @@ import { HarmonyUpgradeIdentityContract } from './HarmonyUpgradeIdentityContract
 import { OhosError } from './OhosError';
 
 const STORE_NAME: string = HarmonyUpgradeIdentityContract.CLOUD_ACCOUNT_STORE;
-const CIPHER_KEY: string = 'session_cipher';
-const IV_KEY: string = 'session_iv';
+const CIPHER_KEY: string = 'github_device_session_v1_cipher';
+const IV_KEY: string = 'github_device_session_v1_iv';
 const HUKS_ALIAS: string = HarmonyUpgradeIdentityContract.CLOUD_ACCOUNT_HUKS_ALIAS;
 
 export interface PersistedCloudAccountSession {

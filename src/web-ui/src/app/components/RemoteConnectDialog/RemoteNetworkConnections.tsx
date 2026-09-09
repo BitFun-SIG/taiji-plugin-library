@@ -9,10 +9,9 @@ import { RemotePairingCard } from './RemotePairingCard';
 
 interface RemoteNetworkConnectionsProps {
   status: RemoteConnectStatus | null;
-  method: 'openbitfun_server' | 'custom_server';
+  method: 'openbitfun_server';
   title: string;
   relayUrl: string;
-  onRelayUrlChange: (url: string) => void;
   invitation: ConnectionResult | null;
   statusState: 'loading' | 'ready' | 'unavailable';
   loading: boolean;
@@ -22,14 +21,13 @@ interface RemoteNetworkConnectionsProps {
   onConnect: () => void;
   onCancel: () => void;
   onDisconnect: () => void;
-  onDeploy: () => void;
 }
 
-/** Preset and custom relays share one card; only the address source differs. */
+/** Official relay connection and paired controller status. */
 export function RemoteNetworkConnections({
-  status, method, title, relayUrl, onRelayUrlChange, invitation, statusState,
+  status, method, title, relayUrl, invitation, statusState,
   loading, pairingUrlCopied, error, onCopyPairingUrl, onConnect, onCancel,
-  onDisconnect, onDeploy,
+  onDisconnect,
 }: RemoteNetworkConnectionsProps) {
   const { t, formatNumber } = useI18n('common');
   const { error: notifyError } = useNotification();
@@ -71,9 +69,7 @@ export function RemoteNetworkConnections({
           <Input
             type="url"
             value={relayUrl}
-            onValueChange={onRelayUrlChange}
-            readOnly={method === 'openbitfun_server' || !!invitation || room || loading}
-            placeholder="https://relay.example.com:9700"
+            readOnly
             size="sm"
             trailing={<IconButton
               variant="quiet"
@@ -124,7 +120,6 @@ export function RemoteNetworkConnections({
       <div className="openbitfun-remote-connect__relay-actions">
         {error}
         <div className="openbitfun-remote-connect__relay-action-row">
-          <Button variant="text" size="sm" onClick={onDeploy}>{t('remoteConnect.desc_custom_server_link')}</Button>
           {room ? <Button variant="outline" size="sm" onClick={onDisconnect}>{t('remoteConnect.disconnect')}</Button>
             : invitation ? <Button variant="fill" size="sm" onClick={onCancel}>{t('remoteConnect.cancelInvitation')}</Button>
               : <Button variant="primary" size="sm" loading={loading} onClick={onConnect}>

@@ -2,26 +2,26 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
-  MarketAccountService,
-  type MarketAccountChangedEvent,
-  type MarketAccountServiceDependencies,
-  type MarketAccountSyncPort,
-} from './MarketAccountService';
+  AccountIdentityService,
+  type AccountIdentityChangedEvent,
+  type AccountIdentityServiceDependencies,
+  type AccountIdentitySyncPort,
+} from './AccountIdentityService';
 
-class FakeSyncPort implements MarketAccountSyncPort {
-  readonly published: MarketAccountChangedEvent[] = [];
-  private readonly listeners = new Set<(event: MarketAccountChangedEvent) => void>();
+class FakeSyncPort implements AccountIdentitySyncPort {
+  readonly published: AccountIdentityChangedEvent[] = [];
+  private readonly listeners = new Set<(event: AccountIdentityChangedEvent) => void>();
 
-  publish(event: MarketAccountChangedEvent): void {
+  publish(event: AccountIdentityChangedEvent): void {
     this.published.push(event);
   }
 
-  subscribe(listener: (event: MarketAccountChangedEvent) => void): () => void {
+  subscribe(listener: (event: AccountIdentityChangedEvent) => void): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
   }
 
-  emit(event: MarketAccountChangedEvent): void {
+  emit(event: AccountIdentityChangedEvent): void {
     this.listeners.forEach(listener => listener(event));
   }
 }
@@ -45,7 +45,7 @@ function setup() {
     logout: vi.fn().mockResolvedValue(undefined),
     onAccountChanged: vi.fn(() => () => undefined),
   };
-  const dependencies: MarketAccountServiceDependencies = {
+  const dependencies: AccountIdentityServiceDependencies = {
     api,
     openExternal: vi.fn().mockResolvedValue(undefined),
     syncPort,
@@ -53,17 +53,17 @@ function setup() {
     sleep: vi.fn().mockResolvedValue(undefined),
     sourceId: 'window-a',
   };
-  const service = new MarketAccountService(dependencies);
+  const service = new AccountIdentityService(dependencies);
   return { api, dependencies, service, syncPort };
 }
 
-const activeServices: MarketAccountService[] = [];
+const activeServices: AccountIdentityService[] = [];
 
 afterEach(() => {
   activeServices.splice(0).forEach(service => service.dispose());
 });
 
-describe('MarketAccountService', () => {
+describe('AccountIdentityService', () => {
   it('uses the MiniApp desktop OAuth flow, keeps tokens out of the renderer, and shares identity', async () => {
     const { api, dependencies, service, syncPort } = setup();
     activeServices.push(service);

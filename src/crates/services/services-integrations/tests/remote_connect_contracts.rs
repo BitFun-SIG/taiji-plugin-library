@@ -123,7 +123,7 @@ fn remote_connect_qr_and_relay_primitives_live_in_services_owner() {
     assert!(auth_only_url.contains("auth=account"));
     assert!(!auth_only_url.contains("user="));
 
-    let with_password = PairingProtocol::answer_challenge_with_password(
+    let with_password = PairingProtocol::answer_challenge_with_access_token(
         &PairingChallenge {
             challenge: "abc".to_string(),
             timestamp: 1,
@@ -142,7 +142,7 @@ fn remote_connect_qr_and_relay_primitives_live_in_services_owner() {
     assert_eq!(json["password"], "secret");
     let parsed: PairingResponse =
         serde_json::from_value(json).expect("deserialize pairing response");
-    assert_eq!(parsed.password.as_deref(), Some("secret"));
+    assert_eq!(parsed.access_token.as_deref(), Some("secret"));
 
     let message = RelayMessage::CreateRoom {
         room_id: Some(payload.room_id),

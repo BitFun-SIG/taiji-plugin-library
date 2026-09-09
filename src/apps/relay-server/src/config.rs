@@ -1,5 +1,6 @@
 //! Relay server configuration.
 
+use anyhow::Context;
 use std::net::SocketAddr;
 
 #[derive(Debug, Clone)]
@@ -44,12 +45,17 @@ impl Default for RelayConfig {
 }
 
 impl RelayConfig {
-    pub(super) fn from_env() -> Self {
+    pub(super) fn from_env() -> anyhow::Result<Self> {
         let mut cfg = Self::default();
         if let Ok(port) = std::env::var("RELAY_PORT") {
             if let Ok(p) = port.parse::<u16>() {
                 cfg.listen_addr = ([0, 0, 0, 0], p).into();
             }
+        }
+        if let Ok(addr) = std::env::var("RELAY_LISTEN_ADDR") {
+            cfg.listen_addr = addr
+                .parse()
+                .context("RELAY_LISTEN_ADDR must be an IP socket address")?;
         }
         if let Ok(dir) = std::env::var("RELAY_STATIC_DIR") {
             cfg.static_dir = Some(dir);
@@ -88,6 +94,6 @@ impl RelayConfig {
         cfg.page_auth_base_url = std::env::var("RELAY_PAGE_AUTH_BASE_URL")
             .ok()
             .filter(|value| !value.trim().is_empty());
-        cfg
+        Ok(cfg)
     }
 }

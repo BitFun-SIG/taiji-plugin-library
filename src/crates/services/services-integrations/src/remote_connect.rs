@@ -11,6 +11,7 @@ pub mod account;
 pub mod bot;
 mod chat_projection;
 pub mod device;
+pub mod device_crypto;
 pub mod encryption;
 mod lan;
 mod mobile_web_upload;
@@ -21,7 +22,6 @@ pub mod qr_generator;
 pub mod relay_client;
 mod relay_http;
 pub mod session_store;
-pub mod sync_state;
 
 pub use chat_projection::{
     agent_input_attachment_from_remote_image_context, project_remote_chat_user,

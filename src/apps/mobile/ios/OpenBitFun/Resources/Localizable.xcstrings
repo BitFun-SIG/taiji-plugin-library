@@ -7858,6 +7858,58 @@
           }
         }
       }
+    },
+    "打开 GitHub 授权": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open GitHub authorization"
+          }
+        }
+      }
+    },
+    "通过 GitHub 登录": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sign in with GitHub"
+          }
+        }
+      }
+    },
+    "请使用当前版本的 OpenBitFun 设备二维码。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Use a current OpenBitFun device QR code."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请使用当前版本的 OpenBitFun 设备二维码。"
+          }
+        }
+      }
+    },
+    "该设备已离线，或不属于当前 GitHub 账户。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This device is offline or does not belong to your GitHub account."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "该设备已离线，或不属于当前 GitHub 账户。"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

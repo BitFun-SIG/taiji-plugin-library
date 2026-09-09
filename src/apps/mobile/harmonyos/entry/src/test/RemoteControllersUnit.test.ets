@@ -2375,8 +2375,8 @@ export default function remoteControllersUnitTest() {
 
   describe('ChatComposerCapabilities', () => {
     it('keeps route-to-surface composer ownership explicit', 0, () => {
-      expect(AppRouteContract.isGeneralComposerRoute(AppRoute.ChatHome)).assertTrue();
-      expect(AppRouteContract.isGeneralComposerRoute(AppRoute.GeneralChat)).assertTrue();
+      expect(AppRouteContract.isGeneralComposerRoute(AppRoute.ChatHome)).assertFalse();
+      expect(AppRouteContract.isGeneralComposerRoute(AppRoute.GeneralChat)).assertFalse();
       expect(AppRouteContract.isGeneralComposerRoute(AppRoute.RemoteHome)).assertFalse();
       expect(AppRouteContract.isGeneralComposerRoute(AppRoute.RemoteChat)).assertFalse();
     });
@@ -2455,14 +2455,14 @@ export default function remoteControllersUnitTest() {
       expect(`${AppRoute.RemoteChat}`).assertEqual('RemoteChat');
       expect(AppRouteContract.isSessionRoute(AppRoute.ChatHome)).assertFalse();
       expect(AppRouteContract.isSessionRoute(AppRoute.RemoteHome)).assertFalse();
-      expect(AppRouteContract.isSessionRoute(AppRoute.GeneralChat)).assertTrue();
+      expect(AppRouteContract.isSessionRoute(AppRoute.GeneralChat)).assertFalse();
       expect(AppRouteContract.isSessionRoute(AppRoute.RemoteChat)).assertTrue();
       expect(generalParam.sessionId).assertEqual('general-session-1');
       expect(remoteParam.sessionId).assertEqual('remote-session-1');
     });
 
-    it('derives current route from NavPathStack path names with ChatHome as root', 0, () => {
-      expect(AppRouteContract.currentRoute([])).assertEqual(AppRoute.ChatHome);
+    it('derives current route from NavPathStack path names with RemoteHome as root', 0, () => {
+      expect(AppRouteContract.currentRoute([])).assertEqual(AppRoute.RemoteHome);
       expect(AppRouteContract.currentRoute([AppRoute.RemoteHome])).assertEqual(AppRoute.RemoteHome);
       expect(AppRouteContract.currentRoute([
         AppRoute.RemoteHome,
@@ -2470,7 +2470,7 @@ export default function remoteControllersUnitTest() {
       ])).assertEqual(AppRoute.RemoteChat);
       expect(AppRouteContract.currentRoute([
         AppRoute.GeneralChat
-      ])).assertEqual(AppRoute.GeneralChat);
+      ])).assertEqual(AppRoute.RemoteHome);
     });
 
     it('builds push path specs and suppresses duplicate current routes', 0, () => {
@@ -2492,32 +2492,31 @@ export default function remoteControllersUnitTest() {
       expect(remoteChatSpec.name).assertEqual(AppRoute.RemoteChat);
       expect(remoteChatSpec.hasSessionParam()).assertTrue();
       expect(remoteChatSpec.routeParam().sessionId).assertEqual('remote-session-1');
-      expect(generalChatSpec.name).assertEqual(AppRoute.GeneralChat);
-      expect(generalChatSpec.routeParam().sessionId).assertEqual('general-session-1');
+      expect(generalChatSpec === undefined).assertTrue();
     });
 
     it('classifies back actions without depending on ArkUI NavPathStack', 0, () => {
       expect(AppRouteContract.backAction(AppRoute.ChatHome, true))
         .assertEqual(AppNavigationBackAction.CloseSidebar);
       expect(AppRouteContract.backAction(AppRoute.GeneralChat, false))
-        .assertEqual(AppNavigationBackAction.CloseActiveChat);
+        .assertEqual(AppNavigationBackAction.AllowSystem);
       expect(AppRouteContract.backAction(AppRoute.RemoteChat, false))
         .assertEqual(AppNavigationBackAction.CloseActiveChat);
       expect(AppRouteContract.backAction(AppRoute.RemoteHome, false))
-        .assertEqual(AppNavigationBackAction.PopRemoteHome);
+        .assertEqual(AppNavigationBackAction.AllowSystem);
       expect(AppRouteContract.backAction(AppRoute.ChatHome, false))
         .assertEqual(AppNavigationBackAction.AllowSystem);
     });
 
-    it('splits remote routes from the general composer without overlap', 0, () => {
+    it('maps retired local route names to the remote controller', 0, () => {
       // The two predicates are complements by construction. Asserting both
       // directions on every route is what keeps a later edit from creating a
       // route that is somehow neither, or both.
-      expect(AppRouteContract.isRemoteRoute(AppRoute.ChatHome)).assertFalse();
-      expect(AppRouteContract.isRemoteRoute(AppRoute.GeneralChat)).assertFalse();
+      expect(AppRouteContract.isRemoteRoute(AppRoute.ChatHome)).assertTrue();
+      expect(AppRouteContract.isRemoteRoute(AppRoute.GeneralChat)).assertTrue();
       expect(AppRouteContract.isRemoteRoute(AppRoute.RemoteHome)).assertTrue();
       expect(AppRouteContract.isRemoteRoute(AppRoute.RemoteChat)).assertTrue();
-      expect(AppRouteContract.isGeneralComposerRoute(AppRoute.ChatHome)).assertTrue();
+      expect(AppRouteContract.isGeneralComposerRoute(AppRoute.ChatHome)).assertFalse();
     });
 
     it('resumes an in-flight remote session instead of landing on the picker', 0, () => {

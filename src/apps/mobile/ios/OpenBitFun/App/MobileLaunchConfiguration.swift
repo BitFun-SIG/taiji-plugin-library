@@ -88,11 +88,6 @@ enum MobileLaunchConfiguration {
             model.downloadStatusText = model.localized("正在保存")
             model.downloadExporterOpen = true
         }
-        if let relay = arguments.value(after: "--relay-url"),
-           let username = arguments.value(after: "--username"),
-           let password = arguments.value(after: "--password") {
-            model.loginAccount(relayURL: relay, username: username, password: password)
-        }
         if arguments.contains("--drawer") {
             model.drawerOpen = true
         }
@@ -102,10 +97,6 @@ enum MobileLaunchConfiguration {
         if arguments.contains("--remote-settings") {
             model.surface = .remote
             model.remoteControlSettingsOpen = true
-        }
-        if arguments.contains("--model-settings") {
-            model.settingsOpen = true
-            model.generalConfigOpen = true
         }
         if arguments.contains("--composer-model-picker") ||
             ProcessInfo.processInfo.environment["OPENBITFUN_COMPOSER_MODEL_PICKER"] == "1" {

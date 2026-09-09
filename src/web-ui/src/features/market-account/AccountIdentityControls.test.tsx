@@ -3,8 +3,8 @@
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { MarketAccountControls } from './MarketAccountControls';
-import { calculateMarketAccountMenuPosition } from './marketAccountMenuPosition';
+import { AccountIdentityControls } from './AccountIdentityControls';
+import { calculateAccountIdentityMenuPosition } from './marketAccountMenuPosition';
 
 const mocks = vi.hoisted(() => ({
   account: {
@@ -23,18 +23,18 @@ const mocks = vi.hoisted(() => ({
   error: vi.fn(),
 }));
 
-vi.mock('@/infrastructure/market-account', () => ({
-  MarketAccountError: class MarketAccountError extends Error {
+vi.mock('@/infrastructure/account-identity', () => ({
+  AccountIdentityError: class AccountIdentityError extends Error {
     constructor(public readonly code: string, message: string) {
       super(message);
     }
   },
-  marketAccountService: {
+  accountIdentityService: {
     signIn: mocks.signIn,
     cancelSignIn: mocks.cancelSignIn,
     logout: mocks.logout,
   },
-  useMarketAccount: () => mocks.account,
+  useAccountIdentity: () => mocks.account,
 }));
 
 vi.mock('@/infrastructure/i18n', () => ({
@@ -64,7 +64,7 @@ vi.mock('@openbitfun/ui', () => ({
   DialogTitle: ({ children }: any) => <h2>{children}</h2>,
 }));
 
-describe('MarketAccountControls', () => {
+describe('AccountIdentityControls', () => {
   let container: HTMLDivElement;
   let root: ReturnType<typeof createRoot>;
 
@@ -93,7 +93,7 @@ describe('MarketAccountControls', () => {
   });
 
   it('opens the shared GitHub login dialog and starts the vault-backed flow', async () => {
-    await act(async () => root.render(<MarketAccountControls />));
+    await act(async () => root.render(<AccountIdentityControls />));
     const signIn = [...container.querySelectorAll('button')]
       .find(button => button.textContent?.includes('market.signIn'));
     await act(async () => signIn?.click());
@@ -111,7 +111,7 @@ describe('MarketAccountControls', () => {
       user: { githubId: 42, login: 'octocat', avatarUrl: 'https://example.com/avatar.png' },
       isAdmin: false,
     };
-    await act(async () => root.render(<MarketAccountControls />));
+    await act(async () => root.render(<AccountIdentityControls />));
 
     const trigger = container.querySelector<HTMLButtonElement>('[aria-haspopup="menu"]');
     await act(async () => trigger?.click());
@@ -124,7 +124,7 @@ describe('MarketAccountControls', () => {
   });
 
   it('keeps the portalled menu aligned to the trigger and inside the viewport', () => {
-    const position = calculateMarketAccountMenuPosition(
+    const position = calculateAccountIdentityMenuPosition(
       { top: 16, right: 218, bottom: 46 },
       { width: 230, height: 112 },
       { width: 240, height: 180 },
@@ -132,7 +132,7 @@ describe('MarketAccountControls', () => {
 
     expect(position).toEqual({ top: 52, left: 8 });
     expect(
-      calculateMarketAccountMenuPosition(
+      calculateAccountIdentityMenuPosition(
         { top: 150, right: 218, bottom: 180 },
         { width: 230, height: 112 },
         { width: 240, height: 200 },

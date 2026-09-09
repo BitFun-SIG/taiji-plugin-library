@@ -20,7 +20,8 @@ use tracing::{debug, info};
 
 use crate::relay::room::{ConnId, OutboundMessage};
 
-pub const MAX_PENDING_DEVICE_RPCS: usize = i32::MAX as usize;
+pub const MAX_PENDING_DEVICE_RPCS: usize = 2048;
+pub const MAX_PENDING_DEVICE_RPCS_PER_ACCOUNT: usize = 64;
 
 /// An online device connection belonging to a user.
 struct DeviceConn {
@@ -57,10 +58,70 @@ struct PendingRpc {
 }
 
 /// The response payload from a device RPC call.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct RpcResponse {
     pub encrypted_data: String,
     pub nonce: String,
+    memory: OwnedSemaphorePermit,
+}
+
+impl RpcResponse {
+    pub fn try_new(encrypted_data: String, nonce: String) -> Option<Self> {
+        static MEMORY: std::sync::OnceLock<Arc<Semaphore>> = std::sync::OnceLock::new();
+        Self::with_budget(
+            encrypted_data,
+            nonce,
+            MEMORY.get_or_init(|| Arc::new(Semaphore::new(256 * 1024 * 1024))),
+        )
+    }
+
+    fn with_budget(encrypted_data: String, nonce: String, budget: &Arc<Semaphore>) -> Option<Self> {
+        // Reserve both the parsed payload and its serialized HTTP response.
+        // The permit follows a response through the mailbox and slow readers.
+        let size = encrypted_data
+            .len()
+            .checked_add(nonce.len())?
+            .checked_mul(2)?
+            .checked_add(1024)?;
+        let memory = Arc::clone(budget)
+            .try_acquire_many_owned(u32::try_from(size).ok()?)
+            .ok()?;
+        Some(Self {
+            encrypted_data,
+            nonce,
+            memory,
+        })
+    }
+
+    pub fn into_http_response(self) -> Result<axum::response::Response, axum::http::StatusCode> {
+        #[derive(serde::Serialize)]
+        struct Payload<'a> {
+            encrypted_data: &'a str,
+            nonce: &'a str,
+        }
+        let bytes = serde_json::to_vec(&Payload {
+            encrypted_data: &self.encrypted_data,
+            nonce: &self.nonce,
+        })
+        .map_err(|_| axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
+        let length = bytes.len();
+        let state = (axum::body::Bytes::from(bytes), self.memory);
+        let stream = futures_util::stream::unfold(state, |(mut bytes, permit)| async move {
+            if bytes.is_empty() {
+                return None;
+            }
+            // Do not hand a whole large body to Hyper and release its budget
+            // while it is still blocked on a slow socket.
+            let piece = bytes.split_to(bytes.len().min(64 * 1024));
+            let chunk = axum::body::Bytes::copy_from_slice(&piece);
+            Some((Ok::<_, std::convert::Infallible>(chunk), (bytes, permit)))
+        });
+        axum::response::Response::builder()
+            .header(axum::http::header::CONTENT_TYPE, "application/json")
+            .header(axum::http::header::CONTENT_LENGTH, length)
+            .body(axum::body::Body::from_stream(stream))
+            .map_err(|_| axum::http::StatusCode::INTERNAL_SERVER_ERROR)
+    }
 }
 
 /// Tracks online devices grouped by `user_id` so that `device_to_device`
@@ -88,6 +149,7 @@ pub struct DeviceManager {
     /// correlation_id → pending RPC response sender (for HTTP→WS→HTTP bridge).
     pending_rpcs: DashMap<String, PendingRpc>,
     pending_rpc_permits: Arc<Semaphore>,
+    pending_registration_gate: Mutex<()>,
     /// Starts the database-backed token revalidator exactly once, lazily from
     /// the first WebSocket handled inside a Tokio runtime.
     token_revalidator_started: AtomicBool,
@@ -103,6 +165,7 @@ impl DeviceManager {
             pending_connections: DashMap::new(),
             pending_rpcs: DashMap::new(),
             pending_rpc_permits: Arc::new(Semaphore::new(MAX_PENDING_DEVICE_RPCS)),
+            pending_registration_gate: Mutex::new(()),
             token_revalidator_started: AtomicBool::new(false),
         })
     }
@@ -232,10 +295,8 @@ impl DeviceManager {
         // same presence gate excludes snapshot broadcasts. Once membership is
         // published below, every later DevicePresence is necessarily behind
         // AuthOk in this socket's FIFO queue.
-        if pending
-            .tx
-            .try_send(OutboundMessage::text(initial_text))
-            .is_err()
+        if !OutboundMessage::try_text(initial_text)
+            .is_some_and(|message| pending.tx.try_send(message).is_ok())
         {
             let _ = pending.force_close_tx.send(true);
             return false;
@@ -399,7 +460,10 @@ impl DeviceManager {
         let Some(dev) = user_devices.get(target_device_id) else {
             return false;
         };
-        match dev.tx.try_send(OutboundMessage::text(text)) {
+        let Some(message) = OutboundMessage::try_text(text) else {
+            return false;
+        };
+        match dev.tx.try_send(message) {
             Ok(()) => true,
             Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => {
                 debug!("route_message: target {target_device_id} queue full, dropping");
@@ -511,9 +575,14 @@ impl DeviceManager {
         };
         for entry in user_devices.iter() {
             let tx = entry.tx.clone();
-            let msg = OutboundMessage::text(&text);
+            let Some(msg) = OutboundMessage::try_text(&text) else {
+                let _ = entry.force_close_tx.send(true);
+                continue;
+            };
             // best-effort; don't block the caller on a slow peer
-            let _ = tx.try_send(msg);
+            if tx.try_send(msg).is_err() {
+                let _ = entry.force_close_tx.send(true);
+            }
         }
     }
 
@@ -533,6 +602,20 @@ impl DeviceManager {
         user_id: &str,
         target_device_id: &str,
     ) -> Option<oneshot::Receiver<RpcResponse>> {
+        let _registration = self
+            .pending_registration_gate
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        if self.pending_rpcs.contains_key(correlation_id)
+            || self
+                .pending_rpcs
+                .iter()
+                .filter(|entry| entry.user_id == user_id)
+                .count()
+                >= MAX_PENDING_DEVICE_RPCS_PER_ACCOUNT
+        {
+            return None;
+        }
         let permit = Arc::clone(&self.pending_rpc_permits)
             .try_acquire_owned()
             .ok()?;
@@ -742,20 +825,43 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn rpc_response_budget_survives_mailbox_and_slow_reader_and_releases_on_drop() {
+        use futures_util::StreamExt;
+        let size = 128 * 1024;
+        let capacity = (size + 5) * 2 + 1024;
+        let budget = Arc::new(Semaphore::new(capacity));
+        let response = RpcResponse::with_budget("a".repeat(size), "nonce".into(), &budget).unwrap();
+        assert_eq!(budget.available_permits(), 0);
+        assert!(RpcResponse::with_budget("x".into(), "nonce".into(), &budget).is_none());
+        let manager = DeviceManager::new();
+        let rx = manager.register_rpc("budget", "account", "device").unwrap();
+        assert!(manager.resolve_rpc("budget", "account", "device", response));
+        assert_eq!(budget.available_permits(), 0);
+        let mut body = rx
+            .await
+            .unwrap()
+            .into_http_response()
+            .unwrap()
+            .into_body()
+            .into_data_stream();
+        assert_eq!(body.next().await.unwrap().unwrap().len(), 64 * 1024);
+        assert_eq!(budget.available_permits(), 0);
+        drop(body);
+        assert_eq!(budget.available_permits(), capacity);
+    }
+
+    #[tokio::test]
     async fn rpc_response_must_come_from_the_expected_account_and_device() {
         let mgr = DeviceManager::new();
         let mut response_rx = mgr
             .register_rpc("corr-1", "user-1", "desktop-1")
             .expect("RPC registration");
-        let response = RpcResponse {
-            encrypted_data: "ciphertext".to_string(),
-            nonce: "nonce".to_string(),
-        };
+        let response = || RpcResponse::try_new("ciphertext".into(), "nonce".into()).unwrap();
 
-        assert!(!mgr.resolve_rpc("corr-1", "user-2", "desktop-1", response.clone()));
-        assert!(!mgr.resolve_rpc("corr-1", "user-1", "desktop-2", response.clone()));
+        assert!(!mgr.resolve_rpc("corr-1", "user-2", "desktop-1", response()));
+        assert!(!mgr.resolve_rpc("corr-1", "user-1", "desktop-2", response()));
         assert!(response_rx.try_recv().is_err());
-        assert!(mgr.resolve_rpc("corr-1", "user-1", "desktop-1", response));
+        assert!(mgr.resolve_rpc("corr-1", "user-1", "desktop-1", response()));
         assert_eq!(
             response_rx
                 .await
@@ -766,8 +872,7 @@ mod tests {
     }
 
     #[test]
-    fn pending_device_rpcs_are_effectively_unbounded_and_permits_are_reclaimed() {
-        assert_eq!(MAX_PENDING_DEVICE_RPCS, i32::MAX as usize);
+    fn pending_device_rpcs_are_isolated_bounded_and_permits_are_reclaimed() {
         let mgr = DeviceManager::new();
         let mut receivers = Vec::new();
         for index in 0..64 {
@@ -777,6 +882,12 @@ mod tests {
             );
         }
 
+        assert!(mgr
+            .register_rpc("over-budget", "user-1", "desktop-1")
+            .is_none());
+        assert!(mgr
+            .register_rpc("other-account", "user-2", "desktop-2")
+            .is_some());
         mgr.cancel_rpc("corr-0");
         assert!(mgr
             .register_rpc("after-cancel", "user-1", "desktop-1")

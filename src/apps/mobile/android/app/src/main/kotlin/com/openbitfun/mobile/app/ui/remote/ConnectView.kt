@@ -83,7 +83,7 @@ internal const val CONNECT_SUBMIT_TEST_TAG: String = "connect-submit"
 @Composable
 internal fun ConnectView(
     state: PairingUiState,
-    onSubmit: (PairingIntent.Submit) -> Unit,
+    onSubmit: (String) -> Unit,
     onDismiss: () -> Unit,
     onBack: () -> Unit,
     onOpenAccount: () -> Unit,
@@ -94,9 +94,6 @@ internal fun ConnectView(
     var manual by rememberSaveable { mutableStateOf(false) }
     var scanning by rememberSaveable { mutableStateOf(startScanning) }
     var url by rememberSaveable { mutableStateOf("") }
-    var userId by rememberSaveable { mutableStateOf("") }
-    // Never rememberSaveable: a password must not reach saved instance state.
-    var password by remember { mutableStateOf("") }
     var scanFailed by rememberSaveable { mutableStateOf(false) }
 
     // Ports `ConnectionErrorResult.shouldShowRemoteUrlInput`: a link that is
@@ -108,7 +105,6 @@ internal fun ConnectView(
         if (state is PairingUiState.Failed && state.failure.reopensLinkInput) manual = true
     }
 
-    val hints = remember(url) { inspectPairingLink(url) }
     val connecting = state is PairingUiState.Connecting
     val context = LocalContext.current
     val scanner = remember(context) {
@@ -127,14 +123,7 @@ internal fun ConnectView(
                 val scanned = barcode.rawValue.orEmpty().trim()
                 if (scanned.isNotEmpty()) {
                     url = scanned
-                    // A room that wants an account cannot be entered from the
-                    // code alone, so the scan hands over to the form instead of
-                    // failing a connect the user did not know needed a password.
-                    if (inspectPairingLink(scanned).requiresAccount) {
-                        manual = true
-                    } else {
-                        onSubmit(PairingIntent.Submit(scanned, userId, ""))
-                    }
+                    onSubmit(scanned)
                 }
             }
             .addOnFailureListener { scanFailed = true }
@@ -180,17 +169,11 @@ internal fun ConnectView(
             ManualPairing(
                 state = state,
                 url = url,
-                userId = userId,
-                password = password,
-                requiresAccount = hints.requiresAccount,
-                suggestedUserId = hints.suggestedUserId,
                 connecting = connecting,
                 onUrlChange = { url = it },
-                onUserIdChange = { userId = it },
-                onPasswordChange = { password = it },
                 onBack = { manual = false },
                 onDismiss = onDismiss,
-                onSubmit = { onSubmit(PairingIntent.Submit(url, userId, password)) },
+                onSubmit = { onSubmit(url) },
                 modifier = Modifier.fillMaxSize(),
             )
         }
@@ -325,21 +308,14 @@ private fun ColumnScope.ScanPairing(
 private fun ManualPairing(
     state: PairingUiState,
     url: String,
-    userId: String,
-    password: String,
-    requiresAccount: Boolean,
-    suggestedUserId: String,
     connecting: Boolean,
     onUrlChange: (String) -> Unit,
-    onUserIdChange: (String) -> Unit,
-    onPasswordChange: (String) -> Unit,
     onBack: () -> Unit,
     onDismiss: () -> Unit,
     onSubmit: () -> Unit,
     modifier: Modifier,
 ) {
-    val canSubmit = url.isNotBlank() && !connecting &&
-        (!requiresAccount || ((userId.ifBlank { suggestedUserId }).isNotBlank() && password.isNotBlank()))
+    val canSubmit = url.isNotBlank() && !connecting
     val consumeTouches = remember { MutableInteractionSource() }
     Box(
         modifier = modifier
@@ -387,33 +363,6 @@ private fun ManualPairing(
                 enabled = !connecting,
                 testTag = CONNECT_PAIRING_CODE_TEST_TAG,
             )
-            if (requiresAccount) {
-                PairingPillField(
-                    value = userId,
-                    onValueChange = onUserIdChange,
-                    placeholder = suggestedUserId.ifBlank { stringResource(R.string.pairing_user_label) },
-                    height = 56.dp,
-                    fontSize = 18.sp,
-                    enabled = !connecting,
-                )
-                PairingPillField(
-                    value = password,
-                    onValueChange = onPasswordChange,
-                    placeholder = stringResource(R.string.pairing_password_label),
-                    height = 56.dp,
-                    fontSize = 18.sp,
-                    keyboardType = KeyboardType.Password,
-                    visualTransformation = PasswordVisualTransformation(),
-                    enabled = !connecting,
-                )
-                Text(
-                    stringResource(R.string.pairing_password_hint),
-                    fontSize = 13.sp,
-                    lineHeight = 18.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
             if (state is PairingUiState.Failed) {
                 PairingFailureCard(state, onDismiss)
             }

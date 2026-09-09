@@ -585,8 +585,8 @@ impl RelayClient {
         Ok(())
     }
 
-    /// Send an encrypted payload to another device in the same account. The
-    /// relay routes by `target_device_id` without decrypting.
+    /// Submit device payloads over memory-admitted HTTP. The WebSocket remains
+    /// the receiving/control channel and does not accept attachment-sized input.
     pub async fn send_device_message(
         &self,
         target_device_id: &str,
@@ -594,13 +594,34 @@ impl RelayClient {
         encrypted_data: &str,
         nonce: &str,
     ) -> Result<()> {
-        self.send(RelayMessage::DeviceMessage {
-            target_device_id: target_device_id.to_string(),
-            correlation_id: correlation_id.to_string(),
-            encrypted_data: encrypted_data.to_string(),
-            nonce: nonce.to_string(),
-        })
-        .await
+        let context = self
+            .lifecycle
+            .lock()
+            .unwrap()
+            .reconnect_ctx
+            .clone()
+            .filter(|context| !context.token.is_empty())
+            .ok_or_else(|| anyhow!("Authenticated relay connection is unavailable"))?;
+        let endpoint = device_message_endpoint(&context.ws_url, target_device_id)?;
+        let response = super::relay_http::relay_http_client()
+            .post(endpoint)
+            .bearer_auth(&context.token)
+            .timeout(RELAY_WRITE_TIMEOUT)
+            .json(&RelayMessage::DeviceMessage {
+                target_device_id: target_device_id.to_string(),
+                correlation_id: correlation_id.to_string(),
+                encrypted_data: encrypted_data.to_string(),
+                nonce: nonce.to_string(),
+            })
+            .send()
+            .await?;
+        if response.status() != reqwest::StatusCode::NO_CONTENT {
+            return Err(anyhow!(
+                "Relay device message rejected (HTTP {})",
+                response.status()
+            ));
+        }
+        Ok(())
     }
 
     pub async fn disconnect(&self) {
@@ -630,6 +651,40 @@ impl RelayClient {
     pub fn room_id(&self) -> &Arc<RwLock<Option<String>>> {
         &self.room_id
     }
+}
+
+fn device_message_endpoint(ws_url: &str, target_device_id: &str) -> Result<reqwest::Url> {
+    if target_device_id.is_empty()
+        || target_device_id.len() > 128
+        || !target_device_id
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.'))
+        || matches!(target_device_id, "." | "..")
+    {
+        return Err(anyhow!("Invalid relay target device id"));
+    }
+    let mut url = reqwest::Url::parse(ws_url)?;
+    let scheme = match url.scheme() {
+        "wss" => "https",
+        "ws" => "http",
+        _ => return Err(anyhow!("Invalid relay WebSocket scheme")),
+    };
+    url.set_scheme(scheme)
+        .map_err(|_| anyhow!("Invalid relay HTTP scheme"))?;
+    if !url.username().is_empty()
+        || url.password().is_some()
+        || url.query().is_some()
+        || url.fragment().is_some()
+    {
+        return Err(anyhow!("Invalid relay WebSocket endpoint"));
+    }
+    let base = url
+        .path()
+        .strip_suffix("/ws")
+        .ok_or_else(|| anyhow!("Invalid relay WebSocket path"))?;
+    let path = format!("{base}/api/devices/{target_device_id}/messages");
+    url.set_path(&path);
+    Ok(url)
 }
 
 impl Drop for RelayClient {
@@ -750,6 +805,41 @@ where
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn device_http_endpoint_preserves_version_prefix_and_rejects_path_injection() {
+        assert_eq!(
+            super::device_message_endpoint("wss://remote.example/v/1.0.0/ws", "desktop-1")
+                .unwrap()
+                .as_str(),
+            "https://remote.example/v/1.0.0/api/devices/desktop-1/messages"
+        );
+        assert_eq!(
+            super::device_message_endpoint("ws://127.0.0.1:3000/ws", "desktop")
+                .unwrap()
+                .as_str(),
+            "http://127.0.0.1:3000/api/devices/desktop/messages"
+        );
+        for id in [
+            "",
+            ".",
+            "..",
+            "../other",
+            "device?x=1",
+            "%2f",
+            "device#fragment",
+        ] {
+            assert!(super::device_message_endpoint("wss://remote.example/ws", id).is_err());
+        }
+        for url in [
+            "https://remote.example/ws",
+            "wss://user@remote.example/ws",
+            "wss://remote.example/ws?token=x",
+            "wss://remote.example/wrong",
+        ] {
+            assert!(super::device_message_endpoint(url, "desktop").is_err());
+        }
+    }
+
     use super::*;
 
     async fn connected_fixture() -> (
@@ -767,6 +857,69 @@ mod tests {
         });
         connected.unwrap();
         (client, events, listener, socket)
+    }
+
+    #[tokio::test]
+    async fn device_payload_uses_authenticated_http_and_reports_rejection() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let (client, _events, listener, _socket) = connected_fixture().await;
+        client
+            .connect_authenticated("fixture-token", "Desktop")
+            .await
+            .unwrap();
+        let server = tokio::spawn(async move {
+            for status in ["204 No Content", "503 Service Unavailable"] {
+                let (mut stream, _) = listener.accept().await.unwrap();
+                let mut bytes = Vec::new();
+                let (header_end, length) = loop {
+                    let mut buffer = [0u8; 8192];
+                    assert!(bytes.len() < 1024 * 1024);
+                    let count = stream.read(&mut buffer).await.unwrap();
+                    assert!(count > 0);
+                    bytes.extend_from_slice(&buffer[..count]);
+                    if let Some(end) = bytes.windows(4).position(|window| window == b"\r\n\r\n") {
+                        let header = String::from_utf8_lossy(&bytes[..end]).to_lowercase();
+                        assert!(
+                            header.starts_with("post /api/devices/controller/messages http/1.1")
+                        );
+                        assert!(header.contains("authorization: bearer fixture-token"));
+                        let length: usize = header
+                            .lines()
+                            .find_map(|line| line.strip_prefix("content-length:"))
+                            .unwrap()
+                            .trim()
+                            .parse()
+                            .unwrap();
+                        break (end + 4, length);
+                    }
+                };
+                while bytes.len() < header_end + length {
+                    let mut buffer = [0u8; 8192];
+                    let count = stream.read(&mut buffer).await.unwrap();
+                    assert!(count > 0);
+                    bytes.extend_from_slice(&buffer[..count]);
+                }
+                let body: serde_json::Value =
+                    serde_json::from_slice(&bytes[header_end..header_end + length]).unwrap();
+                assert_eq!(body["encrypted_data"].as_str().unwrap().len(), 256 * 1024);
+                assert_eq!(body["correlation_id"], "correlation");
+                let reply =
+                    format!("HTTP/1.1 {status}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+                stream.write_all(reply.as_bytes()).await.unwrap();
+            }
+        });
+        let payload = "a".repeat(256 * 1024);
+        client
+            .send_device_message("controller", "correlation", &payload, "nonce")
+            .await
+            .unwrap();
+        let error = client
+            .send_device_message("controller", "correlation", &payload, "nonce")
+            .await
+            .unwrap_err();
+        assert!(error.to_string().contains("503"));
+        server.await.unwrap();
+        client.disconnect().await;
     }
 
     #[tokio::test]

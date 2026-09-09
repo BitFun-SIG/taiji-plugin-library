@@ -790,7 +790,7 @@
     "usernamePlaceholder": "Enter username",
     "passwordPlaceholder": "Enter password",
     "authServerPlaceholder": "https://auth.example.com",
-    "login": "Log In",
+    "login": "Sign in with GitHub",
     "cancel": "Cancel",
     "emptyFields": "Please fill in all fields",
     "invalidCredentialsLength": "Username or password is too long",
@@ -798,7 +798,7 @@
     "insecureServerTitle": "Unencrypted server connection",
     "insecureServerConfirm": "This server uses unencrypted HTTP. A network attacker could intercept your login session. Continue anyway?",
     "continueInsecure": "Continue anyway",
-    "securityNote": "Your password is processed on this device; the relay receives only a derived verification value.",
+    "securityNote": "Authorize OpenBitFun in your browser with GitHub. Device messages are encrypted end to end.",
     "showPassword": "Show password",
     "hidePassword": "Hide password",
     "loginSuccess": "Logged in: {{user_id}}",
@@ -885,7 +885,7 @@
     "syncPhaseExportingSessions": "Backing up sessions {{current}}/{{total}}",
     "copyServerUrl": "Copy server address",
     "copyServerFailed": "Could not copy the server address. Check clipboard permission and try again.",
-    "loginValueProp": "Log in to link your devices: control one from another and keep settings & sessions in sync."
+    "loginValueProp": "Sign in to connect your devices and control them remotely."
   },
   "relayDeploy": {
     "entryHint": "No relay server yet?",

@@ -11,7 +11,6 @@ use openbitfun_agent_runtime::sdk::{
     attach_session_event_cursor, AgentEventReceiver, PermissionRequestEvent,
 };
 use openbitfun_agent_tools::effective_tool_invocation;
-use openbitfun_core::service::remote_connect::encryption::encrypt_to_base64;
 use openbitfun_core::service::remote_connect::remote_server::RemoteCommand;
 use openbitfun_events::{project_agentic_frontend_event, AgenticEvent, ToolEventData};
 use tokio::sync::{broadcast, mpsc};
@@ -683,13 +682,6 @@ async fn fanout_peer_device_event_once(queued: QueuedPeerDeviceEvent) {
             return;
         }
     };
-    let (encrypted_data, nonce) = match encrypt_to_base64(&session.master_key, &envelope) {
-        Ok(encrypted) => encrypted,
-        Err(error) => {
-            tracing::warn!("Peer event fanout encryption failed: {error}");
-            return;
-        }
-    };
     let targets = retained_delivery_targets(&targets, &attached_controllers());
     if targets.is_empty() {
         return;
@@ -701,6 +693,16 @@ async fn fanout_peer_device_event_once(queued: QueuedPeerDeviceEvent) {
         }
         let Some(_delivery_lease) = controller_delivery_lease(target).await else {
             continue;
+        };
+        let (encrypted_data, nonce) = match session
+            .encrypt_for_peer(&routing_lease.relay_url, target, &envelope)
+            .await
+        {
+            Ok(encrypted) => encrypted,
+            Err(error) => {
+                tracing::warn!("Peer event fanout encryption failed: {error}");
+                continue;
+            }
         };
         let correlation_id = uuid::Uuid::new_v4().to_string();
         if let Err(error) = relay_client

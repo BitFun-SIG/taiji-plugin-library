@@ -153,7 +153,7 @@ extension MobileAppModel {
         }
     }
 
-    func loginAccount(relayURL: String, username: String, password: String) {
+    func loginAccount() {
         if coreAdapter?.currentRemoteTargetKey != "pairing" {
             invalidateTargetScopedFileTransfers()
         }
@@ -181,7 +181,7 @@ extension MobileAppModel {
         accountFailureStage = nil
         accountFailureCanRetry = false
         coreErrorMessage = nil
-        coreAdapter?.loginAccount(relayURL: relayURL, username: username, password: password)
+        coreAdapter?.loginAccount()
     }
 
     func retryAccountFailure() {
@@ -204,7 +204,8 @@ extension MobileAppModel {
             pendingDirectoryRemoteDraft?.epoch == remoteTargetEpoch
         pendingAccountOperationPreservesPairing = nil
         accountGeneration = generation
-        accountBusy = state is AccountUiStateSigningIn
+        accountBusy = state is AccountUiStateSigningIn || state is AccountUiStateAuthorizing
+        accountAuthorizationURL = (state as? AccountUiStateAuthorizing).flatMap { URL(string: $0.authorizationUrl) }
         if let ready = state as? AccountUiStateReady {
             let readyTargetKey = ready.selectedDeviceId.map { "account:\($0)" }
             if let adapterTargetKey = coreAdapter?.currentRemoteTargetKey,
@@ -233,6 +234,12 @@ extension MobileAppModel {
                 )
             }
             accountDirectoryGeneration = coreAdapter?.syncDeviceDirectory(accountDevices) ?? (accountDirectoryGeneration &+ 1)
+            if let link = pendingDeviceLink {
+                pendingDeviceLink = nil
+                submitPairing(url: link)
+                if pairingError != nil { pairingSheetOpen = true }
+                return
+            }
             if !directPairingConnected,
                ready.selectedDeviceId == nil,
                let target = ready.devices.first(where: { $0.online }) {

@@ -30,6 +30,7 @@ public sealed interface AccountUiState {
     public data object Restoring : AccountUiState
     public data object SignedOut : AccountUiState
     public data object SigningIn : AccountUiState
+    public data class Authorizing(public val authorizationUrl: String) : AccountUiState
     public data class Ready public constructor(
         public val userId: String,
         /**
@@ -73,13 +74,7 @@ public sealed interface AccountUiState {
 
 public sealed interface AccountIntent {
     public data object Restore : AccountIntent
-    public data class Login public constructor(
-        public val relayUrl: String,
-        public val username: String,
-        public val password: String,
-    ) : AccountIntent {
-        override fun toString(): String = "Login(relayUrl=<redacted>, username=$username, password=<redacted>)"
-    }
+    public data object Login : AccountIntent
     public data class SelectDevice public constructor(public val deviceId: String) : AccountIntent
 
     /**

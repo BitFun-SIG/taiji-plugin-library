@@ -756,6 +756,15 @@ impl ChatView {
         self.login_form.handle_key_event(key)
     }
 
+    pub(crate) fn login_form_set_authorization(
+        &mut self,
+        authorization: openbitfun_product_domains::account::GitHubAuthStart,
+    ) {
+        self.login_form.set_authorization(authorization);
+    }
+    pub(crate) fn login_form_set_status(&mut self, status: &str) {
+        self.login_form.set_status(status);
+    }
     pub(crate) fn login_form_set_error(&mut self, message: impl Into<String>) {
         self.login_form.set_error(message);
     }
@@ -768,24 +777,9 @@ impl ChatView {
         &mut self,
         info: openbitfun_product_domains::account::AccountInfo,
         devices: Vec<openbitfun_product_domains::account::AccountDevice>,
-        sync_progress: openbitfun_product_domains::account::SettingsSyncProgress,
     ) {
-        self.login_form.show_account(info, devices, sync_progress);
+        self.login_form.show_account(info, devices);
         self.popup_stack.push(PopupType::LoginForm);
-    }
-
-    pub(crate) fn show_sync_choice_panel(&mut self, user_id: &str, relay_url: &str) {
-        self.login_form.show_sync_choice(user_id, relay_url);
-        self.popup_stack.push(PopupType::LoginForm);
-    }
-
-    pub(crate) fn update_account_panel_progress(
-        &mut self,
-        devices: Option<Vec<openbitfun_product_domains::account::AccountDevice>>,
-        sync_progress: openbitfun_product_domains::account::SettingsSyncProgress,
-    ) {
-        self.login_form
-            .update_account_progress(devices, sync_progress);
     }
 }
 

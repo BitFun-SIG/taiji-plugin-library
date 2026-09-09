@@ -5,7 +5,7 @@ import OpenBitFunMobileCore
 @MainActor
 final class MobileAppModel: ObservableObject {
     @Published var appLanguage: MobileLanguage = MobileLocalization.restoredLanguage()
-    @Published var surface: MobileSurface = .local
+    @Published var surface: MobileSurface = .remote
     @Published var sessions: [ChatSession]
     @Published var remoteSessions: [ChatSession] = []
     @Published var remoteQuery = ""
@@ -27,17 +27,6 @@ final class MobileAppModel: ObservableObject {
     @Published var remoteCreateSubmitting = false
     @Published var remoteCreateError: String?
     @Published var remoteCreateDeviceError: String?
-    @Published var generalConfigOpen = false
-    @Published var generalConfigured = false
-    @Published var generalConfigBaseURL = ""
-    @Published var generalConfigModel = ""
-    @Published var generalConfigHasAPIKey = false
-    @Published var generalConfigFailure: String?
-    @Published var generalConnectionTestRunning = false
-    @Published var generalConnectionTestMessage: String?
-    @Published var generalExportOpen = false
-    @Published var generalExportName = "conversation.md"
-    @Published var generalExportData = Data()
     @Published var selectedSessionID: String
     @Published var messages: [ChatMessage]
     @Published var timelineRows: [MobileConversationRow] = []
@@ -58,6 +47,7 @@ final class MobileAppModel: ObservableObject {
     @Published var localSessionSelected = false
     @Published var pairingSheetOpen = false
     @Published var pairingScanRequested = false
+    var pendingDeviceLink: String?
     @Published var pairingBusy = false
     @Published var pairingError: String?
     @Published var coreErrorMessage: String?
@@ -65,6 +55,7 @@ final class MobileAppModel: ObservableObject {
     @Published var accountUserID: String?
     @Published var localDeviceID = ""
     @Published var accountBusy = false
+    @Published var accountAuthorizationURL: URL?
     @Published var accountFailureStage: String?
     @Published var accountFailureCanRetry = false
     @Published var accountDeviceName: String?
@@ -130,7 +121,6 @@ final class MobileAppModel: ObservableObject {
         self.timelineRows = messages.map(Self.simpleTimelineRow)
         self.coreAdapter = nil
         let adapter = MobileCoreAdapter(
-            onState: { [weak self] state in self?.apply(coreState: state) },
             onPairingState: { [weak self] state, generation in
                 self?.apply(pairingState: state, generation: generation)
             },
@@ -161,14 +151,14 @@ final class MobileAppModel: ObservableObject {
     }
 
     var selectedSession: ChatSession? {
-        guard (surface == .local && localSessionSelected) || (surface == .remote && remoteSessionSelected) else {
+        guard remoteSessionSelected else {
             return nil
         }
         return visibleSessions.first { $0.id == selectedSessionID }
     }
 
     var visibleSessions: [ChatSession] {
-        surface == .local ? sessions : remoteSessions
+        remoteSessions
     }
 
     var remoteCreateInteraction: RemoteCreateInteractionState {
@@ -285,7 +275,7 @@ final class MobileAppModel: ObservableObject {
         selectedSessionID = ""
         timelineRows = []
         messages = []
-        surface = .local
+        surface = .remote
         connectionPhase = .connected
     }
 
@@ -303,21 +293,24 @@ final class MobileAppModel: ObservableObject {
     }
 
     func submitPairing(url: String) {
-        prepareProjectionForPairingSubmission()
-        pairingIntentInFlight = true
-        pairingGeneration &+= 1
+        guard let result = coreAdapter?.resolveDeviceLink(url: url) else { return }
+        pairingBusy = false
         pairingError = nil
-        pairingBusy = true
-        coreAdapter?.submitPairing(url: url)
-    }
-
-    func submitPairing(url: String, userID: String, password: String) {
-        prepareProjectionForPairingSubmission()
-        pairingIntentInFlight = true
-        pairingGeneration &+= 1
-        pairingError = nil
-        pairingBusy = true
-        coreAdapter?.submitPairing(url: url, userID: userID, password: password)
+        if result.status == .signInRequired {
+            pendingDeviceLink = url
+            openAccountFromPairing()
+        } else if result.status == .ready,
+                  let id = result.deviceId,
+                  let device = accountDevices.first(where: { $0.id == id }) {
+            pendingDeviceLink = nil
+            pairingSheetOpen = false
+            selectRemoteDevice(device)
+        } else {
+            pendingDeviceLink = nil
+            pairingError = result.status == .invalid
+                ? localized("请使用当前版本的 OpenBitFun 设备二维码。")
+                : localized("该设备已离线，或不属于当前 GitHub 账户。")
+        }
     }
 
     private func prepareProjectionForPairingSubmission() {
@@ -394,12 +387,8 @@ final class MobileAppModel: ObservableObject {
     }
 
     func stopSending() {
-        if surface == .remote {
-            guard remoteSessionSelected else { return }
-            coreAdapter?.cancelRemoteTurn(sessionID: selectedSessionID, turnID: activeTurnID)
-        } else {
-            coreAdapter?.cancelGeneralChat()
-        }
+        guard remoteSessionSelected else { return }
+        coreAdapter?.cancelRemoteTurn(sessionID: selectedSessionID, turnID: activeTurnID)
     }
 
     func retryMessage(_ text: String) {
@@ -421,28 +410,7 @@ final class MobileAppModel: ObservableObject {
         guard !normalized.isEmpty, selectedSession != nil else { return }
         if surface == .remote {
             coreAdapter?.renameRemoteSession(sessionID: selectedSessionID, title: normalized)
-        } else {
-            coreAdapter?.renameGeneralSession(sessionID: selectedSessionID, title: normalized)
         }
-    }
-
-    func togglePinSelectedSession() {
-        guard surface == .local, let session = selectedSession else { return }
-        coreAdapter?.pinGeneralSession(sessionID: session.id, pinned: !session.pinned)
-    }
-
-    func archiveSelectedSession() {
-        guard surface == .local, let session = selectedSession else { return }
-        coreAdapter?.archiveGeneralSession(
-            sessionID: session.id,
-            archived: session.status.lowercased() != "archived"
-        )
-    }
-
-    func deleteSelectedSession() {
-        guard surface == .local, let session = selectedSession else { return }
-        coreAdapter?.deleteGeneralSession(sessionID: session.id)
-        localSessionSelected = false
     }
 
     func showUploadedFiles() {

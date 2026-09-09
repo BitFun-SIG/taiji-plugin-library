@@ -26,7 +26,7 @@
     <string name="settings_theme_dark">Dark</string>
     <string name="account_title">Account</string>
     <string name="account_login_title">Sign in to OpenBitFun</string>
-    <string name="account_login_body">Sign in to sync devices, sessions, and remote control status.</string>
+    <string name="account_login_body">Sign in to OpenBitFun to connect to your computers and control their sessions.</string>
     <string name="account_login_server">Sign-in server</string>
     <string name="account_username_placeholder">OpenBitFun username</string>
     <string name="account_password_placeholder">OpenBitFun password</string>
@@ -41,7 +41,7 @@
     <string name="account_relay_url">Relay URL</string>
     <string name="account_username">Username</string>
     <string name="account_password">Password</string>
-    <string name="account_sign_in">Sign in</string>
+    <string name="account_sign_in">Sign in with GitHub</string>
     <string name="account_sign_out">Sign out</string>
     <string name="account_offline">Offline</string>
     <string name="account_online">Online</string>
@@ -446,4 +446,7 @@
     <string name="remote_settings_device_id">This device ID</string>
     <string name="remote_settings_openbitfun_user">OpenBitFun user</string>
     <string name="remote_settings_account_signed_in">Authenticated</string>
+    <string name="account_open_github">Open GitHub authorization</string>
+    <string name="account_device_link_invalid">Use a current OpenBitFun device QR code.</string>
+    <string name="account_device_link_unavailable">This device is offline or does not belong to your GitHub account.</string>
 </resources>

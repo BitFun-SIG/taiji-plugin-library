@@ -66,7 +66,6 @@ pub struct SavedBotConnection {
 /// Persisted remote-connect form values shown in the desktop dialog.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct RemoteConnectFormState {
-    pub custom_server_url: String,
     pub telegram_bot_token: String,
     pub feishu_app_id: String,
     pub feishu_app_secret: String,

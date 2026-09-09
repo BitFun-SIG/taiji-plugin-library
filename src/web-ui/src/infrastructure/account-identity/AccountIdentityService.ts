@@ -1,33 +1,33 @@
 import {
-  miniAppMarketAPI,
+  accountIdentityAPI,
   type DesktopAuthStart,
   type MarketMe,
-} from '@/infrastructure/api/service-api/MiniAppMarketAPI';
+} from '@/infrastructure/api/service-api/AccountIdentityAPI';
 import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
 
-export type MarketAccountStatus = 'loading' | 'signed-out' | 'signed-in' | 'authorizing';
+export type AccountIdentityStatus = 'loading' | 'signed-out' | 'signed-in' | 'authorizing';
 
-export interface MarketAccountSnapshot {
+export interface AccountIdentitySnapshot {
   resolved: boolean;
-  status: MarketAccountStatus;
+  status: AccountIdentityStatus;
   me: MarketMe | null;
-  lastError?: MarketAccountError;
+  lastError?: AccountIdentityError;
 }
 
-export type MarketAccountErrorCode = 'cancelled' | 'expired' | 'failed';
+export type AccountIdentityErrorCode = 'cancelled' | 'expired' | 'failed';
 
-export class MarketAccountError extends Error {
+export class AccountIdentityError extends Error {
   constructor(
-    public readonly code: MarketAccountErrorCode,
+    public readonly code: AccountIdentityErrorCode,
     message: string,
     public readonly cause?: unknown,
   ) {
     super(message);
-    this.name = 'MarketAccountError';
+    this.name = 'AccountIdentityError';
   }
 }
 
-export interface MarketAccountApi {
+export interface AccountIdentityApi {
   me(): Promise<MarketMe | null>;
   authStart(): Promise<DesktopAuthStart>;
   authPoll(transaction: DesktopAuthStart): Promise<'pending' | 'authorized' | 'expired'>;
@@ -35,24 +35,24 @@ export interface MarketAccountApi {
   onAccountChanged?(handler: () => void): () => void;
 }
 
-export interface MarketAccountChangedEvent {
+export interface AccountIdentityChangedEvent {
   kind: 'identity-changed';
   eventId: string;
   sourceId: string;
 }
 
-export interface MarketAccountSyncPort {
-  publish(event: MarketAccountChangedEvent): void | Promise<void>;
-  subscribe(listener: (event: MarketAccountChangedEvent) => void): () => void;
+export interface AccountIdentitySyncPort {
+  publish(event: AccountIdentityChangedEvent): void | Promise<void>;
+  subscribe(listener: (event: AccountIdentityChangedEvent) => void): () => void;
   dispose?(): void;
 }
 
-const noopSyncPort: MarketAccountSyncPort = {
+const noopSyncPort: AccountIdentitySyncPort = {
   publish: () => undefined,
   subscribe: () => () => undefined,
 };
 
-function isMarketAccountChangedEvent(value: unknown): value is MarketAccountChangedEvent {
+function isAccountIdentityChangedEvent(value: unknown): value is AccountIdentityChangedEvent {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const event = value as Record<string, unknown>;
   return event.kind === 'identity-changed'
@@ -60,18 +60,18 @@ function isMarketAccountChangedEvent(value: unknown): value is MarketAccountChan
     && typeof event.sourceId === 'string';
 }
 
-class BroadcastMarketAccountSyncPort implements MarketAccountSyncPort {
-  private readonly listeners = new Set<(event: MarketAccountChangedEvent) => void>();
+class BroadcastAccountIdentitySyncPort implements AccountIdentitySyncPort {
+  private readonly listeners = new Set<(event: AccountIdentityChangedEvent) => void>();
 
   constructor(private readonly channel: BroadcastChannel) {
     channel.addEventListener('message', this.handleMessage);
   }
 
-  publish(event: MarketAccountChangedEvent): void {
+  publish(event: AccountIdentityChangedEvent): void {
     this.channel.postMessage(event);
   }
 
-  subscribe(listener: (event: MarketAccountChangedEvent) => void): () => void {
+  subscribe(listener: (event: AccountIdentityChangedEvent) => void): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
   }
@@ -84,24 +84,24 @@ class BroadcastMarketAccountSyncPort implements MarketAccountSyncPort {
 
   private readonly handleMessage = (message: MessageEvent<unknown>): void => {
     const event = message.data;
-    if (!isMarketAccountChangedEvent(event)) return;
+    if (!isAccountIdentityChangedEvent(event)) return;
     this.listeners.forEach(listener => listener(event));
   };
 }
 
-export function createMarketAccountSyncPort(): MarketAccountSyncPort {
+export function createAccountIdentitySyncPort(): AccountIdentitySyncPort {
   if (typeof BroadcastChannel === 'undefined') return noopSyncPort;
   try {
-    return new BroadcastMarketAccountSyncPort(new BroadcastChannel('openbitfun-market-account'));
+    return new BroadcastAccountIdentitySyncPort(new BroadcastChannel('openbitfun-account-identity'));
   } catch {
     return noopSyncPort;
   }
 }
 
-export interface MarketAccountServiceDependencies {
-  api: MarketAccountApi;
+export interface AccountIdentityServiceDependencies {
+  api: AccountIdentityApi;
   openExternal(url: string): Promise<void>;
-  syncPort: MarketAccountSyncPort;
+  syncPort: AccountIdentitySyncPort;
   now(): number;
   sleep(milliseconds: number): Promise<void>;
   sourceId: string;
@@ -114,22 +114,22 @@ function createId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
-const defaultDependencies = (): MarketAccountServiceDependencies => ({
-  api: miniAppMarketAPI,
+const defaultDependencies = (): AccountIdentityServiceDependencies => ({
+  api: accountIdentityAPI,
   openExternal: url => systemAPI.openExternal(url),
-  syncPort: createMarketAccountSyncPort(),
+  syncPort: createAccountIdentitySyncPort(),
   now: () => Date.now(),
   sleep: milliseconds => new Promise(resolve => globalThis.setTimeout(resolve, milliseconds)),
   sourceId: createId(),
 });
 
-export class MarketAccountService {
-  private snapshot: MarketAccountSnapshot = Object.freeze({
+export class AccountIdentityService {
+  private snapshot: AccountIdentitySnapshot = Object.freeze({
     resolved: false,
     status: 'loading',
     me: null,
   });
-  private readonly listeners = new Set<(snapshot: MarketAccountSnapshot) => void>();
+  private readonly listeners = new Set<(snapshot: AccountIdentitySnapshot) => void>();
   private initializePromise: Promise<void> | null = null;
   private refreshPromise: Promise<MarketMe | null> | null = null;
   private authPromise: Promise<MarketMe> | null = null;
@@ -138,13 +138,13 @@ export class MarketAccountService {
   private stopNativeAccountEvents: (() => void) | null = null;
   private observingHost = false;
 
-  constructor(private readonly dependencies: MarketAccountServiceDependencies = defaultDependencies()) {}
+  constructor(private readonly dependencies: AccountIdentityServiceDependencies = defaultDependencies()) {}
 
-  getSnapshot(): MarketAccountSnapshot {
+  getSnapshot(): AccountIdentitySnapshot {
     return this.snapshot;
   }
 
-  subscribe(listener: (snapshot: MarketAccountSnapshot) => void): () => void {
+  subscribe(listener: (snapshot: AccountIdentitySnapshot) => void): () => void {
     this.listeners.add(listener);
     void this.initialize();
     return () => this.listeners.delete(listener);
@@ -167,7 +167,7 @@ export class MarketAccountService {
           resolved: true,
           status: 'signed-out',
           me: null,
-          lastError: asMarketAccountError(error),
+          lastError: asAccountIdentityError(error),
         });
       });
     return this.initializePromise;
@@ -211,7 +211,7 @@ export class MarketAccountService {
     });
     const operation = this.runSignIn(generation)
       .catch(error => {
-        const failure = asMarketAccountError(error);
+        const failure = asAccountIdentityError(error);
         if (generation === this.authGeneration) {
           this.setSnapshot({
             resolved: true,
@@ -273,18 +273,18 @@ export class MarketAccountService {
       const me = await this.dependencies.api.me();
       this.ensureCurrentAuth(generation);
       if (!me) {
-        throw new MarketAccountError('failed', 'The market authorized GitHub but returned no account.');
+        throw new AccountIdentityError('failed', 'OpenBitFun authorized GitHub but returned no account.');
       }
       this.setSnapshot({ resolved: true, status: 'signed-in', me });
       await this.publishIdentityChanged();
       return me;
     }
-    throw new MarketAccountError('expired', 'The GitHub authorization expired.');
+    throw new AccountIdentityError('expired', 'The GitHub authorization expired.');
   }
 
   private ensureCurrentAuth(generation: number): void {
     if (generation !== this.authGeneration) {
-      throw new MarketAccountError('cancelled', 'The GitHub authorization was cancelled.');
+      throw new AccountIdentityError('cancelled', 'The GitHub authorization was cancelled.');
     }
   }
 
@@ -296,7 +296,7 @@ export class MarketAccountService {
     });
   }
 
-  private setSnapshot(snapshot: MarketAccountSnapshot): void {
+  private setSnapshot(snapshot: AccountIdentitySnapshot): void {
     this.snapshot = Object.freeze(snapshot);
     this.listeners.forEach(listener => listener(this.snapshot));
   }
@@ -330,9 +330,9 @@ export class MarketAccountService {
   }
 }
 
-function asMarketAccountError(error: unknown): MarketAccountError {
-  if (error instanceof MarketAccountError) return error;
-  return new MarketAccountError(
+function asAccountIdentityError(error: unknown): AccountIdentityError {
+  if (error instanceof AccountIdentityError) return error;
+  return new AccountIdentityError(
     'failed',
     error instanceof Error ? error.message : String(error),
     error,
@@ -343,4 +343,4 @@ function identityKey(me: MarketMe | null): string {
   return me ? `${me.user.githubId}:${me.user.login}` : '';
 }
 
-export const marketAccountService = new MarketAccountService();
+export const accountIdentityService = new AccountIdentityService();

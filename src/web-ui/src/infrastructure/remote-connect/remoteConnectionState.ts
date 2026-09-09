@@ -2,7 +2,7 @@ import type { ConnectionResult, RemoteConnectionMethod, RemoteConnectStatus } fr
 
 export type RemoteNetworkMethod = 'lan' | 'ngrok' | 'openbitfun_server' | 'custom_server';
 
-export const OFFICIAL_RELAY_URL = 'https://remote.openbitfun.com/relay';
+export const OFFICIAL_RELAY_URL = 'https://remote.openbitfun.com/v/1.0.0';
 
 export function remoteNetworkMethod(method: RemoteConnectionMethod | null | undefined): RemoteNetworkMethod | null {
   if (typeof method === 'object' && method !== null) {

@@ -1,6 +1,5 @@
 package com.openbitfun.mobile.core.feature.account
 
-import com.openbitfun.mobile.core.feature.CloudSettingsSource
 import com.openbitfun.mobile.core.feature.CoreLog
 import com.openbitfun.mobile.core.feature.pairing.asTransportLog
 import com.openbitfun.mobile.core.feature.session.RemoteSessionStore
@@ -39,18 +38,13 @@ internal data class AccountSessionData(
 
 internal interface AccountBackend {
     suspend fun login(
-        relayUrl: String,
-        username: String,
-        password: String,
         deviceId: String,
         deviceName: String,
+        onAuthorization: (String) -> Unit,
     ): AccountSessionData
 
     /** [selfDeviceId] lets the transport drop this device's own row. */
     suspend fun listDevices(session: AccountSessionData, selfDeviceId: String): List<AccountDeviceUi>
-
-    /** The account's settings document, or null when it has never synced one. */
-    suspend fun fetchSettings(session: AccountSessionData): String?
 
     fun transport(session: AccountSessionData, targetDeviceId: String): RemoteCommandTransport
 }
@@ -73,7 +67,7 @@ public class AccountStore internal constructor(
     public fun dispatch(intent: AccountIntent) {
         when (intent) {
             AccountIntent.Restore -> restore()
-            is AccountIntent.Login -> login(intent)
+            AccountIntent.Login -> login()
             is AccountIntent.SelectDevice -> selectDevice(intent.deviceId)
             AccountIntent.RefreshDevices -> refreshDevices()
             AccountIntent.Retry -> retryFailedStage()
@@ -144,18 +138,6 @@ public class AccountStore internal constructor(
         return controllableDevices.firstOrNull { it.id == target }?.id
     }
 
-    /**
-     * A handle another feature can use to read the account's settings document.
-     *
-     * Bound to the session that was current when it was asked for, so a handle
-     * taken before a logout reads that session and not the next one — the caller
-     * asks again after every sign-in change, and gets null while signed out.
-     */
-    public fun cloudSettingsSource(): CloudSettingsSource? {
-        val current = session ?: return null
-        return CloudSettingsSource { backend.fetchSettings(current) }
-    }
-
     public fun stop() {
         work?.cancel()
         work = null
@@ -210,17 +192,15 @@ public class AccountStore internal constructor(
         }
     }
 
-    private fun login(intent: AccountIntent.Login) {
+    private fun login() {
         work?.cancel()
         _state.value = AccountUiState.SigningIn
         work = scope.launch {
             val loggedIn = try {
                 backend.login(
-                    intent.relayUrl,
-                    intent.username,
-                    intent.password,
                     deviceId,
                     deviceName,
+                    { url -> _state.value = AccountUiState.Authorizing(url) },
                 )
             } catch (cancelled: CancellationException) {
                 throw cancelled
@@ -394,17 +374,10 @@ public class AccountStore internal constructor(
         }
     }
 
-    /** Clears every observable and persisted fact owned by an expired token. */
     private fun expireSession(reason: AccountFailureReason, stage: AccountFailureStage) {
         session = null
         controllableDevices = emptyList()
         _state.value = AccountUiState.Failed(reason, false, stage)
-        try {
-            secureStore.delete(SESSION_KEY)
-        } catch (_: Throwable) {
-            // The in-memory projection is already safe. A storage failure must
-            // not put stale account devices back on screen.
-        }
     }
 
     /**
@@ -441,7 +414,7 @@ public class AccountStore internal constructor(
             )
         }
 
-        private const val SESSION_KEY = "cloud_account_session"
+        private const val SESSION_KEY = "github_device_session_v1"
         private val JSON = Json { ignoreUnknownKeys = true }
 
         private fun encodeRecord(session: AccountSessionData): String = JSON.encodeToString(
@@ -476,16 +449,26 @@ private class CloudBackend(
     private val log: TransportLog,
 ) : AccountBackend {
     override suspend fun login(
-        relayUrl: String,
-        username: String,
-        password: String,
         deviceId: String,
         deviceName: String,
+        onAuthorization: (String) -> Unit,
     ): AccountSessionData {
-        val session = client.login(relayUrl, username, password, deviceId, deviceName)
+        val start = client.startAuthorization()
+        onAuthorization(start.authorizationUrl)
+        var accessToken: String? = null
+        while (kotlin.time.Clock.System.now().epochSeconds < start.expiresAt) {
+            kotlinx.coroutines.delay(start.pollIntervalSeconds.coerceIn(1, 30) * 1000L)
+            val poll = client.pollAuthorization(start)
+            if (poll.status == "authorized") {
+                accessToken = poll.tokens?.accessToken
+                break
+            }
+            if (poll.status == "expired" || poll.status == "denied") break
+        }
+        val session = client.login(accessToken ?: throw CloudAccountException(CloudAccountFailure.AUTHENTICATION), deviceId, deviceName)
         return AccountSessionData(
-            relayUrl = relayUrl.trim().ifEmpty { com.openbitfun.mobile.core.transport.DEFAULT_CLOUD_RELAY_URL },
-            username = username.trim(),
+            relayUrl = com.openbitfun.mobile.core.transport.DEFAULT_CLOUD_RELAY_URL,
+            username = session.userId,
             token = session.token,
             userId = session.userId,
             masterKey = session.masterKey,
@@ -496,9 +479,6 @@ private class CloudBackend(
 
     override suspend fun listDevices(session: AccountSessionData, selfDeviceId: String): List<AccountDeviceUi> =
         client.listDevices(session.relayUrl, session.toTransportSession(), selfDeviceId).map { it.toUi() }
-
-    override suspend fun fetchSettings(session: AccountSessionData): String? =
-        client.fetchSettings(session.relayUrl, session.toTransportSession())?.plaintext
 
     override fun transport(session: AccountSessionData, targetDeviceId: String): RemoteCommandTransport =
         AccountDeviceCommandTransport(client, session.relayUrl, session.toTransportSession(), targetDeviceId, log)

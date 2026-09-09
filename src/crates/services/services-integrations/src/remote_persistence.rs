@@ -13,10 +13,10 @@ use rand::RngCore;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Deserializer, Serialize};
 use sha2::{Digest, Sha256};
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 use std::fs::OpenOptions;
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 const NONCE_SIZE: usize = 12;
 
@@ -48,22 +48,6 @@ impl DeviceIdentityRecord {
 pub struct AccountHintRecord {
     pub username: String,
     pub relay_url: String,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct AccountSyncStateRecord {
-    #[serde(default)]
-    pub last_session_since: i64,
-    #[serde(default)]
-    pub uploaded_hashes: HashMap<String, String>,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct SettingsCursorRecord {
-    #[serde(default)]
-    pub version: i64,
-    #[serde(default)]
-    pub hash: String,
 }
 
 #[derive(Clone, PartialEq, Eq)]
@@ -147,22 +131,6 @@ pub fn read_account_hint(path: &Path) -> Result<Option<AccountHintRecord>> {
 
 pub fn write_account_hint(path: &Path, value: &AccountHintRecord) -> Result<()> {
     write_json_atomic(path, value, true)
-}
-
-pub fn read_account_sync_state(path: &Path) -> Result<Option<AccountSyncStateRecord>> {
-    read_optional_json(path)
-}
-
-pub fn write_account_sync_state(path: &Path, value: &AccountSyncStateRecord) -> Result<()> {
-    write_json_atomic(path, value, false)
-}
-
-pub fn read_settings_cursor(path: &Path) -> Result<Option<SettingsCursorRecord>> {
-    read_optional_json(path)
-}
-
-pub fn write_settings_cursor(path: &Path, value: &SettingsCursorRecord) -> Result<()> {
-    write_json_atomic(path, value, false)
 }
 
 pub fn read_legacy_account_session(
@@ -464,7 +432,6 @@ pub struct SavedBotConnectionRecord {
 
 #[derive(Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RemoteConnectFormStateRecord {
-    pub custom_server_url: String,
     pub telegram_bot_token: String,
     pub feishu_app_id: String,
     pub feishu_app_secret: String,
@@ -1055,33 +1022,10 @@ pub fn is_safe_weixin_account_id(value: &str) -> bool {
             .all(|character| character.is_ascii_alphanumeric() || matches!(character, '-' | '_'))
 }
 
-pub fn account_sync_paths(directory: &Path) -> Result<Vec<PathBuf>> {
-    let entries = match std::fs::read_dir(directory) {
-        Ok(entries) => entries,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
-        Err(error) => return Err(error).context("read account sync directory"),
-    };
-    let mut paths = Vec::new();
-    for entry in entries {
-        let entry = entry.context("read account sync entry")?;
-        let file_type = entry.file_type().context("read account sync entry type")?;
-        if file_type.is_symlink() || !file_type.is_file() {
-            bail!("account sync directory contains a non-regular entry");
-        }
-        let path = entry.path();
-        if path.extension().and_then(|value| value.to_str()) == Some("json")
-            && !path.to_string_lossy().ends_with(".tmp")
-        {
-            paths.push(path);
-        }
-    }
-    paths.sort();
-    Ok(paths)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::PathBuf;
 
     #[test]
     fn legacy_v2_account_session_reencrypts_for_the_current_owner() {

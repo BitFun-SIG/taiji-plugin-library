@@ -233,6 +233,7 @@ pub(crate) fn api_router(state: Arc<MarketState>) -> Router {
             submission_policy_state,
             enforce_submission_write_policy,
         ))
+        .layer(axum::middleware::from_fn(crate::auth_admission::admit))
         .with_state(state)
 }
 

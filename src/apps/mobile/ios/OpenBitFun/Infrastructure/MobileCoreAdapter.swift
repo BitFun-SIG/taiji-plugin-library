@@ -9,7 +9,6 @@ final class MobileCoreAdapter {
     private let accountLoginLog = Logger(subsystem: "com.openbitfun.mobile.ios", category: "account-login")
     let deviceID: String
     private let scope: any CoroutineScope
-    private let generalChat: GeneralChatStore
     private let pairing: PairingStore
     private let account: AccountStore
     private let deviceDirectory: DeviceDirectoryStore
@@ -41,7 +40,6 @@ final class MobileCoreAdapter {
         case accountRestore
     }
 
-    var onState: ((GeneralChatUiState) -> Void)?
     var onPairingState: ((PairingUiState, UInt64) -> Void)?
     var onAccountState: ((AccountUiState, UInt64) -> Void)?
     var onRemoteTargetBound: ((String, UInt64, UInt64) -> Void)?
@@ -52,7 +50,6 @@ final class MobileCoreAdapter {
     var onCreateUnavailable: ((String, String?) -> Void)?
 
     init(
-        onState: ((GeneralChatUiState) -> Void)? = nil,
         onPairingState: ((PairingUiState, UInt64) -> Void)? = nil,
         onAccountState: ((AccountUiState, UInt64) -> Void)? = nil,
         onRemoteTargetBound: ((String, UInt64, UInt64) -> Void)? = nil,
@@ -60,10 +57,9 @@ final class MobileCoreAdapter {
         onWorkspaceState: ((RemoteWorkspaceUiState, String, UInt64) -> Void)? = nil,
         onDirectoryState: ((DeviceDirectoryUiState, UInt64) -> Void)? = nil,
         onCreateOperation: ((CreateSessionOperationState, String) -> Void)? = nil,
-        onCreateUnavailable: ((String, String?) -> Void)? = nil,
+        onCreateUnavailable: ((String, String?) -> Void)? = nil
     ) {
         self.scope = MainScope()
-        self.generalChat = GeneralChatStore.companion.create(scope: scope)
         let defaults = UserDefaults.standard
         let installID: String
         if let stored = defaults.string(forKey: "openbitfun.mobile.install_id") {
@@ -76,17 +72,16 @@ final class MobileCoreAdapter {
         self.pairing = PairingStore.companion.create(
             scope: scope,
             device: DeviceIdentity(installId: installID, displayName: "OpenBitFun iPhone"),
-            log: CoreLogNone.shared,
+            log: CoreLogNone.shared
         )
         self.account = AccountStore.companion.create(
             scope: scope,
             service: "com.openbitfun.mobile.account",
             deviceId: installID,
             deviceName: "OpenBitFun iPhone",
-            log: CoreLogNone.shared,
+            log: CoreLogNone.shared
         )
         self.deviceDirectory = DeviceDirectoryStore.companion.create(scope: scope, accountStore: account)
-        self.onState = onState
         self.onPairingState = onPairingState
         self.onAccountState = onAccountState
         self.onRemoteTargetBound = onRemoteTargetBound
@@ -96,15 +91,6 @@ final class MobileCoreAdapter {
         self.onCreateOperation = onCreateOperation
         self.onCreateUnavailable = onCreateUnavailable
 
-        let flow = SkieSwiftStateFlow<GeneralChatUiState>(generalChat.state)
-        onState?(flow.value)
-        observations.append(Task { [weak self] in
-            for await state in flow {
-                guard !Task.isCancelled else { return }
-                self?.onState?(state)
-            }
-        })
-
         rebindDirectoryObservation(generation: directoryGeneration)
 
         rebindAccountObservation()
@@ -113,81 +99,6 @@ final class MobileCoreAdapter {
 
         account.dispatch(intent: AccountIntentRestore.shared)
         pairing.dispatch(intent: PairingIntentForeground.shared)
-    }
-
-    func updateDraft(_ text: String) {
-        generalChat.dispatch(intent: GeneralChatIntentUpdateDraft(text: text))
-    }
-
-    func send() {
-        generalChat.dispatch(intent: GeneralChatIntentSend.shared)
-    }
-
-    func cancelGeneralChat() {
-        generalChat.dispatch(intent: GeneralChatIntentCancel.shared)
-    }
-
-    func setGeneralChatImages(_ images: [ComposerAttachment]) {
-        generalChat.dispatch(intent: GeneralChatIntentSetImages(images: images.map(\.coreImage)))
-    }
-
-    func renameGeneralSession(sessionID: String, title: String) {
-        generalChat.dispatch(intent: GeneralChatIntentRenameSession(sessionId: sessionID, title: title))
-    }
-
-    func pinGeneralSession(sessionID: String, pinned: Bool) {
-        generalChat.dispatch(intent: GeneralChatIntentPinSession(sessionId: sessionID, pinned: pinned))
-    }
-
-    func archiveGeneralSession(sessionID: String, archived: Bool) {
-        generalChat.dispatch(intent: GeneralChatIntentArchiveSession(sessionId: sessionID, archived: archived))
-    }
-
-    func deleteGeneralSession(sessionID: String) {
-        generalChat.dispatch(intent: GeneralChatIntentDeleteSession(sessionId: sessionID))
-    }
-
-    func selectGeneralModel(modelID: String) {
-        generalChat.dispatch(intent: GeneralChatIntentSelectModel(modelId: modelID))
-    }
-
-    func selectGeneralSession(sessionID: String) {
-        generalChat.dispatch(intent: GeneralChatIntentSelectSession(sessionId: sessionID))
-    }
-
-    func saveGeneralConfig(baseURL: String, model: String, apiKey: String, clearAPIKey: Bool) {
-        generalChat.dispatch(
-            intent: GeneralChatIntentSaveConfig(
-                baseUrl: baseURL, model: model, apiKey: apiKey, clearApiKey: clearAPIKey
-            )
-        )
-    }
-
-    func testGeneralConnection(baseURL: String, model: String, apiKey: String, clearAPIKey: Bool) {
-        generalChat.dispatch(
-            intent: GeneralChatIntentTestConnection(
-                baseUrl: baseURL, model: model, apiKey: apiKey, clearApiKey: clearAPIKey
-            )
-        )
-    }
-
-    func exportGeneralSession(sessionID: String) {
-        generalChat.dispatch(
-            intent: GeneralChatIntentExportSession(
-                sessionId: sessionID,
-                untitledLabel: "未命名会话",
-                userLabel: "用户",
-                assistantLabel: "OpenBitFun"
-            )
-        )
-    }
-
-    func clearGeneralExport() {
-        generalChat.dispatch(intent: GeneralChatIntentClearExport.shared)
-    }
-
-    func newGeneralSession() {
-        generalChat.dispatch(intent: GeneralChatIntentNewSession.shared)
     }
 
     private func rebindAccountObservation(emitCurrent: Bool = true) {
@@ -239,22 +150,10 @@ final class MobileCoreAdapter {
         }
     }
 
-    func submitPairing(url: String) {
-        preparePairingSubmission()
-        pairing.dispatch(intent: PairingIntentSubmit(pairingUrl: url))
-        rebindPairingObserver(capturedGeneration: pairingGeneration)
-    }
-
-    func submitPairing(url: String, userID: String, password: String) {
-        preparePairingSubmission()
-        pairing.dispatch(
-            intent: PairingIntentSubmit(
-                pairingUrl: url,
-                userId: userID,
-                password: password
-            )
+    func resolveDeviceLink(url: String) -> AccountDeviceLinkResult {
+        AccountDeviceLinkKt.resolveAccountDeviceLink(
+            url: url, state: SkieSwiftStateFlow<AccountUiState>(account.state).value
         )
-        rebindPairingObserver(capturedGeneration: pairingGeneration)
     }
 
     private func preparePairingSubmission() {
@@ -300,12 +199,12 @@ final class MobileCoreAdapter {
         return (accountGeneration, remoteTargetEpoch, preservePairing)
     }
 
-    func loginAccount(relayURL: String, username: String, password: String) {
+    func loginAccount() {
         if remoteTargetKey != "pairing" {
             desiredRemoteTarget = .accountRestore
         }
         initialRemoteTargetSelectionOpen = false
-        account.dispatch(intent: AccountIntentLogin(relayUrl: relayURL, username: username, password: password))
+        account.dispatch(intent: AccountIntentLogin.shared)
     }
 
     func selectAccountDevice(id: String) {
@@ -387,7 +286,7 @@ final class MobileCoreAdapter {
             intent: RemoteSessionIntentSendMessage(
                 sessionId: sessionID,
                 content: content,
-                images: images.isEmpty ? nil : images.map(\.coreImage),
+                images: images.isEmpty ? nil : images.map(\.coreImage)
             )
         )
     }
@@ -787,7 +686,6 @@ final class MobileCoreAdapter {
         deviceDirectory.dispatch(intent: DeviceDirectoryIntentStop.shared)
         pairing.dispatch(intent: PairingIntentDisconnect.shared)
         account.stop()
-        generalChat.stop()
     }
 }
 

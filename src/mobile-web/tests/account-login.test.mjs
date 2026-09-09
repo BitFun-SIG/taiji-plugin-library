@@ -74,44 +74,36 @@ test('online selection preserves exact QR targeting and supports later device av
   assert.equal(selectAccountDevice([reconnected, online], 'browser', offline.device_id), reconnected);
 });
 
-test('real account authentication does not request a device or QR room', async () => {
-  const { argon2idAsync } = await import('@noble/hashes/argon2.js');
-  const { gcm } = await import('@noble/ciphers/aes.js');
+test('GitHub login registers an independent device public key at the fixed relay', async () => {
   const encryption = await loadSource('../src/services/E2EEncryption.ts');
-  const authModule = await loadSource('../src/services/CloudAccountClient.ts', {
-    './E2EEncryption': encryption.url,
-  });
+  const { deriveDeviceMessageKey } = await import(encryption.url);
+  const { x25519 } = await import('@noble/curves/ed25519.js');
+  const authModule = await loadSource('../src/services/CloudAccountClient.ts', { './E2EEncryption': encryption.url });
   const { CloudAccountClient } = await import(authModule.url);
-  const params = { m: 8192, t: 1, p: 1 };
-  const password = 'local-test-only';
-  const salt = new Uint8Array(16).fill(1);
-  const kdfSalt = new Uint8Array(16).fill(2);
-  const masterKey = new Uint8Array(32).fill(3);
-  const nonce = new Uint8Array(12).fill(4);
-  const kek = await argon2idAsync(password, salt, { ...params, dkLen: 32 });
-  const passwordHash = await argon2idAsync(password, kdfSalt, { ...params, dkLen: 32 });
-  const b64 = value => Buffer.from(value).toString('base64');
   const originalFetch = globalThis.fetch;
   const originalWindow = globalThis.window;
   const requests = [];
   globalThis.window = { setTimeout, clearTimeout };
   globalThis.fetch = async (url, options) => {
-    const path = new URL(url).pathname;
-    requests.push(path);
-    if (path.endsWith('/challenge')) return Response.json({
-      salt: b64(salt), kdf_salt: b64(kdfSalt), argon2_params: JSON.stringify(params),
-      wrapped_master_key: `${b64(gcm(kek, nonce).encrypt(masterKey))}.${b64(nonce)}`,
-    });
-    assert.equal(path, '/api/auth/login');
+    assert.equal(url, 'https://remote.openbitfun.com/v/1.0.0/api/auth/login');
     const body = JSON.parse(options.body);
-    assert.equal(body.password_hash, b64(passwordHash));
-    return Response.json({ token: 'test-account-token', user_id: 'test-account' });
+    requests.push(body);
+    assert.equal(body.access_token, 'verified-github-token');
+    assert.equal(body.device_id, 'browser');
+    assert.equal(body.password_hash, undefined);
+    assert.equal(Buffer.from(body.public_key, 'base64').length, 32);
+    return Response.json({ token: 'test-account-token', user_id: '101' });
   };
   try {
-    const account = await new CloudAccountClient().login('http://test.invalid', 'test', password, 'browser');
-    assert.equal(account.userId, 'test-account');
-    assert.deepEqual(account.masterKey, masterKey);
-    assert.deepEqual(requests, ['/api/auth/login/challenge', '/api/auth/login']);
+    const first = await new CloudAccountClient().login('verified-github-token', 'browser');
+    const second = await new CloudAccountClient().login('verified-github-token', 'browser');
+    assert.equal(first.userId, '101');
+    assert.notDeepEqual(first.masterKey, second.masterKey);
+    assert.deepEqual(Buffer.from(requests[0].public_key, 'base64'), Buffer.from(x25519.getPublicKey(first.masterKey)));
+    assert.deepEqual(deriveDeviceMessageKey(first.masterKey, x25519.getPublicKey(second.masterKey)),
+      deriveDeviceMessageKey(second.masterKey, x25519.getPublicKey(first.masterKey)));
+    assert.throws(() => deriveDeviceMessageKey(first.masterKey, new Uint8Array(32)));
+    assert.equal(Buffer.from(deriveDeviceMessageKey(new Uint8Array(32).fill(7), x25519.getPublicKey(new Uint8Array(32).fill(11)))).toString('hex'), '6e8f5da837e91e9ddb09c5aa7dee229e731fc94499d29d10dcf5f1437193f56c');
   } finally {
     globalThis.fetch = originalFetch;
     if (originalWindow === undefined) delete globalThis.window;
@@ -121,7 +113,7 @@ test('real account authentication does not request a device or QR room', async (
 
 test('account UI entry precedes discovery and mounts no remote workspace surface', async () => {
   const pairing = await readFile(new URL('../src/pages/PairingPage.tsx', import.meta.url), 'utf8');
-  const direct = pairing.slice(pairing.indexOf('const restoredAccount ='), pairing.indexOf('const initialSync ='));
+  const direct = pairing.slice(pairing.indexOf('const connect ='), pairing.indexOf('  useEffect('));
   assert.match(direct, /saveCloudAccountSession/);
   assert.match(direct, /store\.setControlTarget\(null\)/);
   assert.match(direct, /onPairedRef\.current/);
@@ -135,4 +127,69 @@ test('account UI entry precedes discovery and mounts no remote workspace surface
   assert.match(devices, /automaticSelectionAttemptedRef\.current = true/);
   assert.match(devices, /selectDevice\(target, false\)/, 'initial account selection must not require a new peer command');
   assert.ok(devices.indexOf('await client.sendDeviceRpc') < devices.indexOf('client.setPairedDeviceId(d.device_id)'));
+});
+
+test('authorization follows the central GitHub OAuth URL and rejects lookalike destinations', async () => {
+  const encryption = await loadSource('../src/services/E2EEncryption.ts');
+  const authModule = await loadSource('../src/services/CloudAccountClient.ts', { './E2EEncryption': encryption.url });
+  const { CloudAccountClient } = await import(authModule.url);
+  const previous = { fetch: globalThis.fetch, window: globalThis.window, setTimeout: globalThis.setTimeout };
+  globalThis.window = { setTimeout: previous.setTimeout, clearTimeout };
+  globalThis.setTimeout = callback => { queueMicrotask(callback); return 0; };
+  try {
+    for (const authorizationUrl of [
+      'https://github.com/login/oauth/authorize?state=test',
+      'https://github.com.attacker.example/login/oauth/authorize',
+      'https://github.com/login', 'https://user@github.com/login/oauth/authorize',
+      'http://github.com/login/oauth/authorize',
+    ]) {
+      let polls = 0;
+      globalThis.fetch = async url => {
+        if (url.endsWith('/start')) return Response.json({
+          transactionId: 'txn', transactionSecret: 'secret', authorizationUrl,
+          expiresAt: Date.now() / 1000 + 60, pollIntervalSeconds: 3,
+        });
+        polls++;
+        return Response.json({ status: 'authorized', tokens: { accessToken: 'verified' } });
+      };
+      const popup = { location: { href: 'about:blank' } };
+      const result = new CloudAccountClient().authorize(popup, new AbortController().signal);
+      if (authorizationUrl === 'https://github.com/login/oauth/authorize?state=test') {
+        assert.equal(await result, 'verified');
+        assert.equal(popup.location.href, authorizationUrl);
+        assert.equal(polls, 1);
+      } else {
+        await assert.rejects(result, /Untrusted/);
+        assert.equal(popup.location.href, 'about:blank');
+        assert.equal(polls, 0);
+      }
+    }
+  } finally {
+    globalThis.fetch = previous.fetch;
+    globalThis.setTimeout = previous.setTimeout;
+    if (previous.window === undefined) delete globalThis.window;
+    else globalThis.window = previous.window;
+  }
+});
+
+
+test('scanned device links accept only the official authority and a unique device id', async () => {
+  const encryption = await loadSource('../src/services/E2EEncryption.ts');
+  const auth = await loadSource('../src/services/CloudAccountClient.ts', { './E2EEncryption': encryption.url });
+  const link = await loadSource('../src/services/pairingLink.ts', { './CloudAccountClient': auth.url });
+  const { parseScannedPairingLink, accountDeviceIdFromHash } = await import(link.url);
+  const base = 'https://remote.openbitfun.com/v/1.0.0/';
+  assert.equal(parseScannedPairingLink(`${base}#/pair?did=desktop-1&pk=untrusted&relay=https://evil.example`, base), `${base}#/pair?did=desktop-1`);
+  for (const value of [
+    'https://evil.example/v/1.0.0/#/pair?did=desktop',
+    'https://remote.openbitfun.com.evil.example/v/1.0.0/#/pair?did=desktop',
+    'https://user@remote.openbitfun.com/v/1.0.0/#/pair?did=desktop',
+    'http://remote.openbitfun.com/v/1.0.0/#/pair?did=desktop',
+    'https://remote.openbitfun.com/relay/#/pair?did=desktop',
+    `${base}#/pair?did=a&did=b`, `${base}#/pair?did=%2Fother`,
+    `${base}#/pair?room=room&pk=key`, `${base}#/pair?did=..`,
+    'javascript:alert(1)',
+  ]) assert.equal(parseScannedPairingLink(value, base), null, value);
+  assert.equal(accountDeviceIdFromHash('#/pair?did=desktop'), 'desktop');
+  assert.equal(accountDeviceIdFromHash('#/chat?did=desktop'), null);
 });

@@ -68,6 +68,7 @@ internal fun PairingScreen(
     onOpenSidebar: (() -> Unit)? = null,
     onBack: () -> Unit = {},
     onOpenAccount: () -> Unit = {},
+    onDeviceLink: (String) -> Unit = {},
     compact: Boolean = true,
     requestedSessionId: String? = null,
     creatingSession: Boolean = false,
@@ -78,63 +79,16 @@ internal fun PairingScreen(
     onScanStarted: () -> Unit = {},
     viewModel: PairingViewModel = viewModel(factory = PairingViewModel.Factory),
 ) {
-    val state by viewModel.state.collectAsStateWithLifecycle()
-    val remoteState by viewModel.remoteState.collectAsStateWithLifecycle()
-    val workspaceState by viewModel.workspaceState.collectAsStateWithLifecycle()
-    // The heartbeat runs only while this surface is both composed and resumed:
-    // a ping every fifteen seconds from a backgrounded app buys nothing and
-    // costs a wake-up, and coming back is exactly when the answer is stale.
-    LifecycleResumeEffect(viewModel) {
-        viewModel.dispatch(PairingIntent.Foreground)
-        onPauseOrDispose { viewModel.dispatch(PairingIntent.Background) }
-    }
-
-    when (val current = state) {
-        is PairingUiState.Paired -> {
-            RemoteConnectedScreen(
-                remoteState = remoteState,
-                workspaceState = workspaceState,
-                phase = current.connectionPhase(),
-                settingsPlacement = settingsPlacement,
-                sessionDetailsPlacement = sessionDetailsPlacement,
-                viewSettingsPlacement = viewSettingsPlacement,
-                onOpenRemoteSettings = onOpenRemoteSettings,
-                deviceId = current.workspace.roomLabel,
-                createDevices = emptyList(),
-                desktopName = "",
-                onCreateDevicePick = {},
-                onSessionIntent = viewModel::dispatchSession,
-                onWorkspaceIntent = viewModel::dispatchWorkspace,
-                onOpenSidebar = onOpenSidebar,
-                compact = compact,
-                requestedSessionId = requestedSessionId,
-                creatingSession = creatingSession,
-                onOpenSession = onOpenSession,
-                onCreateSession = onCreateSession,
-                onRemoteHome = onRemoteHome,
-                connectionDetails = {
-                    PairedDetails(
-                        workspace = current.workspace,
-                        liveness = current.liveness,
-                        onVerify = { viewModel.dispatch(PairingIntent.Verify) },
-                        onDisconnect = { viewModel.dispatch(PairingIntent.Disconnect) },
-                    )
-                },
-                modifier = modifier,
-            )
-        }
-
-        else -> ConnectView(
-            state = current,
-            onSubmit = viewModel::dispatch,
-            onDismiss = { viewModel.dispatch(PairingIntent.Dismiss) },
-            onBack = onBack,
-            onOpenAccount = onOpenAccount,
-            startScanning = startScanning,
-            onScanStarted = onScanStarted,
-            modifier = modifier,
-        )
-    }
+    ConnectView(
+        state = PairingUiState.Idle,
+        onSubmit = onDeviceLink,
+        onDismiss = {},
+        onBack = onBack,
+        onOpenAccount = onOpenAccount,
+        startScanning = startScanning,
+        onScanStarted = onScanStarted,
+        modifier = modifier,
+    )
 }
 
 /** The account-device route, which bypasses the QR pairing form entirely. */

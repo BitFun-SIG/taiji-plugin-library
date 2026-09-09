@@ -47,7 +47,7 @@ pub struct PairingChallenge {
 }
 
 /// Response from mobile to desktop.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct PairingResponse {
     pub challenge_echo: String,
     pub device_id: String,
@@ -57,14 +57,25 @@ pub struct PairingResponse {
     /// Local pairing user id, or OpenBitFun account username when account auth is required.
     #[serde(default)]
     pub user_id: Option<String>,
-    /// OpenBitFun account password when the paired desktop is logged in. Never log this field.
+    /// OpenBitFun account access_token when the paired desktop is logged in. Never log this field.
     #[serde(default)]
-    pub password: Option<String>,
+    pub access_token: Option<String>,
+}
+
+impl std::fmt::Debug for PairingResponse {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PairingResponse")
+            .field("device_id", &self.device_id)
+            .field("device_name", &self.device_name)
+            .field("user_id", &self.user_id)
+            .field("access_token", &"[REDACTED]")
+            .finish_non_exhaustive()
+    }
 }
 
 impl PairingResponse {
     /// Validate the decrypted but still untrusted mobile payload before it is
-    /// cloned, persisted, or passed into password verification.
+    /// cloned, persisted, or passed into access_token verification.
     pub fn validate_untrusted(&self) -> Result<()> {
         fn portable_id(value: &str, max_bytes: usize) -> bool {
             !value.is_empty()
@@ -95,9 +106,9 @@ impl PairingResponse {
                 .as_deref()
                 .is_some_and(|value| !bounded_text(value, 128))
             || self
-                .password
+                .access_token
                 .as_deref()
-                .is_some_and(|value| value.len() > 1024 || value.chars().any(char::is_control))
+                .is_some_and(|value| value.len() > 8192 || value.chars().any(char::is_control))
         {
             return Err(anyhow!("invalid pairing response fields"));
         }
@@ -250,7 +261,7 @@ impl PairingProtocol {
         mobile_install_id: Option<String>,
         user_id: Option<String>,
     ) -> PairingResponse {
-        Self::answer_challenge_with_password(
+        Self::answer_challenge_with_access_token(
             challenge,
             device_identity,
             mobile_install_id,
@@ -259,13 +270,13 @@ impl PairingProtocol {
         )
     }
 
-    /// Mobile side: pairing response that may include an account password.
-    pub fn answer_challenge_with_password(
+    /// Mobile side: pairing response that may include an account access_token.
+    pub fn answer_challenge_with_access_token(
         challenge: &PairingChallenge,
         device_identity: &DeviceIdentity,
         mobile_install_id: Option<String>,
         user_id: Option<String>,
-        password: Option<String>,
+        access_token: Option<String>,
     ) -> PairingResponse {
         PairingResponse {
             challenge_echo: challenge.challenge.clone(),
@@ -273,7 +284,7 @@ impl PairingProtocol {
             device_name: device_identity.device_name.clone(),
             mobile_install_id,
             user_id,
-            password,
+            access_token,
         }
     }
 

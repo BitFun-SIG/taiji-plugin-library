@@ -790,7 +790,7 @@
     "usernamePlaceholder": "請輸入帳號",
     "passwordPlaceholder": "請輸入密碼",
     "authServerPlaceholder": "https://auth.example.com",
-    "login": "登入",
+    "login": "使用 GitHub 登入",
     "cancel": "取消",
     "emptyFields": "請填寫所有欄位",
     "invalidCredentialsLength": "帳號或密碼過長",
@@ -798,7 +798,7 @@
     "insecureServerTitle": "伺服器連線未加密",
     "insecureServerConfirm": "此伺服器使用未加密的 HTTP，網路攻擊者可能截取登入工作階段。仍要繼續嗎？",
     "continueInsecure": "仍要繼續",
-    "securityNote": "密碼只在本裝置處理，中繼服務只會收到衍生後的驗證值。",
+    "securityNote": "在瀏覽器中透過 GitHub 授權 OpenBitFun。裝置間訊息使用端對端加密。",
     "showPassword": "顯示密碼",
     "hidePassword": "隱藏密碼",
     "loginSuccess": "登入成功：{{user_id}}",
@@ -885,7 +885,7 @@
     "syncPhaseExportingSessions": "正在備份工作階段 {{current}}/{{total}}",
     "copyServerUrl": "複製伺服器位址",
     "copyServerFailed": "無法複製伺服器位址，請檢查剪貼簿權限後重試。",
-    "loginValueProp": "登入以關聯你的多台裝置：互相遠端控制，並雲端同步設定與工作階段"
+    "loginValueProp": "登入以連結你的多台裝置，並互相遠端控制。"
   },
   "relayDeploy": {
     "entryHint": "還沒有中繼伺服器？",

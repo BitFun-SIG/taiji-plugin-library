@@ -35,12 +35,11 @@ import { QRCodeSVG } from 'qrcode.react';
 import { Monitor, MonitorSmartphone, Smartphone } from 'lucide-react';
 import { useI18n } from '@/infrastructure/i18n';
 import { getLocaleFallbackChain, type LocaleId } from '@/infrastructure/i18n/presets';
-import { confirmWarning } from '@/infrastructure/confirm-dialog';
 import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
 import { api } from '@/infrastructure/api/service-api/ApiClient';
 import { useAccountLoginState } from '@/infrastructure/account/useAccountLoginState';
 import { remoteConnectStatusSource, useRemoteConnectStatus } from '@/infrastructure/remote-connect/remoteConnectStatus';
-import { OFFICIAL_RELAY_URL, relayUrlFromMethod, remoteNetworkMethod, selectRemoteNetworkConnection, type RemoteNetworkMethod } from '@/infrastructure/remote-connect/remoteConnectionState';
+import { OFFICIAL_RELAY_URL, remoteNetworkMethod, selectRemoteNetworkConnection, type RemoteNetworkMethod } from '@/infrastructure/remote-connect/remoteConnectionState';
 import { useNotification } from '@/shared/notification-system';
 import { copyTextToClipboard } from '@/shared/utils/textSelection';
 import { AccountPanel } from './AccountPanel';
@@ -58,8 +57,6 @@ import {
   getRemoteConnectDisclaimerAgreed,
   setRemoteConnectDisclaimerAgreed,
 } from './remoteConnectDisclaimerStorage';
-import { RelayDeployWizard } from '@/features/relay-deploy';
-import type { RelayDeployResult } from '@/features/relay-deploy';
 import {
   stopAfterPendingStart,
   updateIfOperationCurrent,
@@ -99,7 +96,6 @@ const NETWORK_TABS: { id: NetworkTab; labelKey: string }[] = [
   { id: 'lan', labelKey: 'remoteConnect.methodSameNetwork' },
   { id: 'ngrok', labelKey: 'remoteConnect.methodNgrok' },
   { id: 'openbitfun_server', labelKey: 'remoteConnect.methodOpenBitFunRelay' },
-  { id: 'custom_server', labelKey: 'remoteConnect.methodSelfHosted' },
 ];
 
 const BOT_TABS: { id: BotTab; label: string }[] = [
@@ -123,22 +119,6 @@ function pickLocalizedUrl(urls: Partial<Record<LocaleId, string>>, locale: Local
   return urls['en-US'] ?? Object.values(urls)[0] ?? '';
 }
 
-function parseRelayServer(value: string): URL | null {
-  try {
-    const url = new URL(value.trim());
-    if (!['http:', 'https:'].includes(url.protocol)
-      || !url.hostname
-      || url.username
-      || url.password
-      || url.search
-      || url.hash) {
-      return null;
-    }
-    return url;
-  } catch {
-    return null;
-  }
-}
 
 const methodToNetworkTab = remoteNetworkMethod;
 
@@ -192,11 +172,9 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
   const [showDisclaimer, setShowDisclaimer] = useState(false);
   const [hasAgreedDisclaimer, setHasAgreedDisclaimer] = useState<boolean>(() => getRemoteConnectDisclaimerAgreed());
   const [botVerboseMode, setBotVerboseMode] = useState<boolean>(false);
-  const [showRelayDeploy, setShowRelayDeploy] = useState(false);
   const [accountUsername, setAccountUsername] = useState<string | null>(null);
 
   const [qrCopied, setQrCopied] = useState(false);
-  const [customUrl, setCustomUrl] = useState('');
   const [tgToken, setTgToken] = useState('');
   const [feishuAppId, setFeishuAppId] = useState('');
   const [feishuAppSecret, setFeishuAppSecret] = useState('');
@@ -211,7 +189,6 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
   const [weixinQrPollNonce, setWeixinQrPollNonce] = useState(0);
 
   const formSnapshotRef = useRef({
-    customUrl: '',
     tgToken: '',
     feishuAppId: '',
     feishuAppSecret: '',
@@ -472,7 +449,6 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
       try {
         const formState = await remoteConnectAPI.getFormState();
         if (cancelled) return;
-        setCustomUrl(formState.custom_server_url ?? '');
         setTgToken(formState.telegram_bot_token ?? '');
         setFeishuAppId(formState.feishu_app_id ?? '');
         setFeishuAppSecret(formState.feishu_app_secret ?? '');
@@ -489,18 +465,11 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
     };
   }, [isOpen, hasAgreedDisclaimer]);
 
-  // Keep the Self-Hosted server URL in sync with account login state. The
-  // backend already persists the mirrored value; this refreshes the input
-  // while the dialog is open (fill on login, clear on logout).
+  // Refresh connection status when the active identity changes.
   useEffect(() => {
     const unlisten = api.listen<{ logged_in: boolean; relay_url?: string }>(
       'account://login-state',
-      (payload) => {
-        if (payload?.logged_in && payload.relay_url) {
-          setCustomUrl(payload.relay_url);
-        } else if (payload && !payload.logged_in) {
-          setCustomUrl('');
-        }
+      () => {
         // Account changes rotate an unpaired QR invitation, but an established
         // room is an independent control channel and stays connected. Refresh
         // first, then clear only UI state that the backend actually retired.
@@ -544,12 +513,11 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
 
   useEffect(() => {
     formSnapshotRef.current = {
-      customUrl,
       tgToken,
       feishuAppId,
       feishuAppSecret,
     };
-  }, [customUrl, tgToken, feishuAppId, feishuAppSecret]);
+  }, [tgToken, feishuAppId, feishuAppSecret]);
 
   const prepareAndStartWeixinBotFromQr = useCallback(async (
     ilinkToken: string,
@@ -558,7 +526,6 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
   ): Promise<ConnectionResult> => {
     const fs = formSnapshotRef.current;
     await remoteConnectAPI.setFormState({
-      custom_server_url: fs.customUrl,
       telegram_bot_token: fs.tgToken,
       feishu_app_id: fs.feishuAppId,
       feishu_app_secret: fs.feishuAppSecret,
@@ -727,27 +694,7 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
     try {
       await cleanupPromiseRef.current.catch(() => undefined);
       if (!isCurrent()) return;
-      if (activeView === 'network' && networkTab === 'custom_server') {
-        const relayUrl = parseRelayServer(customUrl);
-        if (!relayUrl) {
-          setError(t('accountLogin.invalidServer'));
-          return;
-        }
-        const isLoopback = ['localhost', '127.0.0.1', '[::1]', '::1'].includes(relayUrl.hostname);
-        if (relayUrl.protocol === 'http:' && !isLoopback) {
-          const confirmed = await confirmWarning(
-            t('accountLogin.insecureServerTitle'),
-            t('accountLogin.insecureServerConfirm'),
-            {
-              confirmText: t('accountLogin.continueInsecure'),
-              cancelText: t('accountLogin.cancel'),
-            },
-          );
-          if (!confirmed || !isCurrent()) return;
-        }
-      }
       await remoteConnectAPI.setFormState({
-        custom_server_url: customUrl,
         telegram_bot_token: tgToken,
         feishu_app_id: feishuAppId,
         feishu_app_secret: feishuAppSecret,
@@ -785,7 +732,6 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
         if (!isCurrent()) return;
       } else {
         method = networkTab;
-        if (networkTab === 'custom_server') serverUrl = customUrl || undefined;
       }
       const lanIp = networkTab === 'lan' ? (selectedLanIp || undefined) : undefined;
       remoteConnectStatusSource.invalidateReads();
@@ -816,7 +762,7 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
         setLoading(false);
       }
     }
-  }, [activeView, networkTab, botTab, customUrl, tgToken, feishuAppId, feishuAppSecret, weixinIlinkToken, weixinBaseUrl, weixinBotAccountId, selectedLanIp, startPolling, t, hasAgreedDisclaimer]);
+  }, [activeView, networkTab, botTab, tgToken, feishuAppId, feishuAppSecret, weixinIlinkToken, weixinBaseUrl, weixinBotAccountId, selectedLanIp, startPolling, t, hasAgreedDisclaimer]);
 
   const handleStartWeixinQr = useCallback(async () => {
     if (!hasAgreedDisclaimer) {
@@ -911,19 +857,6 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
 
   const handleOpenNgrokSetup = useCallback(() => {
     void systemAPI.openExternal(NGROK_SETUP_URL);
-  }, []);
-
-  /** Self-Hosted tab entry: open the in-app wizard, never an external README. */
-  const handleOpenRelayDeploy = useCallback(() => {
-    setShowRelayDeploy(true);
-  }, []);
-
-  const handleRelayDeployRegistered = useCallback((result: RelayDeployResult) => {
-    setShowRelayDeploy(false);
-    setCustomUrl(result.relayUrl);
-    setNetworkTab('custom_server');
-    setActiveView('network');
-    setError(null);
   }, []);
 
   const handleOpenFeishuGuide = useCallback(() => {
@@ -1073,18 +1006,14 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
     if (statusState !== 'ready' && !connectionResult) {
       return <RemotePairingCard owner="network" statusState={statusState} copied={false} onCopyUrl={() => {}} />;
     }
-    if (networkTab === 'openbitfun_server' || networkTab === 'custom_server') {
+    if (networkTab === 'openbitfun_server') {
       const invitation = connectionOwner === 'network' ? connectionResult : null;
-      const relayUrl = networkTab === 'openbitfun_server' ? OFFICIAL_RELAY_URL
-        : invitation ? relayUrlFromMethod(invitation.method) ?? customUrl
-          : networkConnection.roomConnected ? relayUrlFromMethod(status?.active_method) ?? customUrl
-            : customUrl;
+      const relayUrl = OFFICIAL_RELAY_URL;
       return <RemoteNetworkConnections
         status={status}
         method={networkTab}
         title={networkLabel(networkTab) ?? ''}
         relayUrl={relayUrl}
-        onRelayUrlChange={setCustomUrl}
         invitation={invitation}
         statusState={statusState}
         loading={loading}
@@ -1094,7 +1023,6 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
         onConnect={handleConnect}
         onCancel={handleCancelConnect}
         onDisconnect={handleDisconnectRelay}
-        onDeploy={handleOpenRelayDeploy}
       />;
     }
     if (networkConnection.roomConnected && networkConnection.roomMethod === networkTab) {
@@ -1949,13 +1877,7 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
               </DialogBody>
       </Dialog>
 
-      {showRelayDeploy && (
-        <RelayDeployWizard
-          isOpen={showRelayDeploy}
-          onClose={() => setShowRelayDeploy(false)}
-          onRegistered={handleRelayDeployRegistered}
-        />
-      )}
+
     </>
   );
 };

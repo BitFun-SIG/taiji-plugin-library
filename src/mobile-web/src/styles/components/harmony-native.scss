@@ -894,7 +894,7 @@
 
 .pairing-page__panel {
   display: grid;
-  grid-template-rows: 56px minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   justify-content: stretch;
   min-height: inherit;
   padding: 0;

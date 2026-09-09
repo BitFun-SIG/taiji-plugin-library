@@ -1,6 +1,7 @@
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { stampRemoteSessionsDevice } from '../../services/RemoteSessionIdentity';
 import {
+  DEFAULT_CLOUD_RELAY_URL,
   CloudAccountBinding,
   CloudAccountClient,
   CloudAccountDevice,
@@ -10,15 +11,6 @@ import {
 import { CloudAccountSessionStore, PersistedCloudAccountSession } from '../../services/CloudAccountSessionStore';
 import { ConnectionErrorPolicy } from '../../services/ConnectionErrorPolicy';
 import { Encoding } from '../../services/Encoding';
-import {
-  GeneralChatConfigSnapshot,
-  GeneralChatConfigStore,
-  GeneralChatConfigUpdate,
-  GeneralChatConfigValidator,
-  GeneralChatModelSelectionPolicy
-} from '../../services/general-chat/GeneralChatConfigStore';
-import { GeneralChatCloudConfigPolicy } from '../../services/general-chat/GeneralChatCloudConfigPolicy';
-import { GeneralChatServiceStatus } from '../../services/general-chat/GeneralChatServiceState';
 import { RemoteHeartbeatController } from '../../services/RemoteHeartbeatController';
 import { RemoteLogger } from '../../services/RemoteLogger';
 import { RemoteDescriptorParser } from '../../services/RemoteDescriptorParser';
@@ -26,15 +18,11 @@ import { ConnectScanDecisionPolicy } from '../../services/ConnectScanDecisionPol
 import { RemoteSessionManager } from '../../services/RemoteSessionManager';
 import { WatchProvisionOutcome } from '../../services/WatchProvisionController';
 import { RemotePermissionMode } from '../../model/RemoteModels';
-import { GeneralChatPageState } from '../state/GeneralChatPageState';
 import { RemotePageState } from '../state/RemotePageState';
-
-export interface SettingsControllerHooks {
-  readonly probeConfiguration: (apiUrl: string, apiKey: string, modelName: string) => Promise<void>;
-}
 
 export interface CloudAccountSettingsHooks {
   readonly deviceId: () => string;
+  readonly openAuthorization: (url: string) => Promise<boolean>;
   readonly remoteAvailable: () => boolean;
   readonly invalidatePreview: () => void;
   readonly invalidateRemoteActivity: () => void;
@@ -75,11 +63,8 @@ export interface PreferredCloudTarget {
 /** How often presence is refetched while device rows are on screen. */
 const PRESENCE_POLL_INTERVAL_MS: number = 20000;
 
-/** Owns general-chat model service settings and their presentation projection. */
+/** Owns the authenticated account and remote device selection. */
 export class SettingsController {
-  private readonly store: GeneralChatConfigStore;
-  private readonly state: GeneralChatPageState;
-  private readonly hooks: SettingsControllerHooks;
   private readonly cloud?: CloudAccountSettingsDependencies;
   private cloudSession?: CloudAccountSession;
   private cloudRelayUrl: string = '';
@@ -94,95 +79,8 @@ export class SettingsController {
   private preferredTargetDeviceId: string = '';
   private preferredTargetDeviceName: string = '';
 
-  constructor(
-    store: GeneralChatConfigStore,
-    state: GeneralChatPageState,
-    hooks: SettingsControllerHooks,
-    cloud?: CloudAccountSettingsDependencies
-  ) {
-    this.store = store;
-    this.state = state;
-    this.hooks = hooks;
+  constructor(cloud: CloudAccountSettingsDependencies) {
     this.cloud = cloud;
-  }
-
-  async save(
-    apiUrl: string,
-    apiKey: string,
-    modelName: string,
-    clearApiKey: boolean
-  ): Promise<string> {
-    const update = this.update(apiUrl, apiKey, modelName, clearApiKey);
-    try {
-      const validationError = await this.validate(update);
-      if (validationError.length > 0) {
-        return validationError;
-      }
-      if (!update.clearApiKey) {
-        const probeError = await this.probe(update);
-        if (probeError.length > 0) {
-          return probeError;
-        }
-      }
-      const catalogBeforeSave = await this.store.modelCatalog();
-      const snapshot = await this.store.save(update);
-      if (GeneralChatModelSelectionPolicy.shouldActivateSavedLocalModel(catalogBeforeSave)) {
-        await this.store.selectLocalModel();
-      }
-      this.apply(snapshot);
-      await this.refreshModelCatalog();
-      return '';
-    } catch (err) {
-      return ConnectionErrorPolicy.errorText(err);
-    }
-  }
-
-  async test(
-    apiUrl: string,
-    apiKey: string,
-    modelName: string,
-    clearApiKey: boolean
-  ): Promise<string> {
-    const update = this.update(apiUrl, apiKey, modelName, clearApiKey);
-    try {
-      const validationError = await this.validate(update);
-      if (validationError.length > 0) {
-        return validationError;
-      }
-      if (update.clearApiKey) {
-        return RemoteI18n.t('settings.modelService.testNeedsKey');
-      }
-      return await this.probe(update);
-    } catch (err) {
-      return ConnectionErrorPolicy.errorText(err);
-    }
-  }
-
-  apply(snapshot: GeneralChatConfigSnapshot): void {
-    this.state.setConfiguration(
-      snapshot.apiUrl,
-      snapshot.modelName,
-      snapshot.hasApiKey,
-      GeneralChatServiceStatus.fromConfiguration(snapshot.apiUrl, snapshot.modelName, snapshot.hasApiKey)
-    );
-  }
-
-  async refreshModelCatalog(): Promise<void> {
-    const catalog = await this.store.modelCatalog();
-    const selectedModelId = catalog.session_model_id || catalog.default_models.primary || '';
-    this.state.setModelCatalog(catalog, selectedModelId);
-    const active = await this.store.activeSnapshot();
-    this.state.setServiceState(
-      GeneralChatServiceStatus.fromConfiguration(active.apiUrl, active.modelName, active.hasApiKey)
-    );
-  }
-
-  async selectModel(modelId: string): Promise<boolean> {
-    if (!await this.store.selectModel(modelId)) {
-      return false;
-    }
-    await this.refreshModelCatalog();
-    return true;
   }
 
   async initializeCloudAccount(context: Context): Promise<void> {
@@ -198,10 +96,8 @@ export class SettingsController {
   /**
    * Whether this phone might be able to add a device to the account itself.
    *
-   * Deliberately "might": the session here is either a real password login or
-   * one delegated by a room pairing, and only the first carries a token the
-   * relay will mint from. The two are indistinguishable locally, so the answer
-   * is optimistic and `provisionWatchCredential` reports the refusal.
+   * The relay checks the credential's provisioning scope. A local session
+   * makes the action available; a server refusal is reported to the caller.
    */
   canMintWatchCredential(): boolean {
     return this.cloudSession !== undefined && this.cloudRelayUrl.length > 0;
@@ -210,14 +106,9 @@ export class SettingsController {
   /**
    * Mints a watch's own account credential straight from this phone.
    *
-   * Returns `undefined` when this phone is not entitled to mint — no session,
-   * or a delegated token the relay refuses — which is the caller's cue to fall
-   * back to asking the paired desktop. Any other failure throws, because a
-   * network blip is not the same answer as "you may not".
-   *
-   * The account master key never leaves for the relay: it is read from the
-   * session this phone already holds and handed back for sealing to the
-   * watch's ephemeral key.
+   * Returns `undefined` without a signed-in session and propagates server
+   * refusals. The watch receives its own newly generated device secret,
+   * sealed by the provisioning transport; the phone's secret stays local.
    */
   async provisionWatchCredential(
     deviceId: string,
@@ -231,26 +122,6 @@ export class SettingsController {
     }
     const cloud = this.requireCloud();
     try {
-      if (password.length > 0) {
-        const username = this.cloudAccountUsername;
-        if (username.length === 0) {
-          throw new Error('The signed-in account name is unavailable.');
-        }
-        const provisioned = await cloud.client.loginWatch(
-          this.cloudRelayUrl, username, password, session, deviceId, deviceName, requestId);
-        RemoteLogger.info(`watch credential obtained through account login device=${provisioned.deviceId}`);
-        return {
-          ok: true,
-          passwordRequired: false,
-          relayUrl: this.cloudRelayUrl,
-          token: provisioned.token,
-          userId: provisioned.userId,
-          masterKeyBase64: Encoding.bytesToBase64(session.masterKey),
-          deviceId: provisioned.deviceId,
-          failure: '',
-          desktopReported: false
-        };
-      }
       const provisioned = await cloud.client.provisionDevice(
         this.cloudRelayUrl, session, deviceId, deviceName, requestId);
       RemoteLogger.info(`watch credential minted from the phone account device=${provisioned.deviceId}`);
@@ -260,33 +131,12 @@ export class SettingsController {
         relayUrl: this.cloudRelayUrl,
         token: provisioned.token,
         userId: provisioned.userId,
-        masterKeyBase64: Encoding.bytesToBase64(session.masterKey),
+        masterKeyBase64: Encoding.bytesToBase64(provisioned.deviceSecret),
         deviceId: provisioned.deviceId,
         failure: '',
         desktopReported: false
       };
     } catch (err) {
-      // Once the user is confirming the account, every failure belongs to the
-      // login attempt itself. Do not reinterpret a rejected password or an old
-      // relay response as a cue to ask the desktop.
-      if (password.length > 0) {
-        throw err instanceof Error ? err : new Error('Watch account verification failed.');
-      }
-      if (err instanceof CloudAccountRequestError && (err.statusCode === 401 || err.statusCode === 403)) {
-        RemoteLogger.info('phone account may not mint a device credential; deferring to the desktop');
-        return undefined;
-      }
-      if (err instanceof CloudAccountRequestError &&
-        (err.statusCode === 404 || err.statusCode === 409 || err.statusCode >= 500) &&
-        this.cloudAccountUsername.length > 0) {
-        RemoteLogger.info('relay cannot provision watch directly; requesting account confirmation');
-        return {
-          ok: false,
-          passwordRequired: true,
-          relayUrl: '', token: '', userId: '', masterKeyBase64: '', deviceId: '', failure: '',
-          desktopReported: false
-        };
-      }
       throw err instanceof Error ? err : new Error('Watch credential provisioning failed.');
     }
   }
@@ -344,10 +194,12 @@ export class SettingsController {
     }
   }
 
-  async loginCloudAccount(relayUrl: string, username: string, password: string): Promise<string> {
+  async loginCloudAccount(): Promise<string> {
+    const relayUrl = DEFAULT_CLOUD_RELAY_URL;
     const cloud = this.requireCloud();
     RemoteLogger.info('cloud account UI login requested');
-    const session = await cloud.client.login(relayUrl, username, password, cloud.hooks.deviceId());
+    const session = await cloud.client.login(cloud.hooks.deviceId(), cloud.hooks.openAuthorization);
+    const username = session.userId;
     this.clearPreferredCloudTarget();
     this.applyCloudAccountSession(session, relayUrl, username);
     try {
@@ -358,7 +210,6 @@ export class SettingsController {
     } catch (err) {
       RemoteLogger.warn(`cloud account session persistence failed: ${String(err)}`);
     }
-    await this.loadGeneralChatAccountModels(session, relayUrl);
     RemoteLogger.info('cloud account session active, refreshing account devices');
     RemoteLogger.info(`cloud account login success user=${session.userId}`);
     return session.userId;
@@ -373,22 +224,18 @@ export class SettingsController {
     remoteState.setAccountUsername(this.cloudAccountUsername);
   }
 
+  cancelCloudLogin(): void { this.cloud?.client.cancelAuthorization(); }
+
   async logoutCloudAccount(): Promise<void> {
+    this.cancelCloudLogin();
     const cloud = this.requireCloud();
-    const preserveRoom = this.hasRoomControlTarget(cloud);
-    if (!preserveRoom) {
-      cloud.hooks.invalidatePreview();
-    }
-    this.teardownCloudAccountProjection(cloud, preserveRoom);
-    this.store.replaceAccountModels([]);
-    await this.refreshModelCatalog();
+    cloud.hooks.invalidatePreview();
+    this.teardownCloudAccountProjection(cloud);
     await cloud.sessionStore.clear();
     await cloud.hooks.clearCachedRemoteData();
-    if (!preserveRoom) {
-      cloud.remoteState.clearControlTarget();
-      cloud.remoteState.setHostCapabilities([]);
-      await this.saveControlTargetType('');
-    }
+    cloud.remoteState.clearControlTarget();
+    cloud.remoteState.setHostCapabilities([]);
+    await this.saveControlTargetType('');
     RemoteLogger.info('cloud account logout success');
   }
 
@@ -812,44 +659,6 @@ export class SettingsController {
     }
   }
 
-  private update(
-    apiUrl: string,
-    apiKey: string,
-    modelName: string,
-    clearApiKey: boolean
-  ): GeneralChatConfigUpdate {
-    return { apiUrl, apiKey, modelName, clearApiKey };
-  }
-
-  private async validate(update: GeneralChatConfigUpdate): Promise<string> {
-    const snapshot = await this.store.snapshot();
-    return GeneralChatConfigValidator.validate(update, snapshot.hasApiKey);
-  }
-
-  private async probe(update: GeneralChatConfigUpdate): Promise<string> {
-    const apiKey = await this.effectiveApiKey(update);
-    if (apiKey.length === 0) {
-      return RemoteI18n.t('settings.modelService.apiKeyRequired');
-    }
-    try {
-      await this.hooks.probeConfiguration(update.apiUrl, apiKey, update.modelName);
-      return '';
-    } catch (err) {
-      return ConnectionErrorPolicy.errorText(err);
-    }
-  }
-
-  private async effectiveApiKey(update: GeneralChatConfigUpdate): Promise<string> {
-    const directKey = update.apiKey.trim();
-    if (directKey.length > 0) {
-      return directKey;
-    }
-    if (update.clearApiKey) {
-      return '';
-    }
-    return (await this.store.accessToken()).trim();
-  }
-
   private async restoreCloudAccountSession(): Promise<void> {
     const cloud = this.requireCloud();
     try {
@@ -864,7 +673,6 @@ export class SettingsController {
       };
       this.applyCloudAccountSession(session, persisted.relayUrl, persisted.username || session.userId);
       this.restorePersistedControlTarget(persisted);
-      await this.loadGeneralChatAccountModels(session, persisted.relayUrl);
     } catch (err) {
       RemoteLogger.warn(`cloud account restore failed: ${err instanceof Error ? err.message : 'unknown error'}`);
       // Retain the encrypted record. A temporary keystore/storage failure must
@@ -891,64 +699,25 @@ export class SettingsController {
     this.restorePreferredCloudTargetProjection();
   }
 
-  private async loadGeneralChatAccountModels(session: CloudAccountSession, relayUrl: string): Promise<void> {
-    const cloud = this.requireCloud();
-    this.store.replaceAccountModels([]);
-    try {
-      const blob = await cloud.client.fetchSettings(relayUrl, session);
-      if (!blob) {
-        this.store.replaceAccountModels([]);
-        await this.refreshModelCatalog();
-        RemoteLogger.info('cloud model catalog is empty');
-        return;
-      }
-      const models = GeneralChatCloudConfigPolicy.models(blob.plaintext);
-      this.store.replaceAccountModels(models);
-      await this.refreshModelCatalog();
-      RemoteLogger.info(`cloud model catalog loaded count=${models.length} version=${blob.version}`);
-    } catch (err) {
-      await this.refreshModelCatalog();
-      RemoteLogger.warn(`cloud model catalog load failed: ${err instanceof Error ? err.message : 'unknown error'}`);
-    }
-  }
-
   private async expireCloudAccountSession(): Promise<void> {
     const cloud = this.requireCloud();
-    const preserveRoom = this.hasRoomControlTarget(cloud);
-    if (!preserveRoom) {
-      cloud.hooks.invalidatePreview();
-    }
-    // Publish the signed-out projection before awaiting storage. A revoked
-    // credential must never leave stale account devices actionable merely
-    // because preferences or cache cleanup is slow (or fails).
-    this.teardownCloudAccountProjection(cloud, preserveRoom);
-    this.store.replaceAccountModels([]);
-    await this.refreshModelCatalog();
-    await cloud.sessionStore.clear();
-    await cloud.hooks.clearCachedRemoteData();
-    if (!preserveRoom) {
-      await this.saveControlTargetType('');
-    }
+    cloud.hooks.invalidatePreview();
+    // Revocation removes live authority, not the user's encrypted record or
+    // cached remote sessions. Only explicit logout may erase those records.
+    this.teardownCloudAccountProjection(cloud);
     RemoteLogger.info('cloud account session expired');
   }
 
   /** Publishes the complete signed-out projection as one synchronous transition. */
   private teardownCloudAccountProjection(
-    cloud: CloudAccountSettingsDependencies,
-    preserveRoom: boolean
+    cloud: CloudAccountSettingsDependencies
   ): void {
     // Invalidate late device-selection completions before touching observable
     // state. During an in-flight switch the target is deliberately `none`, but
     // its busy/status/session projection still belongs to the account.
     this.accountDeviceSelectionVersion += 1;
-    if (!preserveRoom) {
-      this.resetAccountDeviceConnection(true);
-    }
+    this.resetAccountDeviceConnection(true);
     this.clearCloudAccountIdentity(cloud);
-  }
-
-  private hasRoomControlTarget(cloud: CloudAccountSettingsDependencies): boolean {
-    return cloud.remoteState.controlTargetType === 'room';
   }
 
   private async saveControlTargetType(controlTargetType: string): Promise<void> {

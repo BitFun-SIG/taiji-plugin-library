@@ -17,37 +17,37 @@ import { Github, Loader2, LogOut } from 'lucide-react';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { useI18n } from '@/infrastructure/i18n';
 import {
-  MarketAccountError,
-  marketAccountService,
-  useMarketAccount,
-} from '@/infrastructure/market-account';
+  AccountIdentityError,
+  accountIdentityService,
+  useAccountIdentity,
+} from '@/infrastructure/account-identity';
 import { useNotification } from '@/shared/notification-system';
 import { isImeOwnedKeyboardEvent } from '@/shared/utils/ime';
 import {
-  calculateMarketAccountMenuPosition,
-  type MarketAccountMenuPosition,
+  calculateAccountIdentityMenuPosition,
+  type AccountIdentityMenuPosition,
 } from './marketAccountMenuPosition';
-import './MarketAccountControls.scss';
+import './AccountIdentityControls.scss';
 
-export interface MarketAccountControlsProps {
+export interface AccountIdentityControlsProps {
   className?: string;
   loginOpen?: boolean;
   onLoginOpenChange?: (open: boolean) => void;
   onIdentityChanged?: () => void | Promise<void>;
 }
 
-export function MarketAccountControls({
+export function AccountIdentityControls({
   className,
   loginOpen: controlledLoginOpen,
   onLoginOpenChange,
   onIdentityChanged,
-}: MarketAccountControlsProps) {
+}: AccountIdentityControlsProps) {
   const { t } = useI18n('scenes/miniapp');
   const notification = useNotification();
-  const account = useMarketAccount();
+  const account = useAccountIdentity();
   const [internalLoginOpen, setInternalLoginOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [menuPosition, setMenuPosition] = useState<MarketAccountMenuPosition | null>(null);
+  const [menuPosition, setMenuPosition] = useState<AccountIdentityMenuPosition | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const menuPanelRef = useRef<HTMLDivElement>(null);
   const menuTriggerRef = useRef<HTMLButtonElement>(null);
@@ -63,7 +63,7 @@ export function MarketAccountControls({
   const updateMenuPosition = useCallback(() => {
     if (!menuTriggerRef.current || !menuPanelRef.current) return;
     setMenuPosition(
-      calculateMarketAccountMenuPosition(
+      calculateAccountIdentityMenuPosition(
         menuTriggerRef.current.getBoundingClientRect(),
         menuPanelRef.current.getBoundingClientRect(),
         { width: window.innerWidth, height: window.innerHeight },
@@ -129,7 +129,7 @@ export function MarketAccountControls({
   }, [account.me, loginOpen]);
 
   const closeLogin = () => {
-    if (startedHere.current) marketAccountService.cancelSignIn();
+    if (startedHere.current) accountIdentityService.cancelSignIn();
     startedHere.current = false;
     setLoginOpen(false);
   };
@@ -137,14 +137,14 @@ export function MarketAccountControls({
   const signIn = async () => {
     startedHere.current = true;
     try {
-      await marketAccountService.signIn();
+      await accountIdentityService.signIn();
       startedHere.current = false;
       setLoginOpen(false);
       await onIdentityChanged?.();
       notification.success(t('market.messages.signedIn'));
     } catch (error) {
-      if (error instanceof MarketAccountError && error.code === 'cancelled') return;
-      notification.error(error instanceof MarketAccountError && error.code === 'expired'
+      if (error instanceof AccountIdentityError && error.code === 'cancelled') return;
+      notification.error(error instanceof AccountIdentityError && error.code === 'expired'
         ? t('market.messages.authExpired')
         : t('market.messages.authFailed', { error: String(error) }));
     }
@@ -153,7 +153,7 @@ export function MarketAccountControls({
   const signOut = async () => {
     setMenuOpen(false);
     try {
-      await marketAccountService.logout();
+      await accountIdentityService.logout();
       await onIdentityChanged?.();
       notification.success(t('market.messages.signedOut'));
     } catch (error) {

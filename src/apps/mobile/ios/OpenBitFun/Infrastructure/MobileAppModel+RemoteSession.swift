@@ -793,7 +793,7 @@ extension MobileAppModel {
                 workspacePath: session.workspacePath,
                 workspaceName: session.workspaceName,
                 createdAt: session.createdAt,
-                messageCount: Int(session.messageCount),
+                messageCount: Int(session.messageCount)
             )
         }
         if let committed, projectionDecision.protectCommittedRowAndSelection {

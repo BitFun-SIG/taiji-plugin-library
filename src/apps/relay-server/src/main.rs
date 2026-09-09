@@ -21,7 +21,7 @@ async fn main() -> anyhow::Result<()> {
         )
         .init();
 
-    let cfg = RelayConfig::from_env();
+    let cfg = RelayConfig::from_env()?;
     info!("OpenBitFun Relay Server v{}", env!("CARGO_PKG_VERSION"));
 
     let room_manager = RoomManager::new();
@@ -53,8 +53,7 @@ async fn main() -> anyhow::Result<()> {
             })?;
         Some(Arc::new(pool))
     } else {
-        info!("RELAY_DB_PATH not set — account features disabled (pure relay mode)");
-        None
+        anyhow::bail!("RELAY_DB_PATH is required; anonymous relay mode is no longer supported")
     };
     if db.is_some() && cfg.cors_allow_origins.iter().any(|origin| origin == "*") {
         anyhow::bail!(
@@ -73,7 +72,7 @@ async fn main() -> anyhow::Result<()> {
             if db.is_some() {
                 tracing::warn!(
                     "RELAY_PAGE_PUBLIC_BASE_URL and RELAY_PAGE_AUTH_BASE_URL are not set; \
-                     protected Page login uses same-origin compatibility mode"
+                     published Pages are disabled until isolated origins are configured"
                 );
             }
             None
@@ -83,6 +82,7 @@ async fn main() -> anyhow::Result<()> {
         ),
     };
 
+    let pages_enabled = page_browser_auth.is_some();
     let page_data_dir = std::path::PathBuf::from(&cfg.room_web_dir).join("page-data");
     let mut app = openbitfun_relay_service::build_relay_router_with_page_data_origins_and_page_auth(
         room_manager,
@@ -90,7 +90,7 @@ async fn main() -> anyhow::Result<()> {
         start_time,
         db,
         env!("CARGO_PKG_VERSION"),
-        Some(page_data_dir),
+        pages_enabled.then_some(page_data_dir),
         cfg.cors_allow_origins.clone(),
         page_browser_auth,
     );
@@ -100,6 +100,9 @@ async fn main() -> anyhow::Result<()> {
         app = app.fallback_service(
             tower_http::services::ServeDir::new(static_dir).append_index_html_on_directories(true),
         );
+    }
+    if !pages_enabled {
+        app = app.layer(axum::middleware::from_fn(require_isolated_page_origins));
     }
     // Re-apply after installing the optional fallback so static files receive
     // the same browser hardening as relay API responses.
@@ -120,4 +123,55 @@ async fn main() -> anyhow::Result<()> {
     )
     .await?;
     Ok(())
+}
+
+async fn require_isolated_page_origins(
+    request: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> axum::response::Response {
+    use axum::response::IntoResponse;
+    if is_published_page_path(request.uri().path()) {
+        return (
+            axum::http::StatusCode::SERVICE_UNAVAILABLE,
+            axum::Json(serde_json::json!({"error": "Published Pages require isolated public and sign-in origins"})),
+        ).into_response();
+    }
+    next.run(request).await
+}
+
+fn is_published_page_path(path: &str) -> bool {
+    ["/api/pages", "/api/page-auth", "/p"].iter().any(|prefix| {
+        path == *prefix
+            || path
+                .strip_prefix(prefix)
+                .is_some_and(|tail| tail.starts_with('/'))
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_published_page_path;
+
+    #[test]
+    fn gate_all_published_page_routes_without_blocking_account_or_device_routes() {
+        for path in [
+            "/api/pages",
+            "/api/pages/foo",
+            "/api/page-auth/login",
+            "/p",
+            "/p/owner/page",
+        ] {
+            assert!(is_published_page_path(path), "{path}");
+        }
+        for path in [
+            "/health",
+            "/ws",
+            "/api/devices",
+            "/api/auth/login",
+            "/privacy",
+            "/api/pages-other",
+        ] {
+            assert!(!is_published_page_path(path), "{path}");
+        }
+    }
 }

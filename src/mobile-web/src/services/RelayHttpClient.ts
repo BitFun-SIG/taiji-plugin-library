@@ -9,6 +9,7 @@
 import {
   generateKeyPair,
   deriveSharedKey,
+  deriveDeviceMessageKey,
   encrypt,
   decrypt,
   toB64,
@@ -100,6 +101,7 @@ function delegatedAccountChanged(
 export class RelayHttpClient {
   private relayUrl: string;
   private roomId: string;
+  private deviceMessageKeys = new Map<string, { expires: number; key: Promise<Uint8Array> }>();
   private sharedKey: Uint8Array | null = null;
   private keyPair: MobileKeyPair | null = null;
   /** Delegated credentials are committed as one immutable generation. */
@@ -215,6 +217,7 @@ export class RelayHttpClient {
     this.sharedKey = await deriveSharedKey(this.keyPair, desktopPub);
 
     const deviceId = identity.mobileInstallId;
+    this.deviceMessageKeys.clear();
     this.controllerDeviceIdValue = deviceId;
     const deviceName = this.getMobileDeviceName();
     const userId = identity.userId.trim();
@@ -527,6 +530,7 @@ export class RelayHttpClient {
     if (!token || !userId || !deviceId || identity.masterKey.length !== 32) {
       throw new Error('Relay returned an invalid account identity.');
     }
+    this.deviceMessageKeys.clear();
     this.controllerDeviceIdValue = deviceId;
 
     const hadAccountIdentity = this.delegatedAccountIdentity !== null;
@@ -706,9 +710,29 @@ export class RelayHttpClient {
     options: RelayRequestOptions = {},
   ): Promise<T> {
     return this.withDelegatedAuthRetry(async (identity) => {
+      const cacheId = `${identity.generation}:${targetDeviceId}`;
+      let cached = this.deviceMessageKeys.get(cacheId);
+      if (!cached || cached.expires < Date.now()) {
+        const key = (async () => {
+          const response = await this.fetchWithTimeout(
+            `${this.relayUrl}/api/devices/${encodeURIComponent(targetDeviceId)}/key`,
+            { headers: { Authorization: `Bearer ${identity.token}` } }, 20_000,
+          );
+          if (!response.ok) {
+            const error = new Error(`Device key unavailable: HTTP ${response.status}`) as Error & { status?: number };
+            error.status = response.status;
+            throw error;
+          }
+          const peer = await response.json();
+          return deriveDeviceMessageKey(identity.masterKey, fromB64(peer.public_key));
+        })();
+        cached = { expires: Date.now() + 60_000, key };
+        this.deviceMessageKeys.set(cacheId, cached);
+      }
+      const messageKey = await cached.key;
       const plaintext = JSON.stringify(command);
       const { data: encData, nonce: encNonce } = await encrypt(
-        identity.masterKey,
+        messageKey,
         plaintext,
       );
 
@@ -736,7 +760,7 @@ export class RelayHttpClient {
       }
       const data = await resp.json();
       const decrypted = await decrypt(
-        identity.masterKey,
+        messageKey,
         data.encrypted_data,
         data.nonce,
       );
@@ -745,7 +769,10 @@ export class RelayHttpClient {
         throw new Error(parsed.message || 'Remote error');
       }
       return parsed as T;
-    }, { allowAccountReplacementRetry: false });
+    }, { allowAccountReplacementRetry: false }).catch((error) => {
+      this.deviceMessageKeys.clear();
+      throw error;
+    });
   }
 
   private async withDelegatedAuthRetry<T>(

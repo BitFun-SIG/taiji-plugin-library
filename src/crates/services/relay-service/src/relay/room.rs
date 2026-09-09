@@ -13,9 +13,9 @@ use tokio::sync::{mpsc, oneshot, OwnedSemaphorePermit, Semaphore};
 use tracing::{debug, info, warn};
 
 pub type ConnId = u64;
-pub const MAX_PENDING_REQUESTS: usize = i32::MAX as usize;
-pub const MAX_PENDING_REQUESTS_PER_ROOM: usize = i32::MAX as usize;
-pub const MAX_ACTIVE_ROOMS: usize = i32::MAX as usize;
+pub const MAX_PENDING_REQUESTS: usize = 2048;
+pub const MAX_PENDING_REQUESTS_PER_ROOM: usize = 64;
+pub const MAX_ACTIVE_ROOMS: usize = 4096;
 
 /// Room IDs cross an untrusted WebSocket boundary and later become asset
 /// namespace names. Keep them to one portable path segment so they can never
@@ -46,14 +46,39 @@ impl Drop for PendingRequestGuard {
     }
 }
 
-#[derive(Debug, Clone)]
+const OUTBOUND_MEMORY_BYTES: usize = 256 * 1024 * 1024;
+
+#[derive(Debug)]
 pub struct OutboundMessage {
     pub text: String,
+    _memory: Option<OwnedSemaphorePermit>,
 }
 
 impl OutboundMessage {
+    /// Keep queued and actively written payloads inside one process-wide budget.
+    pub fn try_text(text: impl AsRef<str>) -> Option<Self> {
+        static MEMORY: std::sync::OnceLock<Arc<Semaphore>> = std::sync::OnceLock::new();
+        Self::with_budget(
+            text.as_ref(),
+            MEMORY.get_or_init(|| Arc::new(Semaphore::new(OUTBOUND_MEMORY_BYTES))),
+        )
+    }
+
+    fn with_budget(text: &str, budget: &Arc<Semaphore>) -> Option<Self> {
+        let size = u32::try_from(text.len().max(1)).ok()?;
+        let permit = Arc::clone(budget).try_acquire_many_owned(size).ok()?;
+        Some(Self {
+            text: text.to_owned(),
+            _memory: Some(permit),
+        })
+    }
+
+    #[cfg(test)]
     pub fn text(text: impl Into<String>) -> Self {
-        Self { text: text.into() }
+        Self {
+            text: text.into(),
+            _memory: None,
+        }
     }
 }
 
@@ -110,9 +135,9 @@ pub async fn send_outbound_message(
     tx: &mpsc::Sender<OutboundMessage>,
     message: OutboundMessage,
 ) -> bool {
-    match tx.send(message).await {
-        Ok(()) => true,
-        Err(_) => {
+    match tokio::time::timeout(std::time::Duration::from_secs(2), tx.send(message)).await {
+        Ok(Ok(())) => true,
+        _ => {
             debug!("Outbound websocket channel closed before message could be sent");
             false
         }
@@ -230,7 +255,10 @@ impl RoomManager {
         };
 
         if let Some(tx) = tx {
-            send_outbound_message(&tx, OutboundMessage::text(message)).await
+            match OutboundMessage::try_text(message) {
+                Some(message) => send_outbound_message(&tx, message).await,
+                None => false,
+            }
         } else {
             false
         }
@@ -464,11 +492,17 @@ mod tests {
     }
 
     #[test]
-    fn pending_registration_capacity_is_effectively_unbounded() {
-        assert_eq!(MAX_PENDING_REQUESTS, i32::MAX as usize);
-        assert_eq!(MAX_PENDING_REQUESTS_PER_ROOM, i32::MAX as usize);
-        assert_eq!(MAX_ACTIVE_ROOMS, i32::MAX as usize);
+    fn outbound_memory_is_bounded_and_reclaimed() {
+        let budget = std::sync::Arc::new(tokio::sync::Semaphore::new(8));
+        let first = OutboundMessage::with_budget("12345678", &budget).unwrap();
+        assert!(OutboundMessage::with_budget("x", &budget).is_none());
+        drop(first);
+        assert!(OutboundMessage::with_budget("12345678", &budget).is_some());
+        assert!(OutboundMessage::with_budget("123456789", &budget).is_none());
+    }
 
+    #[test]
+    fn pending_registration_is_bounded_per_room_and_reclaimed() {
         let manager = RoomManager::new();
         let mut guards = Vec::new();
         for index in 0..64 {
@@ -489,6 +523,9 @@ mod tests {
                 .expect("room-a pending registration within per-room limit");
             guards.push(guard);
         }
+        assert!(manager
+            .try_register_pending("room-a", "over-budget".to_string())
+            .is_none());
         assert!(manager
             .try_register_pending("room-b", "room-b-still-healthy".to_string())
             .is_some());

@@ -1,3 +1,4 @@
+import { accountDeviceIdFromLink } from '../main/ets/services/AccountDeviceLink';
 import { describe, it, expect } from '@ohos/hypium';
 import { RemoteI18n } from '../main/ets/i18n/RemoteI18n';
 import { ChatSessionController, ChatSessionSnapshot } from '../main/ets/services/ChatSessionController';
@@ -565,20 +566,6 @@ class ProvisioningFailureAccountClient extends CloudAccountClient {
   }
 }
 
-class WatchLoginFailureAccountClient extends CloudAccountClient {
-  async loginWatch(
-    _relayUrl: string,
-    _username: string,
-    _password: string,
-    _currentSession: CloudAccountSession,
-    _deviceId: string,
-    _deviceName: string,
-    _requestId: string
-  ): Promise<CloudProvisionedDevice> {
-    throw new CloudAccountRequestError('login rejected', 401);
-  }
-}
-
 class AccountDeviceSwitchHarness {
   readonly remoteState: RemotePageState = new RemotePageState();
   readonly sessionManager: ScriptedAccountSessionManager;
@@ -602,6 +589,7 @@ class AccountDeviceSwitchHarness {
   ) {
     this.sessionManager = sessionManager;
     const hooks: CloudAccountSettingsHooks = {
+      openAuthorization: async (_url: string): Promise<boolean> => true,
       deviceId: (): string => 'phone',
       remoteAvailable: (): boolean => true,
       invalidatePreview: (): void => {},
@@ -640,16 +628,7 @@ class AccountDeviceSwitchHarness {
       remoteState: this.remoteState,
       hooks
     };
-    this.controller = new SettingsController(
-      new InMemorySettingsConfigStore(),
-      new GeneralChatPageState(),
-      {
-        probeConfiguration: async (
-          _apiUrl: string, _apiKey: string, _modelName: string
-        ): Promise<void> => {}
-      },
-      cloud
-    );
+    this.controller = new SettingsController(cloud);
     if (applyExistingSession) {
       this.controller.applyCloudAccountSession(
         { token: 't', userId: 'u', masterKey: new Uint8Array(32) },
@@ -665,6 +644,19 @@ class AccountDeviceSwitchHarness {
 }
 
 export default function transportAndGeneralChatUnitTest() {
+  describe('Account device links', () => {
+    it('accepts only the official device selector without trusting embedded credentials', 0, () => {
+      const prefix = 'https://remote.openbitfun.com/v/1.0.0/#/pair?';
+      expect(accountDeviceIdFromLink(prefix + 'did=desktop-1&pk=untrusted&relay=evil')).assertEqual('desktop-1');
+      expect(accountDeviceIdFromLink(prefix + 'did=desktop-1&did=desktop-2')).assertEqual('');
+      expect(accountDeviceIdFromLink(prefix + 'did=%00')).assertEqual('');
+      expect(accountDeviceIdFromLink(prefix + 'did=%ZZ')).assertEqual('');
+      expect(accountDeviceIdFromLink('https://evil.test/v/1.0.0/#/pair?did=desktop-1')).assertEqual('');
+      expect(accountDeviceIdFromLink('https://remote.openbitfun.com@evil.test/v/1.0.0/#/pair?did=desktop-1')).assertEqual('');
+      expect(accountDeviceIdFromLink(prefix + 'room=old&pk=old')).assertEqual('');
+    });
+  });
+
   describe('RemoteDescriptorParser', () => {
     it('parses hash route URLs', 0, () => {
       const descriptor = RemoteDescriptorParser.parse('https://relay.example.com/r/mobile#/pair?room=room-a&pk=public-key');
@@ -1490,125 +1482,24 @@ export default function transportAndGeneralChatUnitTest() {
       expect(harness.sessionStore.clears).assertEqual(0);
     });
 
-    it('asks for account confirmation when a legacy relay has no provisioning route', 0, async () => {
-      const harness = new AccountDeviceSwitchHarness(new ProvisioningFailureAccountClient(404));
-
-      const outcome = await harness.controller.provisionWatchCredential(
-        'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-        'HarmonyOS Watch',
-        '12345678-1234-4234-8234-123456789abc'
-      );
-
-      expect(outcome !== undefined).assertTrue();
-      expect(outcome?.passwordRequired).assertTrue();
-    });
-
-    it('asks for account confirmation when the watch is already registered', 0, async () => {
-      const harness = new AccountDeviceSwitchHarness(new ProvisioningFailureAccountClient(409));
-      // An expired QR pairing projects an empty username into the shared page
-      // state during startup. The cloud account identity must survive that UI
-      // projection because its encrypted session is still valid.
-      harness.remoteState.setAccountPairing(false, '');
-
-      const outcome = await harness.controller.provisionWatchCredential(
-        'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-        'HarmonyOS Watch',
-        '12345678-1234-4234-8234-123456789abc'
-      );
-
-      expect(outcome !== undefined).assertTrue();
-      expect(outcome?.passwordRequired).assertTrue();
-    });
-
-    it('does not treat an authorization refusal as a legacy relay', 0, async () => {
-      const harness = new AccountDeviceSwitchHarness(new ProvisioningFailureAccountClient(403));
-
-      const outcome = await harness.controller.provisionWatchCredential(
-        'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-        'HarmonyOS Watch',
-        '12345678-1234-4234-8234-123456789abc'
-      );
-
-      expect(outcome === undefined).assertTrue();
-    });
-
-    it('reports a rejected compatibility login instead of deferring to the desktop', 0, async () => {
-      const harness = new AccountDeviceSwitchHarness(new WatchLoginFailureAccountClient());
-      harness.remoteState.setAccountPairing(false, '');
-      let statusCode = 0;
-
-      try {
-        await harness.controller.provisionWatchCredential(
-          'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-          'HarmonyOS Watch',
-          '12345678-1234-4234-8234-123456789abc',
-          'wrong-password'
-        );
-      } catch (err) {
-        if (err instanceof CloudAccountRequestError) {
-          statusCode = err.statusCode;
+    it('reports provisioning refusals without falling back to password login', 0, async () => {
+      const statuses: number[] = [401, 403, 404, 409];
+      for (const expectedStatus of statuses) {
+        const harness = new AccountDeviceSwitchHarness(new ProvisioningFailureAccountClient(expectedStatus));
+        harness.remoteState.setAccountPairing(false, '');
+        let statusCode = 0;
+        try {
+          await harness.controller.provisionWatchCredential(
+            'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+            'HarmonyOS Watch',
+            '12345678-1234-4234-8234-123456789abc'
+          );
+        } catch (err) {
+          if (err instanceof CloudAccountRequestError) statusCode = err.statusCode;
         }
+        expect(statusCode).assertEqual(expectedStatus);
+        expect(harness.sessionStore.clears).assertEqual(0);
       }
-
-      expect(statusCode).assertEqual(401);
-    });
-
-    it('tests model configuration with the stored key when the form keeps it unchanged', 0, async () => {
-      const store = new InMemorySettingsConfigStore();
-      store.snapshotResult = {
-        apiUrl: 'https://chat.example.com',
-        modelName: 'model-a',
-        hasApiKey: true
-      };
-      store.accessTokenResult = ' stored-key ';
-      let probedApiKey = '';
-      const controller = new SettingsController(store, new GeneralChatPageState(), {
-        probeConfiguration: async (_apiUrl: string, apiKey: string, _modelName: string): Promise<void> => {
-          probedApiKey = apiKey;
-        }
-      });
-
-      const error = await controller.test('https://chat.example.com', '', 'model-a', false);
-
-      expect(error).assertEqual('');
-      expect(probedApiKey).assertEqual('stored-key');
-    });
-
-    it('saves the first local model and projects its catalog into page state', 0, async () => {
-      const store = new InMemorySettingsConfigStore();
-      store.modelCatalogResults = [
-        { version: 1, models: [], default_models: {} },
-        {
-          version: 2,
-          models: [{
-            id: 'local-general-chat',
-            name: 'model-a',
-            provider: 'local',
-            base_url: 'https://chat.example.com',
-            model_name: 'model-a',
-            enabled: true,
-            capabilities: ['text_chat']
-          }],
-          default_models: { primary: 'local-general-chat' },
-          session_model_id: 'local-general-chat'
-        }
-      ];
-      const state = new GeneralChatPageState();
-      const controller = new SettingsController(store, state, {
-        probeConfiguration: async (_apiUrl: string, _apiKey: string, _modelName: string): Promise<void> => {
-        }
-      });
-
-      const error = await controller.save(
-        'https://chat.example.com', 'new-key', 'model-a', false
-      );
-
-      expect(error).assertEqual('');
-      expect(store.saveRequests.length).assertEqual(1);
-      expect(store.selectLocalModelCalls).assertEqual(1);
-      expect(state.apiUrl).assertEqual('https://chat.example.com');
-      expect(state.conversation.selectedModelId).assertEqual('local-general-chat');
-      expect(state.serviceState).assertEqual(GeneralChatServiceState.Ready);
     });
 
     it('clears the published device roster when the account token expires', 0, async () => {
@@ -1628,8 +1519,8 @@ export default function transportAndGeneralChatUnitTest() {
       expect(harness.accountDeviceSnapshots[0].length).assertEqual(1);
       expect(harness.accountDeviceSnapshots[1].length).assertEqual(0);
       expect(harness.controller.hasCloudAccountSession()).assertFalse();
-      expect(harness.sessionStore.clears).assertEqual(1);
-      expect(harness.cachedRemoteClears).assertEqual(1);
+      expect(harness.sessionStore.clears).assertEqual(0);
+      expect(harness.cachedRemoteClears).assertEqual(0);
     });
 
     it('atomically clears account-owned conversation state on logout', 0, async () => {
@@ -1678,48 +1569,34 @@ export default function transportAndGeneralChatUnitTest() {
       expect(harness.timelineResets).assertEqual(1);
     });
 
-    it('keeps a separately paired room connected after account logout', 0, async () => {
+    it('revokes a legacy room projection together with explicit account logout', 0, async () => {
       const harness = new AccountDeviceSwitchHarness();
       harness.remoteState.setControlTarget('room', 'room-device', 'Paired Desktop');
       harness.remoteState.setConnectionState('connected');
       harness.remoteState.setHostCapabilities(['remote_chat']);
-      harness.remoteState.setActiveSession({
-        sessionId: 'room-session', title: 'Paired room', workspacePath: '/room', agentType: 'code'
-      });
-      harness.remoteState.setStatusText('Room is connected');
-
       await harness.controller.logoutCloudAccount();
-
       expect(harness.remoteState.accountUserId).assertEqual('');
-      expect(harness.remoteState.controlTargetType).assertEqual('room');
-      expect(harness.remoteState.controlTargetDeviceId).assertEqual('room-device');
-      expect(harness.remoteState.connectionState).assertEqual('connected');
-      expect(harness.remoteState.activeSession.sessionId).assertEqual('room-session');
-      expect(harness.remoteState.statusText).assertEqual('Room is connected');
-      expect(harness.remoteState.hostCapabilities.join(',')).assertEqual('remote_chat');
-      expect(harness.timelineResets).assertEqual(0);
-      expect(harness.sessionManager.resets).assertEqual(0);
-      expect(harness.savedControlTargetTypes.length).assertEqual(0);
+      expect(harness.remoteState.controlTargetType).assertEqual('none');
+      expect(harness.remoteState.controlTargetDeviceId).assertEqual('');
+      expect(harness.remoteState.connectionState).assertEqual('disconnected');
+      expect(harness.remoteState.hostCapabilities.length).assertEqual(0);
+      expect(harness.timelineResets).assertEqual(1);
+      expect(harness.sessionManager.resets).assertEqual(1);
+      expect(harness.sessionStore.clears).assertEqual(1);
     });
 
-    it('keeps a paired room connected when the phone account expires', 0, async () => {
-      const client = new ExpiringAccountClient();
-      const harness = new AccountDeviceSwitchHarness(client);
+    it('expires legacy live authority while retaining encrypted records and caches', 0, async () => {
+      const harness = new AccountDeviceSwitchHarness(new ExpiringAccountClient());
       await harness.controller.listCloudAccountDevices();
       harness.remoteState.setControlTarget('room', 'room-device', 'Paired Desktop');
       harness.remoteState.setConnectionState('connected');
-      harness.remoteState.setStatusText('Room is connected');
-
-      try {
-        await harness.controller.listCloudAccountDevices();
-      } catch (_err) {
-      }
-
+      try { await harness.controller.listCloudAccountDevices(); } catch (_err) {}
       expect(harness.controller.hasCloudAccountSession()).assertFalse();
-      expect(harness.remoteState.controlTargetType).assertEqual('room');
-      expect(harness.remoteState.connectionState).assertEqual('connected');
-      expect(harness.remoteState.statusText).assertEqual('Room is connected');
-      expect(harness.sessionManager.resets).assertEqual(0);
+      expect(harness.remoteState.controlTargetType).assertEqual('none');
+      expect(harness.remoteState.connectionState).assertEqual('disconnected');
+      expect(harness.sessionManager.resets).assertEqual(1);
+      expect(harness.sessionStore.clears).assertEqual(0);
+      expect(harness.cachedRemoteClears).assertEqual(0);
     });
 
     it('promotes a delegated QR pairing to the cold-start account target', 0, async () => {

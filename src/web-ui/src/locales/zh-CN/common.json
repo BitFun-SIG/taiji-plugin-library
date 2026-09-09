@@ -790,7 +790,7 @@
     "usernamePlaceholder": "请输入用户名",
     "passwordPlaceholder": "请输入密码",
     "authServerPlaceholder": "https://auth.example.com",
-    "login": "登录",
+    "login": "使用 GitHub 登录",
     "cancel": "取消",
     "emptyFields": "请填写所有字段",
     "invalidCredentialsLength": "用户名或密码过长",
@@ -798,7 +798,7 @@
     "insecureServerTitle": "服务器连接未加密",
     "insecureServerConfirm": "此服务器使用未加密的 HTTP，网络攻击者可能截获登录会话。仍要继续吗？",
     "continueInsecure": "仍要继续",
-    "securityNote": "密码仅在本设备处理，中继服务只会收到派生后的验证值。",
+    "securityNote": "在浏览器中通过 GitHub 授权 OpenBitFun。设备间消息使用端到端加密。",
     "showPassword": "显示密码",
     "hidePassword": "隐藏密码",
     "loginSuccess": "登录成功：{{user_id}}",
@@ -885,7 +885,7 @@
     "syncPhaseExportingSessions": "正在备份会话 {{current}}/{{total}}",
     "copyServerUrl": "复制服务器地址",
     "copyServerFailed": "无法复制服务器地址，请检查剪贴板权限后重试。",
-    "loginValueProp": "登录以关联你的多台设备：互相远程控制，并云同步设置与会话"
+    "loginValueProp": "登录以关联你的多台设备，并互相远程控制。"
   },
   "relayDeploy": {
     "entryHint": "还没有中继服务器？",

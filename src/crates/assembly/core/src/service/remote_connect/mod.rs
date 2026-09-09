@@ -14,7 +14,6 @@ pub mod embedded_relay_host;
 pub mod lan;
 pub mod ngrok;
 pub mod remote_server;
-pub mod settings_sync;
 
 pub mod device {
     pub use openbitfun_services_integrations::remote_connect::device::*;
@@ -44,13 +43,9 @@ pub mod session_store {
     pub use openbitfun_services_integrations::remote_connect::session_store::*;
 }
 
-pub mod sync_state {
-    pub use openbitfun_services_integrations::remote_connect::sync_state::*;
-}
-
 pub use account::{
     build_relay_websocket_url, validate_relay_base_url, AccountClient, AccountSession,
-    DelegateToken, DelegatedIdentity, FetchedSession, KdfParams, ListedSessionEntry, SettingsBlob,
+    DelegateToken,
 };
 pub use device::DeviceIdentity;
 pub use encryption::{decrypt_from_base64, encrypt_to_base64, KeyPair};
@@ -76,7 +71,6 @@ pub enum ConnectionMethod {
     Lan { ip: Option<String> },
     Ngrok,
     OpenBitFunServer,
-    CustomServer { url: String },
     BotFeishu,
     BotTelegram,
     BotWeixin,
@@ -88,7 +82,6 @@ pub struct RemoteConnectConfig {
     pub lan_port: u16,
     pub openbitfun_server_url: String,
     pub web_app_url: String,
-    pub custom_server_url: Option<String>,
     pub bot_feishu: Option<bot::BotConfig>,
     pub bot_telegram: Option<bot::BotConfig>,
     pub bot_weixin: Option<bot::BotConfig>,
@@ -99,9 +92,9 @@ impl Default for RemoteConnectConfig {
     fn default() -> Self {
         Self {
             lan_port: 9700,
-            openbitfun_server_url: "https://remote.openbitfun.com/relay".to_string(),
-            web_app_url: "https://remote.openbitfun.com/relay".to_string(),
-            custom_server_url: None,
+            openbitfun_server_url: openbitfun_product_domains::account::DEFAULT_RELAY_URL
+                .to_string(),
+            web_app_url: openbitfun_product_domains::account::DEFAULT_RELAY_URL.to_string(),
             bot_feishu: None,
             bot_telegram: None,
             bot_weixin: None,
@@ -647,7 +640,7 @@ impl RemoteConnectService {
             // auth=account) but the desktop logged out after generating the
             // code. Never downgrade to password-less pairing.
             if response
-                .password
+                .access_token
                 .as_deref()
                 .is_some_and(|value| !value.is_empty())
             {
@@ -672,10 +665,10 @@ impl RemoteConnectService {
             .filter(|value| !value.is_empty())
             .ok_or_else(|| "Missing username".to_string())?;
         let password = response
-            .password
+            .access_token
             .as_deref()
             .filter(|value| !value.is_empty())
-            .ok_or_else(|| "Missing password".to_string())?;
+            .ok_or_else(|| "Missing GitHub access token".to_string())?;
 
         verify(username.to_string(), password.to_string()).await
     }
@@ -835,9 +828,6 @@ impl RemoteConnectService {
             ConnectionMethod::Lan { ip: None },
             ConnectionMethod::Ngrok,
             ConnectionMethod::OpenBitFunServer,
-            ConnectionMethod::CustomServer {
-                url: self.config.custom_server_url.clone().unwrap_or_default(),
-            },
             ConnectionMethod::BotFeishu,
             ConnectionMethod::BotTelegram,
             ConnectionMethod::BotWeixin,
@@ -902,10 +892,6 @@ impl RemoteConnectService {
                 url
             }
             ConnectionMethod::OpenBitFunServer => validate_relay_base_url(&self.config.openbitfun_server_url)?
-                .as_str()
-                .trim_end_matches('/')
-                .to_string(),
-            ConnectionMethod::CustomServer { url } => validate_relay_base_url(url)?
                 .as_str()
                 .trim_end_matches('/')
                 .to_string(),
@@ -990,29 +976,6 @@ impl RemoteConnectService {
                 } else {
                     info!("No mobile_web_dir configured; using server-hosted mobile web");
                     self.config.web_app_url.clone()
-                }
-            }
-            ConnectionMethod::CustomServer { .. } => {
-                if let Some(web_dir) = static_dir {
-                    match upload_mobile_web_to_relay(&relay_url, &qr_payload.room_id, web_dir).await
-                    {
-                        Ok(()) => {
-                            let url = format!(
-                                "{}/r/{}",
-                                relay_url.trim_end_matches('/'),
-                                qr_payload.room_id
-                            );
-                            info!("Uploaded mobile-web to relay: {url}");
-                            url
-                        }
-                        Err(e) => {
-                            error!("Failed to upload mobile-web to custom relay: {e}; using custom server URL directly");
-                            relay_url.clone()
-                        }
-                    }
-                } else {
-                    info!("No mobile_web_dir configured; using custom server URL directly");
-                    relay_url.clone()
                 }
             }
             _ => self.config.web_app_url.clone(),
@@ -2186,7 +2149,7 @@ mod tests {
             device_name: "Phone".to_string(),
             mobile_install_id: Some("install-1".to_string()),
             user_id: user_id.map(str::to_string),
-            password: password.map(str::to_string),
+            access_token: password.map(str::to_string),
         }
     }
 
@@ -2241,7 +2204,7 @@ mod tests {
             &pairing_response(Some("alice"), None),
         )
         .await;
-        assert_eq!(result.unwrap_err(), "Missing password");
+        assert_eq!(result.unwrap_err(), "Missing GitHub access token");
     }
 
     #[tokio::test]

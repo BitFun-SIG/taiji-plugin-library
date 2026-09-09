@@ -1029,7 +1029,7 @@ export default function conversationStateUnitTest() {
   });
 
   describe('ConversationController', () => {
-    it('keeps composer state isolated while the visible route changes', 0, () => {
+    it('routes legacy and current composer destinations to the remote controller', 0, () => {
       const general = new GeneralChatPageState();
       const remote = new RemotePageState();
       let route = AppRoute.ChatHome;
@@ -1042,10 +1042,10 @@ export default function conversationStateUnitTest() {
       controller.setChatInput(AppRoute.ChatHome, 'general draft');
       controller.setChatInput(AppRoute.RemoteChat, 'remote draft');
 
-      expect(controller.visibleChatInput()).assertEqual('general draft');
+      expect(controller.visibleChatInput()).assertEqual('remote draft');
       route = AppRoute.RemoteChat;
       expect(controller.visibleChatInput()).assertEqual('remote draft');
-      expect(general.chatInput).assertEqual('general draft');
+      expect(general.chatInput).assertEqual('');
       expect(remote.chatInput).assertEqual('remote draft');
     });
 

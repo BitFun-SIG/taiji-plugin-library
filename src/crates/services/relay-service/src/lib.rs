@@ -9,7 +9,10 @@
 //!   - The relay forwards encrypted payloads without inspection
 //!   - Per-room mobile-web static files are managed via `WebAssetStore`
 
+mod identity;
+
 pub mod admin;
+mod admission;
 pub mod db;
 pub mod page_data;
 pub mod page_execution;
@@ -1181,10 +1184,8 @@ pub fn build_relay_router_with_page_data_origins_and_page_auth(
             "/api/info",
             get(move || routes::api::server_info_for_host(host_version)),
         )
-        .route(
-            "/api/auth/login/challenge",
-            post(routes::auth::login_challenge),
-        )
+        .route("/api/auth/github/start", post(routes::auth::github_start))
+        .route("/api/auth/github/poll", post(routes::auth::github_poll))
         .route("/api/auth/login", post(routes::auth::login))
         .route("/api/auth/logout", post(routes::auth::logout))
         .route("/api/auth/delegate", post(routes::auth::delegate))
@@ -1211,9 +1212,12 @@ pub fn build_relay_router_with_page_data_origins_and_page_auth(
         )
         .route("/r/{*rest}", get(routes::api::serve_room_web_catchall))
         .route("/ws", get(routes::websocket::websocket_handler))
-        .merge(routes::sync::sync_router())
         .merge(routes::devices::device_router())
         .merge(routes::pages::pages_router())
+        .layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            admission::admit,
+        ))
         .with_state(state)
         .layer(axum::middleware::from_fn(relay_security_headers));
 
