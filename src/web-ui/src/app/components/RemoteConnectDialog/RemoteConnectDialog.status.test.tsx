@@ -160,7 +160,7 @@ beforeEach(() => {
   boundary.getStatus.mockImplementation(async () => ({ ...boundary.backend! }));
   boundary.getFormState.mockResolvedValue({ custom_server_url: relayA });
   boundary.startConnection.mockImplementation(async (_method: string, relay: string) => {
-    boundary.backend = { ...boundary.backend!, active_method: 'OpenBitFunServer', pairing_state: 'waiting_for_scan' };
+    // Official device invitations do not create or mutate a pairing room.
     return invitation(relay);
   });
   boundary.stopConnection.mockImplementation(async () => {
@@ -183,6 +183,51 @@ afterEach(async () => {
 });
 
 describe('Remote Connect shared status through the real dialog and sidebar', () => {
+  it('keeps an official device QR across idle room status, presence changes, and polling', async () => {
+    boundary.backend = status({ bot_connected: null, pairing_state: 'idle', active_method: null });
+    await render();
+    await generateInvitation();
+    expect(dialog().textContent).toContain(invitation().qr_url);
+    expect(dialog().querySelector('.openbitfun-remote-connect__qr-box svg')).not.toBeNull();
+    await tick(10_000);
+    expect(dialog().textContent).toContain(invitation().qr_url);
+    for (const connected of [true, false, true]) {
+      boundary.backend = { ...boundary.backend!, account_control_connected: connected, account_control_relay_url: relayA };
+      await tick();
+      expect(dialog().textContent).toContain(invitation().qr_url);
+      expect(cardStatus()).toBe(connected ? 'remoteConnect.stateConnected' : 'remoteConnect.stateWaiting');
+    }
+    expect(boundary.startConnection).toHaveBeenCalledOnce();
+    await clickText('remoteConnect.cancelInvitation');
+    expect(document.querySelector('[data-openbitfun-part="pairingCard"]')).toBeNull();
+    expect(dialog().textContent).toContain('remoteConnect.showConnectionCode');
+  });
+
+  it('keeps an official device invitation selected when an independent LAN room connects', async () => {
+    boundary.backend = status({ bot_connected: null });
+    await render();
+    await generateInvitation();
+    boundary.backend = status({ pairing_state: 'connected', active_method: 'Lan { ip: None }', is_connected: true });
+    await tick(6000);
+    expect(element('#remote-connect-network-tab-openbitfun_server').getAttribute('aria-selected')).toBe('true');
+    expect(dialog().textContent).toContain(invitation().qr_url);
+    expect(boundary.stopConnection).not.toHaveBeenCalled();
+  });
+
+  it('still clears an expired legacy room invitation from an older host', async () => {
+    const legacy = { ...invitation(), qr_url: `${relayA}/#/pair?relay=${encodeURIComponent(relayA)}&room=legacy` };
+    boundary.startConnection.mockImplementationOnce(async () => {
+      boundary.backend = status({ active_method: 'OpenBitFunServer', pairing_state: 'waiting_for_scan' });
+      return legacy;
+    });
+    await render();
+    await generateInvitation();
+    expect(dialog().textContent).toContain(legacy.qr_url);
+    boundary.backend = status({ active_method: null, pairing_state: 'idle' });
+    await tick();
+    expect(document.querySelector('[data-openbitfun-part="pairingCard"]')).toBeNull();
+  });
+
   it.each([undefined, 'network', 'bot'] as const)('hides connection methods while signed out, including contextual %s entry', async group => {
     boundary.loggedIn = false;
     await render(group);

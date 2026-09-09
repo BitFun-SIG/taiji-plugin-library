@@ -39,7 +39,7 @@ import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
 import { api } from '@/infrastructure/api/service-api/ApiClient';
 import { useAccountLoginState } from '@/infrastructure/account/useAccountLoginState';
 import { remoteConnectStatusSource, useRemoteConnectStatus } from '@/infrastructure/remote-connect/remoteConnectStatus';
-import { OFFICIAL_RELAY_URL, remoteNetworkMethod, selectRemoteNetworkConnection, type RemoteNetworkMethod } from '@/infrastructure/remote-connect/remoteConnectionState';
+import { isOfficialDeviceInvitation, OFFICIAL_RELAY_URL, remoteNetworkMethod, selectRemoteNetworkConnection, type RemoteNetworkMethod } from '@/infrastructure/remote-connect/remoteConnectionState';
 import { useNotification } from '@/shared/notification-system';
 import { copyTextToClipboard } from '@/shared/utils/textSelection';
 import { AccountPanel } from './AccountPanel';
@@ -308,25 +308,27 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
 
   const applyStatus = useCallback((nextStatus: RemoteConnectStatus, restoreSelection = false) => {
     const network = selectRemoteNetworkConnection(nextStatus, connectionResultRef.current);
+    // Account device QR codes outlive room idle/connected transitions.
+    const deviceInvitation = isOfficialDeviceInvitation(connectionResultRef.current);
 
     // Relay and bot connections can coexist. Restore both selected subtabs
     // before choosing which group to show, otherwise the bot-first open path
     // can leave a connected OpenBitFun Server relay rendering the default LAN UI.
     const hasPendingInvitation = connectionOwnerRef.current === 'network' && connectionResultRef.current !== null;
-    if (network.roomConnected || (restoreSelection && network.accountConnected
-      && (!hasPendingInvitation || network.invitationAccountConnected))) {
+    if (!deviceInvitation && (network.roomConnected || (restoreSelection && network.accountConnected
+      && (!hasPendingInvitation || network.invitationAccountConnected)))) {
       const connectedTab = network.method;
       if (connectedTab) setNetworkTab(connectedTab);
     }
     const connectedBot = botInfoToBotTab(nextStatus.bot_connected);
     if (connectedBot) setBotTab(connectedBot);
     const owner = connectionOwnerRef.current;
-    if ((owner === 'network' && network.roomConnected) || (owner === 'bot' && connectedBot)) {
+    if ((owner === 'network' && !deviceInvitation && network.roomConnected) || (owner === 'bot' && connectedBot)) {
       pendingOwnerRef.current = null;
       connectionOwnerRef.current = null;
       setConnectionOwner(null);
       setConnectionResult(null);
-    } else if (owner === 'network' && !nextStatus.active_method && !pendingStartRef.current) {
+    } else if (owner === 'network' && !deviceInvitation && !nextStatus.active_method && !pendingStartRef.current) {
       pendingOwnerRef.current = null;
       connectionOwnerRef.current = null;
       setConnectionOwner(null);
@@ -912,6 +914,7 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
   // ── Sub-tab disabled logic ───────────────────────────────────────
 
   const isNetworkSubDisabled = (tabId: NetworkTab): boolean => {
+    if (tabId === 'openbitfun_server' && isOfficialDeviceInvitation(connectionResult)) return false;
     if (networkConnection.roomConnected && networkConnection.roomMethod && networkConnection.roomMethod !== tabId) return true;
     return false;
   };

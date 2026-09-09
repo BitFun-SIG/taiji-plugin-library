@@ -47,6 +47,20 @@ export function relayUrlFromMethod(method: RemoteConnectionMethod | null | undef
   }
 }
 
+/** Account device links remain valid independently of the legacy room lifecycle. */
+export function isOfficialDeviceInvitation(invitation: ConnectionResult | null | undefined): boolean {
+  if (!invitation?.qr_url || remoteNetworkMethod(invitation.method) !== 'openbitfun_server') return false;
+  try {
+    const url = new URL(invitation.qr_url);
+    const params = new URLSearchParams(url.hash.slice(url.hash.indexOf('?') + 1));
+    return `${url.origin}${url.pathname}` === `${OFFICIAL_RELAY_URL}/`
+      && url.hash.startsWith('#/pair?') && !params.has('relay')
+      && /^[A-Za-z0-9_.-]{1,128}$/.test(params.get('did') ?? '');
+  } catch {
+    return false;
+  }
+}
+
 function invitationRelayUrl(invitation: ConnectionResult): string | null {
   if (invitation.qr_url) {
     try {
@@ -56,11 +70,7 @@ function invitationRelayUrl(invitation: ConnectionResult): string | null {
       const params = new URLSearchParams(query);
       const relay = params.get('relay');
       if (relay !== null) return normalizeRelayUrl(relay);
-      // Only the canonical official device link omits the relay parameter.
-      const isDeviceLink = remoteNetworkMethod(invitation.method) === 'openbitfun_server'
-        && `${url.origin}${url.pathname}` === `${OFFICIAL_RELAY_URL}/`
-        && hash.startsWith('#/pair?') && /^[A-Za-z0-9_.-]{1,128}$/.test(params.get('did') ?? '');
-      return isDeviceLink ? OFFICIAL_RELAY_URL : null;
+      return isOfficialDeviceInvitation(invitation) ? OFFICIAL_RELAY_URL : null;
     } catch {
       return null;
     }
