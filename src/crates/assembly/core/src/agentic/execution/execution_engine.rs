@@ -3874,14 +3874,12 @@ impl ExecutionEngine {
             context.workspace_services.clone(),
         );
         // Older turn metadata may still hold inline pixels even when its context
-        // snapshot predates durable attachments. Recover those pixels without
-        // changing the persisted record shape or requiring manual migration.
+        // snapshot predates durable attachments. Inline pixels also supersede
+        // old temporary/controller paths, which may no longer exist. Recover
+        // them without changing the record shape or requiring manual migration.
         for message in &mut messages {
             if let MessageContent::Multimodal { images, .. } = &mut message.content {
-                if !images
-                    .iter()
-                    .any(|image| image.data_url.is_some() && image.image_path.is_none())
-                {
+                if !images.iter().any(|image| image.data_url.is_some()) {
                     continue;
                 }
                 if let Err(error) =
