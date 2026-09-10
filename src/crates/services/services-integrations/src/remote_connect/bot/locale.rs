@@ -151,6 +151,7 @@ pub struct BotStrings {
     pub session_system_unavailable: &'static str,
     pub workspace_service_unavailable: &'static str,
     pub workspace_open_failed_prefix: &'static str,
+    pub workspace_list_changed: &'static str,
     pub assistant_create_failed_prefix: &'static str,
 
     pub pending_expired: &'static str,
@@ -309,6 +310,7 @@ const STRINGS_ZH: BotStrings = BotStrings {
     session_system_unavailable: "OpenBitFun 会话系统尚未就绪，请稍后再试。",
     workspace_service_unavailable: "工作区服务暂时不可用。",
     workspace_open_failed_prefix: "打开工作区失败：",
+    workspace_list_changed: "工作区列表已更新，请重新选择。",
     assistant_create_failed_prefix: "创建助理工作区失败：",
 
     pending_expired: "上一步已超时，已为你返回主菜单。",
@@ -466,6 +468,7 @@ const STRINGS_ZH_TW: BotStrings = BotStrings {
     session_system_unavailable: "OpenBitFun 會話系統尚未就緒，請稍後再試。",
     workspace_service_unavailable: "工作區服務暫時不可用。",
     workspace_open_failed_prefix: "打開工作區失敗：",
+    workspace_list_changed: "工作區清單已更新，請重新選擇。",
     assistant_create_failed_prefix: "創建助理工作區失敗：",
 
     pending_expired: "上一步已超時，已為你返回主菜單。",
@@ -624,6 +627,7 @@ Open Remote Connect in OpenBitFun Desktop and send the 6-digit pairing code here
     session_system_unavailable: "OpenBitFun session system is not ready yet.",
     workspace_service_unavailable: "Workspace service unavailable.",
     workspace_open_failed_prefix: "Failed to open workspace: ",
+    workspace_list_changed: "The workspace list has changed. Please choose again.",
     assistant_create_failed_prefix: "Failed to create assistant workspace: ",
 
     pending_expired: "Previous step expired. Returned to the main menu.",
