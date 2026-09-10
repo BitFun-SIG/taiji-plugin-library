@@ -1,4 +1,8 @@
 export const ZH_CN_MESSAGES: [string, string][] = [
+  ['notification.onboardingTitle', '开启任务完成提醒'],
+  ['notification.onboardingBody', '允许 OpenBitFun 在任务完成时发送通知。你可以稍后在系统设置中更改。'],
+  ['notification.onboardingLater', '稍后'],
+  ['notification.onboardingEnable', '开启通知'],
   ['app.title', 'OpenBitFun'],
 
   ['common.cancel', '取消'],
