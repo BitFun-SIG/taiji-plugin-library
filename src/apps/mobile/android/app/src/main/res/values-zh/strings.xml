@@ -434,4 +434,5 @@
     <string name="account_open_github">打开 GitHub 授权</string>
     <string name="account_device_link_invalid">请使用当前版本的 OpenBitFun 设备二维码。</string>
     <string name="account_device_link_unavailable">该设备已离线，或不属于当前 GitHub 账户。</string>
+    <string name="chat_image_prepare_failed">无法处理这张图片，请选择其他图片。</string>
 </resources>

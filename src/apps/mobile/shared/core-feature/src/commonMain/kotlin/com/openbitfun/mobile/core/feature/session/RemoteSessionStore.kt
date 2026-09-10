@@ -1335,8 +1335,9 @@ public class RemoteSessionStore internal constructor(
     private fun sendMessage(intent: RemoteSessionIntent.SendMessage) {
         val sessionId = intent.sessionId.trim()
         val content = intent.content
-        if (sessionId.isEmpty() || content.trim().isEmpty()) return
+        if (sessionId.isEmpty() || (content.trim().isEmpty() && intent.images.isNullOrEmpty())) return
         val current = _state.value as? RemoteSessionUiState.Ready ?: return
+        if (current.busy || current.selectedSessionId != sessionId) return
         val wireImages = intent.images?.map { image ->
             com.openbitfun.mobile.core.protocol.ImageAttachment(
                 name = image.id,
@@ -1386,17 +1387,27 @@ public class RemoteSessionStore internal constructor(
                 if (!isCurrentWork(operationToken)) return@launch
                 response.turnId?.let(timelineStore::setLocalActiveTurn)
                 controller.nudge()
-                deletePersistedDraft(sessionId)
                 val ready = ((_state.value as? RemoteSessionUiState.Ready) ?: current)
-                if (ready.selectedSessionId == sessionId) _state.value = ready.copy(draft = "")
+                if (ready.selectedSessionId == sessionId) {
+                    // An acknowledgement owns only the submitted draft. Keep
+                    // newer typing and let each native picker remove only the
+                    // acknowledged images; failed sends retain their pixels.
+                    val draftUnchanged = ready.draft == current.draft && ready.draft.trim() == content.trim()
+                    if (draftUnchanged) deletePersistedDraft(sessionId)
+                    _state.value = ready.copy(
+                        draft = if (draftUnchanged) "" else ready.draft,
+                        lastSentMessage = SentChatMessage(
+                            local.id, sessionId, content, intent.images.orEmpty().map { it.id },
+                        ),
+                    )
+                }
                 setBusy((_state.value as? RemoteSessionUiState.Ready) ?: current, false)
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Throwable) {
                 if (isCurrentWork(operationToken)) {
                     timelineStore.markOptimisticMessageFailed(local.id)
-                    setBusy((_state.value as? RemoteSessionUiState.Ready) ?: current, false)
-                    handleFailure(error, current)
+                    handleFailure(error, (_state.value as? RemoteSessionUiState.Ready) ?: current)
                 }
             }
         }

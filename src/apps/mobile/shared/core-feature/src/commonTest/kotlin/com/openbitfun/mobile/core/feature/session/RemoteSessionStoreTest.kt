@@ -1052,6 +1052,62 @@ class RemoteSessionStoreTest {
     }
 
     @Test
+    fun imageOnlyMessagesAreSentAndAcknowledgedForNativePickers() = runTest {
+        val transport = FakeSessionTransport()
+        val store = RemoteSessionStore.create(this, transport)
+        store.dispatch(RemoteSessionIntent.Open("s-code"))
+        runCurrent()
+        val images = listOf(ComposerImage("photo-1", "data:image/png;base64,abc", "image/png"))
+        store.dispatch(RemoteSessionIntent.SendMessage("s-code", "", images))
+        runCurrent()
+        val sent = transport.commands.last { it.cmd == "send_message" }
+        assertEquals("", sent.content)
+        assertEquals(images.single().dataUrl, sent.imageContexts?.single()?.dataUrl)
+        assertNull(sent.imageContexts?.single()?.imagePath)
+        val ready = assertIs<RemoteSessionUiState.Ready>(store.state.value)
+        assertFalse(ready.busy)
+        assertEquals(listOf("photo-1"), ready.lastSentMessage?.imageIds)
+        assertEquals("s-code", ready.lastSentMessage?.sessionId)
+        store.stop()
+    }
+
+    @Test
+    fun imageSendFailureDoesNotConsumeAttachmentsAndAckKeepsNewTyping() = runTest {
+        val transport = FakeSessionTransport()
+        val store = RemoteSessionStore.create(this, transport)
+        store.dispatch(RemoteSessionIntent.Open("s-code"))
+        runCurrent()
+        val images = listOf(ComposerImage("photo-1", "data:image/png;base64,abc", "image/png"))
+        store.dispatch(RemoteSessionIntent.UpdateDraft("look"))
+        transport.sendMessageFailure = RelayFailure.NetworkUnreachable
+        val failureGate = CompletableDeferred<Unit>()
+        transport.commandGates["send_message"] = failureGate
+        store.dispatch(RemoteSessionIntent.SendMessage("s-code", "look", images))
+        runCurrent()
+        store.dispatch(RemoteSessionIntent.UpdateDraft("edited while waiting"))
+        failureGate.complete(Unit)
+        runCurrent()
+        val failed = assertIs<RemoteSessionUiState.Ready>(store.state.value)
+        assertEquals("edited while waiting", failed.draft)
+        assertNull(failed.lastSentMessage)
+        assertFalse(failed.busy)
+
+        transport.sendMessageFailure = null
+        val gate = CompletableDeferred<Unit>()
+        transport.commandGates["send_message"] = gate
+        store.dispatch(RemoteSessionIntent.SendMessage("s-code", "look", images))
+        runCurrent()
+        store.dispatch(RemoteSessionIntent.UpdateDraft("next question"))
+        gate.complete(Unit)
+        runCurrent()
+        val ready = assertIs<RemoteSessionUiState.Ready>(store.state.value)
+        assertEquals("next question", ready.draft)
+        assertEquals(listOf("photo-1"), ready.lastSentMessage?.imageIds)
+        assertFalse(ready.busy)
+        store.stop()
+    }
+
+    @Test
     fun sendMessageFallsBackToTheLocallyCreatedRecordWhenTheFilterHidesTheSession() = runTest {
         val transport = FakeSessionTransport()
         val store = RemoteSessionStore.create(this, transport)

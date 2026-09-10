@@ -191,7 +191,7 @@ private struct ConversationRowView: View {
                     .foregroundStyle(OpenBitFunTheme.muted)
             }
             if row.showRetry {
-                Button { model.retryMessage(row.text) } label: {
+                Button { model.retryMessage(row.text, images: row.images) } label: {
                     Label(model.localized("重新发送"), systemImage: "arrow.clockwise")
                         .font(MobileDesignTypography.labelSmall.font)
                         .foregroundStyle(OpenBitFunTheme.statusDanger)
@@ -220,7 +220,7 @@ private struct ConversationRowView: View {
             if let error = row.error, !error.isEmpty {
                 assistantFailure(error)
             } else if row.showRetry {
-                Button { model.retryMessage(row.text) } label: {
+                Button { model.retryMessage(row.text, images: row.images) } label: {
                     Label(model.localized("重试"), systemImage: "arrow.clockwise")
                         .font(MobileDesignTypography.labelSmall.font)
                         .foregroundStyle(OpenBitFunTheme.statusDanger)
@@ -242,7 +242,7 @@ private struct ConversationRowView: View {
                 .lineSpacing(MobileDesignTypography.bodySmall.lineSpacing)
                 .textSelection(.enabled)
             if row.showRetry {
-                Button(model.localized("重试")) { model.retryMessage(row.text) }
+                Button(model.localized("重试")) { model.retryMessage(row.text, images: row.images) }
                     .font(MobileDesignTypography.bodySmall.font.weight(.medium))
                     .foregroundStyle(MobileDesignColors.fileLink)
                     .buttonStyle(.plain)

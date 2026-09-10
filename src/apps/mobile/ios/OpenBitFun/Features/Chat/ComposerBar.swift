@@ -513,15 +513,18 @@ struct ComposerBar: View {
     }
 
     private func importPickedImages(_ items: [PhotosPickerItem]) async {
+        let sessionID = model.selectedSessionID
+        let deviceKey = model.remoteExpectedDeviceKey
         for item in items {
-            guard let data = try? await item.loadTransferable(type: Data.self) else {
+            guard let data = try? await item.loadTransferable(type: Data.self),
+                  let prepared = await Task.detached(priority: .userInitiated, operation: {
+                      MobileAppModel.prepareComposerImage(data)
+                  }).value else {
                 model.showToast(model.localized("无法读取所选图片"))
                 continue
             }
-            let mimeType = item.supportedContentTypes
-                .compactMap(\.preferredMIMEType)
-                .first ?? "image/jpeg"
-            model.addComposerImage(data: data, mimeType: mimeType)
+            guard model.selectedSessionID == sessionID, model.remoteExpectedDeviceKey == deviceKey else { break }
+            model.addComposerImage(data: prepared, mimeType: "image/jpeg")
         }
         pickerItems = []
     }

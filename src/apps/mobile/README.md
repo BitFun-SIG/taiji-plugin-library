@@ -16,6 +16,19 @@ and platform adapters. Product logic and stable contracts should remain in the
 platform-agnostic Rust layers and be exposed to these apps through explicit
 interfaces.
 
+## Image messages
+
+All three apps can send images with or without text. Camera photos are decoded
+on the phone and converted to a supported format before upload. Failed sends
+retain the draft and images; acknowledgement removes only the submitted content.
+
+Model selection belongs to the connected host. A primary model that supports
+images receives their pixels directly. For a text-only primary model, select an
+enabled image-understanding model in the host settings and keep `analyze_image`
+enabled for the agent. The receiving runtime saves inline attachments so the
+same images remain available after restoring a conversation, including sessions
+in SSH workspaces. An unavailable model or unreadable image produces an error.
+
 ## Shared visual contract
 
 HarmonyOS is the current visual baseline. The source contract in
