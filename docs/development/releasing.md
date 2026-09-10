@@ -134,3 +134,9 @@ For release workflow and channel-isolation changes, run
 `node --test scripts/relay/package-contract.test.mjs scripts/tauri-release-manifest.test.mjs`.
 These checks exercise release conditions, image tag selection, Beta manifest
 generation, and asset collection with fixtures; they do not build or publish packages.
+
+The inaugural public `1.0.0-beta` release supports marketplace packages declaring
+minimum OpenBitFun `1.0.0`. This is an explicit product compatibility exception;
+numbered beta and RC builds retain their normal SemVer ordering, and updater
+version comparisons are unchanged. Requirements above `1.0.0` still reject this
+release. The shared policy lives in `product-domains::product_release`.
