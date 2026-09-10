@@ -20,6 +20,7 @@ final class MobileAppModel: ObservableObject {
     @Published var remoteViewSettingsOpen = false
     @Published var remoteHasMore = false
     @Published var remoteHasMoreMessages = false
+    @Published var remoteConversationLoading = false
     @Published var remotePermissionMode = "ASK"
     @Published var remotePermissionFailure: String?
     @Published var remoteAssistants: [MobileAssistantOption] = []
@@ -102,10 +103,15 @@ final class MobileAppModel: ObservableObject {
     var remoteLastAppliedAuthority: RemoteAuthorityScope?
     var workspaceCatalog: [(path: String, name: String, selected: Bool)] = []
     var pendingRemoteWorkspaceCreate: (path: String, agentType: String)?
+    var pendingRemoteSessionRefreshWorkspacePath: String?
     var pendingDirectoryWorkspace: (deviceKey: String, path: String, epoch: UInt64)?
     var pendingDirectoryRemoteDraft: PendingDirectoryRemoteDraft?
     var pendingRemoteAssistantCreate = false
     var selectedRemoteWorkspaceKind = ""
+    var remoteConversationLoadTask: Task<Void, Never>?
+    var remoteConversationLoadGeneration: UInt64 = 0
+    var remoteConversationOpeningSessionID: String?
+    var remoteConversationOpenStartedAt: TimeInterval?
 
     var coreAdapter: MobileCoreAdapter?
 
@@ -124,6 +130,9 @@ final class MobileAppModel: ObservableObject {
             },
             onRemoteState: { [weak self] state, targetKey, epoch in
                 self?.apply(remoteState: state, targetKey: targetKey, epoch: epoch)
+            },
+            onRemoteConnectionPhase: { [weak self] phase, targetKey, epoch in
+                self?.apply(remoteConnectionPhase: phase, targetKey: targetKey, epoch: epoch)
             },
             onWorkspaceState: { [weak self] state, targetKey, epoch in
                 self?.apply(workspaceState: state, targetKey: targetKey, epoch: epoch)
@@ -228,6 +237,7 @@ final class MobileAppModel: ObservableObject {
     }
 
     func disconnectRemote() {
+        resetRemoteConversationOpen()
         invalidateTargetScopedFileTransfers()
         committedRemoteCreate = nil
         remoteLastAppliedAuthority = nil
@@ -244,6 +254,7 @@ final class MobileAppModel: ObservableObject {
         workspaceSelectionBusy = false
         remoteCreateWorkspacePhase = .unavailable
         pendingRemoteWorkspaceCreate = nil
+        pendingRemoteSessionRefreshWorkspacePath = nil
         pendingDirectoryRemoteDraft = nil
         pendingRemoteAssistantCreate = false
         selectedRemoteWorkspaceKind = ""
@@ -338,6 +349,7 @@ final class MobileAppModel: ObservableObject {
         pendingDirectoryWorkspace = nil
         pendingDirectoryRemoteDraft = nil
         pendingRemoteWorkspaceCreate = nil
+        pendingRemoteSessionRefreshWorkspacePath = nil
         pendingRemoteAssistantCreate = false
         selectedRemoteWorkspaceKind = ""
         selectedSessionID = ""

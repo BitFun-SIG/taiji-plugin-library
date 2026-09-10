@@ -108,6 +108,7 @@ public class AccountStore internal constructor(
             backend.transport(current, target),
             kotlinx.coroutines.Dispatchers.Default,
             target,
+            persistence?.remoteWorkspaces,
         )
     }
 
@@ -137,6 +138,7 @@ public class AccountStore internal constructor(
             backend.transport(current, target),
             kotlinx.coroutines.Dispatchers.Default,
             target,
+            persistence?.remoteWorkspaces,
         )
     }
 

@@ -31,17 +31,18 @@ extension MobileAppModel {
         remoteCreateRequestEpoch = remoteTargetEpoch
         remoteCreateRequestDeviceKey = nil
         pendingRemoteWorkspaceCreate = nil
+        pendingRemoteSessionRefreshWorkspacePath = nil
         pendingRemoteAssistantCreate = false
         remoteSessionSelected = false
     }
 
-    func selectRemoteDevice(_ device: MobileAccountDevice) {
+    func selectRemoteDevice(_ device: MobileAccountDevice, preserveDrawer: Bool = false) {
         guard device.online else {
             showToast(localized("这台桌面设备当前离线"))
             return
         }
         surface = .remote
-        drawerOpen = false
+        if !preserveDrawer { drawerOpen = false }
         let targetKey = "account:\(device.id)"
         guard remoteExpectedDeviceKey != targetKey else { return }
         invalidateTargetScopedFileTransfers()
@@ -66,6 +67,7 @@ extension MobileAppModel {
         remoteWorkspaces = []
         workspaceCatalog = []
         pendingRemoteWorkspaceCreate = nil
+        pendingRemoteSessionRefreshWorkspacePath = nil
         pendingRemoteAssistantCreate = false
         selectedRemoteWorkspaceKind = ""
         messages = []
@@ -198,10 +200,12 @@ extension MobileAppModel {
             remoteCreateDeviceError = ready.refreshFailure != nil
                 ? localized("设备列表加载失败，请稍后重试。") : nil
             accountDevices = ready.devices.map { device in
-                MobileAccountDevice(
+                let targetKey = "account:\(device.id)"
+                return MobileAccountDevice(
                     id: device.id,
                     name: device.name,
-                    online: device.online,
+                    online: device.online ||
+                        (targetKey == remoteExpectedDeviceKey && remoteConnected && remoteInitialSessionReady),
                     selected: device.id == ready.selectedDeviceId
                 )
             }
@@ -218,9 +222,13 @@ extension MobileAppModel {
                 coreAdapter?.selectAccountDevice(id: target.id)
                 return
             }
-            remoteConnected = ready.selectedDeviceId != nil
+            let selectedTargetKey = ready.selectedDeviceId.map { "account:\($0)" }
+            let retainsReachableAccountTarget = selectedTargetKey == remoteExpectedDeviceKey && remoteConnected
+            if !retainsReachableAccountTarget {
+                remoteConnected = false
+                connectionPhase = ready.selectedDeviceId == nil ? .disconnected : .reconnecting
+            }
             surface = .remote
-            connectionPhase = .connected
             if ready.refreshFailure != nil {
                 showToast(localized("设备列表刷新失败，仍显示上次结果"))
             }
@@ -277,6 +285,23 @@ extension MobileAppModel {
                 invalidateTerminalAccountAuthority()
 
         }
+    }
+
+    func promoteLiveAccountTargetPresence(targetKey: String) {
+        let prefix = "account:"
+        guard targetKey.hasPrefix(prefix), remoteConnected else { return }
+        let deviceID = String(targetKey.dropFirst(prefix.count))
+        guard let index = accountDevices.firstIndex(where: { $0.id == deviceID }),
+              !accountDevices[index].online else { return }
+        let device = accountDevices[index]
+        accountDevices[index] = MobileAccountDevice(
+            id: device.id,
+            name: device.name,
+            online: true,
+            selected: device.selected
+        )
+        accountDirectoryGeneration = coreAdapter?.syncDeviceDirectory(accountDevices) ??
+            (accountDirectoryGeneration &+ 1)
     }
 
     func accountErrorMessage(_ reason: String, stage: String? = nil) -> String {

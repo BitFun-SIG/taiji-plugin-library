@@ -941,6 +941,16 @@
         }
       }
     },
+    "这台电脑暂时无法读取": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This computer cannot be read right now"
+          }
+        }
+      }
+    },
     "工作区助手": {
       "localizations": {
         "en": {
@@ -2551,12 +2561,12 @@
         }
       }
     },
-    "已完成 %lld 项读取与搜索": {
+    "已完成 %lld 项操作": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Completed %lld read and search operations"
+            "value": "Completed %lld operations"
           }
         }
       }
