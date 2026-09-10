@@ -1,4 +1,8 @@
 export const EN_US_MESSAGES: [string, string][] = [
+  ['notification.onboardingTitle', 'Task completion notifications'],
+  ['notification.onboardingBody', 'Allow OpenBitFun to notify you when tasks finish. You can change this later in system settings.'],
+  ['notification.onboardingLater', 'Later'],
+  ['notification.onboardingEnable', 'Enable notifications'],
   ['app.title', 'OpenBitFun'],
 
   ['common.cancel', 'Cancel'],
