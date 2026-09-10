@@ -24,11 +24,14 @@ export interface ImageViewerProps {
   workspacePath?: string;
   /** CSS class name */
   className?: string;
+  /** Immutable bytes supplied by a session provider; never read filePath locally. */
+  imageSource?: { dataUrl: string; size: number };
 }
 
 export const ImageViewer: React.FC<ImageViewerProps> = ({
   filePath,
   fileName,
+  imageSource,
   className = ''
 }) => {
   const { t } = useI18n('tools');
@@ -58,6 +61,20 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
+    if (imageSource) {
+      setImageUrl(imageSource.dataUrl);
+      setFileSize(imageSource.size);
+      setError(null);
+      setLoading(false);
+      return;
+    }
+    if (filePath.startsWith('dispatch-file://')) {
+      setImageUrl('');
+      setError(t('editor.imageViewer.filePathEmpty'));
+      setLoading(false);
+      return;
+    }
     const loadImage = async () => {
       if (!filePath) {
         setError(t('editor.imageViewer.filePathEmpty'));
@@ -72,6 +89,7 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({
         const { workspaceAPI } = await import('@/infrastructure/api');
         const result = await workspaceAPI.readFileContent(filePath);
 
+        if (cancelled) return;
         const mimeType = getMimeType(filePath);
 
         const dataUrl = `data:${mimeType};base64,${result}`;
@@ -81,14 +99,16 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({
         setLoading(false);
         
       } catch (err) {
+        if (cancelled) return;
         log.error('Failed to load image', err);
         setError(t('editor.imageViewer.loadImageFailedWithMessage', { message: String(err) }));
         setLoading(false);
       }
     };
 
-    loadImage();
-  }, [filePath, getMimeType, t]);
+    void loadImage();
+    return () => { cancelled = true; };
+  }, [filePath, getMimeType, imageSource, t]);
 
   const handleImageLoad = useCallback((e: React.SyntheticEvent<HTMLImageElement>) => {
     const img = e.currentTarget;
@@ -285,4 +305,3 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({
 };
 
 export default ImageViewer;
-

@@ -19,11 +19,11 @@ pub use command_router::{
 pub use openbitfun_services_integrations::remote_connect::bot::{
     auto_push_failed_message, auto_push_intro, auto_push_skip_too_large_message,
     collect_auto_push_files, detect_mime_type, extract_computer_file_paths,
-    extract_downloadable_file_paths, format_file_size, get_file_metadata, load_bot_persistence,
-    read_workspace_file, resolve_workspace_path, save_bot_persistence, update_bot_persistence,
-    AutoPushFile, BotConfig, BotLanguage, BotPairingInfo, BotPersistenceData, MenuItem,
-    MenuItemStyle, MenuView, RemoteConnectFormState, RemoteDeviceTarget, SavedBotConnection,
-    WorkspaceFileContent,
+    extract_downloadable_file_paths, extract_output_file_references, format_file_size,
+    get_file_metadata, load_bot_persistence, read_workspace_file, resolve_workspace_path,
+    save_bot_persistence, update_bot_persistence, AutoPushFile, BotConfig, BotLanguage,
+    BotPairingInfo, BotPersistenceData, MenuItem, MenuItemStyle, MenuView, RemoteConnectFormState,
+    RemoteDeviceTarget, SavedBotConnection, WorkspaceFileContent,
 };
 
 use std::collections::HashMap;
@@ -237,4 +237,33 @@ mod lifecycle_tests {
             .is_some());
         assert_eq!(committed.load(Ordering::Acquire), 2);
     }
+}
+
+/// Reads from the output's session, never from mutable bot menu selection.
+pub(crate) async fn read_output_file(
+    session_id: &str,
+    remote_target: Option<&command_router::RemoteBotTarget>,
+    reference: &str,
+    max_bytes: u64,
+    is_current: &(dyn Fn() -> bool + Sync),
+) -> Result<WorkspaceFileContent, String> {
+    if let Some(target) = remote_target {
+        if target.session_id != session_id {
+            return Err("Output session changed".into());
+        }
+        return target.read_file(reference, max_bytes, is_current).await;
+    }
+    let content = crate::service_agent_runtime::CoreServiceAgentRuntime::remote_file_target(
+        reference,
+        Some(session_id),
+    )
+    .await?
+    .read(max_bytes)
+    .await?;
+    Ok(WorkspaceFileContent {
+        name: content.name,
+        bytes: content.bytes,
+        mime_type: content.mime_type,
+        size: content.size,
+    })
 }

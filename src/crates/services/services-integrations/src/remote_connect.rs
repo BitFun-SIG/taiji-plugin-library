@@ -13,6 +13,7 @@ mod chat_projection;
 pub mod device;
 pub mod device_crypto;
 pub mod encryption;
+pub mod file_projection;
 mod lan;
 mod page_upload;
 pub mod pairing;
@@ -631,6 +632,9 @@ pub fn detect_remote_mime_type(path: &Path) -> &'static str {
         "gif" => "image/gif",
         "webp" => "image/webp",
         "svg" => "image/svg+xml",
+        "avif" => "image/avif",
+        "bmp" => "image/bmp",
+        "ico" => "image/x-icon",
         "zip" => "application/zip",
         "docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         "xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -826,6 +830,14 @@ where
 {
     match command {
         RemoteCommand::ReadFile { path, session_id } => {
+            match host
+                .read_remote_file(path, session_id.as_deref(), REMOTE_FILE_MAX_READ_BYTES)
+                .await
+            {
+                Ok(Some(file)) => return remote_file_content_response(Ok(file)),
+                Err(error) => return remote_file_content_response(Err(error)),
+                Ok(None) => {}
+            }
             let workspace_root = host
                 .resolve_remote_file_workspace_root(session_id.as_deref())
                 .await;
@@ -844,6 +856,14 @@ where
             offset,
             limit,
         } => {
+            match host
+                .read_remote_file_chunk(path, session_id.as_deref(), *offset, *limit)
+                .await
+            {
+                Ok(Some(file)) => return remote_file_chunk_response(Ok(file)),
+                Err(error) => return remote_file_chunk_response(Err(error)),
+                Ok(None) => {}
+            }
             let workspace_root = host
                 .resolve_remote_file_workspace_root(session_id.as_deref())
                 .await;
@@ -853,6 +873,11 @@ where
             )
         }
         RemoteCommand::GetFileInfo { path, session_id } => {
+            match host.remote_file_info(path, session_id.as_deref()).await {
+                Ok(Some(file)) => return remote_file_info_response(Ok(file)),
+                Err(error) => return remote_file_info_response(Err(error)),
+                Ok(None) => {}
+            }
             let workspace_root = host
                 .resolve_remote_file_workspace_root(session_id.as_deref())
                 .await;

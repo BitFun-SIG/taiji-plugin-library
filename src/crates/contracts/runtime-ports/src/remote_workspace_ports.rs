@@ -178,6 +178,35 @@ pub trait RemoteInitialSyncRuntimeHost: Send + Sync {
 pub trait RemoteWorkspaceFileRuntimeHost: Send + Sync {
     async fn resolve_remote_file_workspace_root(&self, session_id: Option<&str>)
         -> Option<PathBuf>;
+
+    /// Session-aware providers own routing, including SSH and runtime artifacts.
+    /// `None` retains the legacy workspace-root provider; errors never fall back.
+    async fn read_remote_file(
+        &self,
+        _path: &str,
+        _session_id: Option<&str>,
+        _max_bytes: u64,
+    ) -> Result<Option<RemoteWorkspaceFileContent>, String> {
+        Ok(None)
+    }
+
+    async fn read_remote_file_chunk(
+        &self,
+        _path: &str,
+        _session_id: Option<&str>,
+        _offset: u64,
+        _limit: u64,
+    ) -> Result<Option<RemoteWorkspaceFileChunk>, String> {
+        Ok(None)
+    }
+
+    async fn remote_file_info(
+        &self,
+        _path: &str,
+        _session_id: Option<&str>,
+    ) -> Result<Option<RemoteWorkspaceFileInfo>, String> {
+        Ok(None)
+    }
 }
 
 /// Typed registration boundary for remote filesystem/terminal/image projection providers.

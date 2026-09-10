@@ -32,6 +32,11 @@ slices that are outside pure product logic but still platform-neutral.
   by Remote Connect, remote SSH, and offline migration. Keep it free of network,
   SSH transport, and runtime orchestration dependencies so owner readers and
   writers can validate staged data without enabling those heavier families.
+- `remote_connect::file_projection` performs bounded output reads through the
+  session-selected `WorkspaceFileSystem`; `remote-connect` therefore selects
+  `runtime-ports/workspace-ports` without enabling an SSH implementation. Core
+  supplies the session root and provider. IM adapters consume authorized bytes
+  and must not re-resolve paths on the bot host.
 - Remote workspace facts, session metadata, file projection DTOs, and
   workspace/projection host traits belong in `openbitfun-runtime-ports`.
 - Workspace-root source selection, persistence/workspace service reads,

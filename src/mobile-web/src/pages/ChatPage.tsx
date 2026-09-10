@@ -25,6 +25,7 @@ import {
 import ChatMessageActions from '../components/ChatMessageActions';
 import ChatFeedback from '../components/ChatFeedback';
 import { copyToClipboard } from '../components/ChatMarkdown';
+import { ArtifactImageReader } from '../components/RemoteArtifactImage';
 import ChatTranscript from '../components/ChatTranscript';
 
 function reportRemoteSessionError(
@@ -312,6 +313,32 @@ const ChatPage: React.FC<ChatPageProps> = ({
     },
     [captureChatTargetEpoch, isChatTargetCurrent, sessionId, sessionMgr],
   );
+
+  const readArtifactImage = useMemo(() => {
+    const pending = new Map<string, Promise<string>>();
+    return (filePath: string, refresh = false): Promise<string> => {
+      const targetEpoch = captureChatTargetEpoch();
+      if (targetEpoch === null) return Promise.reject(new RemoteControlTargetChangedError());
+      if (refresh) pending.delete(filePath);
+      const cached = pending.get(filePath);
+      if (cached) return cached;
+      const request = (async () => {
+        const file = await sessionMgr.readFile(filePath, sessionId, undefined, 8 * 1024 * 1024);
+        if (!isChatTargetCurrent(targetEpoch)) throw new RemoteControlTargetChangedError();
+        if (!/^image\/(?:png|jpeg|gif|webp|bmp|svg\+xml|avif|x-icon)$/i.test(file.mimeType)) {
+          throw new Error(t('chat.fileUnavailable'));
+        }
+        return `data:${file.mimeType};base64,${file.contentBase64}`;
+      })().catch((error: unknown) => {
+        pending.delete(filePath);
+        throw error;
+      });
+      // Bound retained previews while allowing remounted transcript rows to reuse reads.
+      if (pending.size >= 24) pending.delete(pending.keys().next().value!);
+      pending.set(filePath, request);
+      return request;
+    };
+  }, [captureChatTargetEpoch, isChatTargetCurrent, sessionMgr, sessionId, t]);
 
   /** Download a workspace file referenced by a `computer://` link. */
   const handleFileDownload = useCallback(async (
@@ -1023,37 +1050,40 @@ const ChatPage: React.FC<ChatPageProps> = ({
           <div className="chat-page__load-more-indicator">{t('chat.loadingOlderMessages')}</div>
         )}
 
-        <ChatTranscript
-          activeTurn={activeTurn}
-          expandedMessageIds={expandedMsgIds}
-          imageAnalyzing={imageAnalyzing}
-          menuMessageId={menuMessage?.id}
-          messages={messages}
-          now={now}
-          optimisticMessage={optimisticMsg}
-          onAnswerQuestion={handleAnswerQuestion}
-          onApproveTool={handleApproveTool}
-          onCancelActiveTool={(toolId) => handleCancelTool(toolId, 'User cancelled')}
-          onCancelLegacyTool={handleCancelTool}
-          onRejectTool={handleRejectTool}
-          onFileDownload={handleFileDownload}
-          onGetFileInfo={handleGetFileInfo}
-          onMessageContextMenu={(message, event) => {
-            event.preventDefault();
-            setMenuMessage(message);
-          }}
-          onMessageTouchEnd={handleMsgTouchEnd}
-          onMessageTouchMove={handleMsgTouchMove}
-          onMessageTouchStart={handleMsgTouchStart}
-          onToggleMessage={(messageId, expanded) => {
-            setExpandedMsgIds((previous) => {
-              const next = new Set(previous);
-              if (expanded) next.add(messageId);
-              else next.delete(messageId);
-              return next;
-            });
-          }}
-        />
+        <ArtifactImageReader.Provider value={readArtifactImage}>
+          <ChatTranscript
+            key={`${sessionId}:${controlTargetEpoch}`}
+            activeTurn={activeTurn}
+            expandedMessageIds={expandedMsgIds}
+            imageAnalyzing={imageAnalyzing}
+            menuMessageId={menuMessage?.id}
+            messages={messages}
+            now={now}
+            optimisticMessage={optimisticMsg}
+            onAnswerQuestion={handleAnswerQuestion}
+            onApproveTool={handleApproveTool}
+            onCancelActiveTool={(toolId) => handleCancelTool(toolId, 'User cancelled')}
+            onCancelLegacyTool={handleCancelTool}
+            onRejectTool={handleRejectTool}
+            onFileDownload={handleFileDownload}
+            onGetFileInfo={handleGetFileInfo}
+            onMessageContextMenu={(message, event) => {
+              event.preventDefault();
+              setMenuMessage(message);
+            }}
+            onMessageTouchEnd={handleMsgTouchEnd}
+            onMessageTouchMove={handleMsgTouchMove}
+            onMessageTouchStart={handleMsgTouchStart}
+            onToggleMessage={(messageId, expanded) => {
+              setExpandedMsgIds((previous) => {
+                const next = new Set(previous);
+                if (expanded) next.add(messageId);
+                else next.delete(messageId);
+                return next;
+              });
+            }}
+          />
+        </ArtifactImageReader.Provider>
 
         <div ref={messagesEndRef} />
 

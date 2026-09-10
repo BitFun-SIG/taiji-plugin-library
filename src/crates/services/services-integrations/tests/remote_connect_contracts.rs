@@ -1719,6 +1719,71 @@ async fn remote_connect_file_command_handler_owns_owner_flow_and_uses_host_root(
     std::fs::remove_dir_all(base).expect("cleanup remote workspace");
 }
 
+struct UnavailableSessionFileHost;
+
+#[async_trait::async_trait]
+impl RemoteWorkspaceFileRuntimeHost for UnavailableSessionFileHost {
+    async fn resolve_remote_file_workspace_root(&self, _: Option<&str>) -> Option<PathBuf> {
+        panic!("A session provider error must never access the legacy local root")
+    }
+
+    async fn read_remote_file(
+        &self,
+        _: &str,
+        session: Option<&str>,
+        _: u64,
+    ) -> Result<Option<RemoteWorkspaceFileContent>, String> {
+        assert_eq!(session, Some("remote-session"));
+        Err("Session host is offline".into())
+    }
+
+    async fn read_remote_file_chunk(
+        &self,
+        _: &str,
+        session: Option<&str>,
+        _: u64,
+        _: u64,
+    ) -> Result<Option<RemoteWorkspaceFileChunk>, String> {
+        assert_eq!(session, Some("remote-session"));
+        Err("Session host is offline".into())
+    }
+
+    async fn remote_file_info(
+        &self,
+        _: &str,
+        session: Option<&str>,
+    ) -> Result<Option<RemoteWorkspaceFileInfo>, String> {
+        assert_eq!(session, Some("remote-session"));
+        Err("Session host is offline".into())
+    }
+}
+
+#[tokio::test]
+async fn remote_connect_file_provider_errors_never_fall_back_to_local_files() {
+    let path = "computer://output.png".to_string();
+    let session_id = Some("remote-session".to_string());
+    for command in [
+        RemoteCommand::ReadFile {
+            path: path.clone(),
+            session_id: session_id.clone(),
+        },
+        RemoteCommand::ReadFileChunk {
+            path: path.clone(),
+            session_id: session_id.clone(),
+            offset: 0,
+            limit: 3,
+        },
+        RemoteCommand::GetFileInfo { path, session_id },
+    ] {
+        assert_eq!(
+            handle_remote_workspace_file_command(&UnavailableSessionFileHost, &command).await,
+            RemoteResponse::Error {
+                message: "Session host is offline".into()
+            }
+        );
+    }
+}
+
 #[test]
 fn remote_connect_execution_response_helpers_preserve_wire_shape() {
     let started = remote_dialog_submit_response(Ok(RemoteDialogSubmitOutcome::Started {

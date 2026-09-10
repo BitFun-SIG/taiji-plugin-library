@@ -395,6 +395,7 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
             {renderLazyEditor(
               <ImageViewer
                 filePath={imageViewerData.filePath || ''}
+                imageSource={imageViewerData.imageSource}
                 fileName={content.title}
                 workspacePath={workspacePath}
                 className="openbitfun-flexible-panel__image-viewer"
