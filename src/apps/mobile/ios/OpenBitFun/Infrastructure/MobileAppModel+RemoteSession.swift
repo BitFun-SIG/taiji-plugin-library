@@ -703,15 +703,14 @@ extension MobileAppModel {
     func sendRemote() {
         let value = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !value.isEmpty || !composerImages.isEmpty,
-              !isSending,
+              !isSending, !busy,
+              let coreAdapter,
               connectionPhase != .disconnected,
               let sessionID = visibleSessions.first(where: { $0.id == selectedSessionID })?.id else { return }
         let images = composerImages
-        draft = ""
-        composerImages = []
         isSending = true
         busy = true
-        coreAdapter?.sendRemote(sessionID: sessionID, content: value, images: images)
+        coreAdapter.sendRemote(sessionID: sessionID, content: value, images: images)
     }
 
     func approveTool(_ toolID: String) {
@@ -869,6 +868,15 @@ extension MobileAppModel {
             )
         }
         setPublishedIfChanged(\.busy, to: ready.busy)
+        if let sent = ready.lastSentMessage,
+           sent.sessionId == selectedSessionID,
+           sent.id != lastAppliedRemoteSendID {
+            lastAppliedRemoteSendID = sent.id
+            if draft.trimmingCharacters(in: .whitespacesAndNewlines) == sent.content {
+                draft = ""
+            }
+            composerImages.removeAll { sent.imageIds.contains($0.id) }
+        }
         setPublishedIfChanged(\.remoteQuery, to: ready.query)
         setPublishedIfChanged(\.remoteAgentFilter, to: ready.agentFilter.name)
         setPublishedIfChanged(\.remoteHasMore, to: ready.hasMore)

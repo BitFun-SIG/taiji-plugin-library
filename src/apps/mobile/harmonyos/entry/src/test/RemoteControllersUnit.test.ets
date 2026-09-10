@@ -2131,12 +2131,16 @@ export default function remoteControllersUnitTest() {
     it('sends prepared remote messages and reports failed payloads', 0, async () => {
       const client = new FakeRemoteChatCommandClient();
       const succeeded: string[] = [];
+      const submittedImages: string[] = [];
       const failed: string[] = [];
       const busyEvents: boolean[] = [];
       const controller = new RemoteChatCommandController(client, {
         onMessagesLoaded: (_messages: ChatMessage[], _hasMoreMessages: boolean) => {},
         onMessageCountKnown: (_pollVersion: number, _knownMessageCount: number) => {},
         onTimelineReady: () => {},
+        onComposerSubmitted: (sessionId: string, _text: string, images: SelectedImageAttachment[]) => {
+          submittedImages.push(`${sessionId}:${images[0].id}`);
+        },
         onSendSucceeded: (turnId: string, pendingActiveId: string, localMessageId: string) => {
           succeeded.push(`${turnId}:${pendingActiveId}:${localMessageId}`);
         },
@@ -2192,6 +2196,8 @@ export default function remoteControllersUnitTest() {
       expect(client.sendRequests[1]).assertEqual('text:session-1:Retry text:code');
       expect(client.sendTurnIds[0]).assertEqual('local-1');
       expect(client.sendTurnIds[1]).assertEqual('local-2');
+      expect(submittedImages.length).assertEqual(1);
+      expect(submittedImages[0]).assertEqual('session-1:image-1');
       expect(succeeded[0]).assertEqual('turn-1:pending-1:local-1');
       expect(failed[0]).assertEqual('Retry text:0:local-2:pending-2');
       expect(busyEvents[0]).assertTrue();

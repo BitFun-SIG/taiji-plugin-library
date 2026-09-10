@@ -913,34 +913,24 @@ const ChatPage: React.FC<ChatPageProps> = ({
   }, []);
 
   const handleFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files) return;
+    const files = Array.from(e.target.files ?? []);
+    e.target.value = '';
+    const targetEpoch = captureChatTargetEpoch();
+    if (targetEpoch === null) return;
     const maxImages = 5;
     const remaining = maxImages - pendingImages.length;
-    const toProcess = Array.from(files).slice(0, remaining);
-
     const { compressImageFile } = await import('../services/imageCompressor');
-    for (const file of toProcess) {
+    for (const file of files.slice(0, remaining)) {
       try {
         const compressed = await compressImageFile(file);
-        setPendingImages((prev) => {
-          if (prev.length >= maxImages) return prev;
-          return [...prev, { name: compressed.name, dataUrl: compressed.dataUrl }];
-        });
+        if (!isChatTargetCurrent(targetEpoch)) return;
+        setPendingImages(prev => prev.length >= maxImages ? prev : [...prev, compressed]);
       } catch {
-        const reader = new FileReader();
-        reader.onload = () => {
-          const dataUrl = reader.result as string;
-          setPendingImages((prev) => {
-            if (prev.length >= maxImages) return prev;
-            return [...prev, { name: file.name, dataUrl }];
-          });
-        };
-        reader.readAsDataURL(file);
+        if (!isChatTargetCurrent(targetEpoch)) return;
+        setError(t('chat.imagePreparationFailed'));
       }
     }
-    e.target.value = '';
-  }, [pendingImages.length]);
+  }, [captureChatTargetEpoch, isChatTargetCurrent, pendingImages.length, setError, t]);
 
   const removeImage = useCallback((idx: number) => {
     setPendingImages((prev) => prev.filter((_, i) => i !== idx));

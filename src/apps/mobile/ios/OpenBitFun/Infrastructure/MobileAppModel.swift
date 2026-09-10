@@ -32,6 +32,7 @@ final class MobileAppModel: ObservableObject {
     @Published var messages: [ChatMessage]
     @Published var timelineRows: [MobileConversationRow] = []
     @Published var draft = ""
+    var lastAppliedRemoteSendID: String?
     @Published var drawerOpen = false
     @Published var settingsOpen = false
     @Published var remoteControlSettingsOpen = false
@@ -374,18 +375,24 @@ final class MobileAppModel: ObservableObject {
         coreAdapter?.cancelRemoteTurn(sessionID: selectedSessionID, turnID: activeTurnID)
     }
 
-    func retryMessage(_ text: String) {
+    func retryMessage(_ text: String, images: [MobileTimelineImage] = []) {
         let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !normalized.isEmpty, !busy, !isSending else { return }
-        if surface == .remote {
-            guard remoteSessionSelected, connectionPhase != .disconnected else { return }
-            isSending = true
-            busy = true
-            coreAdapter?.sendRemote(sessionID: selectedSessionID, content: normalized, images: [])
-        } else {
-            draft = normalized
-            send()
+        guard !normalized.isEmpty || !images.isEmpty, !busy, !isSending else { return }
+        let attachments = images.compactMap { image -> ComposerAttachment? in
+            if let retained = composerImages.first(where: { $0.dataURL == image.dataURL }) { return retained }
+            guard let comma = image.dataURL.firstIndex(of: ","),
+                  let data = Data(base64Encoded: String(image.dataURL[image.dataURL.index(after: comma)...])) else { return nil }
+            let mime = image.dataURL.prefix(upTo: comma).dropFirst(5).split(separator: ";").first.map(String.init) ?? "image/jpeg"
+            return ComposerAttachment(id: UUID().uuidString, data: data, mimeType: mime)
         }
+        guard attachments.count == images.count else {
+            showToast(localized("无法读取所选图片"))
+            return
+        }
+        guard remoteSessionSelected, connectionPhase != .disconnected, let coreAdapter else { return }
+        isSending = true
+        busy = true
+        coreAdapter.sendRemote(sessionID: selectedSessionID, content: normalized, images: attachments)
     }
 
     func renameSelectedSession(_ title: String) {

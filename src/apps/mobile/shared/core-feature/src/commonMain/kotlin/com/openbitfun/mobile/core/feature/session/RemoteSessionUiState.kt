@@ -184,6 +184,14 @@ public data class ComposerImage public constructor(
     public val mimeType: String,
 )
 
+/** A host acknowledgement, used to consume only the draft that was sent. */
+public data class SentChatMessage public constructor(
+    public val id: String,
+    public val sessionId: String,
+    public val content: String,
+    public val imageIds: List<String>,
+)
+
 public sealed interface RemoteSessionUiState {
     public data object Idle : RemoteSessionUiState
 
@@ -222,7 +230,29 @@ public sealed interface RemoteSessionUiState {
         public val draft: String,
         /** Monotonic authority revision for session-list projection on this store. */
         public val revision: Long,
+        public val lastSentMessage: SentChatMessage?,
     ) : RemoteSessionUiState {
+        /** Preserve the existing Swift/Kotlin initializer when adding acknowledgement state. */
+        public constructor(
+            sessions: List<RemoteSession>,
+            selectedSessionId: String?,
+            timeline: ChatTimelineState?,
+            busy: Boolean,
+            permissionMode: SessionPermissionMode?,
+            permissionModeFailure: PermissionModeFailure?,
+            query: String,
+            agentFilter: SessionAgentFilter,
+            hasMore: Boolean,
+            hasMoreMessages: Boolean,
+            modelCatalog: RemoteModelCatalog?,
+            modelCatalogFailure: ModelCatalogFailure?,
+            draft: String,
+            revision: Long,
+        ) : this(
+            sessions, selectedSessionId, timeline, busy, permissionMode, permissionModeFailure,
+            query, agentFilter, hasMore, hasMoreMessages, modelCatalog, modelCatalogFailure, draft, revision, null,
+        )
+
         public constructor(
             sessions: List<RemoteSession>,
             selectedSessionId: String?,

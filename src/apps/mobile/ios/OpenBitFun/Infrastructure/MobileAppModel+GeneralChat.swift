@@ -1,4 +1,6 @@
 import Foundation
+import UIKit
+import ImageIO
 import OpenBitFunMobileCore
 
 extension MobileAppModel {
@@ -23,6 +25,27 @@ extension MobileAppModel {
             return
         }
         composerImages.append(ComposerAttachment(id: UUID().uuidString, data: data, mimeType: mimeType))
+    }
+
+    nonisolated static func prepareComposerImage(_ data: Data) -> Data? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
+        var dimension = 1920
+        while dimension >= 64 {
+            let options: [CFString: Any] = [
+                kCGImageSourceCreateThumbnailFromImageAlways: true,
+                kCGImageSourceCreateThumbnailWithTransform: true,
+                kCGImageSourceThumbnailMaxPixelSize: dimension
+            ]
+            guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else { return nil }
+            let image = UIImage(cgImage: cgImage)
+            for quality in [0.85, 0.75, 0.65, 0.5] {
+                if let encoded = image.jpegData(compressionQuality: quality), encoded.count <= 1024 * 1024 {
+                    return encoded
+                }
+            }
+            dimension = dimension * 3 / 4
+        }
+        return nil
     }
 
     func removeComposerImage(id: String) {

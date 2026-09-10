@@ -449,4 +449,5 @@
     <string name="account_open_github">Open GitHub authorization</string>
     <string name="account_device_link_invalid">Use a current OpenBitFun device QR code.</string>
     <string name="account_device_link_unavailable">This device is offline or does not belong to your GitHub account.</string>
+    <string name="chat_image_prepare_failed">This image could not be prepared. Choose another image.</string>
 </resources>

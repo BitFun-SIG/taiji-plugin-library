@@ -375,6 +375,17 @@ export abstract class AppRootRuntimeComposition {
         onTimelineReady: () => {
           this.remotePageState.setConversationLoading(false);
         },
+        onComposerSubmitted: (sessionId: string, text: string, images: SelectedImageAttachment[]) => {
+          if (this.remotePageState.activeSession.sessionId !== sessionId) {
+            return;
+          }
+          if (this.remotePageState.chatInput.trim() === text.trim()) {
+            this.remotePageState.setChatInput('');
+          }
+          this.remotePageState.setSelectedImages(this.remotePageState.selectedImages.filter(
+            (image: SelectedImageAttachment) => !images.some((sent: SelectedImageAttachment) => sent.id === image.id)
+          ));
+        },
         onSendSucceeded: (turnId: string, pendingActiveId: string, localMessageId: string) => {
           this.chatTimelineStore.acknowledgeOptimisticTurn(localMessageId, turnId);
           if (turnId.length > 0) {
@@ -407,8 +418,6 @@ export abstract class AppRootRuntimeComposition {
           localMessageId: string,
           pendingActiveId: string
         ) => {
-          this.remotePageState.setChatInput(rawText);
-          this.remotePageState.setSelectedImages(images);
           this.chatTimelineStore.markOptimisticMessageFailed(localMessageId);
           if (pendingActiveId.length > 0) {
             this.chatTimelineStore.clearPendingActiveTurn(pendingActiveId);
