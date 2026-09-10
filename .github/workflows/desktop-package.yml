@@ -711,7 +711,7 @@ jobs:
           set -euo pipefail
           for manifest in latest.json linux-binaries.json; do
             curl -fsSL --retry 5 --retry-delay 3 \
-              "https://github.com/GCWing/BitFun/releases/download/v0.2.19/${manifest}" \
+              "https://github.com/GCWing/OpenBitFun/releases/download/v0.2.19/${manifest}" \
               -o "release-upload-assets/${manifest}"
             jq -e '.version == "0.2.19"' "release-upload-assets/${manifest}" >/dev/null
           done
