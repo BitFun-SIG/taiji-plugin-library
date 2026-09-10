@@ -199,6 +199,7 @@ public class RemoteWorkspaceStore internal constructor(
                                 workspaces = loadedWorkspaces,
                                 assistants = loadedAssistants,
                                 selected = info.asSelectedWorkspace(),
+                                hostCapabilities = info.capabilities,
                                 preview = RemoteFilePreviewUiState.None,
                                 busy = false,
                                 download = RemoteFileDownloadUiState.None,
@@ -252,7 +253,7 @@ public class RemoteWorkspaceStore internal constructor(
                 }
                 val info = transport.send<WorkspaceInfoResponse>(RemoteCommand(cmd = "get_workspace_info"))
                 if (generation != loadGeneration) return@launch
-                updateReady { it.copy(selected = info.asSelectedWorkspace(), busy = false, loadFailure = false) }
+                updateReady { it.copy(selected = info.asSelectedWorkspace(), hostCapabilities = info.capabilities, busy = false, loadFailure = false) }
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (_: Throwable) {
