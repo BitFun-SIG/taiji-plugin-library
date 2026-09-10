@@ -1133,7 +1133,7 @@ test('Desktop packaging keeps beta identity explicit and stable-safe', () => {
     '${{ needs.prepare.outputs.release_channel }}',
   );
   assert.match(packageJob.env.TAURI_UPDATER_ENDPOINT, /github\.repository/);
-  assert.match(packageJob.env.TAURI_UPDATER_ENDPOINT, /channel-beta/);
+  assert.match(packageJob.env.TAURI_UPDATER_ENDPOINT, /channel-v1-beta/);
   assert.match(packageJob.env.OPENBITFUN_RELEASE_PUBKEY, /OPENBITFUN_RELEASE_PUBKEY/);
   const appleSetupIndex = packageJob.steps.findIndex(
     (step) => step.name === 'Configure Apple Developer ID signing and notarization',
@@ -1285,7 +1285,7 @@ test('stable and beta publication require every producer, while artifact-only ru
     'linux-release-assets/openbitfun-cli-*.tar.gz',
     'linux-release-assets/openbitfun-relay-server-*.tar.gz',
     'linux-release-assets/*.tar.gz.sig', 'linux-release-assets/*.tar.gz.sha256.sig',
-    'linux-release-assets/linux-binaries.json', 'relay-image-assets/relay-image.json.sig',
+    'linux-release-assets/linux-binaries-v1.json', 'relay-image-assets/relay-image.json.sig',
   ]) assert.ok(stage.run.includes(pattern), pattern);
   assert.match(steps.find((step) => step.name === 'Generate Linux binaries manifest').run, /--repo "\$\{\{ github.repository \}\}"/);
   for (const name of ['Verify published Linux binaries manifest', 'Verify published Relay image descriptor']) {
@@ -1354,6 +1354,7 @@ test('Relay image tag selection keeps Beta and old stable backfills away from la
   for (const scenario of [
     { channel: 'beta', version: '1.0.0-beta.3', imageOnly: 'false', latest: false },
     { channel: 'beta', version: '1.0.0-beta.3', imageOnly: 'true', latest: false },
+    { channel: 'stable', version: '1.0.0-beta', imageOnly: 'false', latest: true },
     { channel: 'stable', version: '1.0.0', imageOnly: 'false', latest: true },
     { channel: 'stable', version: '1.0.0', imageOnly: 'true', latest: true },
     { channel: 'stable', version: '0.2.19', imageOnly: 'true', latest: false },
@@ -1446,11 +1447,11 @@ test('nightly and beta use the shared build-version projection', () => {
   assert.equal(artifacts.jobs.package.env.OPENBITFUN_RELEASE_CHANNEL, 'nightly');
   assert.equal(
     artifacts.jobs.package.env.TAURI_UPDATER_ENDPOINT,
-    'https://github.com/GCWing/OpenBitFun/releases/latest/download/latest.json',
+    'https://github.com/GCWing/OpenBitFun/releases/latest/download/latest-v1.json',
   );
   assert.equal(
     artifacts.jobs.package.env.TAURI_UPDATER_FALLBACK_ENDPOINT,
-    'https://openbitfun.com/release/latest.json',
+    'https://openbitfun.com/release/latest-v1.json',
   );
   assert.equal(artifacts.jobs.package.env.OPENBITFUN_ENABLE_UPDATER_ARTIFACTS, undefined);
   const signingStep = nightly.jobs['publish-nightly'].steps.find(
@@ -1472,5 +1473,46 @@ test('Linux Rust workflows do not install an unused native OpenSSL toolchain', (
       /\blibssl-dev\b/,
       `${workflowPath} must rely on the reviewed Cargo-owned Git2 build profile`,
     );
+  }
+});
+
+
+test('public beta launch uses Latest while legacy updater bytes stay on 0.2.19', () => {
+  const workflow = yaml.parse(readFileSync(path.join(repoRoot, '.github/workflows/desktop-package.yml'), 'utf8'));
+  const steps = workflow.jobs['upload-release-assets'].steps;
+  const upload = steps.find((step) => step.name === 'Upload to release');
+  assert.equal(upload.with.make_latest, "${{ needs.prepare.outputs.release_channel == 'stable' }}");
+  assert.equal(upload.with.prerelease, "${{ needs.prepare.outputs.release_channel == 'beta' }}");
+  const preserve = steps.find((step) => step.name === 'Preserve legacy update feeds');
+  assert.equal(preserve.if, "needs.prepare.outputs.release_channel == 'stable'");
+  assert.ok(steps.indexOf(preserve) < steps.indexOf(upload));
+  assert.match(steps.find((step) => step.name === 'Generate updater manifest').run, /--out release-updater-assets\/latest-v1\.json/);
+  for (const version of ['0.2.19', '1.0.0-beta']) {
+    const cwd = mkdtempSync(path.join(tmpdir(), 'openbitfun-legacy-feed-'));
+    try {
+      mkdirSync(path.join(cwd, 'release-upload-assets'));
+      const candidate = '{"version":"1.0.0-beta"}';
+      writeFileSync(path.join(cwd, 'release-upload-assets/latest-v1.json'), candidate);
+      const legacy = JSON.stringify({ version, platforms: { 'windows-x86_64': { url: 'https://example.test/legacy.exe', signature: 'unchanged' } } });
+      writeFileSync(path.join(cwd, 'legacy.json'), legacy);
+      const result = spawnSync('bash', ['-c', `
+        curl() {
+          while [[ "$1" != "-o" ]]; do shift; done
+          cp legacy.json "$2"
+        }
+        ${preserve.run}
+      `], { cwd, encoding: 'utf8', windowsHide: true });
+      if (version === '0.2.19') {
+        assert.equal(result.status, 0, result.stderr);
+        for (const name of ['latest.json', 'linux-binaries.json']) {
+          assert.equal(readFileSync(path.join(cwd, 'release-upload-assets', name), 'utf8'), legacy);
+        }
+      } else {
+        assert.notEqual(result.status, 0, '1.x must never enter a legacy feed');
+      }
+      assert.equal(readFileSync(path.join(cwd, 'release-upload-assets/latest-v1.json'), 'utf8'), candidate);
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
   }
 });
