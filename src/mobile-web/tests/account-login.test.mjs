@@ -21,9 +21,9 @@ const offline = { device_id: 'desktop-a', device_name: 'Offline desktop', online
 const online = { device_id: 'desktop-b', device_name: 'Online desktop', online: true };
 const controller = { device_id: 'browser', device_name: 'Browser', online: true };
 
-const harnessModule = await loadSource('../../shared/agent-harness/contract.generated.ts');
+const agentContract = await loadSource('../../shared/agent-harness/contract.generated.ts');
 const navigationModule = await loadSource('../src/services/MobileNavigationStore.ts', {
-  '../../../shared/agent-harness/contract.generated': harnessModule.url,
+  '../../../shared/agent-harness/contract.generated': agentContract.url,
 });
 const { loadMobileNavigation, saveMobileNavigation, clearMobileNavigation } = await import(navigationModule.url);
 

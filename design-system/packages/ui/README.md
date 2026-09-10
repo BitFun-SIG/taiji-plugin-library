@@ -431,3 +431,12 @@ PageHeader `md` uses the settings title with a primary 15px description; `displa
 KeyHint uses 10px text on a 10px line and 2px block padding. StatusPill uses a 14px line with 2px block padding; opt into `emphasis` for short mode labels such as Ask, while ordinary status descriptions retain readable content colors. LauncherButton owns a 72px minimum width, 40px height, 10px side padding, 4px gap, 12px icon and 11px monospace text. Product shells may retain a deliberate compact greeting that expands into this geometry.
 
 Composer and ChatComposer share the 16px surface radius, 8px padding, 12px content gap, composer border, context tint, and composer shadow. Compact ChatComposer uses a 24px action track plus 8px padding on each side and two 1px borders (42px border-box height); expanded height follows editor content. The generic context shell has no duplicate outer border or surface inset. Queue and editor state remain owned by their existing slots and product adapters.
+
+ActivityItem `surface` uses a 40px minimum row with a centered outline, 12px
+radius, 9px block padding, 12px leading inset and 9px trailing inset. The 22px
+sibling actions fit inside that row; optional detail grows beneath it. Inline
+activity retains its compact geometry. Identity text can shrink alongside a
+long description while metadata and sibling actions retain their own slots.
+Lab Patterns includes long paths, large change counts, expandable detail and
+disabled actions. The current Web UI has no direct ActivityItem consumer;
+FlowChat ambient tool cards keep their separate presentation contract.

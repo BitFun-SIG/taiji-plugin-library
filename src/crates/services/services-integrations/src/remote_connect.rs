@@ -961,18 +961,24 @@ pub fn remote_workspace_info_response(workspace: Option<RemoteWorkspaceFacts>) -
 pub fn remote_recent_workspaces_response(
     workspaces: Vec<RemoteRecentWorkspaceFacts>,
 ) -> RemoteResponse {
+    remote_workspace_catalog_response(workspaces, None)
+}
+
+fn remote_workspace_catalog_response(
+    workspaces: Vec<RemoteRecentWorkspaceFacts>,
+    opened_workspaces: Option<Vec<RemoteRecentWorkspaceFacts>>,
+) -> RemoteResponse {
+    let project = |workspace: RemoteRecentWorkspaceFacts| RecentWorkspaceEntry {
+        path: workspace.path,
+        name: workspace.name,
+        last_opened: workspace.last_opened,
+        workspace_kind: Some(workspace.kind.as_wire_str().to_string()),
+        remote_connection_id: workspace.remote_connection_id,
+        remote_ssh_host: workspace.remote_ssh_host,
+    };
     RemoteResponse::RecentWorkspaces {
-        workspaces: workspaces
-            .into_iter()
-            .map(|workspace| RecentWorkspaceEntry {
-                path: workspace.path,
-                name: workspace.name,
-                last_opened: workspace.last_opened,
-                workspace_kind: Some(workspace.kind.as_wire_str().to_string()),
-                remote_connection_id: workspace.remote_connection_id,
-                remote_ssh_host: workspace.remote_ssh_host,
-            })
-            .collect(),
+        workspaces: workspaces.into_iter().map(project).collect(),
+        opened_workspaces: opened_workspaces.map(|rows| rows.into_iter().map(project).collect()),
     }
 }
 
@@ -1129,9 +1135,10 @@ where
         RemoteCommand::GetWorkspaceInfo => {
             remote_workspace_info_response(host.current_workspace().await)
         }
-        RemoteCommand::ListRecentWorkspaces => {
-            remote_recent_workspaces_response(host.recent_workspaces().await)
-        }
+        RemoteCommand::ListRecentWorkspaces => match host.opened_workspaces().await {
+            Ok(opened) => remote_workspace_catalog_response(host.recent_workspaces().await, opened),
+            Err(message) => RemoteResponse::Error { message },
+        },
         RemoteCommand::SetWorkspace {
             path,
             remote_connection_id,
@@ -2492,6 +2499,10 @@ pub enum RemoteResponse {
     },
     RecentWorkspaces {
         workspaces: Vec<RecentWorkspaceEntry>,
+        /// Presence negotiates the authoritative opened-workspace catalog.
+        /// Keep `workspaces` as recent history for older clients and pickers.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        opened_workspaces: Option<Vec<RecentWorkspaceEntry>>,
     },
     WorkspaceUpdated {
         success: bool,
@@ -4016,6 +4027,19 @@ mod tests {
             }]
         }
 
+        async fn opened_workspaces(
+            &self,
+        ) -> Result<Option<Vec<RemoteRecentWorkspaceFacts>>, String> {
+            Ok(Some(vec![RemoteRecentWorkspaceFacts {
+                path: "/assistant/workspace".into(),
+                name: "Mina".into(),
+                last_opened: "2026-05-29T00:00:00Z".into(),
+                kind: RemoteWorkspaceKind::Assistant,
+                remote_connection_id: None,
+                remote_ssh_host: None,
+            }]))
+        }
+
         async fn open_workspace(
             &self,
             path: &str,
@@ -4049,6 +4073,44 @@ mod tests {
                 remote_ssh_host: None,
             })
         }
+    }
+
+    #[tokio::test]
+    async fn remote_workspace_catalog_advertises_opened_rows_without_repurposing_recent_history() {
+        let response = handle_remote_workspace_command(
+            &FakeWorkspaceHost,
+            &RemoteCommand::ListRecentWorkspaces,
+        )
+        .await;
+        let json = serde_json::to_value(&response).unwrap();
+        assert_eq!(json["workspaces"][0]["path"], "/workspace/project");
+        assert_eq!(json["opened_workspaces"][0]["name"], "Mina");
+        assert_eq!(json["opened_workspaces"][0]["workspace_kind"], "assistant");
+        assert_eq!(
+            serde_json::from_value::<RemoteResponse>(json).unwrap(),
+            response
+        );
+
+        let legacy = serde_json::json!({
+            "resp": "recent_workspaces",
+            "workspaces": [{ "path": "/legacy", "name": "Legacy", "last_opened": "" }]
+        });
+        assert_eq!(
+            serde_json::to_value(serde_json::from_value::<RemoteResponse>(legacy.clone()).unwrap())
+                .unwrap(),
+            legacy
+        );
+        let empty = remote_workspace_catalog_response(Vec::new(), Some(Vec::new()));
+        assert_eq!(
+            serde_json::to_value(empty).unwrap()["opened_workspaces"],
+            serde_json::json!([])
+        );
+        assert!(
+            serde_json::to_value(remote_recent_workspaces_response(Vec::new()))
+                .unwrap()
+                .get("opened_workspaces")
+                .is_none()
+        );
     }
 
     #[tokio::test]

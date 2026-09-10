@@ -603,12 +603,12 @@
       "$type": "dimension",
       "inlineGap": { "$value": "{space.1}" },
       "inlineIconSize": { "$value": "12px" },
-      "surfaceHeight": { "$value": "30px" },
+      "surfaceHeight": { "$value": "40px" },
       "surfaceGap": { "$value": "{space.2}" },
-      "surfacePaddingBlock": { "$value": "{space.1}" },
-      "surfacePaddingInlineStart": { "$value": "{space.2}" },
-      "surfacePaddingInlineEnd": { "$value": "3px" },
-      "surfaceRadius": { "$value": "{radius.base}" },
+      "surfacePaddingBlock": { "$value": "9px" },
+      "surfacePaddingInlineStart": { "$value": "{space.3}" },
+      "surfacePaddingInlineEnd": { "$value": "9px" },
+      "surfaceRadius": { "$value": "{radius.lg}" },
       "surfaceIconSize": { "$value": "14px" },
       "contentGap": { "$value": "{space.1}" },
       "dividerBlockSize": { "$value": "16px" }
@@ -678,6 +678,14 @@
   },
   "layout": {
     "$type": "dimension",
+    "searchDialog": {
+      "width": { "$value": "{overlay.dialog.maxInlineSizeXlarge}" },
+      "height": { "$value": "460px" },
+      "padding": { "$value": "{space.5}" },
+      "queryHeight": { "$value": "30px" },
+      "scopeGap": { "$value": "{space.5}" },
+      "resultsGap": { "$value": "30px" }
+    },
     "overflowText": {
       "fadeExtent": { "$value": "{space.4}" }
     },

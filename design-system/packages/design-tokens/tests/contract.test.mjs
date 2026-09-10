@@ -100,13 +100,13 @@ test("Activity geometry preserves inline and surfaced status compositions", asyn
   const systemDocument = await readSource("system.tokens.json");
 
   assert.equal(tokens["control.activityItem.inlineIconSize"], "12px");
-  assert.equal(tokens["control.activityItem.surfaceHeight"], "30px");
+  assert.equal(tokens["control.activityItem.surfaceHeight"], "40px");
   assert.equal(tokens["control.activityItem.surfaceIconSize"], "14px");
   assert.equal(tokens["control.activityItem.dividerBlockSize"], "16px");
   assert.equal(tokens["control.changeCount.paddingBlock"], "2px");
   assert.equal(tokens["control.iconButton.xsSize"], "22px");
   assert.equal(tokens["control.iconButton.xsIconSize"], "14px");
-  assert.equal(systemDocument.control.activityItem.surfaceRadius.$value, "{radius.base}");
+  assert.equal(systemDocument.control.activityItem.surfaceRadius.$value, "{radius.lg}");
   assert.equal(systemDocument.control.changeCount.radius.$value, "{radius.xs}");
 });
 
