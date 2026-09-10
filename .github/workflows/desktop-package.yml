@@ -125,6 +125,10 @@ jobs:
             echo "Existing tag ${TAG} points to ${TAG_SHA}, not requested commit ${CHECKOUT_SHA}." >&2
             exit 1
           fi
+          if [[ "${UPLOAD}" == "true" && -z "${TAG_SHA}" ]]; then
+            echo "Publishing requires existing tag ${TAG} at ${CHECKOUT_SHA}. Push the tag before dispatching." >&2
+            exit 1
+          fi
           CHECKOUT_REF="${CHECKOUT_SHA}"
 
           echo "version=$VERSION"          >> "$GITHUB_OUTPUT"
@@ -717,16 +721,40 @@ jobs:
           done
 
       - name: Upload to release
-        uses: softprops/action-gh-release@v3
-        with:
-          tag_name: ${{ needs.prepare.outputs.release_tag }}
-          target_commitish: ${{ needs.prepare.outputs.checkout_ref }}
-          prerelease: ${{ needs.prepare.outputs.release_channel == 'beta' }}
-          name: ${{ needs.prepare.outputs.release_channel == 'beta' && format('OpenBitFun {0} Beta', needs.prepare.outputs.version) || format('OpenBitFun {0}', needs.prepare.outputs.version) }}
-          make_latest: ${{ needs.prepare.outputs.release_channel == 'stable' }}
-          generate_release_notes: true
-          files: release-upload-assets/*
-          fail_on_unmatched_files: true
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.prepare.outputs.release_tag }}
+          RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+          RELEASE_PRERELEASE: ${{ needs.prepare.outputs.release_channel == 'beta' }}
+          RELEASE_LATEST: ${{ needs.prepare.outputs.release_channel == 'stable' }}
+        run: |
+          set -euo pipefail
+          # The immutable tag was checked before building. Do not send
+          # target_commitish: GitHub can require workflows:write even when the
+          # tag already exists. action-gh-release also resends the stored value.
+          status="$(curl -sS --retry 5 --retry-delay 3 \
+            --output release-state.json --write-out '%{http_code}' \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H 'Accept: application/vnd.github+json' \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/tags/${RELEASE_TAG}")"
+          case "${status}" in
+            200) ;;
+            404)
+              gh release create "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" \
+                --verify-tag --draft --title "OpenBitFun ${RELEASE_VERSION}" \
+                --generate-notes
+              ;;
+            *)
+              echo "Could not inspect release (GitHub API returned ${status})." >&2
+              exit 1
+              ;;
+          esac
+          gh release upload "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" \
+            --clobber release-upload-assets/*
+          gh release edit "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" \
+            --title "OpenBitFun ${RELEASE_VERSION}" --draft=false \
+            --prerelease="${RELEASE_PRERELEASE}" --latest="${RELEASE_LATEST}"
 
       - name: Verify published legacy update feeds
         if: needs.prepare.outputs.release_channel == 'stable'

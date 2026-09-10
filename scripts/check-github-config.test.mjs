@@ -1094,7 +1094,7 @@ test('stages unique release asset names before publishing', () => {
       'raw updater signatures have colliding names across macOS architectures',
     );
   }
-  assert.equal(steps[uploadIndex].with.files, 'release-upload-assets/*');
+  assert.match(steps[uploadIndex].run, /--clobber release-upload-assets\/\*/);
 });
 
 test('Desktop packaging installs Bun before preparing the OpenCode extension Host', () => {
@@ -1173,7 +1173,7 @@ test('Desktop packaging keeps beta identity explicit and stable-safe', () => {
   const uploadSteps = workflow.jobs['upload-release-assets'].steps;
   const release = uploadSteps.find((step) => step.name === 'Upload to release');
   assert.equal(
-    release.with.prerelease,
+    release.env.RELEASE_PRERELEASE,
     "${{ needs.prepare.outputs.release_channel == 'beta' }}",
   );
   const verifyIndexPublished = uploadSteps.findIndex(
@@ -1483,8 +1483,8 @@ test('public beta launch uses Latest while legacy updater bytes stay on 0.2.19',
   const workflow = yaml.parse(readFileSync(path.join(repoRoot, '.github/workflows/desktop-package.yml'), 'utf8'));
   const steps = workflow.jobs['upload-release-assets'].steps;
   const upload = steps.find((step) => step.name === 'Upload to release');
-  assert.equal(upload.with.make_latest, "${{ needs.prepare.outputs.release_channel == 'stable' }}");
-  assert.equal(upload.with.prerelease, "${{ needs.prepare.outputs.release_channel == 'beta' }}");
+  assert.equal(upload.env.RELEASE_LATEST, "${{ needs.prepare.outputs.release_channel == 'stable' }}");
+  assert.equal(upload.env.RELEASE_PRERELEASE, "${{ needs.prepare.outputs.release_channel == 'beta' }}");
   const preserve = steps.find((step) => step.name === 'Preserve legacy update feeds');
   assert.equal(preserve.if, "needs.prepare.outputs.release_channel == 'stable'");
   assert.ok(steps.indexOf(preserve) < steps.indexOf(upload));
@@ -1517,4 +1517,39 @@ test('public beta launch uses Latest while legacy updater bytes stay on 0.2.19',
       rmSync(cwd, { recursive: true, force: true });
     }
   }
+});
+
+
+test('release publication omits target overrides and uploads before publishing', (t) => {
+  const workflow = yaml.parse(readFileSync(path.join(repoRoot, '.github/workflows/desktop-package.yml'), 'utf8'));
+  const step = workflow.jobs['upload-release-assets'].steps.find((entry) => entry.name === 'Upload to release');
+  const root = mkdtempSync(path.join(tmpdir(), 'openbitfun-publish-api-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  for (const status of ['200', '404', '403']) {
+    const cwd = path.join(root, status);
+    mkdirSync(cwd);
+    mkdirSync(path.join(cwd, 'release-upload-assets'));
+    writeFileSync(path.join(cwd, 'release-upload-assets/latest-v1.json'), '{}');
+    const result = spawnSync('bash', ['-c', `
+      curl() { printf '%s' "$HTTP_STATUS"; }
+      gh() { printf '%s\\n' "$*" >> calls; }
+      ${step.run}
+    `], { cwd, encoding: 'utf8', windowsHide: true, env: { ...process.env,
+      HTTP_STATUS: status, GH_TOKEN: 'fixture', GITHUB_REPOSITORY: 'test/repo',
+      RELEASE_TAG: 'v1.0.0-beta', RELEASE_VERSION: '1.0.0-beta',
+      RELEASE_PRERELEASE: 'false', RELEASE_LATEST: 'true' } });
+    if (status === '403') {
+      assert.notEqual(result.status, 0);
+      continue;
+    }
+    assert.equal(result.status, 0, result.stderr);
+    const calls = readFileSync(path.join(cwd, 'calls'), 'utf8');
+    assert.doesNotMatch(calls, /--target|target_commitish/);
+    assert.equal(calls.includes('release create'), status === '404');
+    if (status === '404') assert.match(calls, /--verify-tag --draft/);
+    assert.ok(calls.indexOf('release upload') < calls.indexOf('release edit'));
+    assert.match(calls, /--draft=false --prerelease=false --latest=true/);
+  }
+  const prepare = workflow.jobs.prepare.steps.find((entry) => entry.id === 'meta').run;
+  assert.match(prepare, /UPLOAD.*true.*-z.*TAG_SHA/);
 });

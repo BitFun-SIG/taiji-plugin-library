@@ -15,6 +15,13 @@ suffix). It uses `release_channel=stable`, `upload_to_release=true`,
 GitHub release status are separate contracts. Merging this version bump to
 `main` triggers packaging and publication; preparing it locally does not.
 
+Before a manual publishing run, push the immutable version tag to the repository
+being built. Artifact-only builds may omit it. The workflow rejects missing or
+mismatched publishing tags before compiling. The version-bump workflow creates
+its tag automatically. Release creation and editing use GitHub CLI without
+`--target`: sending `target_commitish` for workflow-changing commits can require
+`workflows:write`, even for an existing tag. Asset upload precedes publication.
+
 ## Legacy update isolation
 
 Desktop 1.x reads `latest-v1.json`; CLI 1.x reads `linux-binaries-v1.json`,
@@ -40,7 +47,8 @@ for users who subscribe to repository releases.
 Run `Desktop Package` manually with:
 
 - `tag_name`: the immutable release tag, for example `v1.0.1-beta.1`;
-- `checkout_ref`: the commit or branch to build when the tag does not exist;
+- `checkout_ref`: the commit or branch to build; publication requires the tag
+  to exist and resolve to this exact commit;
 - `release_channel`: `beta`;
 - `upload_to_release`: disabled for internal Actions artifacts, enabled for a
   public GitHub pre-release.
