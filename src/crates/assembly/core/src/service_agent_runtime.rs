@@ -427,39 +427,37 @@ fn workspace_metadata_string(
 }
 
 #[cfg(feature = "remote-connect")]
-async fn remote_opened_workspace_catalog(
+pub(crate) fn remote_workspace_display_name(
+    workspace: &crate::service::workspace::WorkspaceInfo,
+) -> &str {
+    if workspace.workspace_kind == crate::service::workspace::WorkspaceKind::Assistant {
+        workspace
+            .identity
+            .as_ref()
+            .and_then(|identity| identity.name.as_deref())
+            .map(str::trim)
+            .filter(|name| !name.is_empty())
+            .unwrap_or(&workspace.name)
+    } else {
+        &workspace.name
+    }
+}
+
+#[cfg(feature = "remote-connect")]
+pub(crate) async fn remote_opened_workspace_catalog(
     service: &crate::service::workspace::WorkspaceService,
 ) -> Vec<RemoteRecentWorkspaceFacts> {
     service
         .get_opened_workspaces()
         .await
         .into_iter()
-        .map(|workspace| {
-            let name = if workspace.workspace_kind
-                == crate::service::workspace::WorkspaceKind::Assistant
-            {
-                workspace
-                    .identity
-                    .as_ref()
-                    .and_then(|identity| identity.name.as_deref())
-                    .map(str::trim)
-                    .filter(|name| !name.is_empty())
-                    .unwrap_or(&workspace.name)
-                    .to_string()
-            } else {
-                workspace.name.clone()
-            };
-            RemoteRecentWorkspaceFacts {
-                path: workspace.root_path.to_string_lossy().to_string(),
-                name,
-                last_opened: workspace.last_accessed.to_rfc3339(),
-                kind: remote_workspace_kind(workspace.workspace_kind),
-                remote_connection_id: workspace_metadata_string(
-                    &workspace.metadata,
-                    "connectionId",
-                ),
-                remote_ssh_host: workspace_metadata_string(&workspace.metadata, "sshHost"),
-            }
+        .map(|workspace| RemoteRecentWorkspaceFacts {
+            name: remote_workspace_display_name(&workspace).to_string(),
+            path: workspace.root_path.to_string_lossy().to_string(),
+            last_opened: workspace.last_accessed.to_rfc3339(),
+            kind: remote_workspace_kind(workspace.workspace_kind),
+            remote_connection_id: workspace_metadata_string(&workspace.metadata, "connectionId"),
+            remote_ssh_host: workspace_metadata_string(&workspace.metadata, "sshHost"),
         })
         .collect()
 }
