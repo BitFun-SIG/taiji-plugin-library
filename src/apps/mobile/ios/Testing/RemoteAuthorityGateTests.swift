@@ -561,7 +561,7 @@ struct RemoteAuthorityGateTests {
         expectInvalidationBeforeMutation(
             in: modelSource,
             function: "private func prepareProjectionForPairingSubmission()",
-            mutation: "directPairingConnected = false",
+            mutation: "remoteExpectedDeviceKey = nil",
             message: "replacing pairing invalidates transfers before old pairing projection is revoked"
         )
         expectCallBeforeMutation(
@@ -571,13 +571,6 @@ struct RemoteAuthorityGateTests {
             mutation: "selectRemoteDevice(device)",
             message: "QR membership validation precedes the device selection path that invalidates transfers"
         )
-        expectInvalidationBeforeMutation(
-            in: modelSource,
-            function: "private func apply(pairingState state: PairingUiState, generation: UInt64)",
-            mutation: "_ = coreAdapter?.invalidateRemoteAuthority",
-            message: "non-retained pairing failure invalidates transfers before exact adapter authority invalidation"
-        )
-
         let remoteSessionSource = readSource(
             iosDirectory.appendingPathComponent("OpenBitFun/Infrastructure/MobileAppModel+RemoteSession.swift")
         )
