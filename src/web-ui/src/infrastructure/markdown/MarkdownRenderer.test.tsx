@@ -6,6 +6,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { MenuItem } from '@/shared/context-menu-system/types';
 import { MarkdownRenderer } from './MarkdownRenderer';
+import { useAgentCanvasStore } from '@/app/components/panels/content-canvas/stores/canvasStore';
+import { useSceneStore } from '@/app/stores/sceneStore';
+import { useContentResourceStore } from '@/app/workbench/contentResourceStore';
+import { appManager } from '@/app/services/AppManager';
+import { flowChatStore } from '@/flow_chat/store/FlowChatStore';
+import type { Session } from '@/flow_chat/types/flow-chat';
+import { activateSurface, getActiveSurfaceId } from '@/infrastructure/peer-device/deviceSurface';
 
 const mocks = vi.hoisted(() => ({
   getCurrentWorkspacePath: vi.fn(),
@@ -87,6 +94,12 @@ vi.mock('@/shared/utils/startupTrace', () => ({
   startupTrace: {},
 }));
 
+vi.mock('@/infrastructure/services/business/workspaceManager', () => ({
+  workspaceManager: {
+    getState: vi.fn(() => ({ currentWorkspace: null, openedWorkspaces: new Map() })),
+  },
+}));
+
 const EXAMPLE_WORKSPACE = 'C:\\ExampleWorkspace';
 const EXAMPLE_ABSOLUTE_README = 'D:\\SampleDocs\\Guides\\README.md';
 
@@ -95,13 +108,45 @@ describe('Markdown file links', () => {
   let root: Root;
   let onFileViewRequest: ReturnType<typeof vi.fn>;
 
+  function openSessionHost(overrides: Partial<Session> = {}) {
+    const session: Session = {
+      sessionId: 'session_1',
+      title: 'Session',
+      dialogTurns: [],
+      status: 'idle',
+      config: {},
+      sessionKind: 'normal',
+      createdAt: 1,
+      lastActiveAt: 1,
+      error: null,
+      ...overrides,
+    };
+    flowChatStore.setState(state => ({
+      ...state,
+      sessions: new Map([[session.sessionId, session]]),
+      activeSessionId: session.sessionId,
+    }));
+    useSceneStore.getState().openSessionScene({
+      surfaceId: getActiveSurfaceId(),
+      workspaceKey: session.workspacePath ?? 'workspace-less',
+      sessionId: session.sessionId,
+    });
+  }
+
   beforeEach(() => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+    activateSurface('local');
+    flowChatStore.setState(state => ({ ...state, sessions: new Map(), activeSessionId: null }));
+    useContentResourceStore.setState({ resources: {} });
+    useSceneStore.getState().resetForPeerSwitch();
+    appManager.updateLayout({ chatCollapsed: false, rightPanelCollapsed: true });
 
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
 
+    useAgentCanvasStore.getState().reset();
     onFileViewRequest = vi.fn();
     mocks.getCurrentWorkspacePath.mockReset();
     mocks.revealInExplorer.mockReset();
@@ -120,6 +165,9 @@ describe('Markdown file links', () => {
       root.unmount();
     });
     container.remove();
+    flowChatStore.setState(state => ({ ...state, sessions: new Map(), activeSessionId: null }));
+    useContentResourceStore.setState({ resources: {} });
+    useSceneStore.getState().resetForPeerSwitch();
     vi.clearAllMocks();
   });
 
@@ -171,8 +219,11 @@ describe('Markdown file links', () => {
     '[Open Canvas](openbitfun-canvas://session/session_1/canvas/canvas_1)',
     'openbitfun-canvas://session/session_1/canvas/canvas_1',
   ])('opens Canvas artifact links in the Canvas panel: %s', async (content) => {
-    const onCreateTab = vi.fn();
-    window.addEventListener('agent-create-tab', onCreateTab);
+    openSessionHost({
+      workspacePath: '/srv/project',
+      remoteConnectionId: 'remote-connection-1',
+      remoteSshHost: 'workspace.example',
+    });
 
     try {
       await act(async () => {
@@ -192,9 +243,8 @@ describe('Markdown file links', () => {
 
       act(() => link?.click());
 
-      expect(onCreateTab).toHaveBeenCalledTimes(1);
-      const event = onCreateTab.mock.calls[0][0] as CustomEvent;
-      expect(event.detail).toMatchObject({
+      expect(useAgentCanvasStore.getState().primaryGroup.tabs).toHaveLength(1);
+      expect(useAgentCanvasStore.getState().primaryGroup.tabs[0].content).toMatchObject({
         type: 'openbitfun-canvas',
         title: 'OpenBitFun Canvas',
         data: {
@@ -208,20 +258,17 @@ describe('Markdown file links', () => {
           artifactReference: 'openbitfun-canvas://session/session_1/canvas/canvas_1',
           fromMarkdown: true,
         },
-        checkDuplicate: true,
-        duplicateCheckKey: 'openbitfun-canvas-openbitfun-canvas://session/session_1/canvas/canvas_1',
-        replaceExisting: true,
+
       });
       expect(mocks.getCurrentWorkspacePath).not.toHaveBeenCalled();
     } finally {
-      window.removeEventListener('agent-create-tab', onCreateTab);
+      useAgentCanvasStore.getState().reset();
     }
   });
 
   it('opens chat http links in the built-in browser by default', async () => {
     container.className = 'openbitfun-session-scene modern-flowchat-container';
-    const onCreateTab = vi.fn();
-    window.addEventListener('agent-create-tab', onCreateTab);
+    openSessionHost();
 
     try {
       await act(async () => {
@@ -238,27 +285,23 @@ describe('Markdown file links', () => {
       });
 
       expect(mocks.openExternal).not.toHaveBeenCalled();
-      expect(onCreateTab).toHaveBeenCalledTimes(1);
-      const event = onCreateTab.mock.calls[0][0] as CustomEvent;
-      expect(event.detail).toMatchObject({
+      expect(useAgentCanvasStore.getState().primaryGroup.tabs).toHaveLength(1);
+      expect(useAgentCanvasStore.getState().primaryGroup.tabs[0].content).toMatchObject({
         type: 'browser',
         data: { url: 'https://example.com/docs' },
-        duplicateCheckKey: 'browser-panel:https://example.com/docs',
-        replaceExisting: false,
+        metadata: { duplicateCheckKey: 'browser-panel:https://example.com/docs' },
       });
     } finally {
-      window.removeEventListener('agent-create-tab', onCreateTab);
+      useAgentCanvasStore.getState().reset();
     }
   });
 
-  it('expands a collapsed right panel before creating a browser tab', async () => {
-    vi.useFakeTimers();
+  it('commits a browser view and explicitly reveals its inline host', async () => {
     container.className = 'openbitfun-session-scene modern-flowchat-container';
-    (window as any).__OPENBITFUN_LAYOUT_STATE__ = { rightPanelCollapsed: true };
+    openSessionHost();
     const onExpandPanel = vi.fn();
-    const onCreateTab = vi.fn();
-    window.addEventListener('expand-right-panel', onExpandPanel);
-    window.addEventListener('agent-create-tab', onCreateTab);
+
+    window.addEventListener('expand-right-panel-immediate', onExpandPanel);
 
     try {
       await act(async () => {
@@ -274,25 +317,17 @@ describe('Markdown file links', () => {
       });
 
       expect(onExpandPanel).toHaveBeenCalledTimes(1);
-      expect(onCreateTab).not.toHaveBeenCalled();
-
-      act(() => {
-        vi.advanceTimersByTime(300);
-      });
-
-      expect(onCreateTab).toHaveBeenCalledTimes(1);
+      expect(useAgentCanvasStore.getState().primaryGroup.tabs).toHaveLength(1);
+      expect(useAgentCanvasStore.getState().primaryGroup.tabs[0].content.data.url).toBe('https://example.com/docs');
     } finally {
-      delete (window as any).__OPENBITFUN_LAYOUT_STATE__;
-      window.removeEventListener('expand-right-panel', onExpandPanel);
-      window.removeEventListener('agent-create-tab', onCreateTab);
+      window.removeEventListener('expand-right-panel-immediate', onExpandPanel);
       vi.useRealTimers();
     }
   });
 
   it('opens modified chat link clicks in the external browser', async () => {
     container.className = 'openbitfun-session-scene modern-flowchat-container';
-    const onCreateTab = vi.fn();
-    window.addEventListener('agent-create-tab', onCreateTab);
+
 
     try {
       await act(async () => {
@@ -313,9 +348,9 @@ describe('Markdown file links', () => {
       });
 
       expect(mocks.openExternal).toHaveBeenCalledWith('https://example.com/docs');
-      expect(onCreateTab).not.toHaveBeenCalled();
+      expect(useAgentCanvasStore.getState().primaryGroup.tabs).toHaveLength(0);
     } finally {
-      window.removeEventListener('agent-create-tab', onCreateTab);
+      useAgentCanvasStore.getState().reset();
     }
   });
 

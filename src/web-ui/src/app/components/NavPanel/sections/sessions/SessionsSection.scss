@@ -266,6 +266,18 @@
     white-space: nowrap;
   }
 
+  &__inline-item-title {
+    display: inline-flex;
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: 100%;
+    align-items: center;
+
+    .openbitfun-nav-panel__inline-item-label {
+      flex: 0 1 auto;
+    }
+  }
+
   &__inline-item-btw-badge {
     flex: 0 0 auto;
     display: inline-flex;

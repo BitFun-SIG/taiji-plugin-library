@@ -1,3 +1,4 @@
+import { ResourceFileContext, type ResourceFileAccess } from '@/infrastructure/api/ResourceFileContext';
 import React from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { Node } from '@tiptap/core';
@@ -10,6 +11,7 @@ import { MarkdownRenderer } from '@/infrastructure/markdown';
 import { activeEditTargetService } from '@/tools/editor/services/ActiveEditTargetService';
 
 type SourceBackedBlockOptions = {
+  fileAccess?: ResourceFileAccess | null;
   basePath?: string;
   label?: string;
   editLabel?: string;
@@ -273,6 +275,9 @@ function createSourceBackedBlock(
         preview.tabIndex = 0;
         preview.dataset.testid = 'md-embed-preview';
         previewRoot = createRoot(preview);
+        const renderPreviewRoot = (node: React.ReactNode) => previewRoot?.render(
+          React.createElement(ResourceFileContext.Provider, { value: this.options.fileAccess ?? null }, node),
+        );
 
         const sourceFallback = document.createElement('pre');
         sourceFallback.className = `${className}__source-fallback`;
@@ -400,7 +405,7 @@ function createSourceBackedBlock(
             ? typeof pos === 'number' ? sourceBlockPreview(editor.state.doc, pos, referencePrefix) : undefined
             : undefined;
           if (name === 'frontmatter') {
-            previewRoot?.render(
+            renderPreviewRoot(
               React.createElement(
                 'pre',
                 { className: `${className}__source` },
@@ -423,7 +428,7 @@ function createSourceBackedBlock(
               const hasVisibleContent = previewHasVisibleContent(preview);
 
               if (!hasVisibleContent && fallbackToMarkdownRenderer) {
-                previewRoot?.render(
+                renderPreviewRoot(
                   React.createElement(MarkdownRenderer, {
                     content: markdown,
                     basePath: this.options.basePath,
@@ -444,7 +449,7 @@ function createSourceBackedBlock(
           };
 
           if (detailsSource) {
-            previewRoot?.render(
+            renderPreviewRoot(
               React.createElement(
                 'details',
                 {
@@ -485,7 +490,7 @@ function createSourceBackedBlock(
             return;
           }
 
-          previewRoot?.render(
+          renderPreviewRoot(
             React.createElement(MarkdownRenderer, {
               content: markdown,
               ...referencePreview,

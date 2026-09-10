@@ -1,3 +1,5 @@
+import { useResourceFileAccess, type ResourceFileAccess } from '@/infrastructure/api/ResourceFileContext';
+import { getActiveSurfaceId, getActiveSurfaceScope } from '@/infrastructure/peer-device/deviceSurface';
 /**
  * Markdown component
  * Used to render Markdown-formatted text
@@ -471,15 +473,17 @@ function getMimeType(filePath: string): string {
   return mimeTypes[ext || ''] || 'image/jpeg';
 }
 
-function getLocalImageCacheKey(localPath: string, remoteConnectionId?: string): string {
-  return JSON.stringify([remoteConnectionId || null, localPath]);
+function getLocalImageCacheKey(localPath: string, remoteConnectionId?: string, surfaceId = getActiveSurfaceId()): string {
+  return JSON.stringify([surfaceId, remoteConnectionId || null, localPath]);
 }
 
 async function getLocalImageDataUrl(
   localPath: string,
   remoteConnectionId?: string,
+  access?: ResourceFileAccess | null,
 ): Promise<string> {
-  const cacheKey = getLocalImageCacheKey(localPath, remoteConnectionId);
+  const scope = getActiveSurfaceScope();
+  const cacheKey = getLocalImageCacheKey(localPath, remoteConnectionId, access?.scope.surfaceId);
   const cachedDataUrl = localImageDataUrlCache.get(cacheKey);
   if (cachedDataUrl) {
     return cachedDataUrl;
@@ -491,11 +495,9 @@ async function getLocalImageDataUrl(
   }
 
   const request = (async () => {
-    const base64Content = await workspaceAPI.readFileContent(
-      localPath,
-      'base64',
-      remoteConnectionId,
-    );
+    const base64Content = access ? await access.files.readFileContent(localPath, 'base64')
+      : await workspaceAPI.readFileContent(localPath, 'base64', remoteConnectionId);
+    scope.assertCurrent('read markdown image');
     const dataUrl = `data:${getMimeType(localPath)};base64,${base64Content}`;
     localImageDataUrlCache.set(cacheKey, dataUrl);
     localImageRequestCache.delete(cacheKey);
@@ -524,6 +526,8 @@ const MarkdownImage: React.FC<MarkdownImageProps> = ({
   onError,
   ...imgProps
 }) => {
+  const fileAccess = useResourceFileAccess();
+  const connectionId = fileAccess ? fileAccess.scope.remoteConnectionId : remoteConnectionId;
   const rawSrc = typeof src === 'string' ? normalizeExternalImageSrc(src) : '';
   const localPath = useMemo(() => {
     if (!rawSrc || !isLocalAssetPath(rawSrc)) {
@@ -533,7 +537,7 @@ const MarkdownImage: React.FC<MarkdownImageProps> = ({
     return resolveBaseRelativePath(rawSrc, basePath);
   }, [basePath, rawSrc]);
   const cacheKey = localPath
-    ? getLocalImageCacheKey(localPath, remoteConnectionId)
+    ? getLocalImageCacheKey(localPath, connectionId, fileAccess?.scope.surfaceId)
     : null;
   const [resolvedSrc, setResolvedSrc] = useState(() => {
     if (!rawSrc) {
@@ -574,7 +578,7 @@ const MarkdownImage: React.FC<MarkdownImageProps> = ({
     setResolvedSrc(LOCAL_IMAGE_PLACEHOLDER);
     setLoadState('loading');
 
-    void getLocalImageDataUrl(localPath, remoteConnectionId)
+    void getLocalImageDataUrl(localPath, connectionId, fileAccess)
       .then((dataUrl) => {
         if (cancelled) {
           return;
@@ -606,7 +610,7 @@ const MarkdownImage: React.FC<MarkdownImageProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [cacheKey, localPath, rawSrc, remoteConnectionId]);
+  }, [cacheKey, localPath, rawSrc, connectionId, fileAccess, remoteConnectionId]);
 
   if (loadState === 'error') {
     return (
@@ -864,6 +868,8 @@ export const MarkdownRenderer = React.memo<MarkdownRendererProps>(({
   onHttpLinkClick,
   traceContext,
 }) => {
+  const fileAccess = useResourceFileAccess();
+  const fileAccessRef = useLiveValueRef(fileAccess);
   const { current: appearance } = useAppearance();
   const isLight = appearance?.mode === 'light';
   const [currentWorkspacePath, setCurrentWorkspacePath] = useState('');
@@ -873,9 +879,9 @@ export const MarkdownRenderer = React.memo<MarkdownRendererProps>(({
   const isStreamingRef = useRef(isStreaming);
   isStreamingRef.current = isStreaming;
   const basePathRef = useLiveValueRef(basePath);
-  const remoteConnectionIdRef = useLiveValueRef(remoteConnectionId);
+  const remoteConnectionIdRef = useLiveValueRef(fileAccess ? fileAccess.scope.remoteConnectionId : remoteConnectionId);
   const remoteSshHostRef = useLiveValueRef(remoteSshHost);
-  const currentWorkspacePathRef = useLiveValueRef(currentWorkspacePath);
+  const currentWorkspacePathRef = useLiveValueRef(fileAccess?.scope.workspacePath ?? currentWorkspacePath);
   const expandDetailsByDefaultRef = useLiveValueRef(expandDetailsByDefault);
   const onOpenVisualizationRef = useLiveValueRef(onOpenVisualization);
   const onFileViewRequestRef = useLiveValueRef(onFileViewRequest);
@@ -973,8 +979,9 @@ export const MarkdownRenderer = React.memo<MarkdownRendererProps>(({
   }, []);
 
   const handleFileViewRequest = useCallback((filePath: string, fileName: string, lineRange?: LineRange) => {
-    onFileViewRequestRef.current?.(filePath, fileName, lineRange);
-  }, [onFileViewRequestRef]);
+    if (onFileViewRequestRef.current) onFileViewRequestRef.current(filePath, fileName, lineRange);
+    else if (fileAccessRef.current) openFileInBestTarget({ filePath, fileName, jumpToRange: lineRange, scope: fileAccessRef.current.scope });
+  }, [onFileViewRequestRef, fileAccessRef]);
 
   const handleOpenVisualization = useCallback((visualization: any) => {
     onOpenVisualizationRef.current?.(visualization);
