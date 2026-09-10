@@ -458,6 +458,11 @@ impl TelegramBot {
                 let sender: BotMessageSender = std::sync::Arc::new(move |text: String| {
                     let msg_bot = msg_bot.clone();
                     Box::pin(async move {
+                        if !msg_bot.runtime_fence.is_lifecycle_current()
+                            || msg_bot.runtime_fence.identity_epoch() != output_identity_epoch
+                        {
+                            return;
+                        }
                         msg_bot.send_message(chat_id, &text).await.ok();
                     })
                 });
@@ -475,6 +480,19 @@ impl TelegramBot {
                     || bot.runtime_fence.identity_epoch() != output_identity_epoch
                 {
                     return;
+                }
+                if let Some(next) = super::retire_remote_interactions(
+                    &bot.chat_states,
+                    &chat_id,
+                    output_remote_target.as_ref(),
+                    &result.completed_remote_tools,
+                    &bot.runtime_fence,
+                    output_identity_epoch,
+                )
+                .await
+                {
+                    bot.deliver_interaction(chat_id, next, output_identity_epoch)
+                        .await;
                 }
                 if !result.display_text.is_empty() {
                     bot.send_message(chat_id, &result.display_text).await.ok();

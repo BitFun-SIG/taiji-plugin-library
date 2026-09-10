@@ -691,6 +691,19 @@ impl WeixinBot {
                 {
                     return;
                 }
+                if let Some(next) = super::retire_remote_interactions(
+                    &bot.chat_states,
+                    &peer,
+                    output_remote_target.as_ref(),
+                    &turn_result.completed_remote_tools,
+                    &bot.runtime_fence,
+                    output_identity_epoch,
+                )
+                .await
+                {
+                    bot.deliver_interaction(peer.clone(), next, output_identity_epoch)
+                        .await;
+                }
                 if !turn_result.display_text.is_empty() {
                     if let Err(err) = bot.send_text(&peer, &turn_result.display_text).await {
                         warn!("weixin: send final reply to peer {peer} failed: {err}");

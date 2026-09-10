@@ -522,14 +522,6 @@ interface MarkdownImageProps extends React.ImgHTMLAttributes<HTMLImageElement> {
   remoteConnectionId?: string;
 }
 
-const MarkdownImage: React.FC<MarkdownImageProps> = (props) => {
-  const fileAccess = useResourceFileAccess();
-  const scope = useSyncExternalStore(onSurfaceActivated, getActiveSurfaceScope, getActiveSurfaceScope);
-  // Reset before paint when the source or host changes; old pixels must not
-  // survive for one render while an effect starts the new read.
-  return <ScopedMarkdownImage key={JSON.stringify([scope.epoch, props.src, props.basePath, props.remoteConnectionId, fileAccess?.scope.surfaceId, fileAccess?.scope.remoteConnectionId, fileAccess?.scope.workspacePath])} {...props} scope={scope} />;
-};
-
 const ScopedMarkdownImage: React.FC<MarkdownImageProps & { scope: SurfaceScope }> = ({
   scope,
   src,
@@ -662,6 +654,14 @@ const ScopedMarkdownImage: React.FC<MarkdownImageProps & { scope: SurfaceScope }
       }}
     />
   );
+};
+
+const MarkdownImage: React.FC<MarkdownImageProps> = (props) => {
+  const fileAccess = useResourceFileAccess();
+  const scope = useSyncExternalStore(onSurfaceActivated, getActiveSurfaceScope, getActiveSurfaceScope);
+  // Reset before paint when the source or host changes; old pixels must not
+  // survive for one render while an effect starts the new read.
+  return <ScopedMarkdownImage key={JSON.stringify([scope.epoch, props.src, props.basePath, props.remoteConnectionId, fileAccess?.scope.surfaceId, fileAccess?.scope.remoteConnectionId, fileAccess?.scope.workspacePath])} {...props} scope={scope} />;
 };
 
 function isEditorOpenableFilePath(filePath: string): boolean {
@@ -1197,6 +1197,7 @@ export const MarkdownRenderer = React.memo<MarkdownRendererProps>(({
     handleRevealInExplorer,
     handleFileViewRequest,
     fileActionsViaCallbackOnlyRef,
+    onFileDownloadRef,
     handleCopyLink,
     remoteConnectionIdRef,
     showLinkContextMenu,
@@ -1655,6 +1656,8 @@ export const MarkdownRenderer = React.memo<MarkdownRendererProps>(({
       );
     }
   }), [
+    onFileDownloadRef,
+    onImageReadRef,
     handleFileViewRequest,
     handleRevealInExplorer,
     handleLocalFileContextMenu,

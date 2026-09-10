@@ -657,6 +657,19 @@ impl FeishuBot {
                 {
                     return;
                 }
+                if let Some(next) = super::retire_remote_interactions(
+                    &bot.chat_states,
+                    &cid,
+                    output_remote_target.as_ref(),
+                    &result.completed_remote_tools,
+                    &bot.runtime_fence,
+                    output_identity_epoch,
+                )
+                .await
+                {
+                    bot.deliver_interaction(&cid, next, output_identity_epoch)
+                        .await;
+                }
                 if !result.display_text.is_empty() {
                     if let Err(err) = bot.send_message(&cid, &result.display_text).await {
                         warn!("Failed to send Feishu final message to {cid}: {err}");

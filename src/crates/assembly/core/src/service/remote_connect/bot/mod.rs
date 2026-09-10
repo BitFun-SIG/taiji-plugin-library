@@ -267,3 +267,24 @@ pub(crate) async fn read_output_file(
         size: content.size,
     })
 }
+
+/// Retire only the interactions actually observed in a completed remote turn.
+/// Another turn/device may still have a pending or queued question in this chat.
+pub(crate) async fn retire_remote_interactions<K: Eq + Hash>(
+    states: &tokio::sync::RwLock<HashMap<K, BotChatState>>,
+    chat_id: &K,
+    target: Option<&command_router::RemoteBotTarget>,
+    tool_ids: &[String],
+    fence: &BotRuntimeFence,
+    epoch: u64,
+) -> Option<command_router::BotInteractiveRequest> {
+    let target = target?;
+    if tool_ids.is_empty() {
+        return None;
+    }
+    let mut states = states.write().await;
+    if !fence.is_lifecycle_current() || fence.identity_epoch() != epoch {
+        return None;
+    }
+    command_router::retire_completed_remote_tools(states.get_mut(chat_id)?, target, tool_ids)
+}
