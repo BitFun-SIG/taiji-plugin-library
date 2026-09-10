@@ -6,6 +6,12 @@ Mobile web is the browser-based remote control client for OpenBitFun desktop ses
 
 - Keep mobile-web logic inside `src/mobile-web`; do not import from `src/web-ui`.
 - Treat pairing, reconnect, disconnect, session list, and chat state as one connected product flow.
+- The compact sidebar uses the host's opened-workspace catalog, including assistant
+  identity names. `list_recent_workspaces.opened_workspaces` is an additive capability
+  offer: an array (including an empty one) is authoritative; absence selects the
+  explicitly labeled legacy recent-history fallback. Never rebuild sidebar rows
+  from current-workspace state or cached session paths. Keep history for the picker
+  and retain session data when a workspace closes or a refresh fails.
 - Keep connection state semantics consistent across persistent indicators, banners, dialogs, and disabled states.
 - User-facing strings should use the mobile-web i18n message system when one is already present for the surface being changed.
 - Locale ids and aliases come from `src/shared/i18n/contract/locales.json`
