@@ -14,6 +14,50 @@ describe('Markdown rich text browser E2E', () => {
 
   });
 
+  it('preserves escaped text, link titles and code spaces after a native edit, save and reload', async () => {
+    const source = '# Edge cases\n\n[label](<https://example.com/a b> "a & title")\n\n\\# literal\n\n``  padded  ``\n\n~~**Remaining**: work~~\n\nAfter';
+    await editor.mode(1);
+    await editor.source.setValue(source);
+    await editor.mode(0);
+    await expect($$('[data-testid="md-embed-block"]')).toBeElementsArrayOfSize(0);
+    await expect(editor.richText.$('a')).toHaveAttribute('title', 'a & title');
+    expect(await editor.richText.$('code').getProperty('textContent')).toBe(' padded ');
+    await editor.richText.$(':scope > p:last-child').click();
+    await browser.keys([modifier, 'ArrowRight']);
+    await browser.keys(' updated');
+    await expect(editor.dirty).toHaveText('Unsaved');
+    await editor.save();
+    const saved = await editor.savedSource();
+    expect(saved).toContain('"a & title"');
+    expect(saved).toContain('\\# literal');
+    expect(saved).toContain('After updated');
+    await browser.refresh();
+    await editor.richText.waitForDisplayed();
+    await expect(editor.richText.$('a')).toHaveAttribute('title', 'a & title');
+    expect(await editor.richText.$('code').getProperty('textContent')).toBe(' padded ');
+    await expect(editor.richText.$(':scope > p:last-child')).toHaveText('After updated');
+    await expect($$('[data-testid="md-embed-block"]')).toBeElementsArrayOfSize(0);
+  });
+
+  it('edits neighbors of an isolated source block without rewriting that block', async () => {
+    const block = 'Text <b><strong>nested</strong></b> after.';
+    const source = '# Before\n\n'+block+'\n\nAfter';
+    await editor.mode(1);
+    await editor.source.setValue(source);
+    await editor.mode(0);
+    await expect($$('[data-testid="md-embed-block"]')).toBeElementsArrayOfSize(1);
+    await expect(editor.richText.$('h1')).toHaveText('Before');
+    await editor.richText.$(':scope > p:last-child').click();
+    await browser.keys([modifier, 'ArrowRight']);
+    await browser.keys(' updated');
+    await editor.save();
+    expect(await editor.savedSource()).toBe(source+' updated');
+    await browser.refresh();
+    await editor.richText.waitForDisplayed();
+    await expect($$('[data-testid="md-embed-block"]')).toBeElementsArrayOfSize(1);
+    await expect(editor.richText.$(':scope > p:last-child')).toHaveText('After updated');
+  });
+
   it('sanitizes loaded and edited details summaries without changing their Markdown source', async () => {
     const heading = '# Untrusted document\n\n';
     const details = '<details open>\n<summary>'

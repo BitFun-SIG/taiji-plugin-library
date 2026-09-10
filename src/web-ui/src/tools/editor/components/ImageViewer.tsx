@@ -1,3 +1,4 @@
+import { useEditorDocument } from '../services/EditorDocument';
 /**
  * Image Viewer Component
  * 
@@ -5,7 +6,7 @@
  * @module components/ImageViewer
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { ZoomIn, ZoomOut, RotateCw, Maximize2 } from 'lucide-react';
 import { OverflowText, Button, Icon, IconButton, Toolbar, ToolbarGroup, ToolbarSeparator, Tooltip } from '@openbitfun/ui';
 import { createLogger } from '@/shared/utils/logger';
@@ -18,6 +19,7 @@ const log = createLogger('ImageViewer');
 export interface ImageViewerProps {
   /** Image file path */
   filePath: string;
+  isActiveTab?: boolean;
   /** File name */
   fileName?: string;
   /** Workspace path (for relative path resolution) */
@@ -32,9 +34,12 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({
   filePath,
   fileName,
   imageSource,
+  isActiveTab = true,
   className = ''
 }) => {
+  const documentSession = useEditorDocument();
   const { t } = useI18n('tools');
+  const [retryKey, setRetryKey] = useState(0);
   const [imageUrl, setImageUrl] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -86,7 +91,7 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({
         setLoading(true);
         setError(null);
 
-        const { workspaceAPI } = await import('@/infrastructure/api');
+        const workspaceAPI = documentSession?.files ?? (await import('@/infrastructure/api')).workspaceAPI;
         const result = await workspaceAPI.readFileContent(filePath);
 
         if (cancelled) return;
@@ -108,7 +113,14 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({
 
     void loadImage();
     return () => { cancelled = true; };
-  }, [filePath, getMimeType, imageSource, t]);
+  }, [filePath, getMimeType, imageSource, t, documentSession, retryKey]);
+
+  const errorRef = useRef(error);
+  errorRef.current = error;
+  useEffect(() => {
+    // Retry on reactivation, not on each failure (which would loop forever).
+    if (isActiveTab && errorRef.current && documentSession?.isCurrent()) setRetryKey(key => key + 1);
+  }, [documentSession, isActiveTab]);
 
   const handleImageLoad = useCallback((e: React.SyntheticEvent<HTMLImageElement>) => {
     const img = e.currentTarget;

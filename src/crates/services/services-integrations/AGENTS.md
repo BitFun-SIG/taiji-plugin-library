@@ -126,6 +126,7 @@ cargo test -p openbitfun-services-integrations --no-default-features --features 
 cargo test --locked -p openbitfun-services-integrations --no-default-features --features remote-ssh-concrete --lib remote_ssh::relay_deploy::tests::
 cargo test --locked -p openbitfun-services-integrations --no-default-features --features remote-connect --lib remote_connect::relay_client::tests::
 cargo test -p openbitfun-services-integrations --no-default-features --features file-watch --test file_watch_contracts
+cargo test --locked -p openbitfun-services-integrations --no-default-features --features workspace-search --test workspace_search_contracts
 cargo test --locked -p openbitfun-services-integrations --no-default-features --features deep-research --lib deep_research::tests::
 cargo test --locked -p openbitfun-services-integrations --no-default-features --features review-platform --lib review_platform
 pnpm run check:core-boundaries
