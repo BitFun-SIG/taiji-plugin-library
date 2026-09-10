@@ -734,6 +734,7 @@ pub async fn read_remote_workspace_file_chunk(
         .unwrap_or(total_size);
 
     Ok(RemoteWorkspaceFileChunk {
+        revision: String::new(),
         name: remote_file_display_name(abs_path.file_name().and_then(|n| n.to_str())),
         bytes: chunk,
         offset,
@@ -796,6 +797,7 @@ pub fn remote_file_chunk_response(
         Ok(chunk) => {
             use base64::Engine as _;
             RemoteResponse::FileChunk {
+                revision: chunk.revision,
                 name: chunk.name,
                 chunk_base64: base64::engine::general_purpose::STANDARD.encode(&chunk.bytes),
                 offset: chunk.offset,
@@ -2643,6 +2645,8 @@ pub enum RemoteResponse {
         size: u64,
     },
     FileChunk {
+        #[serde(default, skip_serializing_if = "String::is_empty")]
+        revision: String,
         name: String,
         chunk_base64: String,
         offset: u64,

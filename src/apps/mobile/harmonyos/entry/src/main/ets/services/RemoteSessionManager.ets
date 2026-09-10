@@ -409,6 +409,7 @@ export class RemoteSessionManager implements RemoteChatCommandClient, RemoteFile
     return {
       name: response.name || RemoteResponseMapper.basename(path),
       contentBase64: response.chunk_base64 || '',
+      revision: response.revision,
       offset: response.offset ?? offset,
       chunkSize: response.chunk_size || 0,
       totalSize: response.total_size || 0,
@@ -422,6 +423,7 @@ export class RemoteSessionManager implements RemoteChatCommandClient, RemoteFile
     let fileName = RemoteResponseMapper.basename(path);
     let mimeType = 'application/octet-stream';
     let totalSize = 0;
+    let revision: string | undefined;
     const generation = this.transportGeneration;
     const transport = this.transport;
     const chunks: Uint8Array[] = [];
@@ -441,13 +443,14 @@ export class RemoteSessionManager implements RemoteChatCommandClient, RemoteFile
         throw new Error('Remote file transfer is incomplete or inconsistent.');
       }
       if (maxBytes !== undefined && response.totalSize > maxBytes) throw new Error('File too large for preview.');
-      if (chunks.length > 0 && (response.totalSize !== totalSize || response.name !== fileName || response.mimeType !== mimeType)) {
+      if (chunks.length > 0 && (response.totalSize !== totalSize || response.name !== fileName || response.mimeType !== mimeType || response.revision !== revision)) {
         throw new Error('Remote file changed during transfer.');
       }
       chunks.push(bytes);
       fileName = response.name;
       mimeType = response.mimeType;
       totalSize = response.totalSize;
+      revision = response.revision;
       offset += readSize;
       if (onProgress) {
         onProgress(offset, totalSize);

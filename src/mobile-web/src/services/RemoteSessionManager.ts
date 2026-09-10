@@ -629,6 +629,7 @@ export class RemoteSessionManager {
     let fileName = '';
     let mimeType = '';
     let totalSize = 0;
+    let revision: string | undefined;
     const target = this.client.getControlTargetSnapshot();
 
     // eslint-disable-next-line no-constant-condition
@@ -637,6 +638,7 @@ export class RemoteSessionManager {
         resp: string;
         name: string;
         chunk_base64: string;
+        revision?: string;
         offset: number;
         chunk_size: number;
         total_size: number;
@@ -660,7 +662,7 @@ export class RemoteSessionManager {
       if (maxBytes !== undefined && resp.total_size > maxBytes) {
         throw new Error('File is too large for an inline preview. Download it to view.');
       }
-      if (chunks.length > 0 && (resp.total_size !== totalSize || resp.name !== fileName || resp.mime_type !== mimeType)) {
+      if (chunks.length > 0 && (resp.total_size !== totalSize || resp.name !== fileName || resp.mime_type !== mimeType || resp.revision !== revision)) {
         throw new Error('File changed during transfer. Please retry.');
       }
       const bytes = atob(resp.chunk_base64);
@@ -669,6 +671,7 @@ export class RemoteSessionManager {
       fileName = resp.name;
       mimeType = resp.mime_type;
       totalSize = resp.total_size;
+      revision = resp.revision;
       offset += resp.chunk_size;
 
       onProgress?.(Math.min(offset, totalSize), totalSize);

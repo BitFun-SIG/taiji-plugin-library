@@ -247,6 +247,7 @@ impl SessionFileTarget {
             .to_string();
         Ok((
             RemoteWorkspaceFileChunk {
+                revision: revision.clone(),
                 mime_type: detect_remote_mime_type(Path::new(&name)),
                 name,
                 bytes,

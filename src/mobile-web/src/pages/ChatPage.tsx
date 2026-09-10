@@ -329,11 +329,10 @@ const ChatPage: React.FC<ChatPageProps> = ({
           throw new Error(t('chat.fileUnavailable'));
         }
         return `data:${file.mimeType};base64,${file.contentBase64}`;
-      })().catch((error: unknown) => {
-        pending.delete(filePath);
-        throw error;
+      })().finally(() => {
+        if (pending.get(filePath) === request) pending.delete(filePath);
       });
-      // Bound retained previews while allowing remounted transcript rows to reuse reads.
+      // Deduplicate concurrent reads without retaining bytes after the path changes.
       if (pending.size >= 24) pending.delete(pending.keys().next().value!);
       pending.set(filePath, request);
       return request;

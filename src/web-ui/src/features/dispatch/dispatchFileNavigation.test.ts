@@ -46,6 +46,14 @@ describe('dispatch file navigation', () => {
     expect(mocks.readFile).not.toHaveBeenCalled();
   });
 
+  it('reads new bytes when a later result reuses the same output path', async () => {
+    mocks.readFileChunk.mockResolvedValueOnce(chunk(0, 'abc'));
+    expect(await readDispatchSessionImage('session-1', 'reused.png')).toBe('data:image/png;base64,YWJj');
+    mocks.readFileChunk.mockResolvedValueOnce(chunk(0, 'def', { revision: 'revision-2' }));
+    expect(await readDispatchSessionImage('session-1', 'reused.png')).toBe('data:image/png;base64,ZGVm');
+    expect(mocks.readFileChunk).toHaveBeenCalledTimes(2);
+  });
+
   it('resumes a disconnected binary transfer at the same offset and revision', async () => {
     mocks.readFileChunk.mockResolvedValueOnce(chunk(0, 'a'))
       .mockRejectedValueOnce(new Error('Connection interrupted'))

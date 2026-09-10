@@ -217,7 +217,10 @@ once, and Markdown code examples are not treated as delivery requests. Missing
 files and upload failures produce an explicit reply.
 
 Account-device bot submissions retain the original device, session, and account
-identity for result polling, interactions, and attachment reads. A temporary
+identity for result polling, interactions, and attachment reads. Attachments use
+bounded chunks so encrypted relay payloads stay within the transport limit.
+New hosts include an optional file revision; supported readers reject a changed
+revision, while legacy replies without this field remain readable. A temporary
 connection failure replays the same turn query instead of resubmitting the prompt.
 Questions and tool approvals return to that captured target even after menu
 selection changes. Account replacement retires the observer's authority.
@@ -228,7 +231,7 @@ Chunk reads carry an offset and file revision; the controller rejects inconsiste
 transfers and drops responses after a device-surface switch. Older targets retain
 working execution and text-query paths and receive an explicit upgrade instruction
 for a missing binary capability. Existing Remote Connect file commands and
-persisted session records keep their wire shapes.
+persisted session records remain compatible; the file-chunk revision is additive.
 
 ## Upgrade compatibility
 

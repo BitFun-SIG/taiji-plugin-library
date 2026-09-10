@@ -3175,12 +3175,31 @@ pub(crate) async fn execute_forwarded_turn(
             }
         }
 
-        let full_text = tracker.accumulated_text();
-        let full_text = if full_text.is_empty() {
-            response
-        } else {
-            full_text
-        };
+        // Read the submitted turn by identity. Another controller may already
+        // have started the next turn and replaced the tracker's text buffer.
+        let poll_host =
+            crate::service_agent_runtime::CoreServiceAgentRuntime::remote_poll_host(&dispatcher);
+        let poll = openbitfun_services_integrations::remote_connect::handle_remote_poll_command(
+            &poll_host,
+            &openbitfun_services_integrations::remote_connect::RemoteCommand::PollSession {
+                session_id: forward.session_id.clone(),
+                since_version: 0,
+                known_msg_count: 0,
+                known_model_catalog_version: None,
+            },
+        )
+        .await;
+        let full_text = serde_json::to_value(poll)
+            .ok()
+            .and_then(|poll| {
+                openbitfun_services_integrations::remote_connect::bot::remote_turn::observe_turn(
+                    &poll,
+                    &target_turn_id,
+                )
+            })
+            .map(|turn| turn.text)
+            .filter(|text| !text.is_empty())
+            .unwrap_or(response);
 
         // Do NOT truncate here. Each IM adapter knows its own per-message
         // size limit and chunks accordingly (e.g. WeChat splits via
@@ -4255,11 +4274,17 @@ mod handle_chat_tests {
                             assert_eq!(command["tool_id"],"approval-a");
                             serde_json::json!({"resp":"interaction_accepted","action":"confirm_tool","target_id":"approval-a"})
                         }
-                        "get_file_info" => serde_json::json!({"resp":"file_info","name":"result.png","size":3,"mime_type":"image/png"}),
-                        "read_file" => {
+                                                "read_file_chunk" => {
                             assert_eq!(command["session_id"],"session-a");
                             assert_eq!(command["path"],"result.png");
-                            serde_json::json!({"resp":"file_content","name":"result.png","size":3,"mime_type":"image/png","content_base64":"AP8B"})
+                            let offset = command["offset"].as_u64().unwrap();
+                            assert!(command["limit"].as_u64().unwrap() <= 3 * 1024 * 1024);
+                            let (count, encoded) = match offset {
+                                0 => (1, "AA=="),
+                                1 => (2, "/wE="),
+                                other => panic!("Unexpected file offset: {other}"),
+                            };
+                            serde_json::json!({"resp":"file_chunk","name":"result.png","total_size":3,"offset":offset,"chunk_size":count,"mime_type":"image/png","chunk_base64":encoded,"revision":"3:1"})
                         }
                         other=>panic!("Unexpected command: {other}"),
                     };

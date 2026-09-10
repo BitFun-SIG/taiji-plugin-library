@@ -403,7 +403,8 @@ public class RemoteWorkspaceStore internal constructor(
                 if (total < 0 || total > Int.MAX_VALUE) error("remote file is too large for this client")
                 val chunks = mutableListOf<ByteArray>()
                 var offset = 0
-                var expectedTotal = total
+                var revision: String? = null
+                val expectedTotal = total
                 var name = info.name ?: basename(target.remotePath)
                 var mime = info.mimeType ?: "application/octet-stream"
                 updateReady { it.copy(download = RemoteFileDownloadUiState.Loading(target, 0, total)) }
@@ -423,6 +424,8 @@ public class RemoteWorkspaceStore internal constructor(
                     if (response.name != null && response.name != name || response.mimeType != null && response.mimeType != mime) {
                         error("remote file changed during transfer")
                     }
+                    if (offset > 0 && response.revision != revision) error("remote file changed during transfer")
+                    revision = response.revision
                     chunks += bytes
                     offset += bytes.size
                     name = response.name?.takeIf(String::isNotBlank) ?: name
@@ -522,6 +525,7 @@ public class RemoteWorkspaceStore internal constructor(
 
     private suspend fun loadImage(target: FilePreviewTarget, identity: PreviewRequestIdentity, generation: Long, name: String, mime: String, size: Long) {
         val chunks = mutableListOf<ByteArray>()
+        var revision: String? = null
         var offset = 0
         do {
             if (previewGeneration != generation) throw CancellationException("File target changed")
@@ -536,6 +540,8 @@ public class RemoteWorkspaceStore internal constructor(
             if (response.name != null && response.name != name || response.mimeType != null && response.mimeType != mime) {
                 error("remote image changed during transfer")
             }
+            if (offset > 0 && response.revision != revision) error("remote image changed during transfer")
+            revision = response.revision
             chunks += chunk
             offset += chunk.size
         } while (offset.toLong() < size)

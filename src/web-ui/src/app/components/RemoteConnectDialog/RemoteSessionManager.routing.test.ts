@@ -218,7 +218,7 @@ describe('mobile output file transfer integrity', () => {
 
   it.each([
     { offset: 3 }, { chunk_size: 2 }, { total_size: 5 },
-    { name: 'different.png' }, { chunk_base64: '', chunk_size: 0 },
+    { name: 'different.png' }, { chunk_base64: '', chunk_size: 0 }, { revision: 'changed' },
   ])('rejects truncated, inconsistent or reordered chunks: %j', async invalid => {
     const client = clientForTest();
     vi.spyOn(client, 'sendDeviceRpc').mockResolvedValueOnce(chunk(0, 'ab'))

@@ -98,9 +98,8 @@ export async function readDispatchSessionImage(sessionId: string, filePath: stri
   if (refresh) imageRequests.delete(key);
   const cached = imageRequests.get(key);
   if (cached) return cached;
-  const request = readOutputBytes(origin, filePath, 12 * 1024 * 1024).then(imageDataUrl).catch(error => {
-    imageRequests.delete(key);
-    throw error;
+  const request = readOutputBytes(origin, filePath, 12 * 1024 * 1024).then(imageDataUrl).finally(() => {
+    if (imageRequests.get(key) === request) imageRequests.delete(key);
   });
   if (imageRequests.size >= 16) imageRequests.delete(imageRequests.keys().next().value!);
   imageRequests.set(key, request);

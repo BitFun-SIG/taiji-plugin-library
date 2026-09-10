@@ -115,6 +115,8 @@ pub struct RemoteWorkspaceFileContent {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RemoteWorkspaceFileChunk {
+    /// Empty for legacy providers without file revision metadata.
+    pub revision: String,
     pub name: String,
     pub bytes: Vec<u8>,
     pub offset: u64,
@@ -251,6 +253,7 @@ mod tests {
     #[test]
     fn remote_projection_contract_preserves_file_chunk_identity() {
         let chunk = RemoteWorkspaceFileChunk {
+            revision: String::new(),
             name: "report.md".to_string(),
             bytes: b"chunk".to_vec(),
             offset: 6,

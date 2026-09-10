@@ -130,9 +130,6 @@ impl TelegramBot {
             .await
     }
 
-    /// Send a local file to a Telegram chat as a document attachment.
-    /// Caller is expected to pre-check the size against `MAX_TELEGRAM_FILE_BYTES`.
-
     /// Scan `text` for downloadable file references and push every matching
     /// file directly to the Telegram chat as an attachment.  Files exceeding
     /// `MAX_TELEGRAM_FILE_BYTES` are skipped with a brief notice; per-file

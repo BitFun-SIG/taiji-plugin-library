@@ -1510,15 +1510,6 @@ impl CoreServiceAgentRuntime {
     }
 
     #[cfg(feature = "remote-connect")]
-    pub(crate) async fn resolve_session_logical_workspace_path(
-        session_id: &str,
-    ) -> Option<std::path::PathBuf> {
-        Self::resolve_session_workspace_paths(session_id)
-            .await
-            .map(|(workspace_path, _)| workspace_path)
-    }
-
-    #[cfg(feature = "remote-connect")]
     pub(crate) async fn resolve_remote_file_workspace_root(
         session_id: Option<&str>,
     ) -> Option<std::path::PathBuf> {

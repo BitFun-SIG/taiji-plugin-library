@@ -332,12 +332,14 @@ class ScriptedAccountSessionManager extends RemoteSessionManager {
 class OutputFileSessionManager extends RemoteSessionManager {
   readonly offsets: number[] = [];
   invalid: boolean = false;
+  revisionChanges: boolean = false;
 
   async readFileChunk(_path: string, offset: number, _limit: number, _sessionId?: string): Promise<ReadFileChunkResult> {
     this.offsets.push(offset);
     const bytes = offset === 0 ? 'a' : 'bcd';
     return { name: 'preview.png', contentBase64: Encoding.bytesToBase64(Encoding.utf8ToBytes(bytes)),
-      offset: this.invalid && offset > 0 ? 0 : offset, chunkSize: bytes.length, totalSize: 4, mimeType: 'image/png' };
+      offset: this.invalid && offset > 0 ? 0 : offset, chunkSize: bytes.length, totalSize: 4, mimeType: 'image/png',
+      revision: this.revisionChanges ? `4:${offset}` : undefined };
   }
 }
 
@@ -608,6 +610,13 @@ export default function transportAndGeneralChatUnitTest() {
     it('rejects a wrong offset instead of downloading a corrupt file', 0, async () => {
       const manager = new OutputFileSessionManager();
       manager.invalid = true;
+      let failed = false;
+      try { await manager.readFile('preview.png', 'origin-session'); } catch (_) { failed = true; }
+      expect(failed).assertTrue();
+    });
+    it('rejects a changed revision even when the file size is unchanged', 0, async () => {
+      const manager = new OutputFileSessionManager();
+      manager.revisionChanges = true;
       let failed = false;
       try { await manager.readFile('preview.png', 'origin-session'); } catch (_) { failed = true; }
       expect(failed).assertTrue();
