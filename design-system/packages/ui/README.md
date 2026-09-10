@@ -205,6 +205,12 @@ Hosts without Web Animations render the current text immediately.
 The **RollingText** Design Lab entry includes manual standalone and TabGroup
 examples for repeated replacement and long labels.
 
+`TabGroup.renderItem(item, node, index)` can wrap the supplied standard item in
+a tooltip, context-menu owner, or drag target. Keep `node` intact so TabGroup
+continues to own selection, keyboard navigation, label overflow, and end-action
+anatomy. Product wrappers own document states and layout, without replacing the
+tab's control styles or creating another tablist.
+
 ## Mobile controls
 
 Touch-first controls use the isolated mobile entry so compact and foldable
