@@ -276,6 +276,8 @@ export const ZH_CN_MESSAGES: [string, string][] = [
   ['remote.settings.deviceUnavailable', '目标桌面暂时不可用，请刷新设备列表后重试。'],
   ['remote.settings.deviceName', '设备'],
   ['remote.settings.deviceManagementBody', '此设备的账号凭据已使用 HUKS 加密保存。退出账号后会立即清理。'],
+  ['remote.settings.githubId', 'GitHub ID: {0}'],
+  ['remote.settings.githubAccount', 'GitHub 账号'],
   ['remote.settings.userId', '用户 ID'],
   ['remote.settings.deviceId', '本机设备 ID'],
   ['remote.settings.connectedDesktop', '当前桌面端'],

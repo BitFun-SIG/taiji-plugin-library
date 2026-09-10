@@ -1,3 +1,4 @@
+import { SidebarConnectionActionPolicy } from '../policy/SidebarConnectionActionPolicy';
 import { accountDeviceLink } from '../../services/AccountDeviceLink';
 import {
   ChatMessage,
@@ -18,6 +19,7 @@ import { ConnectionStatusPresenter } from '../../services/ConnectionStatusPresen
 import { ImagePickerService } from '../../services/ImagePickerService';
 import { MobileIdentityStore } from '../../services/MobileIdentityStore';
 import { CloudAccountClient, CloudAccountDevice } from '../../services/CloudAccountClient';
+import { GitHubAccountProfileClient } from '../../services/GitHubAccountProfile';
 import { CloudAccountSessionStore } from '../../services/CloudAccountSessionStore';
 import { RemoteActivityLifecycleController } from '../../services/RemoteActivityLifecycleController';
 import { RemoteChatCache } from '../../services/RemoteChatCache';
@@ -610,6 +612,7 @@ export abstract class AppRootRuntimeComposition {
       {
         client: new CloudAccountClient(),
         sessionStore: new CloudAccountSessionStore(),
+        profileLoader: new GitHubAccountProfileClient(),
         sessionManager: this.sessionManager,
         remoteState: this.remotePageState,
         hooks: {
@@ -785,7 +788,11 @@ export abstract class AppRootRuntimeComposition {
     },
     onSidebar: {
       close: (): void => this.closeAppSidebar(),
-      newChat: (): void => { this.closeAppSidebar(); this.enterRemoteSurface(); },
+      newChat: async (agentType: string = 'code'): Promise<void> => {
+        if (!SidebarConnectionActionPolicy.canCreateSession(this.remotePageState.connectionState, this.remotePageState.isBusy)) return;
+        this.closeAppSidebar();
+        await this.conversationController.createRemoteSession(agentType);
+      },
       enterCode: (): void => { this.closeAppSidebar(); this.enterCodeEntry(); },
       scanDesktop: (): void => { this.closeAppSidebar(); this.openConnectSheet(CONNECT_INTENT_SCAN); },
       addDesktop: (): void => {

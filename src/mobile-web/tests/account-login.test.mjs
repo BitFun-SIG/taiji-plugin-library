@@ -203,3 +203,45 @@ test('official and local invitations share strict device-only targeting', async 
   assert.equal(accountDeviceIdFromHash('#/pair?did=desktop'), 'desktop');
   assert.equal(accountDeviceIdFromHash('#/chat?did=desktop'), null);
 });
+
+const githubModule = await loadSource('../src/services/GitHubAccountProfile.ts');
+const { loadGitHubAccountProfile, normalizeGitHubProfile } = await import(githubModule.url);
+const githubUser = { id: 123, login: 'example', avatar_url: 'https://avatars.githubusercontent.com/u/123' };
+
+test('GitHub public profile validates stable identity and never forwards account credentials', async () => {
+  assert.throws(() => normalizeGitHubProfile('124', githubUser));
+  assert.equal(normalizeGitHubProfile('123', { ...githubUser, avatar_url: 'https://other.example/avatar' }).avatarUrl, '');
+  const profiles = [];
+  await loadGitHubAccountProfile('123', p => profiles.push(p), new AbortController().signal, null, async (url, options) => {
+    assert.equal(url, 'https://api.github.com/user/123');
+    assert.equal(options.credentials, 'omit');
+    assert.deepEqual(options.headers, { Accept: 'application/vnd.github+json' });
+    return { ok: true, json: async () => githubUser };
+  });
+  assert.equal(profiles[0].login, 'example');
+});
+
+test('GitHub cached profiles survive refresh failure and fresh cache avoids a request', async () => {
+  for (const age of [0, 2 * 86400000]) {
+    const profile = { ...normalizeGitHubProfile('123', githubUser), fetchedAt: Date.now() - age };
+    let requests = 0;
+    const applied = [];
+    await loadGitHubAccountProfile('123', p => applied.push(p), new AbortController().signal,
+      { getItem: () => JSON.stringify(profile), setItem: () => assert.fail('must retain cache') },
+      async () => { requests++; throw new Error('offline'); });
+    assert.equal(applied[0].login, 'example');
+    assert.equal(requests, age ? 1 : 0);
+  }
+});
+
+test('GitHub profile ignores corrupt/foreign cache and stale account responses', async () => {
+  for (const raw of ['{', JSON.stringify({ userId: '456', fetchedAt: Date.now(), login: 'another' })]) {
+    const controller = new AbortController();
+    await loadGitHubAccountProfile('123', () => assert.fail('stale profile applied'), controller.signal,
+      { getItem: () => raw, setItem: () => assert.fail('stale profile cached') },
+      async () => {
+        controller.abort();
+        return { ok: true, json: async () => githubUser };
+      });
+  }
+});

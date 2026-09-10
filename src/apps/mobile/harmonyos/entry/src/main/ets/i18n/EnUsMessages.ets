@@ -276,6 +276,8 @@ export const EN_US_MESSAGES: [string, string][] = [
   ['remote.settings.deviceUnavailable', 'The target desktop is unavailable. Refresh the device list and retry.'],
   ['remote.settings.deviceName', 'Device'],
   ['remote.settings.deviceManagementBody', 'This device stores account credentials encrypted with HUKS. Signing out clears them immediately.'],
+  ['remote.settings.githubId', 'GitHub ID: {0}'],
+  ['remote.settings.githubAccount', 'GitHub account'],
   ['remote.settings.userId', 'User ID'],
   ['remote.settings.deviceId', 'This device ID'],
   ['remote.settings.connectedDesktop', 'Current desktop'],
