@@ -1,3 +1,5 @@
+import { useGitHubAccountProfile } from '../hooks/useGitHubAccountProfile';
+import AccountAvatar from '../components/AccountAvatar';
 import React, { useEffect, useLayoutEffect, useRef, useCallback, useMemo, useState } from 'react';
 import {
   MobileButton,
@@ -323,12 +325,14 @@ const SessionListPage: React.FC<SessionListPageProps> = ({
     setCurrentAssistant,
     setPairedDisplayMode,
     authenticatedUserId,
-    authenticatedUserLabel,
     connectionHealth,
     controlTarget,
     setControlTarget,
     resetForDeviceSwitch,
   } = useMobileStore();
+  const githubProfile = useGitHubAccountProfile(authenticatedUserId);
+  const authenticatedUserLabel = authenticatedUserId
+    ? githubProfile ? `@${githubProfile.login}` : t('settings.githubAccount') : null;
   const { isDark, toggleTheme } = useTheme();
   const logoMark = isDark ? logoMarkLight : logoMarkDark;
   const [creating, setCreating] = useState(false);
@@ -1819,6 +1823,8 @@ const SessionListPage: React.FC<SessionListPageProps> = ({
 
         <CompactSettingsSheet
           accountLabel={authenticatedUserLabel}
+          accountUserId={authenticatedUserId}
+          accountAvatarUrl={githubProfile?.avatarUrl}
           devices={projectedCompactDevices}
           isDark={isDark}
           onClose={() => setCompactSettingsOpen(false)}
@@ -1867,7 +1873,8 @@ const SessionListPage: React.FC<SessionListPageProps> = ({
             {authenticatedUserLabel && (
               <span className="session-list__header-account-name">
                 <span className={`session-list__health-dot session-list__health-dot--${connectionHealth}`} title={(() => { switch (connectionHealth) { case 'connected': return t('sessions.connectionConnected'); case 'checking': return t('sessions.connectionChecking'); case 'unreachable': return t('sessions.connectionUnreachable'); default: return t('sessions.connectionUnpaired'); } })()} />
-                {authenticatedUserLabel}
+                <AccountAvatar url={githubProfile?.avatarUrl} />
+                <span title={t('settings.githubId', { id: authenticatedUserId || '' })}>{authenticatedUserLabel}</span>
                 {controlTarget && controlTarget.deviceName && (
                   <span className="session-list__header-target" title={t('devices.controllingDevice', { name: controlTarget.deviceName })}>
                     {controlTarget.deviceName}

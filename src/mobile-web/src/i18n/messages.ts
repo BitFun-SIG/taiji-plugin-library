@@ -155,6 +155,8 @@ export const messages: Record<MobileLanguage, MessageTree> = {
     },
     settings: {
       accountSection: 'Account',
+      githubAccount: 'GitHub account',
+      githubId: 'GitHub ID: {id}',
       currentAccount: 'Current account',
       signedIn: 'Verified',
       notSignedIn: 'Not signed in',
@@ -424,6 +426,8 @@ export const messages: Record<MobileLanguage, MessageTree> = {
     },
     settings: {
       accountSection: '账号',
+      githubAccount: 'GitHub 账号',
+      githubId: 'GitHub ID：{id}',
       currentAccount: '当前账号',
       signedIn: '已认证',
       notSignedIn: '未登录',
@@ -693,6 +697,8 @@ export const messages: Record<MobileLanguage, MessageTree> = {
     },
     settings: {
       accountSection: '帳號',
+      githubAccount: 'GitHub 帳號',
+      githubId: 'GitHub ID：{id}',
       currentAccount: '目前帳號',
       signedIn: '已認證',
       notSignedIn: '未登入',
