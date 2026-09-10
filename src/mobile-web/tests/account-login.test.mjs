@@ -21,7 +21,10 @@ const offline = { device_id: 'desktop-a', device_name: 'Offline desktop', online
 const online = { device_id: 'desktop-b', device_name: 'Online desktop', online: true };
 const controller = { device_id: 'browser', device_name: 'Browser', online: true };
 
-const navigationModule = await loadSource('../src/services/MobileNavigationStore.ts');
+const agentContract = await loadSource('../../shared/agent-harness/contract.generated.ts');
+const navigationModule = await loadSource('../src/services/MobileNavigationStore.ts', {
+  '../../../shared/agent-harness/contract.generated': agentContract.url,
+});
 const { loadMobileNavigation, saveMobileNavigation, clearMobileNavigation } = await import(navigationModule.url);
 
 test('same-tab reload restores the selected device and session only within the authenticated QR scope', () => {
@@ -37,7 +40,9 @@ test('same-tab reload restores the selected device and session only within the a
   };
   const navigation = { deviceId: 'desktop-b', session: { id: 'session-b', name: 'Task B', agentType: 'agentic' } };
   saveMobileNavigation(scope, navigation, storage);
-  assert.deepEqual(loadMobileNavigation(scope, storage), navigation);
+  assert.deepEqual(loadMobileNavigation(scope, storage), {
+    ...navigation, session: { ...navigation.session, agentType: 'Standard' },
+  });
   for (const replacement of [
     { accountId: 'account-b' }, { controllerDeviceId: 'browser-b' },
     { relayUrl: 'https://another-relay.example.com' }, { routeKey: '/relay/r/new/#/pair?did=desktop-c' },

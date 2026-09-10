@@ -14,6 +14,7 @@ import {
   type ControlTargetSnapshot,
 } from './RelayHttpClient';
 import { getControlClientIdentity } from './controlClientIdentity';
+import { projectWorkspaceCatalog, type WorkspaceCatalog } from './workspaceIdentity';
 
 export class RemoteControlTargetChangedError extends Error {
   constructor() {
@@ -320,6 +321,21 @@ export class RemoteSessionManager {
       workspaces: RecentWorkspaceEntry[];
     }>({ cmd: 'list_recent_workspaces' });
     return resp.workspaces || [];
+  }
+
+  async listWorkspaceCatalog(): Promise<WorkspaceCatalog> {
+    const target = this.client.getControlTargetSnapshot();
+    const resp = await this.request<{
+      workspaces: RecentWorkspaceEntry[];
+      opened_workspaces?: RecentWorkspaceEntry[] | null;
+    }>({ cmd: 'list_recent_workspaces' }, target);
+    if (Array.isArray(resp.opened_workspaces)) return projectWorkspaceCatalog(resp);
+    // Older hosts only offer recent history. Preserve that fallback explicitly,
+    // and resolve assistant names through their existing supported command.
+    const { assistants } = await this.request<{ assistants: AssistantEntry[] }>(
+      { cmd: 'list_assistants' }, target,
+    );
+    return projectWorkspaceCatalog(resp, assistants);
   }
 
   async setWorkspace(
