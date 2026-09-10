@@ -61,11 +61,19 @@ public sealed interface AccountUiState {
         public constructor(
             userId: String,
             username: String,
-            relayUrl: String = com.openbitfun.mobile.core.transport.DEFAULT_CLOUD_RELAY_URL,
+            relayUrl: String,
             devices: List<AccountDeviceUi>,
             selectedDeviceId: String?,
             selectedDeviceName: String?,
         ) : this(userId, relayUrl, username, devices, selectedDeviceId, selectedDeviceName, false, null)
+
+        public constructor(
+            userId: String,
+            username: String,
+            devices: List<AccountDeviceUi>,
+            selectedDeviceId: String?,
+            selectedDeviceName: String?,
+        ) : this(userId, username, com.openbitfun.mobile.core.transport.DEFAULT_CLOUD_RELAY_URL, devices, selectedDeviceId, selectedDeviceName)
     }
     public data class Failed public constructor(
         public val reason: AccountFailureReason,

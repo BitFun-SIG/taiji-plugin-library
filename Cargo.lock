@@ -6505,6 +6505,7 @@ dependencies = [
  "openbitfun-runtime-ports",
  "openbitfun-services-core",
  "oxc",
+ "pulldown-cmark",
  "qrcode",
  "rand 0.8.7",
  "regex",
