@@ -18,6 +18,43 @@ export function Example() {
 
 The package owns component anatomy, behavior, accessibility, and stable variants. It does not own theme selection persistence, product state, routes, locale resources, or platform APIs.
 
+## Voice calls
+
+`VoiceCallPanel` owns the complete compact call surface: navigation, particle
+logo, scrolling transcripts and mute/settings/end controls. Pass localized
+`title`, `labels`, transcript strings, optional `status`, and callbacks from
+the host. Returning to chat, closing the window and ending a call are separate
+callbacks so the package never decides session or window lifetime.
+
+Typography follows the shared `type.heading.panel` role for the title (18px,
+semibold) and `type.body.lg` for transcripts and status text (15px, regular,
+1.6 line height). Both use the canonical interface font stacks and follow user
+font-size preferences. Compact-height layouts keep the same typography roles.
+User bubbles apply `type.modifier.leading.tight` for 18px leading, with 12px
+padding on all sides and a 12px corner radius. They fit their content and wrap
+within the conversation width; a single line is 42px high at the default size.
+
+`VoiceParticleLogo` is also exported independently. Its `readAudio` callback
+reads `{ user, assistant, assistantSpeaking }` once per animation frame. The
+two spectra are FFT byte bins from analysers configured with `fftSize = 256`;
+pass `null` for muted or unavailable audio. `assistantSpeaking` describes the
+audible playback clock, including queued audio that outlives a provider's
+completion event. Omit the callback for the calm resting motion.
+
+The supplied Voice-Particles-Demo contour, sampling, force coefficients,
+envelopes, density and brightness profiles are preserved in a fixed simulation
+space; resizing changes only its projection. The host supplies real capture and
+playback, and keeps permission, network, transcription and audio cleanup outside
+the component. The canvas pauses offscreen, when inactive or hidden, and renders
+a still logo for reduced motion. Both components are registered in Design Lab;
+its presentation specimens do not capture or simulate speech.
+
+The panel uses the semantic on-light/on-dark endpoints: 80% dark background,
+30% light user bubble, full light text and 20% light circular controls. Render
+it on a transparent host shell to avoid applying the background opacity twice.
+The host allocates its dimensions; the product uses the existing 480 × 680
+compact-window contract. Build and source tests do not prove visual fidelity.
+
 ## Buttons
 
 Choose variants by action role: use `primary` for the main save, submit, create,

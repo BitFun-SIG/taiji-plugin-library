@@ -561,6 +561,11 @@
     --openbitfun-type-heading-page-font-weight: var(--openbitfun-font-weight-bold);
     --openbitfun-type-heading-page-letter-spacing: var(--openbitfun-letter-spacing-normal);
     --openbitfun-type-heading-page-line-height: var(--openbitfun-line-height-tight);
+    --openbitfun-type-heading-panel-font-family: var(--openbitfun-font-family-control);
+    --openbitfun-type-heading-panel-font-size: var(--openbitfun-font-size-2xl);
+    --openbitfun-type-heading-panel-font-weight: var(--openbitfun-font-weight-semibold);
+    --openbitfun-type-heading-panel-letter-spacing: var(--openbitfun-letter-spacing-normal);
+    --openbitfun-type-heading-panel-line-height: var(--openbitfun-line-height-tight);
     --openbitfun-type-heading-section-font-family: var(--openbitfun-font-family-control);
     --openbitfun-type-heading-section-font-size: var(--openbitfun-font-size-lg);
     --openbitfun-type-heading-section-font-weight: var(--openbitfun-font-weight-semibold);
@@ -613,6 +618,7 @@
     --openbitfun-type-modifier-leading-snug-line-height: var(--openbitfun-line-height-snug);
     --openbitfun-type-modifier-leading-spacious-line-height: var(--openbitfun-line-height-spacious);
     --openbitfun-type-modifier-leading-support-line-height: var(--openbitfun-line-height-support);
+    --openbitfun-type-modifier-leading-tight-line-height: var(--openbitfun-line-height-tight);
     --openbitfun-type-modifier-leading-ui-line-height: var(--openbitfun-line-height-ui);
     --openbitfun-type-modifier-tracking-caps-letter-spacing: var(--openbitfun-letter-spacing-caps);
     --openbitfun-type-modifier-tracking-expanded-letter-spacing: var(--openbitfun-letter-spacing-expanded);
