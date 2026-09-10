@@ -23,6 +23,15 @@ line travel and intrinsic-width changes. It has its own token so tuning content
 replacement does not change the existing hover-feedback and larger-view
 transition durations. It is zeroed in the reduced-motion projection.
 
+## Overlay layers
+
+Portaled tooltips must paint above the popovers containing their triggers.
+Use `layer.popover` for menus and panels, with adjacent offsets for their
+backdrops (-1) and nested menus (+1); keep those offsets below `layer.tooltip`.
+Toast, notification, and context-menu layers remain above ordinary hover hints.
+These values order siblings within a stacking context; a portal host still
+needs its own layer above the app content it serves.
+
 ## Semantic typography roles
 
 Text-bearing components consume a complete semantic role rather than assembling

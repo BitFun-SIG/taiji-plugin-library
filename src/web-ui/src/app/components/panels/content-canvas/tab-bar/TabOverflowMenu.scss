@@ -83,7 +83,7 @@
   --openbitfun-overlay-menu-inline-size: min(280px, calc(100vw - 16px));
   --openbitfun-overlay-menu-max-block-size: min(360px, calc(100vh - 16px));
   min-width: 200px;
-  z-index: 99999;
+  z-index: var(--openbitfun-layer-popover);
   animation: menuSlideIn 0.12s ease-out;
 
   @keyframes menuSlideIn {

@@ -436,6 +436,20 @@ test("shared system scales preserve the migrated Web UI foundation contract", ()
   assert.equal(tokens["layer.contextMenu"], 500);
 });
 
+test("tooltips outrank popovers and nested menus without covering priority chrome", () => {
+  for (const mode of tokenModes) {
+    const modeTokens = Object.fromEntries(
+      tokenCatalog.filter(token => token.category === "layer")
+        .map(token => [token.name, Number(token.values[mode])]),
+    );
+    assert.ok(modeTokens["layer.modal"] < modeTokens["layer.popover"]);
+    assert.ok(modeTokens["layer.popover"] + 1 < modeTokens["layer.tooltip"]);
+    for (const layer of ["toast", "notification", "contextMenu"]) {
+      assert.ok(modeTokens["layer.tooltip"] < modeTokens[`layer.${layer}`]);
+    }
+  }
+});
+
 test("semantic typography roles resolve to the canonical foundation", async () => {
   const systemDocument = await readSource("system.tokens.json");
 

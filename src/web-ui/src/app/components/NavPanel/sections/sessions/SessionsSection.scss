@@ -460,7 +460,7 @@
 
   &__inline-item-menu-popover {
     position: fixed;
-    z-index: 10000;
+    z-index: var(--openbitfun-layer-popover);
   }
 
   &__inline-item-edit {
