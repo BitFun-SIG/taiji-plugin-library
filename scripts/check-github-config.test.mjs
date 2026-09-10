@@ -1134,6 +1134,8 @@ test('Desktop packaging keeps beta identity explicit and stable-safe', () => {
   );
   assert.match(packageJob.env.TAURI_UPDATER_ENDPOINT, /github\.repository/);
   assert.match(packageJob.env.TAURI_UPDATER_ENDPOINT, /channel-v1-beta/);
+  assert.ok(packageJob.env.TAURI_UPDATER_ENDPOINT.includes("format('https://github.com/{0}/releases/latest/download/latest-v1.json', github.repository)"));
+  assert.equal(packageJob.env.TAURI_UPDATER_ENDPOINT, packageJob.env.TAURI_UPDATER_FALLBACK_ENDPOINT);
   assert.match(packageJob.env.OPENBITFUN_RELEASE_PUBKEY, /OPENBITFUN_RELEASE_PUBKEY/);
   const appleSetupIndex = packageJob.steps.findIndex(
     (step) => step.name === 'Configure Apple Developer ID signing and notarization',
