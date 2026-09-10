@@ -485,12 +485,12 @@
     "chatComposer": {
       "$type": "dimension",
       "actionIconSize": { "$value": "14px" },
-      "compactGap": { "$value": "9px" },
-      "compactHeight": { "$value": "45px" },
-      "compactPaddingBlock": { "$value": "9px" },
-      "compactPaddingInline": { "$value": "9px" },
-      "compactTrackHeight": { "$value": "25px" },
-      "controlHeight": { "$value": "25px" }
+      "compactGap": { "$value": "{control.composer.surfaceGap}" },
+      "compactHeight": { "$value": "42px" },
+      "compactPaddingBlock": { "$value": "{control.composer.surfacePadding}" },
+      "compactPaddingInline": { "$value": "{control.composer.surfacePadding}" },
+      "compactTrackHeight": { "$value": "24px" },
+      "controlHeight": { "$value": "24px" }
     },
     "flowChat": {
       "$description": "Shared FlowChat rhythm for product and package-owned conversation surfaces.",
@@ -585,6 +585,7 @@
       "iconSizeMd": { "$value": "14px" }
     },
     "composer": {
+      "contextBlur": { "$type": "dimension", "$value": "10px" },
       "$type": "dimension",
       "minBlockSize": { "$value": "120px" },
       "contextOffset": { "$value": "32px" },
