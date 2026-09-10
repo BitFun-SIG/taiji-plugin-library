@@ -551,7 +551,11 @@ export const TiptapEditor = React.forwardRef<TiptapEditorHandle, TiptapEditorPro
       TaskItem.configure({
         nested: true,
       }),
-      Link.configure({
+      Link.extend({
+        addAttributes() {
+          return { ...this.parent?.(), title: { default: null } };
+        },
+      }).configure({
         openOnClick: false,
       }),
       // Placeholder decorations keep hints outside the document mutation path.
