@@ -989,7 +989,7 @@
     "modalActive": { "$value": 250 },
     "fullscreen": { "$value": 280 },
     "overlayHost": { "$value": 300 },
-    "tooltip": { "$value": 350 },
+    "tooltip": { "$value": 370 },
     "popover": { "$value": 360 },
     "toast": { "$value": 400 },
     "notification": { "$value": 400 },
