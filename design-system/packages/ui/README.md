@@ -280,47 +280,35 @@ circle with a 16px glyph. Quiet and outline controls use the shared neutral
 hover surface for both hover and pressed states; outline keeps its border when
 disabled. Existing sm/md/lg sizes and the default sm size remain available.
 
-The 62 reviewed single-path, single-tone masks have opaque paths.
-`Icon` and `SessionIcon` retain their original 80% artwork opacity standalone;
-Button, IconButton, ActionItem and TabGroup slots own this opacity in controls
-through the public `--openbitfun-opacity-icon-artwork` contract. Button trailing
-slots use half the content opacity and restore full disabled content opacity.
-The progress-25 and legacy turn assets retain their internal transparency.
-Product callers should not add opacity or dimensions inside these owned slots.
+General-purpose icons use **Lucide**. Named icons and explicit `glyph` icons
+share a 1.6 line weight, semantic sizing, theme color and accessibility behavior.
+Only `minimal`, `standard`, `ultimate`, `creative` and `git` retain reviewed
+SVG masks. Product logos and mascots are separate brand artwork. The device
+overview retains its original device/server SVGs and MacBook image in the Web UI.
 
-The catalog uses exported vectors, including their view boxes and per-path
-opacity. Theme colors remain caller-owned through `currentColor`. Asset
-fingerprints are reviewed with intentional resource updates so replacing a
-glyph with a similarly named substitute cannot pass unnoticed.
-
-Prefer a catalog `name` whenever it is an exact semantic match. When the
-catalog has no matching symbol, pass the Lucide component through `glyph` so
-the shared boundary applies the standard 1.6 line weight, semantic sizing,
-tone and accessibility behavior:
+Use a semantic `name` when available, or import the required Lucide glyph:
 
 ```tsx
 import { Icon } from "@openbitfun/ui";
 import { Network } from "lucide-react";
 
+<Icon name="search" size="sm" />
 <Icon glyph={Network} size="sm" />
 ```
 
-Do not set `strokeWidth` at product call sites. Let a button, menu, tab or
-navigation slot own the final glyph geometry; use `size` only for standalone
-icons. Raw Lucide rendering remains appropriate for intentionally filled
-marks, progress indicators, illustrations, or a reviewed optical exception.
+Do not set `strokeWidth` at product call sites. Button, menu, tab and navigation
+slots own final geometry and opacity; standalone named icons retain the public
+`--openbitfun-opacity-icon-artwork` treatment. Brand assets retain their original
+geometry, and fixture fingerprints protect the five preserved masks.
 
-Use `canonicalIconNames` for galleries and pickers. `iconNames` also keeps the
-legacy `download`, `circle` and `turn` entries for compatibility; prefer
-`arrow-down`, `unselected` and `<NumberBadge value={18} />` respectively.
-`turn` is only the old empty background, not a complete numbered marker.
-`NumberBadge` owns a 24px filled surface and 11px regular text; longer
-values grow horizontally. Callers supply formatted values and contextual
-accessible labels. `ToolbarBadge` delegates to the same anatomy.
+Use `canonicalIconNames` for galleries and pickers. Existing names remain
+compatible: `download` aliases `arrow-down`, `circle` aliases `unselected`,
+and legacy `turn` renders a Lucide circle. Use `NumberBadge` for numbered
+markers; it owns a 24px filled surface and 11px regular text, growing horizontally
+for longer values. `ToolbarBadge` delegates to the same anatomy.
 
-Use `Icon name="session"` in new consumers. `SessionIcon` retains its SVG
-interface for existing integrations, with geometry checked against the same
-catalog asset.
+Use `Icon name="session"` in new consumers. `SessionIcon` keeps its SVG props
+and ref interface, using the same Lucide MessageCircle glyph.
 
 ## Advanced selection and menus
 

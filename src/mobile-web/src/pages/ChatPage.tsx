@@ -1,3 +1,4 @@
+import { ChevronDown as LucideChevronDown } from 'lucide-react';
 import React, { useEffect, useLayoutEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { MobileIconButton } from '@openbitfun/ui/mobile';
 import { useI18n } from '../i18n';
@@ -1094,9 +1095,7 @@ const ChatPage: React.FC<ChatPageProps> = ({
           className="chat-page__scroll-to-bottom"
           onClick={scrollToBottom}
           aria-label={t('chat.scrollToBottom')}
-          icon={<svg aria-hidden="true" focusable="false" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="6 9 12 15 18 9" />
-          </svg>}
+          icon={<LucideChevronDown aria-hidden="true" focusable="false" width="20" height="20" stroke="currentColor" />}
         />
       )}
 
