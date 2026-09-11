@@ -80,7 +80,7 @@ test('online selection preserves exact QR targeting and supports later device av
   assert.equal(selectAccountDevice([reconnected, online], 'browser', offline.device_id), reconnected);
 });
 
-test('GitHub login registers an independent device public key and reuses the device key across sign-ins', async () => {
+test('GitHub login registers the browser store key without generating another identity', async () => {
   const encryption = await loadSource('../src/services/E2EEncryption.ts');
   const { deriveDeviceMessageKey } = await import(encryption.url);
   const { x25519 } = await import('@noble/curves/ed25519.js');
@@ -90,9 +90,7 @@ test('GitHub login registers an independent device public key and reuses the dev
   const originalWindow = globalThis.window;
   const requests = [];
   globalThis.window = { setTimeout, clearTimeout };
-  const originalStorage = globalThis.sessionStorage;
-  const keys = new Map();
-  globalThis.sessionStorage = { getItem: key => keys.get(key) ?? null, setItem: (key, value) => keys.set(key, value) };
+  const browserPrivateKey = new Uint8Array(32).fill(7);
   globalThis.fetch = async (url, options) => {
     assert.equal(url, 'https://remote.openbitfun.com/v/1.0.0/api/auth/login');
     const body = JSON.parse(options.body);
@@ -104,8 +102,8 @@ test('GitHub login registers an independent device public key and reuses the dev
     return Response.json({ token: 'test-account-token', user_id: '101' });
   };
   try {
-    const first = await new CloudAccountClient('https://remote.openbitfun.com/v/1.0.0').login('verified-github-token', 'browser');
-    const second = await new CloudAccountClient('https://remote.openbitfun.com/v/1.0.0').login('verified-github-token', 'browser');
+    const first = await new CloudAccountClient('https://remote.openbitfun.com/v/1.0.0').login('verified-github-token', 'browser', browserPrivateKey);
+    const second = await new CloudAccountClient('https://remote.openbitfun.com/v/1.0.0').login('verified-github-token', 'browser', browserPrivateKey);
     assert.equal(first.userId, '101');
     assert.deepEqual(first.masterKey, second.masterKey);
     assert.equal(requests[0].public_key, requests[1].public_key);
@@ -115,7 +113,6 @@ test('GitHub login registers an independent device public key and reuses the dev
     assert.throws(() => deriveDeviceMessageKey(first.masterKey, new Uint8Array(32)));
     assert.equal(Buffer.from(deriveDeviceMessageKey(new Uint8Array(32).fill(7), x25519.getPublicKey(new Uint8Array(32).fill(11)))).toString('hex'), '6e8f5da837e91e9ddb09c5aa7dee229e731fc94499d29d10dcf5f1437193f56c');
   } finally {
-    globalThis.sessionStorage = originalStorage;
     globalThis.fetch = originalFetch;
     if (originalWindow === undefined) delete globalThis.window;
     else globalThis.window = originalWindow;
@@ -125,7 +122,8 @@ test('GitHub login registers an independent device public key and reuses the dev
 test('account UI entry precedes discovery and mounts no remote workspace surface', async () => {
   const pairing = await readFile(new URL('../src/pages/PairingPage.tsx', import.meta.url), 'utf8');
   const direct = pairing.slice(pairing.indexOf('const connect ='), pairing.indexOf('  useEffect('));
-  assert.match(direct, /saveCloudAccountSession/);
+  assert.doesNotMatch(direct, /saveSession|saveCloudAccountSession/, 'restoring account state must not republish a new login');
+  assert.match(pairing, /accountStore\.saveSession\(browser, candidate, isCurrent\)/);
   assert.match(direct, /store\.setControlTarget\(null\)/);
   assert.match(direct, /onPairedRef\.current/);
   assert.doesNotMatch(direct, /listDevices\(|sendDeviceRpc\(|\.online|throw new Error/);
@@ -266,7 +264,7 @@ const storedAccount = {
   session: { token: 'test-token', userId: '123', masterKey: new Uint8Array(32).fill(7) },
 };
 
-test('existing v2 account proof survives reload, stays scoped, and is removed only on explicit disconnect', () => {
+test('legacy v2 account proof remains readable and scoped for migration', () => {
   const storage = memoryStorage();
   const legacy = JSON.stringify({
     version: 2, relay_url: storedAccount.relayUrl, username: '123', token: 'test-token',
@@ -291,120 +289,27 @@ test('existing v2 account proof survives reload, stays scoped, and is removed on
   }
 });
 
-function inlineModule(code) {
-  return `data:text/javascript;base64,${Buffer.from(code).toString('base64')}`;
-}
 
-test('pairing mount resumes plain and QR routes once, retains switched target, and stays signed out after disconnect', async () => {
-  // Execute the real page's mount effects, including StrictMode effect replay.
-  // Stub presentation and network owners; restore must never start OAuth/login.
-  const hooksUrl = inlineModule(`
-    export const effects = [];
-    export const useEffect = fn => effects.push(fn);
-    export const useRef = current => ({ current });
-    export const useState = initial => [typeof initial === 'function' ? initial() : initial, () => {}];
-    export default { createElement: (type, props) => ({ type, props }) };
-  `);
-  const { effects } = await import(hooksUrl);
-  const noopUrl = inlineModule('export default () => null;');
-  const pairingModule = await loadSource('../src/pages/PairingPage.tsx', {
-    react: hooksUrl, '../components/PairingForm': noopUrl,
-    '../services/pairingLink': links.url,
-    '../i18n': inlineModule('export const useI18n = () => ({ t: key => key });'),
-    '../theme': inlineModule('export const useTheme = () => ({ isDark: false });'),
-    '../assets/openbitfun-mark-dark.png': noopUrl, '../assets/openbitfun-mark-light.png': noopUrl,
-    '../services/CloudAccountClient': inlineModule(`
-      export class CloudAccountClient { constructor() { throw new Error('Restore started OAuth'); } }
-      export const generateRequestId = () => 'new-browser';
-    `),
-    '../services/CloudAccountSessionStore': accountStoreModule.url,
-    '../services/MobileNavigationStore': navigationModule.url,
-    '../services/RelayHttpClient': inlineModule(`
-      export class RelayHttpClient { constructor(url, identity) { this.identity = structuredClone(identity); } }
-    `),
-    '../services/RemoteSessionManager': inlineModule('export class RemoteSessionManager {}'),
-    '../services/store': inlineModule(`
-      export const useMobileStore = { getState: () => ({ resetForDeviceSwitch() {},
-        setAuthenticatedUserId() {}, setAuthenticatedUserLabel() {}, setControlTarget() {}, setConnectionStatus() {} }) };
-    `),
-  });
-  const { default: PairingPage } = await import(pairingModule.url);
-  const previous = { window: globalThis.window, sessionStorage: globalThis.sessionStorage };
-  try {
-    for (const base of ['http://192.168.1.9:9700/', 'https://remote.openbitfun.com/v/1.0.0/']) {
-      for (const hash of ['', '#/pair?did=desktop-a']) {
-        const location = new URL(base + hash);
-        const relayUrl = base.replace(/\/$/, '');
-        const storage = memoryStorage();
-        globalThis.window = { location, sessionStorage: storage };
-        globalThis.sessionStorage = storage;
-        storage.setItem('openbitfun.mobile.controller_id', 'browser-a');
-        accountStore.saveCloudAccountSession({ ...storedAccount, relayUrl }, storage);
-        saveMobileNavigation({ accountId: '123', controllerDeviceId: 'browser-a', relayUrl,
-          routeKey: location.pathname + hash }, { deviceId: 'desktop-b',
-          session: { id: 'task-b', name: 'Task', agentType: 'Standard' } }, storage);
-        const paired = [];
-        const mount = () => {
-          effects.length = 0;
-          const content = PairingPage({ onPaired: (...args) => paired.push(args) });
-          effects.length = 0;
-          content.type(content.props);
-          const cleanup = effects[0]();
-          cleanup();
-          effects[0]();
-        };
-        mount();
-        assert.equal(paired.length, 1);
-        assert.equal(paired[0][0].identity.token, 'test-token');
-        assert.deepEqual(paired[0][0].identity.masterKey, storedAccount.session.masterKey);
-        assert.equal(paired[0][2], 'desktop-b');
-        assert.equal(paired[0][3].restored.session.id, 'task-b');
-        mount(); // Same storage, new component refs: a full reload.
-        assert.equal(paired.length, 2);
-        accountStore.clearCloudAccountSession();
-        mount();
-        assert.equal(paired.length, 2, 'disconnect must not restore the saved account again');
-      }
-    }
-    globalThis.window = { location: new URL('http://192.168.1.9:9700/'),
-      get sessionStorage() { throw new Error('blocked'); } };
-    globalThis.sessionStorage = { getItem() { throw new Error('blocked'); },
-      setItem() { throw new Error('blocked'); } };
-    effects.length = 0;
-    const content = PairingPage({ onPaired: () => assert.fail('unavailable storage restored an account') });
-    effects.length = 0;
-    content.type(content.props);
-    assert.doesNotThrow(() => effects[0]());
-    const app = await readFile(new URL('../src/App.tsx', import.meta.url), 'utf8');
-    assert.match(app.slice(app.indexOf('const handleDisconnect'), app.indexOf('const isAnimating')), /clearCloudAccountSession\(\)/);
-  } finally {
-    globalThis.window = previous.window;
-    globalThis.sessionStorage = previous.sessionStorage;
-  }
+test('presence uses the authenticated browser ID across managers, tabs and reloads', async () => {
+  const module = await loadSource('../src/services/controlClientIdentity.ts');
+  const { getControlClientIdentity } = await import(module.url);
+  const identity = getControlClientIdentity('browser-device-a');
+  assert.equal(identity.id, 'browser-device-a');
+  assert.ok(identity.name);
+  const { getControlClientIdentity: reloaded } = await import(`${module.url}#reloaded`);
+  assert.deepEqual(reloaded('browser-device-a'), identity);
+  assert.notEqual(reloaded('browser-device-b').id, identity.id);
 });
 
-test('control ping identity survives module reloads but independent tabs keep separate connections', async () => {
-  const module = await loadSource('../src/services/controlClientIdentity.ts');
-  const previousWindow = globalThis.window;
-  let page = 0;
-  const reload = async () => (await import(`${module.url}#page-${page++}`)).getControlClientIdentity;
-  try {
-    const storage = memoryStorage();
-    globalThis.window = { sessionStorage: storage };
-    const firstPage = await reload();
-    const identity = firstPage();
-    assert.equal(firstPage(), identity);
-    for (let i = 0; i < 3; i++) assert.deepEqual((await reload())(), identity);
-    globalThis.window = { sessionStorage: memoryStorage() };
-    assert.notEqual((await reload())().id, identity.id);
-    for (const blocked of [
-      { get sessionStorage() { throw new Error('blocked'); } },
-      { sessionStorage: { getItem: () => null, setItem: () => { throw new Error('quota'); } } },
-    ]) {
-      globalThis.window = blocked;
-      const getIdentity = await reload();
-      assert.match(getIdentity().id, /^[a-f0-9]{32}$/);
-      assert.equal(getIdentity(), getIdentity());
-    }
-  } finally { globalThis.window = previousWindow; }
+test('tab navigation preserves explicit disconnect and migrates only a matching legacy controller', async () => {
+  const { migrateMobileNavigationController } = await import(navigationModule.url);
+  const storage = memoryStorage();
+  const scope = { accountId: 'account-a', controllerDeviceId: 'tab-a', relayUrl: storedAccount.relayUrl, routeKey: '/' };
+  saveMobileNavigation(scope, { deviceId: 'desktop-a', disconnected: true }, storage);
+  migrateMobileNavigationController('other-account', scope.relayUrl, 'tab-a', 'browser-a', storage);
+  assert.equal(loadMobileNavigation({ ...scope, controllerDeviceId: 'browser-a' }, storage), null);
+  migrateMobileNavigationController(scope.accountId, scope.relayUrl, 'tab-a', 'browser-a', storage);
+  assert.deepEqual(loadMobileNavigation({ ...scope, controllerDeviceId: 'browser-a' }, storage), {
+    deviceId: 'desktop-a', disconnected: true, session: undefined,
+  });
 });
