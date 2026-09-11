@@ -30,6 +30,7 @@ pub(crate) struct ExternalMcpImportCandidate {
 }
 
 struct ComputedPlan {
+    source_ids: BTreeMap<String, String>,
     public: ExternalMcpImportPlanV1,
     target_fingerprint: String,
     target_native_ids: BTreeSet<String>,
@@ -211,6 +212,19 @@ fn selected_imports(
             .get(&selection.candidate_id)
             .ok_or(SelectionError::Stale)?;
         imports.push(MCPImportServer {
+            environment: prepared.environment.clone(),
+            headers: prepared.headers.clone(),
+            source_id: current.source_ids.get(&selection.candidate_id).cloned(),
+            working_directory: prepared
+                .working_directory
+                .as_ref()
+                .map(|path| path.to_string_lossy().into_owned()),
+            timeouts: openbitfun_services_integrations::mcp::MCPServerTimeouts {
+                startup_ms: prepared.timeouts.startup_ms,
+                catalog_ms: prepared.timeouts.catalog_ms,
+                execution_ms: prepared.timeouts.execution_ms,
+            },
+            oauth_enabled: prepared.oauth_enabled,
             native_id,
             candidate_id: selection.candidate_id.clone(),
             behavior_version: prepared.behavior_version.clone(),
@@ -235,6 +249,15 @@ fn build_import_plan(
     target: &MCPUserImportSnapshot,
     mut candidates: Vec<ExternalMcpImportCandidate>,
 ) -> ComputedPlan {
+    let source_ids = candidates
+        .iter()
+        .map(|candidate| {
+            (
+                candidate.definition.candidate_id(),
+                candidate.ecosystem_id.as_str().to_string(),
+            )
+        })
+        .collect();
     candidates.sort_by(|left, right| left.definition.id.cmp(&right.definition.id));
     let mut reserved = target.native_ids.clone();
     let mut prepared = BTreeMap::new();
@@ -300,6 +323,7 @@ fn build_import_plan(
     };
     public.plan_fingerprint = plan_fingerprint(target, &public, &prepared);
     ComputedPlan {
+        source_ids,
         public,
         target_fingerprint: target.fingerprint.clone(),
         target_native_ids: target.native_ids.clone(),
@@ -419,6 +443,17 @@ fn plan_fingerprint(
         &serde_json::to_vec(&facts).expect("MCP import plan serialization cannot fail"),
     );
     for (candidate_id, server) in prepared {
+        hash_part(
+            &mut hasher,
+            &serde_json::to_vec(&(
+                &server.working_directory,
+                &server.environment,
+                &server.headers,
+                server.timeouts,
+                server.oauth_enabled,
+            ))
+            .expect("MCP import options serialization cannot fail"),
+        );
         hash_part(&mut hasher, candidate_id.as_bytes());
         hash_part(&mut hasher, server.behavior_version.as_bytes());
         match &server.transport {
@@ -518,6 +553,11 @@ mod tests {
             },
             ecosystem_id: EcosystemId::new("opencode").unwrap(),
             preparation: ExternalMcpImportPreparation::Prepared(PreparedExternalMcpImportServer {
+                environment: Default::default(),
+                headers: Default::default(),
+                working_directory: None,
+                timeouts: Default::default(),
+                oauth_enabled: None,
                 id,
                 behavior_version: "sha256:behavior-v1".to_string(),
                 transport: PreparedExternalMcpImportTransport::Local {
@@ -559,6 +599,35 @@ mod tests {
             first.public.plan_fingerprint,
             second.public.plan_fingerprint
         );
+    }
+
+    #[test]
+    fn import_options_are_versioned_and_forwarded_to_the_config_owner() {
+        let baseline = build_import_plan(&target(&[]), vec![candidate("node")]);
+        let mut changed = candidate("node");
+        let cwd = std::env::current_dir().unwrap();
+        if let ExternalMcpImportPreparation::Prepared(server) = &mut changed.preparation {
+            server.working_directory = Some(cwd.clone());
+            server.timeouts.execution_ms = Some(60_000);
+        }
+        let plan = build_import_plan(&target(&[]), vec![changed]);
+        assert_ne!(
+            baseline.public.plan_fingerprint,
+            plan.public.plan_fingerprint
+        );
+        let request = ExternalMcpImportApplyRequestV1 {
+            schema_version: EXTERNAL_MCP_IMPORT_SCHEMA_V1,
+            plan_fingerprint: plan.public.plan_fingerprint.clone(),
+            selections: vec![
+                openbitfun_product_domains::external_sources::ExternalMcpImportSelectionV1 {
+                    candidate_id: plan.public.items[0].candidate_id.clone(),
+                    requested_native_id: None,
+                },
+            ],
+        };
+        let imports = selected_imports(&plan, &request).unwrap();
+        assert_eq!(imports[0].working_directory.as_deref(), cwd.to_str());
+        assert_eq!(imports[0].timeouts.execution_ms, Some(60_000));
     }
 
     #[test]

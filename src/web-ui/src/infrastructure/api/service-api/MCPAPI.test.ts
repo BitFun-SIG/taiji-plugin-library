@@ -11,6 +11,31 @@ vi.mock('@/infrastructure/peer-device/deviceSurface', () => ({
 describe('MCP JSON save acknowledgement', () => {
   beforeEach(() => { invokeMock.mockReset(); scopeMock.assertCurrent.mockReset(); });
 
+  it('enables one imported server with CAS and preserves origin, secrets and unrelated settings', async () => {
+    const config = { mcpServers: {
+      imported: { enabled: false, autoStart: false, env: { TEST_KEY: 'private-value' }, _openbitfunImport: { sourceCandidateId: 'codex:mcp' }, futureOption: 3 },
+      other: { enabled: false, command: 'other' },
+    }, futureRoot: true };
+    invokeMock.mockResolvedValueOnce({ jsonConfig: JSON.stringify(config), fingerprint: 'before-enable' }).mockResolvedValueOnce(undefined);
+    await expect(MCPAPI.enableServer('imported')).resolves.toEqual({ runtimeApplied: true });
+    const saved = invokeMock.mock.calls[1];
+    expect(saved[0]).toBe('save_mcp_json_config');
+    expect(saved[1].expectedFingerprint).toBe('before-enable');
+    expect(JSON.parse(saved[1].jsonConfig)).toEqual({ ...config, mcpServers: { ...config.mcpServers, imported: { ...config.mcpServers.imported, enabled: true } } });
+    expect(invokeMock.mock.calls.map(call => call[0])).not.toContain('start_mcp_server');
+  });
+
+  it('does not recreate a removed server or write to a changed host while enabling', async () => {
+    invokeMock.mockResolvedValueOnce({ jsonConfig: '{"mcpServers":{}}', fingerprint: 'current' });
+    await expect(MCPAPI.enableServer('removed')).rejects.toThrow('unavailable');
+    expect(invokeMock).toHaveBeenCalledTimes(1);
+    invokeMock.mockClear();
+    invokeMock.mockResolvedValueOnce({ jsonConfig: '{"mcpServers":{"imported":{"enabled":false}}}', fingerprint: 'current' });
+    scopeMock.assertCurrent.mockImplementationOnce(() => { throw new Error('Surface changed'); });
+    await expect(MCPAPI.enableServer('imported')).rejects.toThrow('Surface changed');
+    expect(invokeMock).toHaveBeenCalledTimes(1);
+  });
+
   it('accepts the existing void success response', async () => {
     invokeMock.mockResolvedValue(undefined);
     await expect(MCPAPI.saveMCPJsonConfig('{}', 'revision')).resolves.toEqual({ runtimeApplied: true });

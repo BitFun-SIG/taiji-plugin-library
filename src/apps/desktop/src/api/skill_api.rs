@@ -564,8 +564,20 @@ pub async fn get_skill_configs(
         get_skill_scan_report_for_workspace_input(&state, registry, workspace_path.as_deref())
             .await?;
 
-    serialize_skill_scan_response(all_skills, include_diagnostics.unwrap_or(false))
-        .map_err(|e| format!("Failed to serialize skill configs: {}", e))
+    let mut response =
+        serialize_skill_scan_response(all_skills, include_diagnostics.unwrap_or(false))
+            .map_err(|e| format!("Failed to serialize skill configs: {}", e))?;
+    if let Some(object) = response.as_object_mut() {
+        let supported = match workspace_path.as_deref() {
+            Some(path) => !is_remote_path(path).await,
+            None => true,
+        };
+        object.insert(
+            "importOperationsVersion".into(),
+            serde_json::json!(if supported { 2 } else { 0 }),
+        );
+    }
+    Ok(response)
 }
 
 #[tauri::command]
@@ -939,7 +951,52 @@ pub async fn add_skill(
     source_path: String,
     level: String,
     workspace_path: Option<String>,
+    source_key: Option<String>,
+    target_name: Option<String>,
 ) -> Result<String, String> {
+    if let Some(source_key) = source_key {
+        if !matches!(level.as_str(), "user" | "project") {
+            return Err("Invalid Skill target scope".into());
+        }
+        let workspace = workspace_root_from_input(workspace_path.as_deref());
+        if let Some(root) = &workspace {
+            if is_remote_path(&root.to_string_lossy()).await {
+                return Err("External Skill import into remote workspaces is not supported".into());
+            }
+        }
+        let source = SkillRegistry::global()
+            .find_skill_by_key_for_workspace(&source_key, workspace.as_deref())
+            .await
+            .ok_or("External Skill source changed; refresh before importing")?;
+        if tokio::fs::canonicalize(&source.path)
+            .await
+            .map_err(|error| error.to_string())?
+            != tokio::fs::canonicalize(&source_path)
+                .await
+                .map_err(|error| error.to_string())?
+        {
+            return Err("External Skill path does not match the selected source".into());
+        }
+        let paths = get_path_manager_arc();
+        let target = if level == "project" {
+            paths
+                .project_root(workspace.as_deref().ok_or("No workspace selected")?)
+                .join("skills")
+        } else {
+            paths.user_skills_dir()
+        };
+        openbitfun_core::agentic::tools::implementations::skills::registry::imports::import_copy_as(
+            source, target, target_name,
+        )
+        .await?;
+        SkillRegistry::global()
+            .refresh_for_workspace(workspace.as_deref())
+            .await;
+        return Ok("External Skill imported successfully".into());
+    }
+    if target_name.is_some() {
+        return Err("Renaming an imported Skill requires its source identity".into());
+    }
     let validation = validate_skill_path(source_path.clone()).await?;
     if !validation.valid {
         return Err(validation.error.unwrap_or("Invalid skill path".to_string()));
@@ -1033,11 +1090,15 @@ pub async fn delete_skill(
     state: State<'_, AppState>,
     skill_key: String,
     workspace_path: Option<String>,
+    expected_import_id: Option<String>,
 ) -> Result<String, String> {
     let registry = SkillRegistry::global();
     if let Some((remote_root, entry)) =
         resolve_remote_workspace(&state, workspace_path.as_deref()).await?
     {
+        if expected_import_id.is_some() {
+            return Err("External Skill import undo on remote workspaces is not supported".into());
+        }
         let remote_fs = state
             .get_remote_file_service_async()
             .await
@@ -1090,7 +1151,9 @@ pub async fn delete_skill(
 
     let skill_path = std::path::PathBuf::from(&skill_info.path);
 
-    if skill_path.exists() {
+    if let Some(expected) = expected_import_id {
+        openbitfun_core::agentic::tools::implementations::skills::registry::imports::remove_imported_copy(&skill_path, &expected).await?;
+    } else if skill_path.exists() {
         if let Err(e) = tokio::fs::remove_dir_all(&skill_path).await {
             return Err(format!("Failed to delete skill folder: {}", e));
         }

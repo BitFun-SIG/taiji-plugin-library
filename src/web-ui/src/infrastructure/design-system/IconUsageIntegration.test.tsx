@@ -154,7 +154,7 @@ describe('catalog icon consumer integration', () => {
     expect(source('app/components/NavPanel/MainNav.tsx')).toContain('<Icon glyph={Users} size="sm" />');
     expect(source('app/components/NavPanel/MainNav.tsx')).toContain('<Icon glyph={Network} size="sm" />');
     expect(source('app/scenes/agents/agentsIcons.ts')).toContain('Record<AgentIconKey, IconSource>');
-    expect(source('app/scenes/ecosystem-compatibility/EcosystemCompatibilityScene.tsx'))
+    expect(source('app/scenes/ecosystem-compatibility/ExternalAgentContent.tsx'))
       .toContain('Record<EcosystemImportItemKind, IconSource>');
 
     const galleryEmpty = source('app/components/GalleryLayout/GalleryEmpty.tsx');

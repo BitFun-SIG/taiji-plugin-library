@@ -215,7 +215,7 @@ name = "Ignored display label"
 }
 
 #[test]
-fn workspace_implicit_cwd_requires_setup_instead_of_changing_local_behavior() {
+fn workspace_implicit_cwd_is_preserved_in_native_import() {
     let fixture = Fixture::new();
     write(
         fixture.codex_home.join("config.toml"),
@@ -229,11 +229,11 @@ args = ["./server.js"]
     let snapshot = provider.discover(&input).unwrap();
     let server = &snapshot.servers[0];
 
-    let error = provider
+    let prepared = provider
         .prepare_import(&input, &server.id, &server.behavior_version)
-        .unwrap_err();
+        .unwrap();
 
-    assert_eq!(error.code, "external_mcp.import_setup_required");
+    assert_eq!(prepared.working_directory, Some(fixture.workspace.clone()));
 }
 
 #[test]
@@ -261,7 +261,7 @@ url = "https://docs.example.test/mcp"
 }
 
 #[test]
-fn local_environment_references_and_explicit_cwd_require_setup() {
+fn local_environment_references_require_setup_and_explicit_cwd_is_preserved() {
     let fixture = Fixture::new();
     write(
         fixture.codex_home.join("config.toml"),
@@ -282,7 +282,26 @@ cwd = "."
     let input = fixture.input();
     let snapshot = provider.discover(&input).unwrap();
 
-    for name in ["literal_env", "referenced_env", "explicit_cwd"] {
+    let cwd = snapshot
+        .servers
+        .iter()
+        .find(|s| s.name == "explicit_cwd")
+        .unwrap();
+    let prepared = provider
+        .prepare_import(&input, &cwd.id, &cwd.behavior_version)
+        .unwrap();
+    assert!(prepared.working_directory.as_ref().unwrap().is_absolute());
+    let literal = snapshot
+        .servers
+        .iter()
+        .find(|s| s.name == "literal_env")
+        .unwrap();
+    let prepared = provider
+        .prepare_import(&input, &literal.id, &literal.behavior_version)
+        .unwrap();
+    assert_eq!(prepared.environment.values().next().unwrap(), "secret");
+    assert!(!format!("{prepared:?}").contains("secret"));
+    for name in ["referenced_env"] {
         let server = snapshot
             .servers
             .iter()
@@ -328,6 +347,17 @@ url = "https://user:secret@docs.example.test/mcp"
     let snapshot = provider.discover(&input).unwrap();
 
     for server in &snapshot.servers {
+        if server.name == "literal_header" {
+            let prepared = provider
+                .prepare_import(&input, &server.id, &server.behavior_version)
+                .unwrap();
+            assert_eq!(
+                prepared.headers.get("X-Secret").map(String::as_str),
+                Some("secret")
+            );
+            assert!(!format!("{prepared:?}").contains("secret"));
+            continue;
+        }
         let error = provider
             .prepare_import(&input, &server.id, &server.behavior_version)
             .unwrap_err();
@@ -416,6 +446,13 @@ tool_timeout_sec = 2.5
         .prepare_server(&input, &server.id, &server.behavior_version)
         .unwrap();
     assert_eq!(prepared.timeouts, server.timeouts);
+    assert_eq!(
+        provider
+            .prepare_import(&input, &server.id, &server.behavior_version)
+            .unwrap()
+            .timeouts,
+        server.timeouts
+    );
 }
 
 #[test]

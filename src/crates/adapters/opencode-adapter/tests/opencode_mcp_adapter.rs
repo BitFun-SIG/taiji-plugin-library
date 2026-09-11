@@ -341,6 +341,34 @@ fn unsafe_user_servers_require_setup_instead_of_copying_opaque_fields() {
     let snapshot = provider.discover(&input).unwrap();
 
     for server in &snapshot.servers {
+        if server.name == "env" || server.name == "headers" {
+            let prepared = provider
+                .prepare_import(&input, &server.id, &server.behavior_version)
+                .unwrap();
+            let values = if server.name == "env" {
+                &prepared.environment
+            } else {
+                &prepared.headers
+            };
+            assert_eq!(values.values().next().unwrap(), "secret");
+            assert!(!format!("{prepared:?}").contains("secret"));
+            continue;
+        }
+        if server.name == "cwd" || server.name == "no-oauth" {
+            let prepared = provider
+                .prepare_import(&input, &server.id, &server.behavior_version)
+                .unwrap();
+            if server.name == "cwd" {
+                assert!(prepared
+                    .working_directory
+                    .as_ref()
+                    .unwrap()
+                    .ends_with("tools"));
+            } else {
+                assert_eq!(prepared.oauth_enabled, Some(false));
+            }
+            continue;
+        }
         let error = provider
             .prepare_import(&input, &server.id, &server.behavior_version)
             .unwrap_err();
@@ -554,9 +582,9 @@ fn opencode_timeout_applies_to_all_mcp_lifecycle_phases() {
     assert_eq!(
         provider
             .prepare_import(&input, &server.id, &server.behavior_version)
-            .unwrap_err()
-            .code,
-        "external_mcp.import_setup_required"
+            .unwrap()
+            .timeouts,
+        server.timeouts
     );
 }
 

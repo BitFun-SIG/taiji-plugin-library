@@ -957,24 +957,34 @@ fn prepare_import_projection(
     definition: ExternalMcpServerDefinition,
     template: PreparedTransportTemplate,
 ) -> Result<PreparedExternalMcpImportServer, ExternalSourceProviderError> {
-    if !definition.timeouts.is_empty() {
-        return Err(ExternalSourceProviderError::new(
-            "external_mcp.import_setup_required",
-            "MCP timeout overrides cannot be imported into native configuration",
-            false,
-        ));
-    }
-    let transport = match template {
+    let (transport, working_directory, oauth_enabled, environment, headers) = match template {
         PreparedTransportTemplate::Local {
             command,
             args,
             environment,
             working_directory,
-        } if environment.is_empty() && working_directory.is_none() => {
-            PreparedExternalMcpImportTransport::Local { command, args }
+        } if collect_environment_reference_names(environment.values())
+            .is_ok_and(|refs| refs.is_empty()) =>
+        {
+            (
+                PreparedExternalMcpImportTransport::Local { command, args },
+                working_directory,
+                None,
+                environment,
+                BTreeMap::new(),
+            )
         }
-        PreparedTransportTemplate::Remote { url, headers } if headers.is_empty() => {
-            PreparedExternalMcpImportTransport::Remote { url }
+        PreparedTransportTemplate::Remote { url, headers }
+            if collect_environment_reference_names(headers.values())
+                .is_ok_and(|refs| refs.is_empty()) =>
+        {
+            (
+                PreparedExternalMcpImportTransport::Remote { url },
+                None,
+                Some(false),
+                BTreeMap::new(),
+                headers,
+            )
         }
         _ => {
             return Err(ExternalSourceProviderError::new(
@@ -985,9 +995,14 @@ fn prepare_import_projection(
         }
     };
     let prepared = PreparedExternalMcpImportServer {
+        environment,
+        headers,
         id: definition.id,
         behavior_version: definition.behavior_version,
         transport,
+        working_directory,
+        timeouts: definition.timeouts,
+        oauth_enabled,
     };
     prepared.validate().map_err(|_| {
         ExternalSourceProviderError::new(

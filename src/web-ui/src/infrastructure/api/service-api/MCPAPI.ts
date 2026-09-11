@@ -28,6 +28,7 @@ export type MCPServerStatus =
 
  
 export interface MCPServerInfo {
+  importOrigin?: { sourceCandidateId: string; behaviorVersion: string; sourceId?: string | null } | null;
   id: string;
   name: string;
   status: string;
@@ -322,6 +323,22 @@ export class MCPAPI {
    
   static async startServer(serverId: string): Promise<void> {
     return api.invoke('start_mcp_server', { serverId });
+  }
+
+  static async enableServer(serverId: string): Promise<{ runtimeApplied: boolean }> {
+    const scope = getActiveSurfaceScope();
+    const snapshot = await this.loadMCPJsonConfig();
+    scope.assertCurrent('enable MCP server');
+    const config = JSON.parse(snapshot.jsonConfig);
+    const servers = config?.mcpServers;
+    const server = servers && typeof servers === 'object' && !Array.isArray(servers)
+      && Object.prototype.hasOwnProperty.call(servers, serverId) ? servers[serverId] : null;
+    if (!server || typeof server !== 'object' || Array.isArray(server)) {
+      throw new Error('MCP server configuration is unavailable; refresh before enabling');
+    }
+    if (server.enabled !== false) return { runtimeApplied: true };
+    server.enabled = true;
+    return this.saveMCPJsonConfig(JSON.stringify(config, null, 2), snapshot.fingerprint);
   }
 
    

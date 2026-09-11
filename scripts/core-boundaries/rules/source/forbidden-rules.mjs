@@ -4230,6 +4230,7 @@ export const forbiddenContentUnderRules = [
       allowPaths: [
         'src/crates/adapters/static-hook-support/tests/parser.rs',
         'src/crates/adapters/dsh-adapter/src/hook_source.rs',
+        'src/crates/adapters/dsh-adapter/src/mcp_source.rs',
         'src/crates/adapters/pi-adapter/src/hook_source.rs',
         'src/crates/adapters/opencode-adapter/src/hook_source.rs',
         'src/crates/adapters/opencode-adapter/src/command_source.rs',

@@ -68,12 +68,15 @@ export interface ResetModeSkillSelectionParams {
 }
 
 export interface AddSkillParams {
+  targetName?: string;
+  sourceKey?: string;
   sourcePath: string;
   level: SkillLevel;
   workspacePath?: string;
 }
 
 export interface DeleteSkillParams {
+  expectedImportId?: string;
   skillKey: string;
   workspacePath?: string;
 }
@@ -503,12 +506,14 @@ export class ConfigAPI {
 
    
   async addSkill({
+    targetName,
+    sourceKey,
     sourcePath,
     level,
     workspacePath,
   }: AddSkillParams): Promise<string> {
     try {
-      return await api.invoke('add_skill', { sourcePath, level, workspacePath });
+      return await api.invoke('add_skill', { sourcePath, level, workspacePath, ...(sourceKey ? { sourceKey } : {}), ...(targetName ? { targetName } : {}) });
     } catch (error) {
       throw createTauriCommandError('add_skill', error, { sourcePath, level, workspacePath });
     }
@@ -516,11 +521,12 @@ export class ConfigAPI {
 
    
   async deleteSkill({
+    expectedImportId,
     skillKey,
     workspacePath,
   }: DeleteSkillParams): Promise<string> {
     try {
-      return await api.invoke('delete_skill', { skillKey, workspacePath });
+      return await api.invoke('delete_skill', { skillKey, workspacePath, ...(expectedImportId ? { expectedImportId } : {}) });
     } catch (error) {
       throw createTauriCommandError('delete_skill', error, { skillKey, workspacePath });
     }
