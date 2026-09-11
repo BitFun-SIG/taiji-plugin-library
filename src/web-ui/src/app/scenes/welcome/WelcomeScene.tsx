@@ -61,7 +61,7 @@ const WelcomeScene: React.FC = () => {
     const schedule = () => {
       if (!document.hidden) timer = window.setTimeout(tick, nextDelay);
     };
-    const tick = () => {
+    function tick() {
       const phrase = characters[phraseIndex];
       characterCount += deleting ? -1 : 1;
       setText(phrase.slice(0, characterCount).join(''));
@@ -77,7 +77,7 @@ const WelcomeScene: React.FC = () => {
         nextDelay = deleting ? DELETE_MS : TYPE_MS;
       }
       schedule();
-    };
+    }
     const handleVisibilityChange = () => {
       window.clearTimeout(timer);
       schedule();
