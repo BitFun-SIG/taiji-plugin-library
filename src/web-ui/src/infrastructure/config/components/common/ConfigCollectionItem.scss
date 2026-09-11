@@ -113,6 +113,11 @@
   &[data-open='true'] {
     grid-template-rows: 1fr;
     opacity: 1;
+
+    @starting-style {
+      grid-template-rows: 0fr;
+      opacity: 0;
+    }
   }
 }
 
