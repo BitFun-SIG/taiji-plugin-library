@@ -1784,6 +1784,7 @@ pub async fn run() {
             api::miniapp_api::miniapp_get_customization_metadata,
             api::miniapp_api::miniapp_decline_builtin_update,
             api::miniapp_market_api::miniapp_market_browse,
+            api::market_image_api::market_image_load,
             api::miniapp_market_api::miniapp_market_get_listing,
             api::miniapp_market_api::miniapp_market_capture_window,
             api::miniapp_market_api::miniapp_market_set_rating,

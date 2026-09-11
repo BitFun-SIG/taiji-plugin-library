@@ -429,6 +429,7 @@ pub(super) const OPERATIONS: &[OperationDefinition] = &[
     op("mark_announcement_seen",                                     Agnostic,    ControllerLocal,  REFUSED),
     op("mark_openbitfun_control_surface_ready",                          Agnostic,    ControllerLocal,  REFUSED),
     op("mark_openbitfun_control_surface_unready",                        Agnostic,    ControllerLocal,  REFUSED),
+    op("market_image_load",                                         Agnostic,    ControllerLocal,  REFUSED),
     op("miniapp_agent_cancel",                                       Unaudited,   Proxied,          CLI_NOT_IMPLEMENTED),
     op("miniapp_agent_cancel_stale_runs",                            Unaudited,   Proxied,          CLI_NOT_IMPLEMENTED),
     op("miniapp_agent_ensure_session",                               LocalOnly,   Proxied,          CLI_NOT_IMPLEMENTED),
