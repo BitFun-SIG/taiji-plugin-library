@@ -97,6 +97,41 @@ describe('ConfigCollectionItem', () => {
     expect(container.querySelector('.openbitfun-collection-item__details-collapse')).toBeNull();
   });
 
+  it('keeps controlled details interactive after disabling the item when explicitly allowed', () => {
+    const Harness = () => {
+      const [enabled, setEnabled] = React.useState(true);
+      const [expanded, setExpanded] = React.useState(false);
+      return (
+        <ConfigCollectionItem
+          label="Model A"
+          control={<button type="button" onClick={() => setEnabled(false)}>Disable</button>}
+          details={<span>Model details</span>}
+          disabled={!enabled}
+          detailsDisabled={false}
+          expanded={expanded}
+          onToggle={() => setExpanded(value => !value)}
+          toggleOnRowClick
+        />
+      );
+    };
+    act(() => root.render(<Harness />));
+    const toggle = container.querySelector<HTMLButtonElement>('.openbitfun-collection-item__details-toggle')!;
+    const label = container.querySelector<HTMLElement>('.openbitfun-collection-item__name')!;
+    const disable = Array.from(container.querySelectorAll('button')).find(button => button.textContent === 'Disable')!;
+
+    act(() => toggle.click());
+    act(() => disable.click());
+    expect(container.querySelector('.openbitfun-collection-item')?.classList.contains('is-disabled')).toBe(true);
+    expect(toggle.disabled).toBe(false);
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    act(() => toggle.click());
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    act(() => label.click());
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    act(() => label.click());
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+  });
+
   it('optionally toggles from the row without stealing nested control clicks', () => {
     act(() => {
       root.render(
