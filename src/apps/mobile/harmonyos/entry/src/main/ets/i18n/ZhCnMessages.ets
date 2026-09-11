@@ -255,7 +255,7 @@ export const ZH_CN_MESSAGES: [string, string][] = [
   ['remote.settings.accountSignedInBody', '当前连接已通过账号 {0} 验证。密码不会保存到手机。'],
   ['remote.settings.accountNotSignedInBody', '扫码连接时，如果桌面端要求账号验证，手机会在本次配对中完成认证。'],
   ['remote.settings.accountLoginTitle', '使用 GitHub 登录'],
-  ['remote.settings.accountLoginBody', '使用 GitHub 登录并连接自己的电脑。任务和模型配置保留在被控电脑上。'],
+  ['remote.settings.accountLoginBody', '使用 GitHub 登录并连接自己的电脑。\n任务和模型配置保留在被控电脑上。'],
   ['remote.settings.loginServer', '登录服务器'],
   ['remote.settings.accountSignIn', '使用 GitHub 登录'],
   ['remote.settings.accountSigningIn', '正在登录…'],

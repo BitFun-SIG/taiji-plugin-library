@@ -8020,6 +8020,22 @@
           }
         }
       }
+    },
+    "使用 GitHub 登录并连接自己的电脑。\n任务和模型配置保留在被控电脑上。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sign in with GitHub to connect to your computers.\nTasks and model settings stay on the controlled computer."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "使用 GitHub 登录并连接自己的电脑。\n任务和模型配置保留在被控电脑上。"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

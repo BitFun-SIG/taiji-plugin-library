@@ -1,5 +1,4 @@
 import OpenBitFunMobileCore
-import OpenBitFunMobileCore
 import SwiftUI
 
 struct RemoteHomeView: View {
@@ -18,19 +17,19 @@ struct RemoteHomeView: View {
             .overlay(RoundedRectangle(cornerRadius: 24).stroke(OpenBitFunTheme.line, lineWidth: 1))
             .clipShape(RoundedRectangle(cornerRadius: 24))
             Text(model.localized("连接桌面端"))
-                .font(.system(size: 18, weight: .bold))
+                .font(MobileDesignTypography.headlineSmall.font)
                 .foregroundStyle(OpenBitFunTheme.ink)
             Text(model.localized("扫描桌面端显示的二维码，开始远程处理任务。"))
-                .font(.system(size: 13))
+                .font(MobileDesignTypography.bodySmall.font)
                 .foregroundStyle(OpenBitFunTheme.muted)
                 .multilineTextAlignment(.center)
                 .lineSpacing(7)
                 .padding(.horizontal, 20)
             Button(model.localized("连接")) { model.connectRemote() }
-                .font(.system(size: 15, weight: .medium))
+                .font(MobileDesignTypography.titleSmall.font)
                 .foregroundStyle(OpenBitFunTheme.contentOnAction)
                 .frame(width: 136, height: 44)
-                .background(OpenBitFunTheme.accent)
+                .background(MobileDesignColors.primaryAction)
                 .clipShape(Capsule())
             Spacer()
         }

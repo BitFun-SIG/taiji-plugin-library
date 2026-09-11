@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -51,12 +52,16 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.ui.graphics.asImageBitmap
+import com.openbitfun.mobile.app.ui.common.ConnectionSheetHeader
+import com.openbitfun.mobile.app.ui.common.ConnectionSheetFooter
+import com.openbitfun.mobile.app.ui.common.connectionSheetTextStyle
 import com.openbitfun.mobile.app.R
 import com.openbitfun.mobile.app.platform.deviceIdentity
 import com.openbitfun.mobile.app.viewmodel.AccountViewModel
 import com.openbitfun.mobile.core.feature.account.AccountFailureReason
 import com.openbitfun.mobile.core.feature.account.AccountIntent
 import com.openbitfun.mobile.core.feature.account.AccountUiState
+import com.openbitfun.mobile.app.ui.theme.generated.MobileDesignGeometry
 import com.openbitfun.mobile.app.ui.theme.openBitFunColors
 
 private val AccountCardShape = RoundedCornerShape(24.dp)
@@ -91,7 +96,7 @@ internal fun AccountScreen(
 }
 
 @Composable
-private fun AccountLoginPage(
+internal fun AccountLoginPage(
     state: AccountUiState,
     onBack: () -> Unit,
     onLogin: () -> Unit,
@@ -100,36 +105,35 @@ private fun AccountLoginPage(
     val busy = state is AccountUiState.SigningIn || state is AccountUiState.Authorizing
     val canSubmit = !busy
     val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
-    Box(modifier.fillMaxSize()) {
-        Column(
-            modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())
-                .padding(start = 28.dp, end = 28.dp, top = 118.dp, bottom = 44.dp),
-        ) {
-            Text(stringResource(R.string.account_login_title), fontSize = 32.sp, lineHeight = 38.sp, fontWeight = FontWeight.Bold)
-            Text(stringResource(R.string.account_login_body), fontSize = 15.sp, lineHeight = 22.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 12.dp, bottom = 42.dp))
-            (state as? AccountUiState.Authorizing)?.let { authorization ->
-                Button(onClick = { uriHandler.openUri(authorization.authorizationUrl) }, modifier = Modifier.fillMaxWidth()) {
-                    Text(stringResource(R.string.account_open_github))
+    Column(modifier.fillMaxWidth()) {
+        ConnectionSheetHeader(onBack, uniformGlyph = true)
+        Box(Modifier.weight(1f, fill = false).fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
+            Column(
+                modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
+                    .padding(horizontal = 20.dp).heightIn(min = MobileDesignGeometry.LoginSheetBodyMinHeight),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text(stringResource(R.string.account_login_title),
+                    style = MaterialTheme.typography.displayMedium.connectionSheetTextStyle(), textAlign = TextAlign.Center)
+                Text(stringResource(R.string.account_login_body),
+                    style = MaterialTheme.typography.bodyMedium.connectionSheetTextStyle(),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(top = 8.dp))
+                (state as? AccountUiState.Authorizing)?.let { authorization ->
+                    Button(onClick = { uriHandler.openUri(authorization.authorizationUrl) }) {
+                        Text(stringResource(R.string.account_open_github))
+                    }
+                }
+                (state as? AccountUiState.Failed)?.let { failure ->
+                    Text(stringResource(failure.reason.messageRes()), color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall.connectionSheetTextStyle(), modifier = Modifier.padding(top = 12.dp))
                 }
             }
-            (state as? AccountUiState.Failed)?.let { failure ->
-                Text(stringResource(failure.reason.messageRes()), color = MaterialTheme.colorScheme.error, fontSize = 13.sp, lineHeight = 19.sp, modifier = Modifier.padding(top = 12.dp))
-            }
-            Spacer(Modifier.height(if (state is AccountUiState.Failed) 22.dp else 30.dp))
-            Button(
-                onClick = onLogin,
-                enabled = canSubmit,
-                shape = RoundedCornerShape(18.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary,
-                    disabledContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.28f),
-                    disabledContentColor = MaterialTheme.colorScheme.onPrimary,
-                ),
-                modifier = Modifier.fillMaxWidth().height(56.dp),
-            ) { Text(stringResource(if (busy) R.string.account_signing_in else R.string.account_sign_in), fontSize = 17.sp, fontWeight = FontWeight.Bold) }
         }
-        AccountBackButton(onBack, Modifier.padding(start = 28.dp, top = 22.dp))
+        ConnectionSheetFooter(
+            label = stringResource(if (busy) R.string.account_signing_in else R.string.account_login_title),
+            primary = true, elevated = false, enabled = canSubmit, onClick = onLogin,
+        )
     }
 }
 
