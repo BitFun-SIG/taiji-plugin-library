@@ -1595,6 +1595,7 @@
     "roundHistoryShow": "Show {{count}} previous retry rounds",
     "roundHistoryHide": "Hide previous retry rounds",
     "roundRetryLabel": "Retry {{index}}",
+    "continued": "Continued",
     "retryHistoryShow": "Show {{count}} previous attempts",
     "retryHistoryHide": "Hide retry history",
     "attemptLabel": "Attempt {{index}}",

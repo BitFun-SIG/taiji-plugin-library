@@ -12,7 +12,7 @@ import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { Icon, Menu, MenuItem, Tooltip } from '@openbitfun/ui';
 import { CircleAlert } from 'lucide-react';
-import type { ModelRound, ModelRoundAttempt, ModelRoundAttemptDiagnostic, FlowItem, FlowTextItem, FlowToolItem, FlowThinkingItem, TokenUsage, ToolRejectOptions } from '../../types/flow-chat';
+import type { ModelRound, ModelRoundAttempt, ModelRoundAttemptDiagnostic, FlowItem, FlowTextItem, FlowToolItem, FlowThinkingItem, ToolRejectOptions } from '../../types/flow-chat';
 import { useI18n } from '@/infrastructure/i18n';
 import { FlowTextBlock } from '../FlowTextBlock';
 import { FlowToolCard } from '../FlowToolCard';
@@ -45,6 +45,7 @@ import { buildTranscriptExportLabels } from '../../utils/transcriptExportLabels'
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { useAnchoredPopoverPosition } from '@/shared/utils/useAnchoredPopoverPosition';
 import { canvasArtifactReferenceFromToolItem } from '../../utils/canvasArtifactPresentation';
+import { areModelRoundItemPropsEqual, type ModelRoundItemProps } from './modelRoundItemMemo';
 import './ModelRoundItem.scss';
 import './SubagentItems.scss';
 
@@ -122,19 +123,6 @@ const ModelRoundRenderTrace: React.FC<ModelRoundRenderTraceProps> = ({
 
   return null;
 };
-
-interface ModelRoundItemProps {
-  round: ModelRound;
-  turnId: string;
-  isLastRound?: boolean;
-  isTurnComplete?: boolean;
-  turnStartedAt?: number;
-  turnEndedAt?: number;
-  turnDurationMs?: number;
-  turnTokenUsage?: TokenUsage;
-  canvasArtifactItems?: FlowToolItem[];
-  expandedThinkingItemIds?: string[];
-}
 
 function sortRoundAttempts(attempts: ModelRoundAttempt[]): ModelRoundAttempt[] {
   return [...attempts].sort((left, right) => left.index - right.index);
@@ -605,6 +593,9 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
         data-effective-model-name={round.effectiveModelName || ''}
         data-streaming={isVisuallyStreaming ? 'true' : 'false'}
       >
+        {round.renderHints?.continuedAfterInterruption && (
+          <div className="model-round-item__continuation">{t('modelRound.continued')}</div>
+        )}
         {renderTraceEnabled && renderTraceStartedAtMs !== null && groupSummary && (
           <ModelRoundRenderTrace
             startedAtMs={renderTraceStartedAtMs}
@@ -853,29 +844,7 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
       </TypewriterRevealGateProvider>
     );
   },
-  (prev, next) => {
-    // Streaming content accumulates, so always re-render.
-    if (next.round.isStreaming || prev.round.isStreaming) {
-      return false;
-    }
-
-    // In complete state, compare items array reference to detect tool state changes.
-    return (
-      prev.round.id === next.round.id &&
-      prev.round.items === next.round.items &&
-      prev.round.attempts === next.round.attempts &&
-      prev.round.attemptDiagnostics === next.round.attemptDiagnostics &&
-      prev.round.historyRounds === next.round.historyRounds &&
-      prev.isLastRound === next.isLastRound &&
-      prev.isTurnComplete === next.isTurnComplete &&
-      prev.expandedThinkingItemIds === next.expandedThinkingItemIds &&
-      prev.turnStartedAt === next.turnStartedAt &&
-      prev.turnEndedAt === next.turnEndedAt &&
-      prev.turnDurationMs === next.turnDurationMs &&
-      prev.turnTokenUsage === next.turnTokenUsage &&
-      prev.canvasArtifactItems === next.canvasArtifactItems
-    );
-  }
+  areModelRoundItemPropsEqual
 );
 
 ModelRoundItem.displayName = 'ModelRoundItem';

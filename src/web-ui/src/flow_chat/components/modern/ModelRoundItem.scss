@@ -18,6 +18,13 @@
   position: relative;
   opacity: 1;
 
+  &__continuation {
+    color: var(--openbitfun-color-content-muted);
+    font-size: var(--openbitfun-type-flow-meta-font-size);
+    line-height: var(--openbitfun-type-flow-meta-line-height);
+    margin-bottom: var(--openbitfun-space-1);
+  }
+
   // Streaming state
   &--streaming {
     opacity: 1;

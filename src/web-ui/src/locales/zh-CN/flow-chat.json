@@ -1595,6 +1595,7 @@
     "roundHistoryShow": "显示 {{count}} 次历史重试轮次",
     "roundHistoryHide": "隐藏历史重试轮次",
     "roundRetryLabel": "重试轮次 {{index}}",
+    "continued": "已继续",
     "retryHistoryShow": "显示 {{count}} 次历史尝试",
     "retryHistoryHide": "隐藏重试历史",
     "attemptLabel": "第 {{index}} 次尝试",
