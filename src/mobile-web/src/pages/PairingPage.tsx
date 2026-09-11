@@ -17,12 +17,17 @@ interface PairingPageProps {
     preferredDeviceId?: string, navigation?: PairedNavigation) => void;
 }
 
+let fallbackInstallId: string | undefined;
+
 function installId(): string {
   const key = 'openbitfun.mobile.controller_id';
-  const existing = sessionStorage.getItem(key);
-  if (existing) return existing;
-  const created = generateRequestId();
-  sessionStorage.setItem(key, created);
+  try {
+    const existing = sessionStorage.getItem(key);
+    if (existing) return existing;
+  } catch { /* Unavailable storage must not break the sign-in page on mount. */ }
+  const created = fallbackInstallId ??= generateRequestId();
+  try { sessionStorage.setItem(key, created); }
+  catch { /* Retain an identity for this page when persistence is unavailable. */ }
   return created;
 }
 
@@ -38,6 +43,7 @@ const PairingPageContent: React.FC<PairingPageProps> = ({ onPaired }) => {
   const pending = useRef<AbortController | null>(null);
   const popup = useRef<Window | null>(null);
   const onPairedRef = useRef(onPaired);
+  const restoreAttempted = useRef(false);
   onPairedRef.current = onPaired;
   const targetDeviceId = accountDeviceIdFromHash(window.location.hash) || undefined;
 
@@ -56,12 +62,14 @@ const PairingPageContent: React.FC<PairingPageProps> = ({ onPaired }) => {
     const navigation = restore ? loadMobileNavigation(scope) : null;
     session.masterKey.fill(0);
     onPairedRef.current(client, new RemoteSessionManager(client),
-      targetDeviceId || navigation?.deviceId || undefined, { scope, restored: navigation });
+      navigation?.deviceId || targetDeviceId || undefined, { scope, restored: navigation });
   };
 
   useEffect(() => {
-    // Only opening a target invitation resumes the tab's authenticated controller.
-    if (targetDeviceId) {
+    // Resume both direct entry and invitations. StrictMode replays mount effects;
+    // one route must hand its restored connection to the app only once.
+    if (!restoreAttempted.current) {
+      restoreAttempted.current = true;
       const id = installId();
       const saved = loadMatchingCloudAccountSession(relayUrl, '', id);
       if (saved) connect(saved.session, id, true);

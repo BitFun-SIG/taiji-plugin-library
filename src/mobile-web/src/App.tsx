@@ -11,6 +11,7 @@ import {
   RemoteSessionManager,
 } from './services/RemoteSessionManager';
 import { reconcileAccountOwner } from './services/accountOwner';
+import { clearCloudAccountSession } from './services/CloudAccountSessionStore';
 import {
   clearMobileNavigation,
   saveMobileNavigation,
@@ -287,6 +288,7 @@ const AppContent: React.FC = () => {
 
   const handleDisconnect = useCallback(() => {
     navigationRef.current = null;
+    clearCloudAccountSession();
     clearMobileNavigation();
     setAccountDirectoryOpen(false);
     setPreferredDeviceId(undefined);

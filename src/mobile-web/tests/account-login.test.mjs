@@ -6,7 +6,7 @@ import ts from 'typescript';
 async function loadSource(relativePath, imports = {}) {
   const source = await readFile(new URL(relativePath, import.meta.url), 'utf8');
   let code = ts.transpileModule(source, {
-    compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2020 },
+    compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2020, jsx: ts.JsxEmit.React },
   }).outputText;
   code = code.replace(/from (['"])([^'"]+)\1/g, (_, quote, specifier) => (
     `from ${JSON.stringify(imports[specifier] ?? import.meta.resolve(specifier))}`
@@ -244,4 +244,167 @@ test('GitHub profile ignores corrupt/foreign cache and stale account responses',
         return { ok: true, json: async () => githubUser };
       });
   }
+});
+
+
+function memoryStorage() {
+  const entries = new Map();
+  return {
+    getItem: key => entries.get(key) ?? null,
+    setItem: (key, value) => entries.set(key, value),
+    removeItem: key => entries.delete(key),
+  };
+}
+
+const encryptionModule = await loadSource('../src/services/E2EEncryption.ts');
+const accountStoreModule = await loadSource('../src/services/CloudAccountSessionStore.ts', {
+  './E2EEncryption': encryptionModule.url, './pairingLink': links.url,
+});
+const accountStore = await import(accountStoreModule.url);
+const storedAccount = {
+  relayUrl: 'http://192.168.1.9:9700', username: '123', controllerDeviceId: 'browser-a',
+  session: { token: 'test-token', userId: '123', masterKey: new Uint8Array(32).fill(7) },
+};
+
+test('existing v2 account proof survives reload, stays scoped, and is removed only on explicit disconnect', () => {
+  const storage = memoryStorage();
+  const legacy = JSON.stringify({
+    version: 2, relay_url: storedAccount.relayUrl, username: '123', token: 'test-token',
+    user_id: '123', device_secret: Buffer.alloc(32, 7).toString('base64'), controller_device_id: 'browser-a',
+  });
+  storage.setItem('openbitfun.mobile.account_session.v2', legacy);
+  const restored = accountStore.loadMatchingCloudAccountSession(storedAccount.relayUrl, '', 'browser-a', storage);
+  assert.deepEqual(restored, storedAccount);
+  accountStore.saveCloudAccountSession(restored, storage);
+  assert.deepEqual(JSON.parse(storage.getItem('openbitfun.mobile.account_session.v2')), JSON.parse(legacy));
+  for (const [relay, username, controllerId] of [
+    ['https://remote.openbitfun.com/v/1.0.0', '', 'browser-a'],
+    [storedAccount.relayUrl, '', 'browser-b'], [storedAccount.relayUrl, '456', 'browser-a'],
+  ]) assert.equal(accountStore.loadMatchingCloudAccountSession(relay, username, controllerId, storage), null);
+  assert.equal(storage.getItem('openbitfun.mobile.account_session.v2'), legacy);
+  accountStore.clearCloudAccountSession(storage);
+  assert.equal(accountStore.loadMatchingCloudAccountSession(storedAccount.relayUrl, '', 'browser-a', storage), null);
+  for (const raw of ['{', JSON.stringify({ version: 99 })]) {
+    storage.setItem('openbitfun.mobile.account_session.v2', raw);
+    assert.equal(accountStore.loadMatchingCloudAccountSession(storedAccount.relayUrl, '', 'browser-a', storage), null);
+    assert.equal(storage.getItem('openbitfun.mobile.account_session.v2'), raw);
+  }
+});
+
+function inlineModule(code) {
+  return `data:text/javascript;base64,${Buffer.from(code).toString('base64')}`;
+}
+
+test('pairing mount resumes plain and QR routes once, retains switched target, and stays signed out after disconnect', async () => {
+  // Execute the real page's mount effects, including StrictMode effect replay.
+  // Stub presentation and network owners; restore must never start OAuth/login.
+  const hooksUrl = inlineModule(`
+    export const effects = [];
+    export const useEffect = fn => effects.push(fn);
+    export const useRef = current => ({ current });
+    export const useState = initial => [typeof initial === 'function' ? initial() : initial, () => {}];
+    export default { createElement: (type, props) => ({ type, props }) };
+  `);
+  const { effects } = await import(hooksUrl);
+  const noopUrl = inlineModule('export default () => null;');
+  const pairingModule = await loadSource('../src/pages/PairingPage.tsx', {
+    react: hooksUrl, '../components/PairingForm': noopUrl,
+    '../services/pairingLink': links.url,
+    '../i18n': inlineModule('export const useI18n = () => ({ t: key => key });'),
+    '../theme': inlineModule('export const useTheme = () => ({ isDark: false });'),
+    '../assets/openbitfun-mark-dark.png': noopUrl, '../assets/openbitfun-mark-light.png': noopUrl,
+    '../services/CloudAccountClient': inlineModule(`
+      export class CloudAccountClient { constructor() { throw new Error('Restore started OAuth'); } }
+      export const generateRequestId = () => 'new-browser';
+    `),
+    '../services/CloudAccountSessionStore': accountStoreModule.url,
+    '../services/MobileNavigationStore': navigationModule.url,
+    '../services/RelayHttpClient': inlineModule(`
+      export class RelayHttpClient { constructor(url, identity) { this.identity = structuredClone(identity); } }
+    `),
+    '../services/RemoteSessionManager': inlineModule('export class RemoteSessionManager {}'),
+    '../services/store': inlineModule(`
+      export const useMobileStore = { getState: () => ({ resetForDeviceSwitch() {},
+        setAuthenticatedUserId() {}, setAuthenticatedUserLabel() {}, setControlTarget() {}, setConnectionStatus() {} }) };
+    `),
+  });
+  const { default: PairingPage } = await import(pairingModule.url);
+  const previous = { window: globalThis.window, sessionStorage: globalThis.sessionStorage };
+  try {
+    for (const base of ['http://192.168.1.9:9700/', 'https://remote.openbitfun.com/v/1.0.0/']) {
+      for (const hash of ['', '#/pair?did=desktop-a']) {
+        const location = new URL(base + hash);
+        const relayUrl = base.replace(/\/$/, '');
+        const storage = memoryStorage();
+        globalThis.window = { location, sessionStorage: storage };
+        globalThis.sessionStorage = storage;
+        storage.setItem('openbitfun.mobile.controller_id', 'browser-a');
+        accountStore.saveCloudAccountSession({ ...storedAccount, relayUrl }, storage);
+        saveMobileNavigation({ accountId: '123', controllerDeviceId: 'browser-a', relayUrl,
+          routeKey: location.pathname + hash }, { deviceId: 'desktop-b',
+          session: { id: 'task-b', name: 'Task', agentType: 'Standard' } }, storage);
+        const paired = [];
+        const mount = () => {
+          effects.length = 0;
+          const content = PairingPage({ onPaired: (...args) => paired.push(args) });
+          effects.length = 0;
+          content.type(content.props);
+          const cleanup = effects[0]();
+          cleanup();
+          effects[0]();
+        };
+        mount();
+        assert.equal(paired.length, 1);
+        assert.equal(paired[0][0].identity.token, 'test-token');
+        assert.deepEqual(paired[0][0].identity.masterKey, storedAccount.session.masterKey);
+        assert.equal(paired[0][2], 'desktop-b');
+        assert.equal(paired[0][3].restored.session.id, 'task-b');
+        mount(); // Same storage, new component refs: a full reload.
+        assert.equal(paired.length, 2);
+        accountStore.clearCloudAccountSession();
+        mount();
+        assert.equal(paired.length, 2, 'disconnect must not restore the saved account again');
+      }
+    }
+    globalThis.window = { location: new URL('http://192.168.1.9:9700/'),
+      get sessionStorage() { throw new Error('blocked'); } };
+    globalThis.sessionStorage = { getItem() { throw new Error('blocked'); },
+      setItem() { throw new Error('blocked'); } };
+    effects.length = 0;
+    const content = PairingPage({ onPaired: () => assert.fail('unavailable storage restored an account') });
+    effects.length = 0;
+    content.type(content.props);
+    assert.doesNotThrow(() => effects[0]());
+    const app = await readFile(new URL('../src/App.tsx', import.meta.url), 'utf8');
+    assert.match(app.slice(app.indexOf('const handleDisconnect'), app.indexOf('const isAnimating')), /clearCloudAccountSession\(\)/);
+  } finally {
+    globalThis.window = previous.window;
+    globalThis.sessionStorage = previous.sessionStorage;
+  }
+});
+
+test('control ping identity survives module reloads but independent tabs keep separate connections', async () => {
+  const module = await loadSource('../src/services/controlClientIdentity.ts');
+  const previousWindow = globalThis.window;
+  let page = 0;
+  const reload = async () => (await import(`${module.url}#page-${page++}`)).getControlClientIdentity;
+  try {
+    const storage = memoryStorage();
+    globalThis.window = { sessionStorage: storage };
+    const firstPage = await reload();
+    const identity = firstPage();
+    assert.equal(firstPage(), identity);
+    for (let i = 0; i < 3; i++) assert.deepEqual((await reload())(), identity);
+    globalThis.window = { sessionStorage: memoryStorage() };
+    assert.notEqual((await reload())().id, identity.id);
+    for (const blocked of [
+      { get sessionStorage() { throw new Error('blocked'); } },
+      { sessionStorage: { getItem: () => null, setItem: () => { throw new Error('quota'); } } },
+    ]) {
+      globalThis.window = blocked;
+      const getIdentity = await reload();
+      assert.match(getIdentity().id, /^[a-f0-9]{32}$/);
+      assert.equal(getIdentity(), getIdentity());
+    }
+  } finally { globalThis.window = previousWindow; }
 });
