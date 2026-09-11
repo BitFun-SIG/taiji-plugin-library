@@ -29,7 +29,7 @@ export interface StoredCloudAccountSession {
   session: CloudAccountSession;
 }
 
-type StorageLike = Pick<Storage, 'getItem' | 'setItem'>;
+type StorageLike = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
 
 function stringField(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
@@ -103,6 +103,12 @@ export function saveCloudAccountSession(
   } catch {
     // Private browsing and constrained webviews may reject browser storage.
   }
+}
+
+/** Explicit disconnect/sign-out only; failed requests must retain the record. */
+export function clearCloudAccountSession(storage: StorageLike | null = storageOrNull()): void {
+  try { storage?.removeItem(ACCOUNT_SESSION_STORAGE_KEY); }
+  catch { /* Browser storage may be unavailable. */ }
 }
 
 export function loadMatchingCloudAccountSession(
