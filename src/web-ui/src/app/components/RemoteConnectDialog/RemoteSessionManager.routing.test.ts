@@ -22,13 +22,13 @@ function clientForTest() {
 }
 
 describe('mobile RemoteSessionManager target routing', () => {
-  it('keeps one browser-page identity across heartbeat requests and manager recreation', async () => {
+  it('uses the authenticated browser device across heartbeat requests and manager recreation', async () => {
     const client = clientForTest();
     const send = vi.spyOn(client, 'sendDeviceRpc').mockResolvedValue({ resp: 'pong' });
     await new RemoteSessionManager(client).ping();
     await new RemoteSessionManager(client).ping();
     const first = send.mock.calls[0][1] as { client: { id: string; name: string } };
-    expect(first.client.id).toMatch(/^[a-f0-9]{32}$/);
+    expect(first.client.id).toBe(client.controllerDeviceId);
     expect(first.client.name).toBeTruthy();
     expect(send.mock.calls[1][1]).toEqual(expect.objectContaining({ cmd: 'ping', client: first.client }));
   });
