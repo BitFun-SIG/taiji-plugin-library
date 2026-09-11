@@ -513,6 +513,30 @@ export const mobileComponents = {
       ],
       "platformNotes": "Use each platform's native modal lifecycle, accessibility focus, and back gesture; placement comes from the shared adaptive policy and visual geometry comes from these tokens."
     },
+    "account_login_sheet": {
+      "purpose": "Offers GitHub sign-in in a compact bottom sheet without empty full-screen space.",
+      "anatomy": [
+        "close_header",
+        "title",
+        "supporting_copy",
+        "optional_error",
+        "primary_action"
+      ],
+      "states": [
+        "signed_out",
+        "authorizing",
+        "error"
+      ],
+      "tokens": [
+        "sheet_top_radius",
+        "sheet_horizontal_padding",
+        "sheet_header_height",
+        "sheet_action_height",
+        "display_medium",
+        "body_medium"
+      ],
+      "platformNotes": "Use a content-sized native bottom sheet on compact and wide hosts, with a 280-unit minimum content height. Let localized text, accessibility text and errors grow the content. Account profiles retain their separate adaptive settings presentation."
+    },
     "action_popover": {
       "purpose": "Presents a short, anchored set of conversation, session, model, or project actions.",
       "anatomy": [

@@ -66,12 +66,6 @@ public sealed interface AccountUiState {
         ) : this(userId, relayUrl, username, devices, selectedDeviceId, selectedDeviceName, refreshing, refreshFailure, null)
 
         public constructor(
-            userId: String, username: String, devices: List<AccountDeviceUi>,
-            selectedDeviceId: String?, selectedDeviceName: String?,
-        ) : this(userId, com.openbitfun.mobile.core.transport.DEFAULT_CLOUD_RELAY_URL, username, devices,
-            selectedDeviceId, selectedDeviceName, false, null, null)
-
-        public constructor(
             userId: String,
             username: String,
             relayUrl: String,

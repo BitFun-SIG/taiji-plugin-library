@@ -19,6 +19,7 @@ const WIDE_SHEET_RADIUS: number = 30;
 export struct AppShell {
   @Param shellState: AppShellState = new AppShellState();
   @Param useWideLayout: boolean = false;
+  @Param compactAccountLogin: boolean = false;
   @Param settingsPlacement: SettingsPlacement =
     SettingsPlacementPolicy.compactBottom(SettingsSheetKind.Settings);
   @Param connectPlacement: SettingsPlacement =
@@ -111,7 +112,7 @@ export struct AppShell {
       this.settings()
     }
     .width('100%')
-    .height('100%')
+    .height(this.compactAccountLogin ? undefined : '100%')
     .borderRadius(this.usesWideSheetChrome(this.settingsPlacement) ? WIDE_SHEET_RADIUS : 0)
     .clip(this.usesWideSheetChrome(this.settingsPlacement))
     .shadow({
@@ -148,6 +149,17 @@ export struct AppShell {
   }
 
   private settingsSheetOptions(): SheetOptions {
+    if (this.compactAccountLogin) {
+      return {
+        height: SheetSize.FIT_CONTENT,
+        preferType: SheetType.BOTTOM,
+        keyboardAvoidMode: SheetKeyboardAvoidMode.RESIZE_ONLY,
+        backgroundColor: PAGE_BG,
+        maskColor: SHELL_SCRIM,
+        showClose: false,
+        dragBar: false
+      };
+    }
     return AdaptiveSheetOptions.fromPlacement(this.settingsPlacement);
   }
 

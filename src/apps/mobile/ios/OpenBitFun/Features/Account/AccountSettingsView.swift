@@ -4,6 +4,9 @@ import SwiftUI
 struct AccountSettingsView: View {
     @ObservedObject var model: MobileAppModel
     var onClose: (() -> Void)? = nil
+    @ScaledMetric(relativeTo: .title2) private var loginTitleSize = MobileDesignTypography.displayMedium.size
+    @ScaledMetric(relativeTo: .body) private var loginBodySize = MobileDesignTypography.bodyMedium.size
+    @ScaledMetric(relativeTo: .caption) private var loginErrorSize = MobileDesignTypography.bodySmall.size
     var body: some View {
         Group {
             if model.accountFailureStage == "DEVICE_LIST", model.accountFailureCanRetry {
@@ -14,68 +17,55 @@ struct AccountSettingsView: View {
                 profilePage
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(maxWidth: .infinity, maxHeight: model.accountUser == nil && model.accountFailureStage != "DEVICE_LIST" ? nil : .infinity)
         .background(OpenBitFunTheme.page)
     }
 
     private var loginPage: some View {
         VStack(spacing: 0) {
-            OpenBitFunModalHeader(title: "", onClose: close)
-                .padding(.horizontal, MobileDesignGeometry.sheetHorizontalPadding)
+            ConnectionSheetHeader(onClose: close)
 
-            ScrollView(showsIndicators: false) {
-                VStack(spacing: 0) {
-                    Text(model.localized("使用 GitHub 登录"))
-                        .font(MobileDesignTypography.headlineMedium.font)
-                        .foregroundStyle(OpenBitFunTheme.ink)
-                        .multilineTextAlignment(.center)
-                        .frame(maxWidth: .infinity)
-                    Text(model.localized("登录后可查看并连接账号下的桌面设备。"))
-                        .font(MobileDesignTypography.bodyMedium.font)
-                        .foregroundStyle(OpenBitFunTheme.muted)
-                        .lineSpacing(MobileDesignTypography.bodyMedium.lineSpacing)
-                        .multilineTextAlignment(.center)
-                        .frame(maxWidth: .infinity)
-                        .padding(.top, 8)
-                        .padding(.bottom, 12)
+            VStack(spacing: 0) {
+                Text(model.localized("使用 GitHub 登录"))
+                    .font(.system(size: loginTitleSize, weight: .bold))
+                    .padding(.vertical, MobileDesignTypography.displayMedium.lineSpacing / 2)
+                    .foregroundStyle(OpenBitFunTheme.ink)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity)
+                Text(model.localized("使用 GitHub 登录并连接自己的电脑。任务和模型配置保留在被控电脑上。"))
+                    .font(.system(size: loginBodySize))
+                    .padding(.vertical, MobileDesignTypography.bodyMedium.lineSpacing / 2)
+                    .foregroundStyle(OpenBitFunTheme.muted)
+                    .lineSpacing(MobileDesignTypography.bodyMedium.lineSpacing)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 8)
+                    .padding(.bottom, 24)
 
-                    if let error = model.coreErrorMessage, !error.isEmpty {
-                        Text(error)
-                            .font(MobileDesignTypography.bodySmall.font)
-                            .foregroundStyle(OpenBitFunTheme.statusDanger)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.horizontal, 4)
-                            .padding(.top, 12)
-                    }
+                if let error = model.coreErrorMessage, !error.isEmpty {
+                    Text(error)
+                        .font(.system(size: loginErrorSize))
+                        .padding(.vertical, MobileDesignTypography.bodySmall.lineSpacing / 2)
+                        .foregroundStyle(OpenBitFunTheme.statusDanger)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 4)
+                        .padding(.top, 12)
                 }
-                .frame(maxWidth: 520)
-                .padding(.horizontal, MobileDesignGeometry.sheetHorizontalPadding)
-                .padding(.bottom, 12)
-                .frame(maxWidth: .infinity)
             }
-
-            Button {
-                model.loginAccount()
-            } label: {
-                HStack(spacing: 8) {
-                    if model.accountBusy { ProgressView().tint(OpenBitFunTheme.contentOnAction) }
-                    Text(model.localized(model.accountAuthorizationURL != nil
-                        ? "打开 GitHub 授权"
-                        : model.accountBusy ? "正在登录" : "通过 GitHub 登录"))
-                }
-                .font(.system(size: 17, weight: .bold))
-                .foregroundStyle(OpenBitFunTheme.contentOnAction)
-                .frame(maxWidth: 520, minHeight: MobileDesignGeometry.sheetActionHeight)
-                .background(canLogin ? OpenBitFunTheme.accent : OpenBitFunTheme.muted.opacity(0.35))
-                .clipShape(Capsule())
-            }
-            .buttonStyle(.plain)
-            .disabled(!canLogin)
-            .accessibilityIdentifier("account.login")
+            .frame(maxWidth: 520)
             .padding(.horizontal, MobileDesignGeometry.sheetHorizontalPadding)
-            .padding(.top, 10)
-            .padding(.bottom, 24)
+            .frame(maxWidth: .infinity)
+            .padding(.bottom, 18)
+
+            ConnectionSheetFooter(
+                label: model.localized(model.accountAuthorizationURL != nil ? "打开 GitHub 授权"
+                    : model.accountBusy ? "正在登录" : "使用 GitHub 登录"),
+                primary: true, enabled: canLogin, onAction: model.loginAccount
+            )
+            .accessibilityIdentifier("account.login")
         }
+        .frame(minHeight: 280)
+        .fixedSize(horizontal: false, vertical: true)
     }
 
     private var deviceListRetryPage: some View {

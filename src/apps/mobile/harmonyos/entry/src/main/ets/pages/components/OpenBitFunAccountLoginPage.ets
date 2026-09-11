@@ -51,7 +51,6 @@ export struct OpenBitFunAccountLoginPage {
         .alignItems(HorizontalAlign.Center)
       }
       .width('100%')
-      .layoutWeight(1)
       .scrollBar(BarState.Off)
 
       SheetActionFooter({
@@ -65,7 +64,7 @@ export struct OpenBitFunAccountLoginPage {
       })
     }
     .width('100%')
-    .height('100%')
+    .constraintSize({ minHeight: 280 })
   }
 
   @Builder
