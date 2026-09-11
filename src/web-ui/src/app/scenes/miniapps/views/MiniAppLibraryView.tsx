@@ -98,11 +98,6 @@ interface MiniAppLibraryViewProps {
   tabs?: React.ReactNode;
 }
 
-const MiniAppLibraryView: React.FC<MiniAppLibraryViewProps> = (props) => {
-  const epoch = useSyncExternalStore(onSurfaceActivated, () => getActiveSurfaceScope().epoch);
-  return <MiniAppLibraryContent key={epoch} {...props} />;
-};
-
 const MiniAppLibraryContent: React.FC<MiniAppLibraryViewProps> = ({ tabs }) => {
   const [surfaceScope] = useState(getActiveSurfaceScope);
   const apps = useMiniAppStore((state) => state.apps);
@@ -1294,5 +1289,10 @@ function categoryLabel(category: string, t: Translate): string {
     default: return t('market.categories.other');
   }
 }
+
+const MiniAppLibraryView: React.FC<MiniAppLibraryViewProps> = (props) => {
+  const epoch = useSyncExternalStore(onSurfaceActivated, () => getActiveSurfaceScope().epoch);
+  return <MiniAppLibraryContent key={epoch} {...props} />;
+};
 
 export default MiniAppLibraryView;
