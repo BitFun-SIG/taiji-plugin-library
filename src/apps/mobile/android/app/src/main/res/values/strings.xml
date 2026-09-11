@@ -26,7 +26,7 @@
     <string name="settings_theme_dark">Dark</string>
     <string name="account_title">Account</string>
     <string name="account_login_title">Sign in with GitHub</string>
-    <string name="account_login_body">Sign in with GitHub to connect to your computers. Tasks and model settings stay on the controlled computer.</string>
+    <string name="account_login_body">Sign in with GitHub to connect to your computers.\nTasks and model settings stay on the controlled computer.</string>
     <string name="account_login_server">Sign-in server</string>
     <string name="account_username_placeholder">OpenBitFun username</string>
     <string name="account_password_placeholder">OpenBitFun password</string>

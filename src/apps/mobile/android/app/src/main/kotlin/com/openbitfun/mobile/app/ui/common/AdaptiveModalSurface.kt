@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.safeDrawingPadding
@@ -23,6 +25,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.window.DialogWindowProvider
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -54,7 +59,27 @@ internal fun AdaptiveModalSurface(
 ) {
     if (!visible) return
 
-    if (!fitContent && placement.mode == SettingsPlacementMode.SIDE) {
+    if (fitContent) {
+        Dialog(onDismissRequest = onDismissRequest,
+            properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+            val window = (LocalView.current.parent as? DialogWindowProvider)?.window
+            SideEffect { window?.setDimAmount(0f) }
+            Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.scrim)
+                .clickable(interactionSource = null, indication = null, onClick = onDismissRequest)
+                .safeDrawingPadding().imePadding().padding(MobileDesignGeometry.LoginSheetOuterMargin),
+                contentAlignment = Alignment.BottomCenter) {
+                Surface(modifier = Modifier.widthIn(max = MobileDesignGeometry.LoginSheetMaxWidth).fillMaxWidth()
+                    .clickable(interactionSource = null, indication = null, onClick = {}),
+                    shape = RoundedCornerShape(MobileDesignGeometry.SheetTopRadius),
+                    color = MaterialTheme.colorScheme.background) {
+                    content(Modifier.fillMaxWidth())
+                }
+            }
+        }
+        return
+    }
+
+    if (placement.mode == SettingsPlacementMode.SIDE) {
         Dialog(
             onDismissRequest = onDismissRequest,
             properties = DialogProperties(

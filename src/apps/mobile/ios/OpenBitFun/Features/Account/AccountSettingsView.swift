@@ -23,7 +23,7 @@ struct AccountSettingsView: View {
 
     private var loginPage: some View {
         VStack(spacing: 0) {
-            ConnectionSheetHeader(onClose: close)
+            ConnectionSheetHeader(onClose: close, uniformGlyph: true)
 
             VStack(spacing: 0) {
                 Text(model.localized("使用 GitHub 登录"))
@@ -32,7 +32,7 @@ struct AccountSettingsView: View {
                     .foregroundStyle(OpenBitFunTheme.ink)
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: .infinity)
-                Text(model.localized("使用 GitHub 登录并连接自己的电脑。任务和模型配置保留在被控电脑上。"))
+                Text(model.localized("使用 GitHub 登录并连接自己的电脑。\n任务和模型配置保留在被控电脑上。"))
                     .font(.system(size: loginBodySize))
                     .padding(.vertical, MobileDesignTypography.bodyMedium.lineSpacing / 2)
                     .foregroundStyle(OpenBitFunTheme.muted)
@@ -40,7 +40,6 @@ struct AccountSettingsView: View {
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: .infinity)
                     .padding(.top, 8)
-                    .padding(.bottom, 24)
 
                 if let error = model.coreErrorMessage, !error.isEmpty {
                     Text(error)
@@ -55,16 +54,15 @@ struct AccountSettingsView: View {
             .frame(maxWidth: 520)
             .padding(.horizontal, MobileDesignGeometry.sheetHorizontalPadding)
             .frame(maxWidth: .infinity)
-            .padding(.bottom, 18)
+            .frame(minHeight: MobileDesignGeometry.loginSheetBodyMinHeight, alignment: .top)
 
             ConnectionSheetFooter(
                 label: model.localized(model.accountAuthorizationURL != nil ? "打开 GitHub 授权"
                     : model.accountBusy ? "正在登录" : "使用 GitHub 登录"),
-                primary: true, enabled: canLogin, onAction: model.loginAccount
+                elevated: false, primary: true, enabled: canLogin, onAction: model.loginAccount
             )
             .accessibilityIdentifier("account.login")
         }
-        .frame(minHeight: 280)
         .fixedSize(horizontal: false, vertical: true)
     }
 

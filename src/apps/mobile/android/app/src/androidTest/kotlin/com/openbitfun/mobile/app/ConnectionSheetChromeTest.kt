@@ -2,6 +2,9 @@ package com.openbitfun.mobile.app
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.unit.dp
@@ -52,6 +55,30 @@ class ConnectionSheetChromeTest {
         // the two 21dp lines within one layout unit without padding the glyphs.
         val bounds = body.getUnclippedBoundsInRoot()
         assertTrue(kotlin.math.abs((bounds.bottom - bounds.top).value - 42f) <= 1f)
+    }
+
+    @Test fun compactLoginKeepsContentGeometryAtPhoneAndWideWidths() {
+        var width by androidx.compose.runtime.mutableStateOf(386.dp)
+        composeRule.setContent {
+            OpenBitFunTheme(dark = false) {
+                com.openbitfun.mobile.app.ui.account.AccountLoginPage(
+                    state = com.openbitfun.mobile.core.feature.account.AccountUiState.SignedOut,
+                    onBack = {}, onLogin = {},
+                    modifier = Modifier.requiredWidth(width).testTag("login-panel"))
+            }
+        }
+        val context = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext
+        for (panelWidth in listOf(386.dp, 560.dp)) {
+            composeRule.runOnIdle { width = panelWidth }
+            val panel = composeRule.onNodeWithTag("login-panel").assertHeightIsEqualTo(280.dp)
+                .assertWidthIsEqualTo(panelWidth).getUnclippedBoundsInRoot()
+            val labels = composeRule.onAllNodesWithText(context.getString(R.string.account_login_title))
+            val title = labels[0].getUnclippedBoundsInRoot()
+            val action = labels[1].getUnclippedBoundsInRoot()
+            assertTrue(kotlin.math.abs((title.top - panel.top).value - 56f) < 1f)
+            assertTrue(kotlin.math.abs((action.top - panel.top).value - 208f) < 1f)
+            labels[1].assertHeightIsEqualTo(48.dp).assertWidthIsEqualTo(panelWidth - 40.dp)
+        }
     }
 
 }

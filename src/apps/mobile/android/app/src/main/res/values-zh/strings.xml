@@ -25,7 +25,7 @@
     <string name="settings_theme_dark">深色</string>
     <string name="account_title">账号</string>
     <string name="account_login_title">使用 GitHub 登录</string>
-    <string name="account_login_body">使用 GitHub 登录并连接自己的电脑。任务和模型配置保留在被控电脑上。</string>
+    <string name="account_login_body">使用 GitHub 登录并连接自己的电脑。\n任务和模型配置保留在被控电脑上。</string>
     <string name="account_login_server">登录服务器</string>
     <string name="account_username_placeholder">OpenBitFun 用户名</string>
     <string name="account_password_placeholder">OpenBitFun 密码</string>

@@ -61,6 +61,7 @@ import com.openbitfun.mobile.app.viewmodel.AccountViewModel
 import com.openbitfun.mobile.core.feature.account.AccountFailureReason
 import com.openbitfun.mobile.core.feature.account.AccountIntent
 import com.openbitfun.mobile.core.feature.account.AccountUiState
+import com.openbitfun.mobile.app.ui.theme.generated.MobileDesignGeometry
 import com.openbitfun.mobile.app.ui.theme.openBitFunColors
 
 private val AccountCardShape = RoundedCornerShape(24.dp)
@@ -95,7 +96,7 @@ internal fun AccountScreen(
 }
 
 @Composable
-private fun AccountLoginPage(
+internal fun AccountLoginPage(
     state: AccountUiState,
     onBack: () -> Unit,
     onLogin: () -> Unit,
@@ -104,12 +105,12 @@ private fun AccountLoginPage(
     val busy = state is AccountUiState.SigningIn || state is AccountUiState.Authorizing
     val canSubmit = !busy
     val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
-    Column(modifier.fillMaxWidth().heightIn(min = 280.dp)) {
-        ConnectionSheetHeader(onBack)
-        Box(Modifier.weight(1f, fill = false).fillMaxWidth().padding(bottom = 18.dp), contentAlignment = Alignment.Center) {
+    Column(modifier.fillMaxWidth()) {
+        ConnectionSheetHeader(onBack, uniformGlyph = true)
+        Box(Modifier.weight(1f, fill = false).fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
             Column(
                 modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
-                    .padding(horizontal = 20.dp),
+                    .padding(horizontal = 20.dp).heightIn(min = MobileDesignGeometry.LoginSheetBodyMinHeight),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Text(stringResource(R.string.account_login_title),
@@ -117,7 +118,7 @@ private fun AccountLoginPage(
                 Text(stringResource(R.string.account_login_body),
                     style = MaterialTheme.typography.bodyMedium.connectionSheetTextStyle(),
                     color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(top = 8.dp, bottom = 24.dp))
+                    modifier = Modifier.padding(top = 8.dp))
                 (state as? AccountUiState.Authorizing)?.let { authorization ->
                     Button(onClick = { uriHandler.openUri(authorization.authorizationUrl) }) {
                         Text(stringResource(R.string.account_open_github))
@@ -131,7 +132,7 @@ private fun AccountLoginPage(
         }
         ConnectionSheetFooter(
             label = stringResource(if (busy) R.string.account_signing_in else R.string.account_login_title),
-            primary = true, enabled = canSubmit, onClick = onLogin,
+            primary = true, elevated = false, enabled = canSubmit, onClick = onLogin,
         )
     }
 }
