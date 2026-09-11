@@ -469,6 +469,8 @@ Dialog titles use 24px bold type with their own 29px line box and normal trackin
 
 Extra-large (`xl`) dialogs have an 800px maximum width and continue shrinking within the viewport gutter. Provider editing uses the floating footer; small workspace creation retains its attached footer and existing button/input sizes. The Lab workspace pattern uses local sample paths and callbacks only.
 
+Keep `Dialog` and `Sheet` mounted and set `open={false}` to close them. They retain the last committed children during the exit animation, with interaction disabled, so clearing an owner selection does not collapse the surface. Reopening uses the latest children and cancels the pending exit. Owners that conditionally mount an editor can remove it in `onExitComplete`, which runs once after the surface unmounts.
+
 PageHeader `md` uses the settings title with a primary 15px description; `display` uses the welcome heading and medium 17px introduction with a 12px gap. ActionCard uses 12px padding, section-heading typography (15px semibold), and a primary 13px single-line action description. Its inset outline does not inflate the 62px medium minimum height; longer content keeps the independent sibling actions and OverflowText behavior.
 
 KeyHint uses 10px text on a 10px line and 2px block padding. StatusPill uses a 14px line with 2px block padding; opt into `emphasis` for short mode labels such as Ask, while ordinary status descriptions retain readable content colors. LauncherButton owns a 72px minimum width, 40px height, 10px side padding, 4px gap, 12px icon and 11px monospace text. Product shells may retain a deliberate compact greeting that expands into this geometry.
