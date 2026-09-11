@@ -2,12 +2,12 @@
   "schemaVersion": 2,
   "generatedFrom": "src/shared/interactive-capabilities/catalog.json",
   "catalogDigest": "896281a3cd5cac2b50ec607988e04624224444911ddb2d58ba59a5d7d06493c5",
-  "commandCount": 643,
+  "commandCount": 644,
   "coverage": {
-    "commandCount": 643,
+    "commandCount": 644,
     "documentedCommandCount": 607,
-    "implementationCommandCount": 36,
-    "implementationDigest": "c9bbc0f2ca3695d8c18cff285386edeba7bcf3b11120adb57509a80b09ee3297"
+    "implementationCommandCount": 37,
+    "implementationDigest": "3c5e64b6ff16d55d95c2a6b4f77046be009a554b395b4a52bf8ed7c162ab1093"
   },
   "commands": [
     {
@@ -5238,6 +5238,18 @@
       "rustPath": "openbitfun_control_host::mark_openbitfun_control_surface_unready",
       "sourceFile": "src/apps/desktop/src/openbitfun_control_host.rs",
       "signature": "fn mark_openbitfun_control_surface_unready()",
+      "remoteWorkspacePolicy": "WorkspaceAgnostic"
+    },
+    {
+      "id": "market_image_load",
+      "moduleId": "market_image",
+      "capabilityId": null,
+      "capabilityIds": [],
+      "documentedItemIds": [],
+      "visibility": "internal",
+      "rustPath": "api::market_image_api::market_image_load",
+      "sourceFile": "src/apps/desktop/src/api/market_image_api.rs",
+      "signature": "fn market_image_load( app: tauri::AppHandle, request: MarketImageRequest, ) -> Result<tauri::ipc::Response, String>",
       "remoteWorkspacePolicy": "WorkspaceAgnostic"
     },
     {

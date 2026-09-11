@@ -182,6 +182,9 @@
     }
   ],
   "implementationOnlyCommands": {
+    "publicMarketImageCache": [
+      "market_image_load"
+    ],
     "legacyUpdateCompatibility": [
       "install_update"
     ],
@@ -9371,6 +9374,9 @@
     },
     "miniapp_market": {
       "capabilityId": "feature.miniapps"
+    },
+    "market_image": {
+      "capabilityId": null
     },
     "acp_client": {
       "capabilityId": "setting.tools.acp"

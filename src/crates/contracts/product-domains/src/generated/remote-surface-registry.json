@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "digest": "fnv1a64:57f26e05119c5457",
+  "digest": "fnv1a64:f94e0d96f655c86c",
   "retiredCommandPrefixes": [
     {
       "prefix": "lsp_",
@@ -4104,6 +4104,18 @@
     },
     {
       "id": "mark_openbitfun_control_surface_unready",
+      "surface": "tauri_command",
+      "remoteWorkspace": "WorkspaceAgnostic",
+      "peer": {
+        "kind": "controller_local"
+      },
+      "cliPeer": {
+        "kind": "unsupported",
+        "reason": "the controller keeps this command; peer hosts refuse it before dispatch"
+      }
+    },
+    {
+      "id": "market_image_load",
       "surface": "tauri_command",
       "remoteWorkspace": "WorkspaceAgnostic",
       "peer": {
