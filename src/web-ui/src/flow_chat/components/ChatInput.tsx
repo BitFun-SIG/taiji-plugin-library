@@ -935,7 +935,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       }
       collapseVerificationRafRef.current = requestAnimationFrame(() => {
         collapseVerificationRafRef.current = null;
-        measureIsMultiLine('collapse-confirmation');
+        measureIsMultiLineRef.current?.('collapse-confirmation');
       });
       return;
     }
@@ -962,8 +962,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     if (!el) return;
     let rafId: number;
     const observer = new MutationObserver(() => {
+      cancelAnimationFrame(rafId);
       rafId = requestAnimationFrame(() => {
-        measureIsMultiLine('mutation-observer');
+        // Session restoration can change attachments after this observer mounts.
+        measureIsMultiLineRef.current?.('mutation-observer');
         checkDomEmpty();
       });
     });
@@ -972,9 +974,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       observer.disconnect();
       cancelAnimationFrame(rafId);
     };
-  // measureIsMultiLine / checkDomEmpty capture latest closure values
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [checkDomEmpty]);
 
   useEffect(() => {
     const containerEl = containerRef.current;
