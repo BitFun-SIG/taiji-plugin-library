@@ -16,6 +16,7 @@ each missing what the other had.
 
 | Test | Contract it holds |
 |---|---|
+| `../../../infrastructure/markdown/useStreamingTextReveal.test.tsx` | appended-glyph-only fading, independent batch clocks and renderers, history/remount stability, stream completion and reduced motion |
 | `modelRoundItemMemo.test.ts` | settled rows refresh continuation labels and tool grouping hints without invalidating equivalent hints |
 | `flowChatTailFollow.test.ts` | the three-quarter reservation and `hold-tail` geometry |
 | `flowChatCollapseMotion.test.ts` | collapse does not move earlier content |
