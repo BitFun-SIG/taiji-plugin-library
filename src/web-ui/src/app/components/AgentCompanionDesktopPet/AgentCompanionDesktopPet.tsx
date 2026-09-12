@@ -16,6 +16,9 @@ import type {
 import type { AgentCompanionPetCommand } from '@/app/services/agentCompanionPetCommands';
 import { createLogger } from '@/shared/utils/logger';
 import { isImeOwnedKeyboardEvent } from '@/shared/utils/ime';
+import { isReducedMotionPreferred } from '@/shared/utils/motionPreference';
+import { getPetLookDirection } from '@/infrastructure/config/services/agentCompanionPetSprite';
+import { startAgentCompanionDrag } from '@/infrastructure/config/services/AgentCompanionDragService';
 import './AgentCompanionDesktopPet.scss';
 
 const log = createLogger('AgentCompanionDesktopPet');
@@ -31,6 +34,7 @@ const BUBBLE_WIDTH = 180;
 const BUBBLE_OUTPUT_TYPEWRITER_INTERVAL_MS = 28;
 const WINDOW_EDGE_BUFFER = 4;
 const POINTER_HOVER_POLL_INTERVAL_MS = 120;
+const PET_LOOK_HOLD_MS = 960;
 /** Clicks shorter/smaller than this use `show_main_window`; beyond it we start a native drag. */
 const PET_DRAG_THRESHOLD_PX = 8;
 const IS_WINDOWS_WEBVIEW = /\bWindows\b/i.test(window.navigator.userAgent);
@@ -122,9 +126,37 @@ export const AgentCompanionDesktopPet: React.FC = () => {
   );
   const [mood, setMood] = useState<AgentCompanionMood>('rest');
   const [tasks, setTasks] = useState<AgentCompanionTaskStatus[]>([]);
+  const previousTasksRef = useRef<AgentCompanionTaskStatus[] | null>(null);
+  const [reaction, setReaction] = useState<{ action: 'jumping' | 'waving' } | null>(null);
+  useEffect(() => {
+    if (!previousTasksRef.current) return;
+    const previousTasks = previousTasksRef.current;
+    const isActive = (task: AgentCompanionTaskStatus) => task.state === 'running' || task.state === 'waiting' || task.state === 'attention';
+    const started = tasks.some(task => isActive(task)
+      && !previousTasks.some(previous => previous.sessionId === task.sessionId && isActive(previous)));
+    const completed = tasks.find(task => task.state === 'completed'
+      && previousTasks.some(previous => previous.sessionId === task.sessionId && isActive(previous)));
+    previousTasksRef.current = tasks;
+    if (completed) setReaction({ action: 'waving' });
+    else if (started) setReaction({ action: 'jumping' });
+    else if (tasks.some(task => (task.state === 'error' || task.state === 'interrupted')
+      && previousTasks.some(previous => previous.sessionId === task.sessionId && isActive(previous)))) setReaction(null);
+  }, [tasks]);
+  useEffect(() => {
+    if (!reaction) return;
+    const timer = window.setTimeout(() => setReaction(null), 1200);
+    return () => window.clearTimeout(timer);
+  }, [reaction]);
   const [typedOutputBySessionId, setTypedOutputBySessionId] = useState<Record<string, TypewriterOutputState>>({});
   const [isHoveringPet, setIsHoveringPet] = useState(false);
+  const [lookDirection, setLookDirection] = useState<number | null>(null);
+  const trackPetLook = mood === 'rest' && pet != null && (
+    pet.spriteVersionNumber === 2 || (pet.source === 'user' && pet.spriteVersionNumber == null)
+  );
   const [isDraggingPet, setIsDraggingPet] = useState(false);
+  const [dragDirection, setDragDirection] = useState<'left' | 'right'>('right');
+  const stopDragRef = useRef<(() => void) | null>(null);
+  useEffect(() => () => stopDragRef.current?.(), []);
   const [petFrameSize, setPetFrameSize] = useState<{ width: number; height: number } | null>(null);
   const [overlay, setOverlay] = useState<PetOverlayState>(null);
   const [menuAnchor, setMenuAnchor] = useState<MenuAnchor | null>(null);
@@ -217,6 +249,8 @@ export const AgentCompanionDesktopPet: React.FC = () => {
       lastActivityEmittedAtRef.current = emittedAt;
       lastActivitySequenceRef.current = sequence;
       setMood(event.payload.mood);
+      // The first snapshot is hydration, not a new request.
+      if (previousTasksRef.current === null) previousTasksRef.current = event.payload.tasks;
       setTasks(event.payload.tasks);
     }).then(unlisten => {
       if (disposed) {
@@ -427,7 +461,7 @@ export const AgentCompanionDesktopPet: React.FC = () => {
   }, [activePetSize.height, activePetSize.width, overlay, visibleTasks]);
 
   useEffect(() => {
-    if (IS_WINDOWS_WEBVIEW) {
+    if (IS_WINDOWS_WEBVIEW && !trackPetLook) {
       return;
     }
 
@@ -436,6 +470,8 @@ export const AgentCompanionDesktopPet: React.FC = () => {
     let windowPosition: { x: number; y: number } | null = null;
     let scaleFactor = 1;
     let pointerPollInFlight = false;
+    let lastPointer: { x: number; y: number } | null = null;
+    let lastPointerMovedAt = 0;
     let removeWindowMovedListener: (() => void) | null = null;
     let removeScaleChangedListener: (() => void) | null = null;
 
@@ -457,6 +493,9 @@ export const AgentCompanionDesktopPet: React.FC = () => {
       });
 
     void tauriWindow.onMoved(event => {
+      if (!IS_WINDOWS_WEBVIEW && petPointerSessionRef.current?.dragStarted && windowPosition && event.payload.x !== windowPosition.x) {
+        setDragDirection(event.payload.x > windowPosition.x ? 'right' : 'left');
+      }
       windowPosition = event.payload;
     }).then(unlisten => {
       if (disposed) {
@@ -534,6 +573,19 @@ export const AgentCompanionDesktopPet: React.FC = () => {
         const safeScaleFactor = Number.isFinite(scaleFactor) && scaleFactor > 0 ? scaleFactor : 1;
         const pointerX = (pointer.x - windowPosition.x) / safeScaleFactor;
         const pointerY = (pointer.y - windowPosition.y) / safeScaleFactor;
+        const now = performance.now();
+        if (!lastPointer || pointer.x !== lastPointer.x || pointer.y !== lastPointer.y) {
+          lastPointerMovedAt = now;
+          lastPointer = { x: pointer.x, y: pointer.y };
+        }
+        setLookDirection(cachedHitboxRect && now - lastPointerMovedAt < PET_LOOK_HOLD_MS && !isReducedMotionPreferred()
+          ? getPetLookDirection(
+            pointerX - (cachedHitboxRect.left + cachedHitboxRect.width / 2),
+            pointerY - (cachedHitboxRect.top + cachedHitboxRect.height / 2),
+          )
+          : null);
+        // Windows uses native pointer events for hover. Poll only supplies the off-window look target.
+        if (IS_WINDOWS_WEBVIEW) return;
         const isPointerInsideHitbox = cachedHitboxRect
           ? rectContainsPoint(cachedHitboxRect, pointerX, pointerY)
           : false;
@@ -568,7 +620,7 @@ export const AgentCompanionDesktopPet: React.FC = () => {
       removeWindowMovedListener?.();
       removeScaleChangedListener?.();
     };
-  }, []);
+  }, [trackPetLook]);
 
   const showMainWindowFromPet = useCallback(async () => {
     try {
@@ -755,6 +807,9 @@ export const AgentCompanionDesktopPet: React.FC = () => {
       return;
     }
     petPointerSessionRef.current = null;
+    stopDragRef.current?.();
+    stopDragRef.current = null;
+    setIsDraggingPet(false);
     try {
       target.releasePointerCapture(pointerId);
     } catch {
@@ -796,12 +851,27 @@ export const AgentCompanionDesktopPet: React.FC = () => {
     }
     session.dragStarted = true;
     event.preventDefault();
+    setDragDirection(dx < 0 ? 'left' : 'right');
     setIsDraggingPet(true);
+    setReaction(null);
+    if (IS_WINDOWS_WEBVIEW) {
+      const target = event.currentTarget;
+      stopDragRef.current = startAgentCompanionDrag(setDragDirection, error => {
+        log.warn('Failed to move Agent companion window', error);
+        clearPetPointerSession(target, session.pointerId);
+      });
+      return;
+    }
     void getCurrentWindow().startDragging()
       .catch(error => {
         log.warn('Failed to start Agent companion window drag', error);
+        if (petPointerSessionRef.current === session) petPointerSessionRef.current = null;
       })
       .finally(() => {
+        if (petPointerSessionRef.current === session) {
+          petPointerSessionRef.current = null;
+          setReaction({ action: 'waving' });
+        }
         setIsDraggingPet(false);
       });
   };
@@ -813,6 +883,7 @@ export const AgentCompanionDesktopPet: React.FC = () => {
     }
     const shouldShowMain = !session.dragStarted;
     clearPetPointerSession(event.currentTarget, event.pointerId);
+    if (session.dragStarted) setReaction({ action: 'waving' });
     if (shouldShowMain) {
       void showMainWindowFromPet();
     }
@@ -1041,11 +1112,17 @@ export const AgentCompanionDesktopPet: React.FC = () => {
             onPointerMove={onPetPointerMove}
             onPointerUp={onPetPointerUp}
             onPointerCancel={onPetPointerCancel}
+            onLostPointerCapture={onPetPointerCancel}
             onContextMenu={onPetContextMenu}
            data-openbitfun-component="agent-companion-desktop-pet" data-openbitfun-part="hitbox" data-openbitfun-state={hasAttentionTask ? 'attention' : undefined}>
             <AgentCompanionPet
               mood={displayMood}
+              dragDirection={dragDirection}
+              action={!isDraggingPet
+                ? mood === 'rest' && visibleTasks.some(task => task.state === 'error') ? 'failed' : reaction?.action ?? null
+                : null}
               pet={pet}
+              lookDirection={trackPetLook && !isDraggingPet ? lookDirection : null}
               nativePetdexSize
               petdexScale={PETDEX_DESKTOP_SCALE}
               onPetFrameSizeChange={handlePetFrameSizeChange}

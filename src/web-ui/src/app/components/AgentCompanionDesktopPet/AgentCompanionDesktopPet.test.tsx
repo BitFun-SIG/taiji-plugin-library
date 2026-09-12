@@ -12,6 +12,9 @@ const emitMock = vi.hoisted(() => vi.fn(() => Promise.resolve()));
 const listenMock = vi.hoisted(() => vi.fn());
 const invokeMock = vi.hoisted(() => vi.fn(() => Promise.resolve()));
 const cursorPositionMock = vi.hoisted(() => vi.fn(() => Promise.resolve({ x: 0, y: 0 })));
+const startDraggingMock = vi.hoisted(() => vi.fn(() => Promise.resolve()));
+const controlledDragMock = vi.hoisted(() => vi.fn());
+vi.mock('@/infrastructure/config/services/AgentCompanionDragService', () => ({ startAgentCompanionDrag: controlledDragMock }));
 /** Backs the Tauri IPC bridge, so window resize requests are observable. */
 const hostInvokeMock = vi.hoisted(() => vi.fn(() => Promise.resolve()));
 
@@ -29,7 +32,7 @@ vi.mock('@tauri-apps/api/window', () => ({
   getCurrentWindow: () => ({
     hide: vi.fn(() => Promise.resolve()),
     setFocus: vi.fn(() => Promise.resolve()),
-    startDragging: vi.fn(() => Promise.resolve()),
+    startDragging: startDraggingMock,
     outerPosition: vi.fn(() => Promise.resolve({ x: 0, y: 0 })),
     scaleFactor: vi.fn(() => Promise.resolve(1)),
     onMoved: vi.fn(() => Promise.resolve(() => {})),
@@ -48,7 +51,9 @@ vi.mock('@/infrastructure/config/services/AIExperienceConfigService', () => ({
 }));
 
 vi.mock('@/flow_chat/components/AgentCompanionPet', () => ({
-  AgentCompanionPet: () => <div data-testid="pixel-pet" />,
+  AgentCompanionPet: ({ lookDirection, action, mood, dragDirection }: { lookDirection?: number | null; action?: string | null; mood?: string; dragDirection?: string }) => (
+    <div data-testid="pixel-pet" data-look-direction={lookDirection ?? 'none'} data-action={action ?? 'none'} data-mood={mood} data-direction={dragDirection} />
+  ),
 }));
 
 const PET_COMMAND_EVENT = 'agent-companion://pet-command';
@@ -148,6 +153,9 @@ describe('AgentCompanionDesktopPet', () => {
     hostInvokeMock.mockClear();
     cursorPositionMock.mockReset();
     cursorPositionMock.mockResolvedValue({ x: 0, y: 0 });
+    startDraggingMock.mockReset();
+    startDraggingMock.mockResolvedValue(undefined);
+    controlledDragMock.mockReset();
     listenMock.mockReset();
 
     const activityListeners: Array<(event: { payload: AgentCompanionActivityPayload }) => void> = [];
@@ -180,6 +188,106 @@ describe('AgentCompanionDesktopPet', () => {
       root.unmount();
     });
     container.remove();
+    vi.useRealTimers();
+  });
+
+  it('provides the off-window pointer direction to v2 only while idle', async () => {
+    vi.useFakeTimers();
+    cursorPositionMock.mockResolvedValue({ x: 0, y: 100 });
+    const settingsListener = listenMock.mock.calls.find(([name]) => name === 'agent-companion://settings-updated')?.[1];
+    expect(settingsListener).toBeDefined();
+    await act(async () => settingsListener({ payload: {
+      enable_agent_companion: true,
+      agent_companion_pet: {
+        id: 'sample', displayName: 'Sample', source: 'user', packagePath: '/pets/sample',
+        spritesheetPath: '/pets/sample/spritesheet.webp', spritesheetMimeType: 'image/webp', spriteVersionNumber: 2,
+      },
+    } }));
+    expect(query('[data-testid="pixel-pet"]')?.getAttribute('data-look-direction')).toBe('8');
+    await act(async () => vi.advanceTimersByTimeAsync(1080));
+    expect(query('[data-testid="pixel-pet"]')?.getAttribute('data-look-direction')).toBe('none');
+    cursorPositionMock.mockResolvedValue({ x: 100, y: 0 });
+    await act(async () => vi.advanceTimersByTimeAsync(120));
+    expect(query('[data-testid="pixel-pet"]')?.getAttribute('data-look-direction')).toBe('4');
+    pushActivity({ mood: 'working', tasks: [task()], emittedAt: 1, sequence: 1 });
+    expect(query('[data-testid="pixel-pet"]')?.getAttribute('data-look-direction')).toBe('none');
+  });
+
+  it('celebrates only fresh completions and distinguishes errors from interruption', () => {
+    vi.useFakeTimers();
+    const action = () => query('[data-testid="pixel-pet"]')?.getAttribute('data-action');
+    const publish = (state: AgentCompanionTaskStatus['state'], sequence: number) => pushActivity({
+      mood: state === 'running' ? 'working' : 'rest',
+      tasks: [task({ state, updatedAt: sequence })], emittedAt: sequence, sequence,
+    });
+    publish('completed', 1);
+    expect(action()).toBe('none');
+    publish('running', 2);
+    expect(action()).toBe('jumping');
+    publish('completed', 3);
+    expect(action()).toBe('waving');
+    act(() => vi.advanceTimersByTime(1200));
+    expect(action()).toBe('none');
+    publish('completed', 4);
+    expect(action()).toBe('none');
+    publish('error', 5);
+    expect(action()).toBe('failed');
+    publish('interrupted', 6);
+    expect(action()).toBe('none');
+    vi.useRealTimers();
+  });
+
+  it('does not restart a request reaction on repeated activity snapshots', () => {
+    vi.useFakeTimers();
+    pushActivity({ mood: 'rest', tasks: [], emittedAt: 1, sequence: 1 });
+    pushActivity({ mood: 'working', tasks: [task()], emittedAt: 2, sequence: 2 });
+    expect(query('[data-testid="pixel-pet"]')?.getAttribute('data-action')).toBe('jumping');
+    act(() => vi.advanceTimersByTime(1200));
+    pushActivity({ mood: 'waiting', tasks: [task({ state: 'waiting' })], emittedAt: 3, sequence: 3 });
+    expect(query('[data-testid="pixel-pet"]')?.getAttribute('data-action')).toBe('none');
+  });
+
+  it.each([-20, 20])('selects the initial drag direction and waves after release (%s)', async dx => {
+    let finish!: () => void;
+    startDraggingMock.mockReturnValue(new Promise<void>(resolve => { finish = resolve; }));
+    const hitbox = query('.openbitfun-agent-companion-window__pet-hitbox')!;
+    dispatch(hitbox, 'pointerdown', { clientX: 100, clientY: 100 });
+    dispatch(hitbox, 'pointermove', { clientX: 100 + dx, clientY: 100 });
+    expect(query('[data-testid="pixel-pet"]')?.getAttribute('data-mood')).toBe('dragging');
+    expect(query('[data-testid="pixel-pet"]')?.getAttribute('data-direction')).toBe(dx < 0 ? 'left' : 'right');
+    dispatch(hitbox, 'pointerup', { clientX: 100 + dx, clientY: 100 });
+    expect(query('[data-testid="pixel-pet"]')?.getAttribute('data-action')).toBe('waving');
+    await act(async () => finish());
+  });
+
+  it('keeps Windows dragging active until pointer release and cancels without waving', async () => {
+    const userAgent = vi.spyOn(window.navigator, 'userAgent', 'get').mockReturnValue('Windows');
+    const stop = vi.fn();
+    controlledDragMock.mockReturnValue(stop);
+    try {
+      vi.resetModules();
+      const { AgentCompanionDesktopPet: WindowsPet } = await import('./AgentCompanionDesktopPet');
+      await act(async () => root.render(<I18nextProvider i18n={i18n}><WindowsPet /></I18nextProvider>));
+      const hitbox = query('.openbitfun-agent-companion-window__pet-hitbox')!;
+      dispatch(hitbox, 'pointerdown', { clientX: 100, clientY: 100 });
+      dispatch(hitbox, 'pointermove', { clientX: 120, clientY: 100 });
+      expect(controlledDragMock).toHaveBeenCalledTimes(1);
+      expect(startDraggingMock).not.toHaveBeenCalled();
+      await act(async () => Promise.resolve());
+      expect(query('[data-testid="pixel-pet"]')?.getAttribute('data-mood')).toBe('dragging');
+      act(() => controlledDragMock.mock.calls[0][0]('left'));
+      expect(query('[data-testid="pixel-pet"]')?.getAttribute('data-direction')).toBe('left');
+      dispatch(hitbox, 'pointerup', { clientX: 120, clientY: 100 });
+      expect(stop).toHaveBeenCalledTimes(1);
+      expect(query('[data-testid="pixel-pet"]')?.getAttribute('data-action')).toBe('waving');
+      dispatch(hitbox, 'pointerdown', { clientX: 100, clientY: 100 });
+      dispatch(hitbox, 'pointermove', { clientX: 120, clientY: 100 });
+      dispatch(hitbox, 'pointercancel');
+      expect(stop).toHaveBeenCalledTimes(2);
+      expect(query('[data-testid="pixel-pet"]')?.getAttribute('data-action')).toBe('none');
+    } finally {
+      userAgent.mockRestore();
+    }
   });
 
   it('closes the desktop pet from the pet context menu', () => {

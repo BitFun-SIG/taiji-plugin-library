@@ -4,6 +4,7 @@ import type { AgentCompanionPetSelection } from './AIExperienceConfigService';
 import { isTauriRuntime } from '@/infrastructure/runtime';
 import { createLogger } from '@/shared/utils/logger';
 import builtinPetMetadata from './agentCompanionBuiltinPetMetadata.json';
+import { getPetSpriteLayout } from './agentCompanionPetSprite';
 
 const log = createLogger('AgentCompanionPetService');
 const BUILTIN_PET_BASE = '/agent-companion-pets';
@@ -216,4 +217,18 @@ export async function resolveAgentCompanionPetSrc(
   if (pet.source === 'preset') return pet.spritesheetPath;
   if (!isTauriRuntime()) return '';
   return readFileAsBlobUrl(pet.spritesheetPath, pet.spritesheetMimeType);
+}
+
+/** Recover the version omitted by older builds without rewriting or discarding user settings. */
+export async function resolveAgentCompanionPet(pet: AgentCompanionPetSelection) {
+  let resolved = pet;
+  if (pet.source === 'user' && pet.spriteVersionNumber == null && isTauriRuntime()) {
+    const { pets } = await api.invoke<ListAgentCompanionPetsResponse>('list_agent_companion_pets');
+    const installed = pets.find(item => item.packagePath === pet.packagePath);
+    if (!installed) throw new Error('Selected pet package is unavailable or unsupported');
+    resolved = installed;
+  }
+  const layout = getPetSpriteLayout(resolved.spriteVersionNumber);
+  const src = await resolveAgentCompanionPetSrc(resolved);
+  return { src, layout };
 }
