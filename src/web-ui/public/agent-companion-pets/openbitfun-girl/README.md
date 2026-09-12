@@ -2,9 +2,12 @@
 
 ![Idle, wave, and pointer-look preview](preview.gif)
 
-An original chibi adaptation of the OpenBitFun Girl character, with silver hair,
-a black-and-ivory dress, and hollow rounded-hexagon ornaments. The artwork was
-created with AI image generation from the approved character illustration.
+An original chibi adaptation of the OpenBitFun Girl character, with an oversized
+head, a compact black-and-ivory bell skirt, and tiny legs with rounded shoes.
+Silver hair and OpenBitFun ornaments preserve the character's identity: both the
+outer outline and the inner opening of each logo are rounded six-sided hexagons.
+The artwork was created with AI image generation from the character illustration,
+the official brand mark, and the requested short-legged proportions.
 
 The built-in picker lists this pet immediately after the default blue-golden
 cat. Its independent `openbitfun-girl` ID preserves existing pet selections,
