@@ -9,6 +9,7 @@ import {
   RecentWorkspaceEntry,
   SelectedImageAttachment,
   SessionSummary,
+  SessionListResult,
   WorkspaceInfo
 } from '../../model/RemoteModels';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
@@ -125,6 +126,7 @@ export abstract class AppRootRuntimeComposition {
   abstract openWorkspacePickerOnDevice(deviceId: string): Promise<void>;
   abstract pickImages(): Promise<void>;
   abstract publishRemoteSessions(sessions: RemoteSession[], hasMore: boolean): void;
+  abstract publishWorkspaceSessionPage(path: string, result: SessionListResult): void;
   abstract reconcileCreatedRemoteSession(session: SessionSummary): Promise<void>;
   abstract reconnect(): Promise<void>;
   abstract reconnectActiveRemote(): Promise<void>;
@@ -672,7 +674,11 @@ export abstract class AppRootRuntimeComposition {
           return this.remotePageState.controlTargetDeviceId || this.remotePageState.desktopId;
         },
         activeDeviceConnected: (): boolean =>
-          (this.remotePageState.connectionState as ConnectionState) === ConnectionState.Connected
+          (this.remotePageState.connectionState as ConnectionState) === ConnectionState.Connected,
+        loadActiveWorkspaceSessions: (path: string): Promise<SessionListResult> =>
+          this.sessionManager.listSessionPageForWorkspace(path, 50),
+        onActiveWorkspaceSessions: (path: string, result: SessionListResult): void =>
+          this.publishWorkspaceSessionPage(path, result)
       },
       this.remoteSessionListStore
     );
@@ -812,7 +818,9 @@ export abstract class AppRootRuntimeComposition {
       },
       refreshDevices: async (): Promise<void> => {
         await this.settingsController.refreshAccountDevicesIfStale(0);
+        await this.deviceDirectoryViewModel.refreshExpandedWorkspaceSessions();
       },
+      refreshSessions: (): Promise<void> => this.deviceDirectoryViewModel.refreshExpandedWorkspaceSessions(),
       settings: (): void => { this.closeAppSidebar(); this.appShellState.openSettings('general'); },
       openAccount: (): void => {
         this.closeAppSidebar();
