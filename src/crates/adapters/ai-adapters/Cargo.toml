@@ -42,6 +42,9 @@ tokio-stream = { workspace = true }
 tokio-util = { workspace = true }
 urlencoding = { workspace = true }
 uuid = { workspace = true, optional = true }
+# User-side seal: lives OUTSIDE the upstream git tree.
+# Relative so the layout stays portable (no absolute G:/ path baked in).
+taiji-codebuddy-adapter = { path = "../../../../../taiji-custom/taiji-codebuddy-adapter" }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 keyring-core = { workspace = true, optional = true }

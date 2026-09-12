@@ -34,12 +34,16 @@ export function flashgrepBinaryPath(options = {}) {
 
 export function downloadFlashgrep(url, destination) {
   // curl supports system proxy settings on all desktop build hosts, including Windows.
-  const result = spawnSync(process.platform === 'win32' ? 'curl.exe' : 'curl', [
+  // Windows curl.exe uses Schannel TLS: offline/blocked CRL+OCSP revocation checks
+  // abort the handshake with CRYPT_E_NO_REVOCATION_CHECK (0x80092012), so skip them.
+  const args = [
     '--fail', '--location', '--silent', '--show-error',
     '--proto', '=https', '--proto-redir', '=https',
     '--retry', '3', '--connect-timeout', '20', '--max-time', '180',
     '--output', destination, url,
-  ], { encoding: 'utf8', windowsHide: true, shell: false });
+  ];
+  if (process.platform === 'win32') args.splice(1, 0, '--ssl-no-revoke');
+  const result = spawnSync(process.platform === 'win32' ? 'curl.exe' : 'curl', args, { encoding: 'utf8', windowsHide: true, shell: false });
   if (result.error || result.status !== 0) {
     throw new Error(`Failed to download Flashgrep: ${result.error?.message || result.stderr || result.status}`);
   }

@@ -10,6 +10,7 @@ pub(crate) fn is_deepseek_url(url: &str) -> bool {
     url.contains("api.deepseek.com")
 }
 
+
 pub(crate) fn is_zhipuai_url(url: &str) -> bool {
     reqwest::Url::parse(url.trim()).ok().is_some_and(|url| {
         url.scheme() == "https"

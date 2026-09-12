@@ -241,6 +241,10 @@
     "tokendance": {
       "name": "詞元跳動",
       "description": "統一的大模型 API 閘道"
+    },
+    "codebuddy": {
+      "name": "CodeBuddy",
+      "description": "騰訊 AI 程式設計助手"
     }
   },
   "tabs": {

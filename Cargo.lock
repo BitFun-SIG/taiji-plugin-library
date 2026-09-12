@@ -5691,6 +5691,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "taiji-codebuddy-adapter",
  "tokio",
  "tokio-stream",
  "tokio-util",
@@ -9855,6 +9856,15 @@ dependencies = [
  "pkg-config",
  "toml 0.8.2",
  "version-compare",
+]
+
+[[package]]
+name = "taiji-codebuddy-adapter"
+version = "0.1.0"
+dependencies = [
+ "openbitfun-agent-stream",
+ "openbitfun-core-types",
+ "serde_json",
 ]
 
 [[package]]

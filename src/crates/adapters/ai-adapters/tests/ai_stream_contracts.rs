@@ -2,6 +2,8 @@
 mod common;
 #[path = "ai_stream_contracts/stream_processor_anthropic.rs"]
 mod stream_processor_anthropic;
+#[path = "ai_stream_contracts/stream_processor_codebuddy.rs"]
+mod stream_processor_codebuddy;
 #[path = "ai_stream_contracts/stream_processor_openai.rs"]
 mod stream_processor_openai;
 #[path = "ai_stream_contracts/stream_processor_tool_arguments.rs"]

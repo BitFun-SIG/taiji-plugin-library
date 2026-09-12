@@ -241,6 +241,10 @@
     "tokendance": {
       "name": "TokenDance",
       "description": "Unified AI model gateway"
+    },
+    "codebuddy": {
+      "name": "CodeBuddy",
+      "description": "Tencent AI coding assistant"
     }
   },
   "tabs": {
