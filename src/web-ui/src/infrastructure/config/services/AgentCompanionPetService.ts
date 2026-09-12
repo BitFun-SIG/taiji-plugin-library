@@ -67,6 +67,16 @@ const BUILTIN_PETS: AgentCompanionPetSelection[] = [
     ...DEFAULT_AGENT_COMPANION_PET,
   },
   {
+    id: 'deepseek-goldwhale',
+    displayName: BUILTIN_PET_DISPLAY_NAMES.goldWhale,
+    description: 'A quiet whale maid with long blue curls, a whale apron, and a gold sea-patterned skirt.',
+    source: 'preset',
+    packagePath: `${BUILTIN_PET_BASE}/deepseek-goldwhale`,
+    spritesheetPath: `${BUILTIN_PET_BASE}/deepseek-goldwhale/spritesheet.webp`,
+    spritesheetMimeType: 'image/webp',
+    spriteVersionNumber: 2,
+  },
+  {
     id: 'openbitfun',
     displayName: 'OpenBitFun',
     description:
