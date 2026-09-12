@@ -67,6 +67,16 @@ const BUILTIN_PETS: AgentCompanionPetSelection[] = [
     ...DEFAULT_AGENT_COMPANION_PET,
   },
   {
+    id: 'openbitfun-girl',
+    displayName: BUILTIN_PET_DISPLAY_NAMES.openbitfunGirl,
+    description: 'A cheerful silver-haired chibi artisan in a black-and-ivory dress with hollow rounded-hexagon ornaments.',
+    source: 'preset',
+    packagePath: `${BUILTIN_PET_BASE}/openbitfun-girl`,
+    spritesheetPath: `${BUILTIN_PET_BASE}/openbitfun-girl/spritesheet.webp`,
+    spritesheetMimeType: 'image/webp',
+    spriteVersionNumber: 2,
+  },
+  {
     id: 'deepseek-goldwhale',
     displayName: BUILTIN_PET_DISPLAY_NAMES.goldWhale,
     description: 'A quiet whale maid with long blue curls, a whale apron, and a gold sea-patterned skirt.',
