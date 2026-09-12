@@ -243,3 +243,12 @@ Lab sequence own their own gaps. Thinking/Explore content has an 8px top inset;
 bounded Explore retains 8px bottom padding for its scroll fade. There is no
 negative adjacent-region margin. The resident runtime slot stays 24px high and
 continues to participate in the existing footer/reservation contract.
+
+## Streaming glyph presentation
+
+The shared Markdown renderer paints newly appended text with
+`useStreamingTextReveal`. Its CSS Highlight ranges fade on their own arrival
+clock without adding nodes or changing geometry. Mounted history and virtualized
+remounts start settled; stream completion does not restart the text. It does not
+write the viewport, change row keys, or add a mount animation inside a virtual
+item. Unsupported Highlight APIs and reduced motion display text directly.
