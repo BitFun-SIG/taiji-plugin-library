@@ -102,6 +102,8 @@ cargo check -p openbitfun-desktop && cargo test -p openbitfun-desktop
 
 For skill discovery response compatibility and timeouts, use
 `cargo test -p openbitfun-desktop --lib api::skill_api::tests`.
+For companion pet manifest versions and package metadata, use
+`cargo test -p openbitfun-desktop --lib api::commands::pet_package_tests`.
 For content-search routing and remote fallback protection, use
 `cargo test --locked -p openbitfun-desktop --lib api::search_api::tests`.
 For staged application-update cache and signature behavior, use
