@@ -19,6 +19,7 @@ import { isImeOwnedKeyboardEvent } from '@/shared/utils/ime';
 import { isReducedMotionPreferred } from '@/shared/utils/motionPreference';
 import { getPetLookDirection } from '@/infrastructure/config/services/agentCompanionPetSprite';
 import { startAgentCompanionDrag } from '@/infrastructure/config/services/AgentCompanionDragService';
+import { prepareAgentCompanionPointerDrag, type CompanionPointerDrag } from '@/infrastructure/config/services/AgentCompanionPointerDragService';
 import './AgentCompanionDesktopPet.scss';
 
 const log = createLogger('AgentCompanionDesktopPet');
@@ -35,9 +36,13 @@ const BUBBLE_OUTPUT_TYPEWRITER_INTERVAL_MS = 28;
 const WINDOW_EDGE_BUFFER = 4;
 const POINTER_HOVER_POLL_INTERVAL_MS = 120;
 const PET_LOOK_HOLD_MS = 960;
-/** Clicks shorter/smaller than this use `show_main_window`; beyond it we start a native drag. */
+/** Clicks shorter/smaller than this use `show_main_window`; beyond it we start dragging. */
 const PET_DRAG_THRESHOLD_PX = 8;
 const IS_WINDOWS_WEBVIEW = /\bWindows\b/i.test(window.navigator.userAgent);
+const IS_MACOS_WEBVIEW = /\bMacintosh\b/i.test(window.navigator.userAgent);
+// AppKit's native drag returns immediately and may consume mouse-up. Keep pointer
+// capture on macOS too, so running direction and drag lifetime follow the pointer.
+const USE_CONTROLLED_PET_DRAG = IS_WINDOWS_WEBVIEW || IS_MACOS_WEBVIEW;
 const PET_COMMAND_EVENT = 'agent-companion://pet-command';
 const MENU_EDGE_MARGIN = 4;
 
@@ -156,7 +161,11 @@ export const AgentCompanionDesktopPet: React.FC = () => {
   const [isDraggingPet, setIsDraggingPet] = useState(false);
   const [dragDirection, setDragDirection] = useState<'left' | 'right'>('right');
   const stopDragRef = useRef<(() => void) | null>(null);
-  useEffect(() => () => stopDragRef.current?.(), []);
+  const pointerDragRef = useRef<CompanionPointerDrag | null>(null);
+  useEffect(() => () => {
+    stopDragRef.current?.();
+    pointerDragRef.current?.cancel();
+  }, []);
   const [petFrameSize, setPetFrameSize] = useState<{ width: number; height: number } | null>(null);
   const [overlay, setOverlay] = useState<PetOverlayState>(null);
   const [menuAnchor, setMenuAnchor] = useState<MenuAnchor | null>(null);
@@ -493,7 +502,7 @@ export const AgentCompanionDesktopPet: React.FC = () => {
       });
 
     void tauriWindow.onMoved(event => {
-      if (!IS_WINDOWS_WEBVIEW && petPointerSessionRef.current?.dragStarted && windowPosition && event.payload.x !== windowPosition.x) {
+      if (!USE_CONTROLLED_PET_DRAG && petPointerSessionRef.current?.dragStarted && windowPosition && event.payload.x !== windowPosition.x) {
         setDragDirection(event.payload.x > windowPosition.x ? 'right' : 'left');
       }
       windowPosition = event.payload;
@@ -807,6 +816,8 @@ export const AgentCompanionDesktopPet: React.FC = () => {
       return;
     }
     petPointerSessionRef.current = null;
+    pointerDragRef.current?.cancel();
+    pointerDragRef.current = null;
     stopDragRef.current?.();
     stopDragRef.current = null;
     setIsDraggingPet(false);
@@ -821,6 +832,9 @@ export const AgentCompanionDesktopPet: React.FC = () => {
     if (event.button !== 0) {
       return;
     }
+    // WebKit can start a native text/image selection before our drag threshold
+    // is reached. Cancel that default at pointer-down, while retaining capture.
+    event.preventDefault();
     // The bubble composer stays interactive while open (it lives inside a
     // bubble), so touching the pet is what dismisses it.
     if (overlay?.kind === 'composer') {
@@ -832,6 +846,19 @@ export const AgentCompanionDesktopPet: React.FC = () => {
       startY: event.clientY,
       dragStarted: false,
     };
+    if (IS_MACOS_WEBVIEW) {
+      const target = event.currentTarget;
+      const session = petPointerSessionRef.current;
+      pointerDragRef.current?.cancel();
+      pointerDragRef.current = prepareAgentCompanionPointerDrag(
+        { x: event.screenX, y: event.screenY },
+        setDragDirection,
+        error => {
+          log.warn('Failed to move Agent companion window', error);
+          if (petPointerSessionRef.current === session) clearPetPointerSession(target, session.pointerId);
+        },
+      );
+    }
     try {
       event.currentTarget.setPointerCapture(event.pointerId);
     } catch {
@@ -841,7 +868,11 @@ export const AgentCompanionDesktopPet: React.FC = () => {
 
   const onPetPointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
     const session = petPointerSessionRef.current;
-    if (!session || event.pointerId !== session.pointerId || session.dragStarted) {
+    if (!session || event.pointerId !== session.pointerId) {
+      return;
+    }
+    if (session.dragStarted) {
+      pointerDragRef.current?.move({ x: event.screenX, y: event.screenY });
       return;
     }
     const dx = event.clientX - session.startX;
@@ -854,6 +885,10 @@ export const AgentCompanionDesktopPet: React.FC = () => {
     setDragDirection(dx < 0 ? 'left' : 'right');
     setIsDraggingPet(true);
     setReaction(null);
+    if (IS_MACOS_WEBVIEW) {
+      pointerDragRef.current?.move({ x: event.screenX, y: event.screenY });
+      return;
+    }
     if (IS_WINDOWS_WEBVIEW) {
       const target = event.currentTarget;
       stopDragRef.current = startAgentCompanionDrag(setDragDirection, error => {
@@ -882,6 +917,11 @@ export const AgentCompanionDesktopPet: React.FC = () => {
       return;
     }
     const shouldShowMain = !session.dragStarted;
+    if (session.dragStarted && pointerDragRef.current) {
+      pointerDragRef.current.move({ x: event.screenX, y: event.screenY });
+      pointerDragRef.current.finish();
+      pointerDragRef.current = null;
+    }
     clearPetPointerSession(event.currentTarget, event.pointerId);
     if (session.dragStarted) setReaction({ action: 'waving' });
     if (shouldShowMain) {

@@ -14,7 +14,9 @@ const invokeMock = vi.hoisted(() => vi.fn(() => Promise.resolve()));
 const cursorPositionMock = vi.hoisted(() => vi.fn(() => Promise.resolve({ x: 0, y: 0 })));
 const startDraggingMock = vi.hoisted(() => vi.fn(() => Promise.resolve()));
 const controlledDragMock = vi.hoisted(() => vi.fn());
+const pointerDrag = vi.hoisted(() => ({ prepare: vi.fn(), move: vi.fn(), finish: vi.fn(), cancel: vi.fn() }));
 vi.mock('@/infrastructure/config/services/AgentCompanionDragService', () => ({ startAgentCompanionDrag: controlledDragMock }));
+vi.mock('@/infrastructure/config/services/AgentCompanionPointerDragService', () => ({ prepareAgentCompanionPointerDrag: pointerDrag.prepare }));
 /** Backs the Tauri IPC bridge, so window resize requests are observable. */
 const hostInvokeMock = vi.hoisted(() => vi.fn(() => Promise.resolve()));
 
@@ -142,6 +144,8 @@ describe('AgentCompanionDesktopPet', () => {
       element.dispatchEvent(new window.MouseEvent(type, {
         bubbles: true,
         cancelable: true,
+        screenX: at?.clientX,
+        screenY: at?.clientY,
         ...at,
       }));
     });
@@ -156,6 +160,8 @@ describe('AgentCompanionDesktopPet', () => {
     startDraggingMock.mockReset();
     startDraggingMock.mockResolvedValue(undefined);
     controlledDragMock.mockReset();
+    pointerDrag.prepare.mockReset().mockReturnValue(pointerDrag);
+    pointerDrag.move.mockReset(); pointerDrag.finish.mockReset(); pointerDrag.cancel.mockReset();
     listenMock.mockReset();
 
     const activityListeners: Array<(event: { payload: AgentCompanionActivityPayload }) => void> = [];
@@ -266,8 +272,8 @@ describe('AgentCompanionDesktopPet', () => {
     controlledDragMock.mockReturnValue(stop);
     try {
       vi.resetModules();
-      const { AgentCompanionDesktopPet: WindowsPet } = await import('./AgentCompanionDesktopPet');
-      await act(async () => root.render(<I18nextProvider i18n={i18n}><WindowsPet /></I18nextProvider>));
+      const { AgentCompanionDesktopPet: PlatformPet } = await import('./AgentCompanionDesktopPet');
+      await act(async () => root.render(<I18nextProvider i18n={i18n}><PlatformPet /></I18nextProvider>));
       const hitbox = query('.openbitfun-agent-companion-window__pet-hitbox')!;
       dispatch(hitbox, 'pointerdown', { clientX: 100, clientY: 100 });
       dispatch(hitbox, 'pointermove', { clientX: 120, clientY: 100 });
@@ -277,6 +283,8 @@ describe('AgentCompanionDesktopPet', () => {
       expect(query('[data-testid="pixel-pet"]')?.getAttribute('data-mood')).toBe('dragging');
       act(() => controlledDragMock.mock.calls[0][0]('left'));
       expect(query('[data-testid="pixel-pet"]')?.getAttribute('data-direction')).toBe('left');
+      act(() => controlledDragMock.mock.calls[0][0]('right'));
+      expect(query('[data-testid="pixel-pet"]')?.getAttribute('data-direction')).toBe('right');
       dispatch(hitbox, 'pointerup', { clientX: 120, clientY: 100 });
       expect(stop).toHaveBeenCalledTimes(1);
       expect(query('[data-testid="pixel-pet"]')?.getAttribute('data-action')).toBe('waving');
@@ -285,9 +293,52 @@ describe('AgentCompanionDesktopPet', () => {
       dispatch(hitbox, 'pointercancel');
       expect(stop).toHaveBeenCalledTimes(2);
       expect(query('[data-testid="pixel-pet"]')?.getAttribute('data-action')).toBe('none');
+      expect(query('[data-testid="pixel-pet"]')?.getAttribute('data-mood')).not.toBe('dragging');
+
+      dispatch(hitbox, 'pointerdown', { clientX: 100, clientY: 100 });
+      dispatch(hitbox, 'pointermove', { clientX: 80, clientY: 100 });
+      dispatch(hitbox, 'lostpointercapture');
+      expect(stop).toHaveBeenCalledTimes(3);
+      expect(query('[data-testid="pixel-pet"]')?.getAttribute('data-mood')).not.toBe('dragging');
     } finally {
       userAgent.mockRestore();
     }
+  });
+
+  it('uses captured screen coordinates on macOS and prevents native text selection at pointer-down', async () => {
+    const userAgent = vi.spyOn(window.navigator, 'userAgent', 'get').mockReturnValue('Macintosh; Intel Mac OS X 10_15_7');
+    try {
+      vi.resetModules();
+      const { AgentCompanionDesktopPet: MacPet } = await import('./AgentCompanionDesktopPet');
+      await act(async () => root.render(<I18nextProvider i18n={i18n}><MacPet /></I18nextProvider>));
+      const hitbox = query('.openbitfun-agent-companion-window__pet-hitbox')!;
+      const down = new MouseEvent('pointerdown', {
+        bubbles: true, cancelable: true, clientX: 100, clientY: 100, screenX: 100, screenY: 100,
+      });
+      act(() => hitbox.dispatchEvent(down));
+      expect(down.defaultPrevented).toBe(true);
+      expect(pointerDrag.prepare).toHaveBeenCalledWith({ x: 100, y: 100 }, expect.any(Function), expect.any(Function));
+      dispatch(hitbox, 'pointermove', { clientX: 120, clientY: 100 });
+      await act(async () => Promise.resolve());
+      expect(query('[data-testid="pixel-pet"]')?.getAttribute('data-mood')).toBe('dragging');
+      expect(pointerDrag.move).toHaveBeenLastCalledWith({ x: 120, y: 100 });
+      expect(startDraggingMock).not.toHaveBeenCalled();
+      expect(controlledDragMock).not.toHaveBeenCalled();
+      act(() => pointerDrag.prepare.mock.calls[0][1]('left'));
+      expect(query('[data-testid="pixel-pet"]')?.getAttribute('data-direction')).toBe('left');
+      dispatch(hitbox, 'pointermove', { clientX: 80, clientY: 100 });
+      expect(pointerDrag.move).toHaveBeenLastCalledWith({ x: 80, y: 100 });
+      dispatch(hitbox, 'pointerup', { clientX: 70, clientY: 100 });
+      expect(pointerDrag.move).toHaveBeenLastCalledWith({ x: 70, y: 100 });
+      expect(pointerDrag.finish).toHaveBeenCalledTimes(1);
+      expect(pointerDrag.cancel).not.toHaveBeenCalled();
+      expect(query('[data-testid="pixel-pet"]')?.getAttribute('data-action')).toBe('waving');
+      dispatch(hitbox, 'pointerdown', { clientX: 100, clientY: 100 });
+      dispatch(hitbox, 'pointermove', { clientX: 120, clientY: 100 });
+      dispatch(hitbox, 'lostpointercapture');
+      expect(pointerDrag.cancel).toHaveBeenCalledTimes(1);
+      expect(query('[data-testid="pixel-pet"]')?.getAttribute('data-mood')).not.toBe('dragging');
+    } finally { userAgent.mockRestore(); }
   });
 
   it('closes the desktop pet from the pet context menu', () => {
