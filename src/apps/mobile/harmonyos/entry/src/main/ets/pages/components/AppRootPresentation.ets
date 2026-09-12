@@ -311,6 +311,7 @@ export struct AppRootPresentation {
   }
 
   private restoreWideMasterPane(): void {
+    void this.actions.onSidebar.refreshSessions();
     const previewLayout = this.filePreviewLayout();
     if (WideLayoutGeometry.restoreMasterClosesPreview(previewLayout)) {
       // Focus split temporarily borrows the master pane's space. Restoring the
