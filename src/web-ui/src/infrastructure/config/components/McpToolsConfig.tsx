@@ -10,6 +10,7 @@ import {
   IconButton,
   Input,
   Textarea,
+  StatusPill,
   Tooltip,
   Dialog,
   DialogBody,
@@ -44,7 +45,7 @@ import {
   MCPServerInfo,
 } from '../../api/service-api/MCPAPI';
 import { systemAPI } from '../../api/service-api/SystemAPI';
-import ExternalMcpOverview from './ExternalMcpOverview';
+import { getEcosystemSourceLabel } from '../skillSourcePresentation';
 import './McpToolsConfig.scss';
 
 const log = createLogger('McpToolsConfig');
@@ -772,6 +773,15 @@ const McpToolsConfig: React.FC = () => {
     let shouldStartOAuth = false;
     if (!beginServerLifecycleAction(serverId, 'start')) return;
     try {
+      if (!server.enabled) {
+        const result = await MCPAPI.enableServer(serverId);
+        if (!capabilityIsCurrent(capabilityEpoch)) return;
+        if (!result.runtimeApplied) {
+          notification.warning(tMcp('messages.partialStartFailed'));
+          await loadServers();
+          return;
+        }
+      }
       await MCPAPI.startServer(serverId);
       if (!capabilityIsCurrent(capabilityEpoch)) return;
       notification.success(tMcp('messages.startSuccess', { serverId }), {
@@ -1252,11 +1262,12 @@ const McpToolsConfig: React.FC = () => {
   const renderServerBadge = (server: MCPServerInfo) => (
     <span className={`openbitfun-mcp-tools__status-badge ${getStatusClass(server.status)}`} data-openbitfun-component="mcp-tools-config" data-openbitfun-part="statusBadge">
       {getStatusIcon(server.status)}
-      {getServerStatusLabel(server.status)}
+      {server.enabled ? getServerStatusLabel(server.status) : tMcp('status.disabled')}
     </span>
   );
 
   const renderServerControl = (server: MCPServerInfo) => {
+    const startLabel = tMcp(server.enabled ? 'actions.start' : 'actions.enableAndStart');
     const pendingAction = serverLifecycleActions[server.id];
     const oauthPending = authDialogOpen && authDialogServer?.id === server.id
       && oauthSession !== null
@@ -1292,7 +1303,7 @@ const McpToolsConfig: React.FC = () => {
         {isStopped(server.status) ? (
           <Tooltip content={
             canStartServer(server)
-              ? tMcp('actions.start')
+              ? startLabel
               : tMcp('messages.commandUnavailable', { serverId: server.id })
           }>
             <IconButton
@@ -1303,7 +1314,7 @@ const McpToolsConfig: React.FC = () => {
               data-testid="mcp-server-start"
               aria-label={
                 canStartServer(server)
-                  ? tMcp('actions.start')
+                  ? startLabel
                   : tMcp('messages.commandUnavailable', { serverId: server.id })
               }
               icon={pendingAction === 'start'
@@ -1582,14 +1593,14 @@ const McpToolsConfig: React.FC = () => {
                 data-testid="mcp-server-item"
                 data-server-id={server.id}
                 label={server.name}
-                badge={renderServerBadge(server)}
+                badge={<>{renderServerBadge(server)}{server.importOrigin ? <StatusPill tone="neutral">{getEcosystemSourceLabel(server.importOrigin.sourceId ?? undefined) || tMcp('server.importedSource')}</StatusPill> : null}</>}
                 control={renderServerControl(server)}
                 details={renderServerDetails(server)}
               />
             ))}
         </ConfigPageSection>
 
-        {!showJsonEditor && <ExternalMcpOverview />}
+
       </ConfigPageContent>
       <Dialog
         open={desktopConfigAvailable && authDialogOpen}

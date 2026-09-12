@@ -16,6 +16,7 @@ import type { SkillInfo, SkillLevel, SkillMarketItem, SkillValidationResult } fr
 import {
   buildSkillCoverageSourceMap,
   canDeleteSkill,
+  isOpenBitFunManagedSkill,
   getSkillSourceLabel,
 } from '../skillSourcePresentation';
 import { open } from '@tauri-apps/plugin-dialog';
@@ -72,7 +73,7 @@ const SkillsConfig: React.FC = () => {
       if (requestId !== loadRequestIdRef.current) {
         return;
       }
-      setSkills(skillsList);
+      setSkills(skillsList.filter(isOpenBitFunManagedSkill));
     } catch (err) {
       if (requestId !== loadRequestIdRef.current) {
         return;

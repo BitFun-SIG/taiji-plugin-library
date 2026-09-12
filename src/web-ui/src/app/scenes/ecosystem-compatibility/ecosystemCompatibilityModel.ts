@@ -27,7 +27,7 @@ export type EcosystemProductGroup = 'connected' | 'available' | 'other';
 export interface EcosystemProductSpec {
   id: EcosystemProductId;
   name: string;
-  ecosystemId?: string;
+  ecosystemId: string;
   acpClientId?: string;
   development?: boolean;
   searchTerms: readonly string[];
@@ -120,7 +120,7 @@ const PRODUCT_ADAPTED_KINDS = {
   'claude-code': ['command', 'subagent', 'skill', 'mcp', 'hook'],
   codex: ['subagent', 'skill', 'mcp', 'hook'],
   pi: ['skill', 'hook'],
-  dsh: ['skill', 'hook'],
+  dsh: ['skill', 'hook', 'mcp'],
   opencode: ['command', 'tool', 'subagent', 'skill', 'mcp', 'hook'],
 } as const satisfies Record<EcosystemProductId, readonly EcosystemImportItemKind[]>;
 
@@ -207,6 +207,30 @@ function productSources(
 ): ExternalSourceCatalogSnapshot['sources'] {
   if (!snapshot || !ecosystemId) return [];
   return snapshot.sources.filter((source) => source.record.ecosystemId === ecosystemId);
+}
+
+export function catalogDiscoveryState(
+  snapshot: ExternalSourceCatalogSnapshot | null,
+  ecosystemId: string | undefined,
+  capabilityId: string,
+): 'checking' | 'discoveryDisabled' | 'discoveryUnavailable' | 'notDetected' {
+  if (!snapshot) return 'checking';
+  const policy = snapshot.integrationPolicy;
+  if (policy.status !== 'compatible') return 'discoveryUnavailable';
+  if (!policy.effective.enabled) return 'discoveryDisabled';
+  const access = ecosystemId
+    ? policy.effective.ecosystems[ecosystemId]?.capabilities[capabilityId]
+    : undefined;
+  if (access === 'disabled') return 'discoveryDisabled';
+  if (!access || !['discover_only', 'ask_before_use', 'auto'].includes(access)) {
+    return 'discoveryUnavailable';
+  }
+  if (snapshot.discoveryPending) return 'checking';
+  const failedSource = productSources(snapshot, ecosystemId).some((source) => (
+    ['unavailable', 'degraded'].includes(source.record.health)
+    && source.record.diagnostics?.some((diagnostic) => diagnostic.assetKind === capabilityId)
+  ));
+  return failedSource ? 'discoveryUnavailable' : 'notDetected';
 }
 
 function capabilityCounts(

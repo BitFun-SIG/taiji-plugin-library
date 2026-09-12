@@ -329,7 +329,7 @@
       "visibility": "documented",
       "rustPath": "add_skill",
       "sourceFile": "src/apps/desktop/src/api/skill_api.rs",
-      "signature": "fn add_skill( _state: State<'_, AppState>, source_path: String, level: String, workspace_path: Option<String>, ) -> Result<String, String>",
+      "signature": "fn add_skill( _state: State<'_, AppState>, source_path: String, level: String, workspace_path: Option<String>, source_key: Option<String>, target_name: Option<String>, ) -> Result<String, String>",
       "remoteWorkspacePolicy": "LegacyUnaudited"
     },
     {
@@ -1793,7 +1793,7 @@
       "visibility": "documented",
       "rustPath": "delete_skill",
       "sourceFile": "src/apps/desktop/src/api/skill_api.rs",
-      "signature": "fn delete_skill( state: State<'_, AppState>, skill_key: String, workspace_path: Option<String>, ) -> Result<String, String>",
+      "signature": "fn delete_skill( state: State<'_, AppState>, skill_key: String, workspace_path: Option<String>, expected_import_id: Option<String>, ) -> Result<String, String>",
       "remoteWorkspacePolicy": "LegacyUnaudited"
     },
     {

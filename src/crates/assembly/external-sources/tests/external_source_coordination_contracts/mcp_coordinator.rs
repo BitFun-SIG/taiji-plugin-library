@@ -150,6 +150,11 @@ impl ExternalMcpSourceProvider for FakeProvider {
         expected_behavior_version: &str,
     ) -> Result<PreparedExternalMcpImportServer, ExternalSourceProviderError> {
         Ok(PreparedExternalMcpImportServer {
+            environment: Default::default(),
+            headers: Default::default(),
+            working_directory: None,
+            timeouts: Default::default(),
+            oauth_enabled: None,
             id: server_id.clone(),
             behavior_version: expected_behavior_version.to_string(),
             transport: PreparedExternalMcpImportTransport::Remote {

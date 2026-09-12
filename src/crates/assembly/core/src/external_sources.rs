@@ -65,6 +65,7 @@ use openbitfun_claude_code_adapter::{
     ClaudeCodeCommandProvider, ClaudeCodeMcpProvider, ClaudeCodeSubagentProvider,
 };
 use openbitfun_codex_adapter::{CodexMcpProvider, CodexSubagentProvider};
+use openbitfun_dsh_adapter::DshMcpProvider;
 use openbitfun_external_sources::{
     DeferredDiscovery, ExternalMcpDiscoveryResult, ExternalSourceControlPlane,
     ExternalSourceCoordinator, ExternalSourceDiscoveryResult, ExternalSubagentDiscoveryResult,
@@ -853,7 +854,43 @@ fn default_external_integration_registry() -> Vec<ExternalEcosystemRegistration>
             mcp_provider: Some(Arc::new(CodexMcpProvider::default())),
             workspace_reference_provider: None,
         },
+        ExternalEcosystemRegistration {
+            descriptor: ExternalIntegrationEcosystemDescriptor {
+                ecosystem_id: EcosystemId::new("deepseek-harness").expect("static ecosystem id"),
+                display_name: "DeepSeek Harness".to_string(),
+                adapter_revision: "1".to_string(),
+                capabilities: vec![external_capability_descriptor(
+                    EXTERNAL_CAPABILITY_MCP,
+                    ExternalIntegrationAccess::AskBeforeUse,
+                    ExternalIntegrationAccess::AskBeforeUse,
+                )],
+            },
+            contract_major: EXTERNAL_ADAPTER_CONTRACT_MAJOR,
+            upstream_format_revision: "dsh-mcp-declarations-v1",
+            command_provider: None,
+            tool_provider: None,
+            subagent_provider: None,
+            mcp_provider: Some(Arc::new(DshMcpProvider::default())),
+            workspace_reference_provider: None,
+        },
     ]
+}
+
+/// Resolve legacy native import receipts using registered provider identity, even
+/// when the external source is offline or no longer present. This does no discovery.
+pub fn ecosystem_for_imported_mcp_candidate(candidate_id: &str) -> Option<String> {
+    let qualified =
+        openbitfun_product_domains::external_sources::SourceQualifiedMcpServerId::from_stable_key(
+            candidate_id.strip_prefix("external_mcp:")?,
+        )?;
+    default_external_integration_registry()
+        .into_iter()
+        .find_map(|registration| {
+            let provider = registration.mcp_provider?;
+            let identity = provider.identity();
+            (identity.provider_id == qualified.source.provider_id)
+                .then(|| identity.ecosystem_id.to_string())
+        })
 }
 
 fn default_external_integration_ecosystems() -> Vec<ExternalIntegrationEcosystemDescriptor> {
@@ -4743,6 +4780,16 @@ async fn service_for(
     service_for_profile(workspace_root, ExternalSourceServiceProfile::LocalExecution).await
 }
 
+fn mcp_import_discovery_complete(
+    snapshot: &openbitfun_external_sources::ExternalMcpCoordinatorSnapshot,
+) -> bool {
+    !snapshot.discovery_pending
+        && !snapshot
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code.starts_with("external_mcp.discovery_"))
+}
+
 pub(crate) async fn collect_external_mcp_import_candidates(
     workspace_root: Option<&Path>,
 ) -> Result<Vec<crate::external_mcp_import::ExternalMcpImportCandidate>, String> {
@@ -4750,6 +4797,26 @@ pub(crate) async fn collect_external_mcp_import_candidates(
     service.refresh().await?;
     let coordinator = lock_mcp_coordinator(&service.control_plane);
     let snapshot = coordinator.snapshot();
+    log::debug!(
+        "External MCP import discovery: providers={:?}, servers={}, pending={}, diagnostics={:?}",
+        snapshot
+            .sources
+            .iter()
+            .map(|source| source.record.key.provider_id.as_str())
+            .collect::<BTreeSet<_>>(),
+        snapshot.servers.len(),
+        snapshot.discovery_pending,
+        snapshot
+            .diagnostics
+            .iter()
+            .map(|diagnostic| diagnostic.code.as_str())
+            .collect::<Vec<_>>(),
+    );
+    if !mcp_import_discovery_complete(&snapshot) {
+        return Err(
+            "External MCP discovery is incomplete; refresh before reviewing imports".to_string(),
+        );
+    }
     let input_candidates = snapshot
         .servers
         .iter()
@@ -7405,6 +7472,52 @@ mod opencode_local_source_order_tests;
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn imported_mcp_plan_does_not_treat_capacity_failures_as_an_empty_catalog() {
+        let mut snapshot = openbitfun_external_sources::ExternalMcpCoordinatorSnapshot {
+            generation: 1,
+            discovery_pending: false,
+            sources: vec![],
+            servers: vec![],
+            diagnostics: vec![],
+        };
+        assert!(mcp_import_discovery_complete(&snapshot));
+        snapshot.discovery_pending = true;
+        assert!(!mcp_import_discovery_complete(&snapshot));
+        snapshot.discovery_pending = false;
+        snapshot.diagnostics.push(ExternalSourceDiagnostic::warning(
+            "external_mcp.discovery_overloaded",
+            "Discovery capacity is busy",
+            None,
+        ));
+        assert!(!mcp_import_discovery_complete(&snapshot));
+        snapshot.diagnostics.clear();
+        assert!(mcp_import_discovery_complete(&snapshot));
+    }
+    #[test]
+    fn imported_mcp_legacy_receipt_keeps_registered_origin_without_discovery() {
+        use openbitfun_product_domains::external_sources::SourceQualifiedMcpServerId;
+        for (provider, ecosystem) in [
+            ("codex.mcp", "codex"),
+            ("claude-code.mcp", "claude-code"),
+            ("opencode.mcp", "opencode"),
+        ] {
+            let id = SourceQualifiedMcpServerId::new(
+                SourceKey::new(provider, "removed-source").unwrap(),
+                "old-server",
+            )
+            .unwrap();
+            let candidate = format!("external_mcp:{}", id.stable_key());
+            assert_eq!(
+                ecosystem_for_imported_mcp_candidate(&candidate).as_deref(),
+                Some(ecosystem)
+            );
+            assert!(
+                ecosystem_for_imported_mcp_candidate(&format!("{candidate}invalid-tail")).is_none()
+            );
+        }
+        assert!(ecosystem_for_imported_mcp_candidate("external_mcp:bad").is_none());
+    }
     use crate::service::mcp::{ConfigLocation, MCPServerConfig, MCPServerType};
     use openbitfun_product_domains::external_sources::{
         EcosystemId, ExternalSourceProviderError, ExternalSourceRecord, ExternalSourceScope,
@@ -9367,9 +9480,13 @@ mod tests {
     #[test]
     fn default_registry_exposes_only_each_ecosystems_supported_asset_kinds() {
         let registrations = default_external_integration_registry();
-        assert_eq!(registrations.len(), 3);
+        assert_eq!(registrations.len(), 4);
 
         let expected = BTreeMap::from([
+            (
+                "deepseek-harness",
+                BTreeSet::from([EXTERNAL_CAPABILITY_MCP]),
+            ),
             (
                 "opencode",
                 BTreeSet::from([

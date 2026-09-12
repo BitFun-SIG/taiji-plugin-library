@@ -248,7 +248,30 @@ fn safe_servers_have_a_native_import_projection_and_unsafe_fields_require_setup(
             if args == &["--stdio"]
     ));
 
-    for name in ["env", "cwd", "query", "headers"] {
+    let cwd = snapshot.servers.iter().find(|s| s.name == "cwd").unwrap();
+    let prepared_cwd = provider
+        .prepare_import(&input, &cwd.id, &cwd.behavior_version)
+        .unwrap();
+    assert!(prepared_cwd
+        .working_directory
+        .as_ref()
+        .unwrap()
+        .ends_with("tools"));
+    assert_eq!(prepared_remote.oauth_enabled, Some(false));
+    for name in ["env", "headers"] {
+        let server = snapshot.servers.iter().find(|s| s.name == name).unwrap();
+        let prepared = provider
+            .prepare_import(&input, &server.id, &server.behavior_version)
+            .unwrap();
+        let values = if name == "env" {
+            &prepared.environment
+        } else {
+            &prepared.headers
+        };
+        assert_eq!(values.values().next().unwrap(), "secret");
+        assert!(!format!("{prepared:?}").contains("secret"));
+    }
+    for name in ["query"] {
         let server = snapshot
             .servers
             .iter()
@@ -396,9 +419,9 @@ fn claude_timeout_controls_execution_and_subsecond_values_are_ignored() {
     assert_eq!(
         provider
             .prepare_import(&input, &docs.id, &docs.behavior_version)
-            .unwrap_err()
-            .code,
-        "external_mcp.import_setup_required"
+            .unwrap()
+            .timeouts,
+        docs.timeouts
     );
 }
 

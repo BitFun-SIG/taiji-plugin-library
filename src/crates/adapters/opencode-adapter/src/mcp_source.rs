@@ -337,7 +337,6 @@ enum PreparedTransportTemplate {
         args: Vec<String>,
         environment: BTreeMap<String, String>,
         working_directory: Option<PathBuf>,
-        working_directory_explicit: bool,
     },
     Remote {
         url: String,
@@ -431,7 +430,6 @@ fn materialize_server(
                     args: Vec::new(),
                     environment: BTreeMap::new(),
                     working_directory: None,
-                    working_directory_explicit: false,
                 },
             })
         }
@@ -475,7 +473,6 @@ fn materialize_local_server(
         reason.get_or_insert(error.clone());
     }
     let environment_reference_names = environment_reference_names.unwrap_or_default();
-    let working_directory_explicit = object.contains_key("cwd");
     let cwd = match object.get("cwd") {
         None => context
             .workspace_root
@@ -545,7 +542,6 @@ fn materialize_local_server(
             args,
             environment,
             working_directory: cwd,
-            working_directory_explicit,
         },
     })
 }
@@ -659,7 +655,6 @@ fn resolve_runtime_values(
             args,
             environment,
             working_directory,
-            working_directory_explicit: _,
         } => {
             let command = expand_environment_references(&command)?;
             let args = args
@@ -744,30 +739,30 @@ fn prepare_import_projection(
     definition: ExternalMcpServerDefinition,
     template: PreparedTransportTemplate,
 ) -> Result<PreparedExternalMcpImportServer, ExternalSourceProviderError> {
-    if !definition.timeouts.is_empty() {
-        return Err(ExternalSourceProviderError::new(
-            "external_mcp.import_setup_required",
-            "MCP timeout overrides cannot be imported into native configuration",
-            false,
-        ));
-    }
-    let transport = match template {
+    let (transport, working_directory, oauth_enabled, environment, headers) = match template {
         PreparedTransportTemplate::Local {
             command,
             args,
             environment,
-            working_directory: _,
-            working_directory_explicit,
-        } if environment.is_empty() && !working_directory_explicit => {
-            PreparedExternalMcpImportTransport::Local { command, args }
-        }
+            working_directory,
+        } if environment.values().all(|value| !value.contains("{env:")) => (
+            PreparedExternalMcpImportTransport::Local { command, args },
+            working_directory,
+            None,
+            environment,
+            BTreeMap::new(),
+        ),
         PreparedTransportTemplate::Remote {
             url,
             headers,
             oauth_enabled,
-        } if headers.is_empty() && oauth_enabled => {
-            PreparedExternalMcpImportTransport::Remote { url }
-        }
+        } if headers.values().all(|value| !value.contains("{env:")) => (
+            PreparedExternalMcpImportTransport::Remote { url },
+            None,
+            Some(oauth_enabled),
+            BTreeMap::new(),
+            headers,
+        ),
         _ => {
             return Err(ExternalSourceProviderError::new(
                 "external_mcp.import_setup_required",
@@ -777,9 +772,14 @@ fn prepare_import_projection(
         }
     };
     let prepared = PreparedExternalMcpImportServer {
+        environment,
+        headers,
         id: definition.id,
         behavior_version: definition.behavior_version,
         transport,
+        working_directory,
+        timeouts: definition.timeouts,
+        oauth_enabled,
     };
     prepared.validate().map_err(|_| {
         ExternalSourceProviderError::new(

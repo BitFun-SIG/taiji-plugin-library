@@ -50,6 +50,7 @@ use std::sync::OnceLock;
 use tokio::fs;
 
 mod discovery;
+pub mod imports;
 
 #[cfg(feature = "external-sources")]
 const MAX_OPENCODE_CONFIGURED_SKILL_ROOTS: usize = 64;
@@ -99,6 +100,7 @@ mod implicit_invocation_policy_tests {
             source_id: "codex".to_string(),
             source_label: "Codex".to_string(),
             installation_source: None,
+            import_origin: None,
             entry_file: None,
             dir_name: name.to_string(),
             is_builtin: false,
@@ -814,20 +816,24 @@ impl SkillRegistry {
             }
         }
 
-        // OpenBitFun's own user-defined skills sit between most home slots and config slots.
-        // This lets other agent directories (e.g. ~/.claude/skills) take precedence
-        // while still keeping config-level overrides after OpenBitFun defaults.
+        // Explicitly installed native user copies take precedence over external discovery.
+        // Project roots still precede every user root, and external-to-external order is unchanged.
         let path_manager = get_path_manager_arc();
-        let openbitfun_skills = path_manager.user_skills_dir();
-        entries.push(SkillRootEntry {
-            path: openbitfun_skills,
-            level: SkillLocation::User,
-            slot: OPENBITFUN_USER_SKILL_SLOT,
-            source_id: OPENBITFUN_SKILL_SOURCE_ID,
-            source_label: OPENBITFUN_SKILL_SOURCE_LABEL,
-            priority,
-            is_builtin: false,
-        });
+        for entry in &mut entries {
+            entry.priority += 1;
+        }
+        entries.insert(
+            0,
+            SkillRootEntry {
+                path: path_manager.user_skills_dir(),
+                level: SkillLocation::User,
+                slot: OPENBITFUN_USER_SKILL_SLOT,
+                source_id: OPENBITFUN_SKILL_SOURCE_ID,
+                source_label: OPENBITFUN_SKILL_SOURCE_LABEL,
+                priority: 0,
+                is_builtin: false,
+            },
+        );
         priority += 1;
 
         let builtin_skills = path_manager.builtin_skills_dir();
@@ -1057,7 +1063,8 @@ impl SkillRegistry {
                 USER_HOME_SKILL_ROOTS
                     .iter()
                     .position(|root| root.source_id == "opencode")
-                    .expect("OpenCode user Skill root is registered"),
+                    .expect("OpenCode user Skill root is registered")
+                    + 1,
             );
 
         for candidate in &mut standard {
@@ -1364,6 +1371,9 @@ impl SkillRegistry {
         workspace_root: Option<&Path>,
         agent_type: Option<&str>,
     ) -> Vec<SkillCandidate> {
+        // Discovery alone never publishes a skill into the native runtime.
+        // Approved plugin contributions are added by their owner below.
+        candidates.retain(|candidate| candidate.info.is_native());
         #[cfg(feature = "opencode-plugin-host")]
         {
             let plugin_roots = crate::plugin_capability_publication::skill_roots_for_agent(
@@ -1420,11 +1430,12 @@ impl SkillRegistry {
 
     async fn apply_mode_filters_for_remote_workspace(
         &self,
-        candidates: Vec<SkillCandidate>,
+        mut candidates: Vec<SkillCandidate>,
         fs: &dyn WorkspaceFileSystem,
         remote_root: &str,
         agent_type: Option<&str>,
     ) -> Vec<SkillCandidate> {
+        candidates.retain(|candidate| candidate.info.is_native());
         let globally_disabled_user_skills = Self::globally_disabled_user_skill_keys().await;
         let candidates =
             Self::filter_globally_disabled_candidates(candidates, &globally_disabled_user_skills);
@@ -1450,8 +1461,11 @@ impl SkillRegistry {
         candidates: Vec<SkillCandidate>,
         agent_type: Option<&str>,
     ) -> OpenBitFunResult<SkillInfo> {
+        if let Some(error) = Self::unimported_skill_error(&candidates, skill_name) {
+            return Err(error);
+        }
         match resolve_default_hidden_builtin_for_explicit_invocation(
-            skill_name, candidates, agent_type,
+            skill_name, candidates.into_iter().filter(|candidate| candidate.info.is_native()).collect(), agent_type,
         ) {
             ExplicitSkillInvocationResolution::Found(info) => Ok(info),
             ExplicitSkillInvocationResolution::NotFound => Err(OpenBitFunError::tool(format!(
@@ -1465,6 +1479,26 @@ impl SkillRegistry {
                 )))
             }
         }
+    }
+
+    fn unimported_skill_error(
+        candidates: &[SkillCandidate],
+        identifier: &str,
+    ) -> Option<OpenBitFunError> {
+        let matches = |candidate: &&SkillCandidate| {
+            candidate.info.key == identifier || candidate.info.name == identifier
+        };
+        if candidates
+            .iter()
+            .filter(matches)
+            .any(|candidate| candidate.info.is_native())
+        {
+            return None;
+        }
+        candidates.iter().find(matches).map(|candidate| OpenBitFunError::tool(format!(
+            "Skill '{}' is only discovered from '{}'; import it into OpenBitFun through Ecosystem Compatibility before invoking it.",
+            identifier, candidate.info.source_label
+        )))
     }
 
     async fn find_skill_info_for_explicit_invocation_workspace(
@@ -1671,7 +1705,11 @@ impl SkillRegistry {
         let scan = self
             .scan_skill_candidates_with_diagnostics_for_workspace(workspace_root)
             .await;
-        let candidates = scan.candidates;
+        let candidates: Vec<_> = scan
+            .candidates
+            .into_iter()
+            .filter(|candidate| candidate.info.is_native())
+            .collect();
         let all_skills = sort_skills(annotate_shadowed_skills(candidates.clone()));
         let user_overrides = load_user_mode_skill_overrides(mode_id)
             .await
@@ -1724,7 +1762,11 @@ impl SkillRegistry {
         let scan = self
             .scan_skill_candidates_with_diagnostics_for_remote_workspace(fs, remote_root)
             .await;
-        let candidates = scan.candidates;
+        let candidates: Vec<_> = scan
+            .candidates
+            .into_iter()
+            .filter(|candidate| candidate.info.is_native())
+            .collect();
         let all_skills = sort_skills(annotate_shadowed_skills(candidates.clone()));
         let user_overrides = load_user_mode_skill_overrides(mode_id)
             .await
@@ -1794,11 +1836,11 @@ impl SkillRegistry {
         let content = Self::read_local_skill_markdown(&info).await?;
 
         let mut data = Self::parse_skill_markdown(
-            info.path.clone(),
+            info.parser_path(),
             &content,
             info.level,
             true,
-            &info.source_slot,
+            info.parser_source_slot(),
         )
         .map_err(|error| OpenBitFunError::tool(error.to_string()))?;
         data.path = info.path;
@@ -1820,6 +1862,7 @@ impl SkillRegistry {
         let candidates = self
             .scan_skill_candidates_for_workspace(workspace_root)
             .await;
+        let unimported = Self::unimported_skill_error(&candidates, skill_key);
         let filtered = self
             .apply_mode_filters_for_workspace(candidates, workspace_root, agent_type)
             .await;
@@ -1828,6 +1871,9 @@ impl SkillRegistry {
             .map(|candidate| candidate.info)
             .find(|skill| skill.key == skill_key)
             .ok_or_else(|| {
+                if let Some(error) = unimported {
+                    return error;
+                }
                 OpenBitFunError::tool(format!(
                     "Skill key '{}' was not found or is disabled for this mode",
                     skill_key
@@ -1837,11 +1883,11 @@ impl SkillRegistry {
         let content = Self::read_local_skill_markdown(&info).await?;
 
         let mut data = Self::parse_skill_markdown(
-            info.path.clone(),
+            info.parser_path(),
             &content,
             info.level,
             true,
-            &info.source_slot,
+            info.parser_source_slot(),
         )
         .map_err(|error| OpenBitFunError::tool(error.to_string()))?;
         data.path = info.path;
@@ -1872,11 +1918,11 @@ impl SkillRegistry {
 
         let content = Self::read_skill_md_for_remote_merge(&info, fs).await?;
         let mut data = Self::parse_skill_markdown(
-            info.path.clone(),
+            info.parser_path(),
             &content,
             info.level,
             true,
-            &info.source_slot,
+            info.parser_source_slot(),
         )
         .map_err(|error| OpenBitFunError::tool(error.to_string()))?;
         data.path = info.path;
@@ -1899,6 +1945,7 @@ impl SkillRegistry {
         let candidates = self
             .scan_skill_candidates_for_remote_workspace(fs, remote_root)
             .await;
+        let unimported = Self::unimported_skill_error(&candidates, skill_key);
         let filtered = self
             .apply_mode_filters_for_remote_workspace(candidates, fs, remote_root, agent_type)
             .await;
@@ -1907,6 +1954,9 @@ impl SkillRegistry {
             .map(|candidate| candidate.info)
             .find(|skill| skill.key == skill_key)
             .ok_or_else(|| {
+                if let Some(error) = unimported {
+                    return error;
+                }
                 OpenBitFunError::tool(format!(
                     "Skill key '{}' was not found or is disabled for this mode",
                     skill_key
@@ -1915,11 +1965,11 @@ impl SkillRegistry {
 
         let content = Self::read_skill_md_for_remote_merge(&info, fs).await?;
         let mut data = Self::parse_skill_markdown(
-            info.path.clone(),
+            info.parser_path(),
             &content,
             info.level,
             true,
-            &info.source_slot,
+            info.parser_source_slot(),
         )
         .map_err(|error| OpenBitFunError::tool(error.to_string()))?;
         data.path = info.path;
@@ -2484,7 +2534,8 @@ mod remote_scan_tests {
             assert!(group[1].info.allow_implicit_invocation);
         }
         assert!(skills[0].priority < skills[13].priority);
-        assert!(fs.calls.load(Ordering::SeqCst) <= 100);
+        // 92 discovery/policy calls plus one provenance existence check for each native package.
+        assert!(fs.calls.load(Ordering::SeqCst) <= 92 + 13);
         assert_eq!(fs.active.load(Ordering::SeqCst), 0);
         assert!(fs.peak.load(Ordering::SeqCst) > 1);
         assert!(fs.peak.load(Ordering::SeqCst) <= super::REMOTE_SKILL_SCAN_CONCURRENCY);
