@@ -48,7 +48,7 @@ describe('AgentCompanionPetService built-in presets', () => {
     expect(invoke).not.toHaveBeenCalled();
   });
 
-  it('lists OpenBitFun Girl second and resolves its packaged v2 layout without host access', async () => {
+  it('lists Feiling second and resolves its packaged v2 layout without host access', async () => {
     const { listAgentCompanionPets, resolveAgentCompanionPet } = await import('./AgentCompanionPetService');
     const pets = await listAgentCompanionPets();
     const girl = pets[1];
