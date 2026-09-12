@@ -69,7 +69,7 @@ const BUILTIN_PETS: AgentCompanionPetSelection[] = [
   {
     id: 'openbitfun-girl',
     displayName: BUILTIN_PET_DISPLAY_NAMES.openbitfunGirl,
-    description: 'Feiling, a silver-haired short-legged companion with a softly oval face and hollow rounded-hexagon ornaments.',
+    description: 'Fangling, a silver-haired short-legged companion with a softly oval face and hollow rounded-hexagon ornaments.',
     source: 'preset',
     packagePath: `${BUILTIN_PET_BASE}/openbitfun-girl`,
     spritesheetPath: `${BUILTIN_PET_BASE}/openbitfun-girl/spritesheet.webp`,
