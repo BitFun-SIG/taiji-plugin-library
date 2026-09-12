@@ -86,6 +86,7 @@ export default function ExternalAgentContent({ runtime, snapshot, catalogFailed,
   const alive = useRef(false);
   const loadSequence = useRef(0);
   const reviewSequence = useRef(0);
+  const mcpPlanSequence = useRef(0);
 
   const loadSupplemental = useCallback(async (refresh = false) => {
     const sequence = ++loadSequence.current;
@@ -158,17 +159,20 @@ export default function ExternalAgentContent({ runtime, snapshot, catalogFailed,
   }, [hooks, loading, onSupplementalCounts, skills]);
 
   const hasMcp = items.some((item) => item.kind === 'mcp' && item.discovered);
-  useEffect(() => {
-    let cancelled = false;
+  const refreshMcpPlan = useCallback(async () => {
+    const sequence = ++mcpPlanSequence.current;
     setPlan(null);
     if (!localImportSupported || !hasMcp) { setPlanLoading(false); return; }
     setPlanLoading(true);
-    void externalSourcesAPI.planMcpImport(workspacePath || undefined)
-      .then((next) => { if (!cancelled) setPlan(next); })
-      .catch(() => { if (!cancelled) setPlan(null); })
-      .finally(() => { if (!cancelled) setPlanLoading(false); });
-    return () => { cancelled = true; };
-  }, [hasMcp, localImportSupported, snapshot?.generation, workspacePath]);
+    const next = await externalSourcesAPI.planMcpImport(workspacePath || undefined).catch(() => null);
+    if (!alive.current || sequence !== mcpPlanSequence.current) return;
+    setPlan(next);
+    setPlanLoading(false);
+  }, [hasMcp, localImportSupported, workspacePath]);
+  useEffect(() => {
+    void refreshMcpPlan();
+    return () => { mcpPlanSequence.current += 1; };
+  }, [refreshMcpPlan, snapshot?.generation]);
 
   const importedHook = (item: ContentItem) => hooks?.imports.some((entry) => (
     entry.source.key.providerId === item.hookSource?.key.providerId
@@ -280,8 +284,8 @@ export default function ExternalAgentContent({ runtime, snapshot, catalogFailed,
         if (result.status === 'imported') setCompleted((current) => new Set([...current, result.id]));
       });
       if (alive.current) {
-        await loadSupplemental(true);
-        await onRefresh();
+        void loadSupplemental(true);
+        void onRefresh().catch(() => { if (alive.current) setNotice(t('content.refreshAfterImportFailed')); });
       }
     } catch { if (alive.current) setNotice(t('content.refreshAfterImportFailed')); }
     finally { if (alive.current) setBusy(false); }
@@ -365,7 +369,7 @@ export default function ExternalAgentContent({ runtime, snapshot, catalogFailed,
       setDetail(null);
       notification.success(t('content.importSuccess', { name: captured.item.name }), { duration: 3200 });
       void loadSupplemental(true);
-      void onRefresh();
+      void onRefresh().catch(() => { if (alive.current) setNotice(t('content.refreshAfterImportFailed')); });
     } catch (error) {
       const reason = importErrorMessage(error);
       const conflict = reason.includes('Skill target already exists with different content') || reason.includes('Skill target belongs to a different import');
@@ -419,16 +423,9 @@ export default function ExternalAgentContent({ runtime, snapshot, catalogFailed,
         const nativeKey = captured.review.receipt.nativeKey;
         setSkills((current) => current.filter((entry) => entry.key !== nativeKey));
       }
-      if (captured.review.kind === 'mcp') {
-        setPlan(null);
-        setPlanLoading(true);
-        const next = await externalSourcesAPI.planMcpImport(workspacePath || undefined).catch(() => null);
-        if (!alive.current) return;
-        setPlan(next);
-        setPlanLoading(false);
-      }
+      if (captured.review.kind === 'mcp') void refreshMcpPlan();
       void loadSupplemental(true);
-      void onRefresh();
+      void onRefresh().catch(() => { if (alive.current) setNotice(t('content.refreshAfterImportFailed')); });
     } catch (error) {
       if (alive.current) setNotice(`${t('content.undoFailed')} ${importErrorMessage(error)}`);
     } finally {
@@ -467,9 +464,9 @@ export default function ExternalAgentContent({ runtime, snapshot, catalogFailed,
       });
       if (!alive.current) return;
       setSelected(new Set());
-      await loadSupplemental(true);
-      setPlan(await externalSourcesAPI.planMcpImport(workspacePath || undefined).catch(() => null));
-      await onRefresh();
+      void loadSupplemental(true);
+      void refreshMcpPlan();
+      void onRefresh().catch(() => { if (alive.current) setNotice(t('content.refreshAfterImportFailed')); });
     } catch (error) { if (alive.current) setNotice(`${t('content.undoFailed')} ${importErrorMessage(error)}`); }
     finally { if (alive.current) setBusy(false); }
   }
@@ -497,7 +494,7 @@ export default function ExternalAgentContent({ runtime, snapshot, catalogFailed,
         <div className="ecosystem-compatibility__import-action">
           {localImportSupported ? <><Button size="sm" variant="primary" disabled={busy || loading || planLoading} onClick={() => void prepareBatch()}>{t('content.importAll')}</Button>
             <Button size="sm" variant="outline" disabled={busy || loading || !items.some((item) => importState(item) === 'imported')} onClick={() => void prepareBatchUndo()}>{t('content.undoAll')}</Button></> : null}
-          <IconButton size="sm" variant="outline" icon={<Icon name="refresh" size="sm" />} aria-label={t('content.refresh')} title={t('content.refresh')} disabled={busy || loading} onClick={() => { setNotice(null); void loadSupplemental(true); void onRefresh(); }} />
+          <IconButton size="sm" variant="outline" icon={<Icon name="refresh" size="sm" />} aria-label={t('content.refresh')} title={t('content.refresh')} disabled={busy || loading} onClick={() => { setNotice(null); void loadSupplemental(true); void onRefresh().catch(() => { if (alive.current) setNotice(t('content.refreshAfterImportFailed')); }); }} />
         </div>
       </div>
       {notice && !review && !undo && !batch && !batchUndo ? <p className="ecosystem-compatibility__feedback" role="status">{notice}</p> : null}

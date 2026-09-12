@@ -19,9 +19,13 @@ home/profile/workspace `cordis.yml` and `cordis.patch.yml`. Each file is an
 independent reuse source, not an effective native profile. Literal stdio and
 HTTPS Streamable HTTP declarations use the shared MCP provider and import ports.
 Preserve launch-relative cwd, the 60-second default tool timeout, and disabled
-OAuth discovery. Dynamic YAML, partial patches, scoped lifecycle behavior and
-explicit reconnect policies must remain unsupported; never evaluate Cordis or
-install packages during discovery. Environment and headers stay private to the
+OAuth discovery. Dynamic YAML, partial patches and scoped lifecycle behavior remain unsupported.
+Direct compatibility activation rejects explicit reconnect/startup policies;
+explicit snapshot import accepts valid literal reconnect and failOnStartupError
+settings with a disclosure that OpenBitFun owns lifecycle after import. Source
+disabled state does not block import. Keep the discovery revision when preparing
+the import so status relaxation cannot break or bypass stale-plan checks. Never
+evaluate Cordis or install packages during discovery. Environment and headers stay private to the
 approved runtime preparation and require manual setup for snapshot import.
 
 It does not execute Cordis plugins, install npm packages, or depend on a

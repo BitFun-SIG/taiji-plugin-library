@@ -690,3 +690,47 @@ command = "outside-server"
         "project provenance must not cover an outside target"
     );
 }
+
+#[test]
+fn disabled_servers_import_without_activating_and_invalid_fields_still_block() {
+    let fixture = Fixture::new();
+    fs::write(
+        fixture.codex_home.join("config.toml"),
+        r#"
+[mcp_servers.docs]
+command = "docs"
+enabled = false
+[mcp_servers.invalid]
+command = "docs"
+enabled = false
+unsupported_policy = true
+"#,
+    )
+    .unwrap();
+    let provider = fixture.provider();
+    let mut input = fixture.input();
+    let snapshot = provider.discover(&input).unwrap();
+    let docs = snapshot.servers.iter().find(|s| s.name == "docs").unwrap();
+    assert_eq!(
+        docs.static_status,
+        ExternalMcpStaticStatus::DisabledBySource
+    );
+    assert!(provider
+        .prepare_server(&input, &docs.id, &docs.behavior_version)
+        .is_err());
+    assert!(provider
+        .prepare_import(&input, &docs.id, &docs.behavior_version)
+        .is_ok());
+    let invalid = snapshot
+        .servers
+        .iter()
+        .find(|s| s.name == "invalid")
+        .unwrap();
+    assert!(provider
+        .prepare_import(&input, &invalid.id, &invalid.behavior_version)
+        .is_err());
+    input.suppressed_sources.insert(docs.id.source.clone());
+    assert!(provider
+        .prepare_import(&input, &docs.id, &docs.behavior_version)
+        .is_err());
+}

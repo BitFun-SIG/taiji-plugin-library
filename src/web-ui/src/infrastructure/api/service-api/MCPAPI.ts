@@ -1,6 +1,7 @@
  
 
 import { api } from './ApiClient';
+import { notifyMcpConfigChanged } from '@/infrastructure/mcp/configEvents';
 import { getActiveSurfaceScope } from '@/infrastructure/peer-device/deviceSurface';
 
 function canonicalConfig(json: string): string {
@@ -369,7 +370,7 @@ export class MCPAPI {
     const scope = getActiveSurfaceScope();
     try {
       await api.invoke('save_mcp_json_config', { jsonConfig, expectedFingerprint });
-      scope.assertCurrent('save MCP configuration');
+      notifyMcpConfigChanged(scope);
       return { runtimeApplied: true };
     } catch (error) {
       scope.assertCurrent('confirm saved MCP configuration');
@@ -379,6 +380,7 @@ export class MCPAPI {
       const message = error instanceof Error ? error.message : error;
       if (typeof message === 'string'
         && message.startsWith('MCP config was saved, but runtime reconciliation failed:')) {
+        notifyMcpConfigChanged(scope);
         return { runtimeApplied: false };
       }
       if (error instanceof Error && (error as Error & { code?: string }).code === 'REQUEST_TIMEOUT') {
@@ -387,6 +389,7 @@ export class MCPAPI {
         const snapshot = await this.loadMCPJsonConfig().catch(() => null);
         scope.assertCurrent('read back saved MCP configuration');
         if (snapshot && canonicalConfig(snapshot.jsonConfig) === canonicalConfig(jsonConfig)) {
+          notifyMcpConfigChanged(scope);
           return { runtimeApplied: false };
         }
       }

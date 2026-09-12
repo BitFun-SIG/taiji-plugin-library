@@ -5,9 +5,9 @@ use openbitfun_product_domains::external_sources::{
     EcosystemId, ExternalMcpImportApplyOutcomeV1, ExternalMcpImportApplyRequestV1,
     ExternalMcpImportApplyResultV1, ExternalMcpImportDispositionV1, ExternalMcpImportPlanItemV1,
     ExternalMcpImportPlanV1, ExternalMcpImportedItemV1, ExternalMcpServerDefinition,
-    ExternalMcpStaticStatus, ExternalSourceOperationError, ExternalSourceOperationErrorCode,
-    ExternalSourceOperationResult, PreparedExternalMcpImportServer,
-    PreparedExternalMcpImportTransport, EXTERNAL_MCP_IMPORT_SCHEMA_V1,
+    ExternalSourceOperationError, ExternalSourceOperationErrorCode, ExternalSourceOperationResult,
+    PreparedExternalMcpImportServer, PreparedExternalMcpImportTransport,
+    EXTERNAL_MCP_IMPORT_SCHEMA_V1,
 };
 use openbitfun_services_integrations::mcp::config::{
     MCPImportError, MCPImportServer, MCPImportTransport, MCPUserImportSnapshot,
@@ -270,17 +270,6 @@ fn build_import_plan(
         });
         let (proposed_native_id, disposition, reason_code) = if already_imported {
             (None, ExternalMcpImportDispositionV1::AlreadyImported, None)
-        } else if !candidate.definition.source_enabled
-            || !matches!(
-                candidate.definition.static_status,
-                ExternalMcpStaticStatus::Ready
-            )
-        {
-            (
-                None,
-                ExternalMcpImportDispositionV1::Unavailable,
-                Some("external_mcp.import_unavailable".to_string()),
-            )
         } else {
             match candidate.preparation {
                 ExternalMcpImportPreparation::Unavailable(reason) => (
@@ -527,7 +516,7 @@ fn operation_error(
 mod tests {
     use super::*;
     use openbitfun_product_domains::external_sources::{
-        ExternalMcpTransportKind, SourceKey, SourceQualifiedMcpServerId,
+        ExternalMcpStaticStatus, ExternalMcpTransportKind, SourceKey, SourceQualifiedMcpServerId,
     };
 
     fn candidate(command: &str) -> ExternalMcpImportCandidate {
@@ -573,6 +562,25 @@ mod tests {
             fingerprint: "sha256:target".to_string(),
             native_ids: ids.iter().map(|id| (*id).to_string()).collect(),
             imports: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn import_eligibility_uses_preparation_instead_of_external_runtime_status() {
+        for status in [
+            ExternalMcpStaticStatus::DisabledBySource,
+            ExternalMcpStaticStatus::Unsupported {
+                reason: "External lifecycle is not implemented".into(),
+            },
+        ] {
+            let mut value = candidate("docs");
+            value.definition.source_enabled = false;
+            value.definition.static_status = status;
+            let plan = build_import_plan(&target(&[]), vec![value]);
+            assert_eq!(
+                plan.public.items[0].disposition,
+                ExternalMcpImportDispositionV1::Eligible
+            );
         }
     }
 

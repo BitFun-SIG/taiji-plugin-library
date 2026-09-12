@@ -1,3 +1,6 @@
+mod v1;
+mod v2;
+
 use crate::local_source_paths::{
     local_source_plan, local_source_watch_roots, normalize_path_lexically,
     LocalConfigDirectoryKind, LocalConfigDocument, LocalConfigDocumentKind, LocalSourcePlanItem,
@@ -104,6 +107,8 @@ impl OpenCodeMcpProvider {
         let mut diagnostics = Vec::new();
         let mut merged_servers = BTreeMap::<String, Value>::new();
         let mut provenance = BTreeMap::<String, Vec<SourceKey>>::new();
+        let mut format = None;
+        let mut defaults = serde_json::json!({});
 
         for layer in self.discover_layers(&input.context) {
             let key = source_key(&layer);
@@ -138,8 +143,25 @@ impl OpenCodeMcpProvider {
             });
             diagnostics.append(&mut layer_diagnostics);
 
-            if parsed.fatal || input.suppressed_sources.contains(&key) {
+            if input.suppressed_sources.contains(&key) {
                 continue;
+            }
+            if parsed.fatal {
+                return Err(ExternalSourceProviderError::new(
+                    "opencode.mcp.overlay_invalid",
+                    "An OpenCode MCP config is invalid; effective declarations cannot be prepared without its connection settings",
+                    false,
+                ));
+            }
+            if parsed.v2 || !parsed.servers.is_empty() {
+                if format.is_some_and(|previous| previous != parsed.v2) {
+                    return Err(ExternalSourceProviderError::new("opencode.mcp.mixed_versions", "OpenCode V1 and V2 MCP layers cannot be combined; use one format for the selected source configuration", false));
+                }
+                format = Some(parsed.v2);
+            }
+            if parsed.v2 {
+                deep_merge(&mut defaults, parsed.defaults);
+                diagnostics.push(ExternalSourceDiagnostic::warning("opencode.mcp.v2_host_policy", "OpenCode V2 MCP connections are imported independently; Code Mode, host permissions and connection lifecycle are managed by OpenBitFun", Some(key.clone())).with_asset_kind(ExternalSourceAssetKind::Mcp));
             }
             for (name, patch) in parsed.servers {
                 if merged_servers.len() >= MAX_MCP_SERVERS && !merged_servers.contains_key(&name) {
@@ -158,7 +180,11 @@ impl OpenCodeMcpProvider {
                 let current = merged_servers
                     .entry(name.clone())
                     .or_insert_with(|| Value::Object(Map::new()));
-                deep_merge(current, patch);
+                if parsed.v2 {
+                    *current = patch;
+                } else {
+                    v1::merge(current, patch);
+                }
                 let entries = provenance.entry(name).or_default();
                 if entries.last() != Some(&key) {
                     entries.push(key.clone());
@@ -173,14 +199,27 @@ impl OpenCodeMcpProvider {
             let Some(effective_source) = server_provenance.last().cloned() else {
                 continue;
             };
-            match materialize_server(
-                &input.context,
-                &input.revision_key,
-                effective_source,
-                server_provenance,
-                name,
-                value,
-            ) {
+            let materialized = if format == Some(true) {
+                v2::materialize(
+                    &input.context,
+                    &input.revision_key,
+                    effective_source,
+                    server_provenance,
+                    name,
+                    value,
+                    &defaults,
+                )
+            } else {
+                materialize_server(
+                    &input.context,
+                    &input.revision_key,
+                    effective_source,
+                    server_provenance,
+                    name,
+                    value,
+                )
+            };
+            match materialized {
                 Ok(server) => {
                     let stable_key = server.definition.id.stable_key();
                     prepared.insert(stable_key, server.prepared);
@@ -215,6 +254,7 @@ impl OpenCodeMcpProvider {
         input: &ExternalMcpDiscoveryInput,
         server_id: &SourceQualifiedMcpServerId,
         expected_behavior_version: &str,
+        for_import: bool,
     ) -> Result<(ExternalMcpServerDefinition, PreparedTransportTemplate), ExternalSourceProviderError>
     {
         if server_id.source.provider_id.as_str() != PROVIDER_ID {
@@ -245,8 +285,11 @@ impl OpenCodeMcpProvider {
                 true,
             ));
         }
-        if !definition.source_enabled
-            || !matches!(definition.static_status, ExternalMcpStaticStatus::Ready)
+        if (!for_import && !definition.source_enabled)
+            || !matches!(
+                definition.static_status,
+                ExternalMcpStaticStatus::Ready | ExternalMcpStaticStatus::DisabledBySource
+            )
         {
             return Err(ExternalSourceProviderError::new(
                 "opencode.mcp.not_activatable",
@@ -296,7 +339,7 @@ impl ExternalMcpSourceProvider for OpenCodeMcpProvider {
         expected_behavior_version: &str,
     ) -> Result<PreparedExternalMcpServer, ExternalSourceProviderError> {
         let (definition, prepared) =
-            self.current_preparation(input, server_id, expected_behavior_version)?;
+            self.current_preparation(input, server_id, expected_behavior_version, false)?;
         resolve_runtime_values(
             prepared,
             server_id.clone(),
@@ -312,7 +355,7 @@ impl ExternalMcpSourceProvider for OpenCodeMcpProvider {
         expected_behavior_version: &str,
     ) -> Result<PreparedExternalMcpImportServer, ExternalSourceProviderError> {
         let (definition, prepared) =
-            self.current_preparation(input, server_id, expected_behavior_version)?;
+            self.current_preparation(input, server_id, expected_behavior_version, true)?;
         prepare_import_projection(definition, prepared)
     }
 
@@ -449,6 +492,12 @@ fn materialize_local_server(
     let mut reason = unsupported_field_reason(object, LOCAL_FIELDS)
         .or_else(|| command_parts.as_ref().err().cloned())
         .or_else(|| unsupported_variable_reason(object));
+    if object
+        .get("enabled")
+        .is_some_and(|value| !value.is_boolean())
+    {
+        reason.get_or_insert("OpenCode V1 enabled must be a boolean".into());
+    }
     let timeouts = timeout_overrides(object).unwrap_or_else(|error| {
         reason.get_or_insert(error);
         ExternalMcpTimeouts::default()
@@ -508,10 +557,10 @@ fn materialize_local_server(
     }
     let command = command_parts.first().cloned().unwrap_or_default();
     let args = command_parts.iter().skip(1).cloned().collect::<Vec<_>>();
-    let static_status = if !source_enabled {
-        ExternalMcpStaticStatus::DisabledBySource
-    } else if let Some(reason) = reason {
+    let static_status = if let Some(reason) = reason {
         ExternalMcpStaticStatus::Unsupported { reason }
+    } else if !source_enabled {
+        ExternalMcpStaticStatus::DisabledBySource
     } else {
         ExternalMcpStaticStatus::Ready
     };
@@ -561,6 +610,12 @@ fn materialize_remote_server(
         .to_string();
     let mut reason = unsupported_field_reason(object, REMOTE_FIELDS)
         .or_else(|| unsupported_variable_reason(object));
+    if object
+        .get("enabled")
+        .is_some_and(|value| !value.is_boolean())
+    {
+        reason.get_or_insert("OpenCode V1 enabled must be a boolean".into());
+    }
     let timeouts = timeout_overrides(object).unwrap_or_else(|error| {
         reason.get_or_insert(error);
         ExternalMcpTimeouts::default()
@@ -610,10 +665,10 @@ fn materialize_remote_server(
             format!("Remote MCP runtime values exceed the {MAX_RUNTIME_TEXT_BYTES} byte limit")
         });
     }
-    let static_status = if !source_enabled {
-        ExternalMcpStaticStatus::DisabledBySource
-    } else if let Some(reason) = reason {
+    let static_status = if let Some(reason) = reason {
         ExternalMcpStaticStatus::Unsupported { reason }
+    } else if !source_enabled {
+        ExternalMcpStaticStatus::DisabledBySource
     } else {
         ExternalMcpStaticStatus::Ready
     };
@@ -1008,6 +1063,8 @@ impl ConfigLayer {
 }
 
 struct ParsedConfigLayer {
+    v2: bool,
+    defaults: Value,
     servers: BTreeMap<String, Value>,
     diagnostics: Vec<ExternalSourceDiagnostic>,
     content_version: String,
@@ -1020,6 +1077,8 @@ fn parse_config_layer(
 ) -> ParsedConfigLayer {
     match document.read_bounded(MAX_CONFIG_FILE_BYTES) {
         Ok(BoundedTextRead::TooLarge) => ParsedConfigLayer {
+            v2: false,
+            defaults: Value::Null,
             servers: BTreeMap::new(),
             diagnostics: vec![ExternalSourceDiagnostic::error(
                 "opencode.mcp.config_too_large",
@@ -1031,6 +1090,8 @@ fn parse_config_layer(
             fatal: true,
         },
         Ok(BoundedTextRead::InvalidUtf8) => ParsedConfigLayer {
+            v2: false,
+            defaults: Value::Null,
             servers: BTreeMap::new(),
             diagnostics: vec![ExternalSourceDiagnostic::error(
                 "opencode.mcp.config_invalid_utf8",
@@ -1051,6 +1112,8 @@ fn parse_config_layer(
                 Ok(value) => value,
                 Err(error) => {
                     return ParsedConfigLayer {
+                        v2: false,
+                        defaults: Value::Null,
                         servers: BTreeMap::new(),
                         diagnostics: vec![ExternalSourceDiagnostic::error(
                             "opencode.mcp.config_invalid",
@@ -1063,27 +1126,33 @@ fn parse_config_layer(
                     };
                 }
             };
-            let servers = match value.get("mcp") {
-                None => BTreeMap::new(),
-                Some(Value::Object(servers)) => servers
-                    .iter()
-                    .map(|(name, value)| (name.clone(), value.clone()))
-                    .collect(),
-                Some(_) => {
+            let is_v2 = v2::matches(&value);
+            let parsed = if is_v2 {
+                v2::parse(&value)
+            } else {
+                v1::servers(&value).map(|servers| (servers, Value::Null))
+            };
+            let (servers, defaults) = match parsed {
+                Ok(parsed) => parsed,
+                Err(reason) => {
                     return ParsedConfigLayer {
+                        v2: is_v2,
+                        defaults: Value::Null,
                         servers: BTreeMap::new(),
                         diagnostics: vec![ExternalSourceDiagnostic::error(
                             "opencode.mcp.config_invalid",
-                            "OpenCode top-level mcp field must be an object",
+                            reason,
                             None,
                         )
                         .with_asset_kind(ExternalSourceAssetKind::Mcp)],
                         content_version,
                         fatal: true,
-                    };
+                    }
                 }
             };
             ParsedConfigLayer {
+                v2: is_v2,
+                defaults,
                 servers,
                 diagnostics: Vec::new(),
                 content_version,
@@ -1091,6 +1160,8 @@ fn parse_config_layer(
             }
         }
         Err(error) => ParsedConfigLayer {
+            v2: false,
+            defaults: Value::Null,
             servers: BTreeMap::new(),
             diagnostics: vec![ExternalSourceDiagnostic::error(
                 "opencode.mcp.config_unreadable",

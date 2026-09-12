@@ -125,7 +125,7 @@ fn secrets_stay_private_and_configuration_changes_invalidate_preparation() {
 }
 
 #[test]
-fn disabled_suppressed_and_unsupported_declarations_cannot_prepare() {
+fn disabled_and_lifecycle_declarations_import_but_do_not_activate() {
     let fixture = Fixture::new();
     fixture.write("cordis.yml", "- id: group\n  group: true\n  disabled: true\n  config:\n  - id: disabled\n    name: '@deepseek-ai/dsh-mcp-client'\n    config: {serverName: disabled, transport: stdio, command: docs}\n- id: dynamic\n  name: '@deepseek-ai/dsh-mcp-client'\n  config: {serverName: dynamic, transport: stdio, command: !js 'process.exit(1)'}\n- id: reconnect\n  name: '@deepseek-ai/dsh-mcp-client'\n  config: {serverName: reconnect, transport: stdio, command: docs, reconnect: {enabled: false}}\n");
     let provider = fixture.provider();
@@ -137,9 +137,12 @@ fn disabled_suppressed_and_unsupported_declarations_cannot_prepare() {
         assert!(provider
             .prepare_server(&input, &server.id, &server.behavior_version)
             .is_err());
-        assert!(provider
-            .prepare_import(&input, &server.id, &server.behavior_version)
-            .is_err());
+        assert_eq!(
+            provider
+                .prepare_import(&input, &server.id, &server.behavior_version)
+                .is_ok(),
+            server.name != "dynamic"
+        );
     }
     input
         .suppressed_sources
@@ -147,6 +150,11 @@ fn disabled_suppressed_and_unsupported_declarations_cannot_prepare() {
     let suppressed = provider.discover(&input).unwrap();
     assert_eq!(suppressed.sources.len(), 1);
     assert!(suppressed.servers.is_empty());
+    for server in &snapshot.servers {
+        assert!(provider
+            .prepare_import(&input, &server.id, &server.behavior_version)
+            .is_err());
+    }
 }
 
 #[test]
@@ -186,4 +194,30 @@ fn malformed_and_oversized_files_produce_explicit_errors() {
         fixture.write("cordis.yml", &body);
         assert!(provider.discover(&fixture.input()).is_err());
     }
+}
+
+#[test]
+fn import_validates_lifecycle_literals_and_fences_source_changes() {
+    let fixture = Fixture::new();
+    let provider = fixture.provider();
+    let input = fixture.input();
+    let body = "- id: docs\n  name: '@deepseek-ai/dsh-mcp-client'\n  disabled: true\n  config: {serverName: docs, transport: stdio, command: docs, failOnStartupError: true, reconnect: {enabled: true, initialDelayMs: 1500, maxAttempts: 3}}\n";
+    fixture.write("cordis.yml", body);
+    let snapshot = provider.discover(&input).unwrap();
+    let server = &snapshot.servers[0];
+    assert!(provider
+        .prepare_import(&input, &server.id, &server.behavior_version)
+        .is_ok());
+    fixture.write(
+        "cordis.yml",
+        &body.replace("maxAttempts: 3", "maxAttempts: 0"),
+    );
+    assert!(provider
+        .prepare_import(&input, &server.id, &server.behavior_version)
+        .is_err());
+    let invalid = provider.discover(&input).unwrap();
+    let server = &invalid.servers[0];
+    assert!(provider
+        .prepare_import(&input, &server.id, &server.behavior_version)
+        .is_err());
 }

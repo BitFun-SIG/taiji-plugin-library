@@ -749,11 +749,32 @@ Command；明确缺失且未被标记失败的 Command 是稳定删除。产品�
    Claude Code 单服务器执行 timeout 已映射为统一的启动、目录读取、执行阶段事实；Codex `startup_timeout_sec` 同时约束
    初始化和首次工具目录请求，`tool_timeout_sec` 只约束工具执行。只有来源显式声明时才覆盖现有运行行为；当前使用每次请求的
    硬期限，不因 progress 重置，超时只停止
-   OpenBitFun 的当前等待，不承诺服务端工作已经取消，也不触发自动重放或重启。Remote 执行域、OpenCode OAuth client 配置、SSE、OpenCode V2 分阶段 timeout
-   配置格式、Agent 范围和通用凭据归属模块明确延后。
+   OpenBitFun 的当前等待，不承诺服务端工作已经取消，也不触发自动重放或重启。Remote 执行域、OpenCode OAuth client 配置、SSE、Agent 范围和通用凭据归属模块明确延后。OpenCode V2 的独立解析与阶段 timeout 见下面的显式导入边界。
 9. 本阶段只把外部 MCP 的 Tool 目录接入 Agent Tool 归属模块。通用 Resource/Prompt/MCP App Desktop 接口不接受无工作区
    上下文的外部 runtime id；外部服务器发起的 roots、sampling 和 elicitation 请求也一律拒绝，防止跨工作区读取或借用
    OpenBitFun 宿主能力。后续若接入这些能力，必须先补独立契约、工作区路由与权限交互，不能复用全局连接绕过当前边界。
+
+MCP 显式发现与导入的当前边界（2026-09）：
+
+- Claude Code 读取用户 `.claude.json`、项目 `.mcp.json` 与 `projects[path].mcpServers`，保留原生整条覆盖顺序，
+  并读取项目 `disabledMcpServers` 作为来源状态。HTTP 导入允许 OpenBitFun 自行完成动态 OAuth 登录；不复制外部登录缓存。
+- Codex 读取用户和项目 `config.toml` 的 MCP 声明并保留字段覆盖；普通 `enabled = false` 不阻止导入。
+- OpenCode V1/V2 使用 adapter 内独立模块：V1 的 `mcp.<name>` 递归合并；V2 的 `mcp.servers.<name>` 整条替换，
+  使用 `disabled` 和 startup/catalog/execution 超时继承。有效 V1 `servers` 同名服务器保持兼容，来源链混用版本时明确报错。
+- DSH 读取 home/profile/workspace Cordis 文件中的完整静态 MCP 声明；普通禁用、有效的 reconnect/failOnStartupError
+  可导入，预览说明生命周期由 OpenBitFun 接管。动态 YAML、依赖执行或缺失上下文的 patch、作用域策略仍明确不可导入。
+  PI 本轮不新增 MCP provider；Claude 插件包/云端连接器与自定义配置目录也不属于当前声明发现范围。
+- 导入是显式复制，与外部 Agent 是否在线、是否启用无关，也不需要启动外部 Agent。协调器与导入计划以独立的
+  `prepare_import` 结果判断可导入性；直接兼容运行仍保留原启用条件。OpenBitFun 的来源抑制、导入权限及版本守卫继续生效。
+- MCP 导入计划和应用只刷新 MCP provider，保留当前来源策略与版本守卫，不等待无关的 Command/Tool/Agent/Reference 扫描。
+  同步的导入准备文件读取放在 blocking worker；持久化成功后通过前端带 surface 身份的配置变更通知刷新已挂载的 MCP 页面，
+  原生列表重新读 owner 配置，不依赖重新进入页面。未保存 JSON 草稿及其原 CAS fingerprint 不被刷新覆盖；失败或 stale 导入不发成功通知。
+  导入/撤销后的补充目录重扫在后台进行，不能延长已提交操作的界面锁定；撤销仍等待必要的目标运行清理。
+- 成功导入写入原生用户 MCP 配置，默认 `enabled=false`、`autoStart=false`，保留可表达的连接参数、cwd、阶段超时和认证开关。
+  OpenBitFun 管理启停、登录、重连和工具权限；外部文件后续变化不自动覆盖或删除副本。环境变量、Header、认证或权限字段
+  无法由当前导入契约无损表达时返回 setup-required/unsupported，不把占位符当字面量写入，不静默丢弃约束。
+- 本地 Windows 定向测试覆盖四个 adapter、协调器、导入计划与原生配置写入/旧数据往返。Remote Workspace 保持显式不支持；
+  Remote Control、Peer Device 和 Detached Dispatch 未经本轮端到端验证，不能把本地导入测试作为远端能力证据。
 
 独立 Hook 切片不依赖 Plugin Runtime 阶段：
 
