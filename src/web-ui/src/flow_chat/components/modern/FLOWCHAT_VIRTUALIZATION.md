@@ -1,5 +1,16 @@
 # FlowChat Virtualization
 
+## Interrupted turn continuity
+
+Cancelled rounds remain in the ordinary transcript. The display projection removes
+only the terminal legacy `stream_error` diagnostic whose serialized error starts
+with `Cancelled: `; genuine failed attempts keep their retry history. Saved data
+is unchanged. A recovery generation and a preceding cancelled round place a quiet
+continuation label inside the next visible model-round row, including when empty
+cancelled rounds precede it. That boundary prevents cross-round grouping from
+hiding the label; ordinary within-round tool folding remains available. Round ids
+and virtual row keys stay unchanged, with no viewport writes or mount animation.
+
 ## Embedded session lifetime
 
 `BtwSessionPanel` keeps a lightweight tab-owned wrapper while its content is

@@ -16,6 +16,7 @@ each missing what the other had.
 
 | Test | Contract it holds |
 |---|---|
+| `modelRoundItemMemo.test.ts` | settled rows refresh continuation labels and tool grouping hints without invalidating equivalent hints |
 | `flowChatTailFollow.test.ts` | the three-quarter reservation and `hold-tail` geometry |
 | `flowChatCollapseMotion.test.ts` | collapse does not move earlier content |
 | `useFlowChatFollowOutput.test.tsx` | one-shot new-Turn reveal, frame loop, blank crossing, resize realign |
