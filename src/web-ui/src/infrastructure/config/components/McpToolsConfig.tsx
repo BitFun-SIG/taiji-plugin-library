@@ -47,6 +47,9 @@ import {
 import { systemAPI } from '../../api/service-api/SystemAPI';
 import { getEcosystemSourceLabel } from '../skillSourcePresentation';
 import './McpToolsConfig.scss';
+import { globalEventBus } from '@/infrastructure/event-bus';
+import { MCP_CONFIG_CHANGED, type MCPConfigChanged } from '@/infrastructure/mcp/configEvents';
+import { isLocalSurface } from '@/infrastructure/peer-device/deviceSurface';
 
 const log = createLogger('McpToolsConfig');
 
@@ -458,6 +461,17 @@ const McpToolsConfig: React.FC = () => {
     void loadServers();
     void loadJsonConfig();
   }, [desktopConfigAvailable, loadJsonConfig, loadServers]);
+
+  useEffect(() => {
+    if (!desktopConfigAvailable) return;
+    return globalEventBus.on<MCPConfigChanged>(MCP_CONFIG_CHANGED, ({ surfaceId }) => {
+      if (!isLocalSurface(surfaceId)) return;
+      // Settings scenes can stay mounted while the ecosystem page mutates MCP.
+      void loadServers();
+      // Preserve an open editor draft and its CAS fingerprint after other writes.
+      if (!jsonDirty && !mcpSavingRef.current) void loadJsonConfig();
+    });
+  }, [desktopConfigAvailable, jsonDirty, loadJsonConfig, loadServers]);
 
   useEffect(() => {
     if (!desktopConfigAvailable || mcpLoading) return;

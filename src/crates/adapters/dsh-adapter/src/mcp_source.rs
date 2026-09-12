@@ -48,6 +48,7 @@ struct Materialized {
     transports: BTreeMap<String, PreparedExternalMcpTransport>,
 }
 
+#[derive(Clone)]
 struct Declaration {
     identity: String,
     config: Value,
@@ -131,6 +132,7 @@ impl DshMcpProvider {
     fn materialize(
         &self,
         input: &ExternalMcpDiscoveryInput,
+        for_import: bool,
     ) -> Result<Materialized, ExternalSourceProviderError> {
         if !self.options.dsh_home.is_absolute()
             || input
@@ -224,7 +226,8 @@ impl DshMcpProvider {
                 if incomplete || duplicate {
                     declaration.unsupported = Some("DSH patch composition or duplicate declarations must be resolved before this source can be used".into());
                 }
-                let (definition, transport) = materialize_server(input, &key, declaration)?;
+                let (definition, transport) =
+                    materialize_server(input, &key, declaration, for_import)?;
                 transports.insert(definition.id.stable_key(), transport);
                 snapshot.servers.push(definition);
             }
@@ -266,6 +269,7 @@ impl DshMcpProvider {
         input: &ExternalMcpDiscoveryInput,
         id: &SourceQualifiedMcpServerId,
         version: &str,
+        for_import: bool,
     ) -> Result<
         (ExternalMcpServerDefinition, PreparedExternalMcpTransport),
         ExternalSourceProviderError,
@@ -277,7 +281,7 @@ impl DshMcpProvider {
                 false,
             ));
         }
-        let mut materialized = self.materialize(input)?;
+        let mut materialized = self.materialize(input, for_import)?;
         let definition = materialized
             .snapshot
             .servers
@@ -297,7 +301,11 @@ impl DshMcpProvider {
                 true,
             ));
         }
-        if !definition.source_enabled || definition.static_status != ExternalMcpStaticStatus::Ready
+        if (!for_import && !definition.source_enabled)
+            || !matches!(
+                definition.static_status,
+                ExternalMcpStaticStatus::Ready | ExternalMcpStaticStatus::DisabledBySource
+            )
         {
             return Err(error(
                 "not_activatable",
@@ -328,7 +336,7 @@ impl ExternalMcpSourceProvider for DshMcpProvider {
         &self,
         input: &ExternalMcpDiscoveryInput,
     ) -> Result<ExternalMcpProviderSnapshot, ExternalSourceProviderError> {
-        self.materialize(input).map(|m| m.snapshot)
+        self.materialize(input, false).map(|m| m.snapshot)
     }
     fn prepare_server(
         &self,
@@ -336,7 +344,7 @@ impl ExternalMcpSourceProvider for DshMcpProvider {
         id: &SourceQualifiedMcpServerId,
         version: &str,
     ) -> Result<PreparedExternalMcpServer, ExternalSourceProviderError> {
-        let (definition, transport) = self.current(input, id, version)?;
+        let (definition, transport) = self.current(input, id, version, false)?;
         Ok(PreparedExternalMcpServer {
             id: id.clone(),
             behavior_version: version.into(),
@@ -350,7 +358,7 @@ impl ExternalMcpSourceProvider for DshMcpProvider {
         id: &SourceQualifiedMcpServerId,
         version: &str,
     ) -> Result<PreparedExternalMcpImportServer, ExternalSourceProviderError> {
-        let (definition, transport) = self.current(input, id, version)?;
+        let (definition, transport) = self.current(input, id, version, true)?;
         let (transport, working_directory, oauth_enabled, environment, headers) = match transport {
             PreparedExternalMcpTransport::Local {
                 command,
@@ -559,8 +567,20 @@ fn materialize_server(
     input: &ExternalMcpDiscoveryInput,
     source: &SourceKey,
     declaration: Declaration,
+    for_import: bool,
 ) -> Result<(ExternalMcpServerDefinition, PreparedExternalMcpTransport), ExternalSourceProviderError>
 {
+    // The established V1 revision includes compatibility status. Import relaxes
+    // lifecycle compatibility only; keep the discovery revision for stale-plan checks.
+    let discovery_version = if for_import {
+        Some(
+            materialize_server(input, source, declaration.clone(), false)?
+                .0
+                .behavior_version,
+        )
+    } else {
+        None
+    };
     let mut reason = declaration.unsupported;
     let empty = Map::new();
     let config = declaration.config.as_object().unwrap_or_else(|| {
@@ -612,7 +632,10 @@ fn materialize_server(
             "failOnStartupError",
         ]
     };
-    if config.keys().any(|k| !allowed.contains(&k.as_str())) {
+    if config
+        .keys()
+        .any(|k| !allowed.contains(&k.as_str()) && !(for_import && k == "reconnect"))
+    {
         reason.get_or_insert(
             "DSH MCP configuration has unsupported fields (including explicit reconnect policies)"
                 .into(),
@@ -620,9 +643,30 @@ fn materialize_server(
     }
     if config
         .get("failOnStartupError")
-        .is_some_and(|v| v != &Value::Bool(false))
+        .is_some_and(|v| !v.is_boolean() || (!for_import && v != &Value::Bool(false)))
     {
         reason.get_or_insert("DSH failOnStartupError must be false; native profile startup cannot be controlled by an imported MCP server".into());
+    }
+    if for_import
+        && config.get("reconnect").is_some_and(|value| {
+            let Some(policy) = value.as_object() else {
+                return true;
+            };
+            policy.iter().any(|(key, value)| match key.as_str() {
+                "enabled" => !value.is_boolean(),
+                "initialDelayMs" | "maxDelayMs" => !value
+                    .as_f64()
+                    .is_some_and(|n| (1.0..=2_147_483_647.0).contains(&n)),
+                "maxAttempts" => !value
+                    .as_u64()
+                    .is_some_and(|n| (1..=9_007_199_254_740_991).contains(&n)),
+                _ => true,
+            })
+        })
+    {
+        reason.get_or_insert(
+            "DSH reconnect policy must contain valid literal lifecycle settings".into(),
+        );
     }
     let timeout = match config.get("toolCallTimeoutMs") {
         None => DEFAULT_CALL_TIMEOUT,
@@ -780,6 +824,9 @@ fn materialize_server(
         "dsh.mcp.behavior.v1",
         [encoded.as_bytes(), cwd.as_bytes(), status.as_bytes()],
     );
+    if let Some(version) = discovery_version {
+        definition.behavior_version = version;
+    }
     Ok((definition, transport))
 }
 

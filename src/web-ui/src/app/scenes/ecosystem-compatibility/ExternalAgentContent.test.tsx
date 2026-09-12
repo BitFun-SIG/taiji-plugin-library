@@ -326,6 +326,21 @@ describe('external agent content and explicit import boundary', () => {
     expect(mocks.saveMcp.mock.calls[0][1]).toBe('native-v1');
   });
 
+  it('releases the UI after undo commits while the refreshed import plan is still pending', async () => {
+    data.plan.items[0].disposition = 'already_imported';
+    await render(); await click('content.undo', 'mcp');
+    let finishPlan!: (plan: typeof data.plan) => void;
+    mocks.planMcp.mockImplementationOnce(() => new Promise(resolve => { finishPlan = resolve; }));
+    await click('content.confirmUndo');
+    expect(mocks.saveMcp).toHaveBeenCalledTimes(1);
+    const view = Array.from(container.querySelectorAll<HTMLButtonElement>('[data-import-kind="mcp"] button')).find(button => button.textContent === 'content.view');
+    expect(view?.disabled).toBe(false);
+    expect(container.querySelector('[role="dialog"]')).toBeNull();
+    data.plan.items[0].disposition = 'eligible';
+    await act(async () => { finishPlan(data.plan); });
+    expect(container.querySelector('[data-import-kind="mcp"]')?.getAttribute('data-import-state')).toBe('ready');
+  });
+
   it('retains import state after a failed undo and requires a new review', async () => {
     data.plan.items[0].disposition = 'already_imported';
     mocks.saveMcp.mockRejectedValue(new Error('stale'));

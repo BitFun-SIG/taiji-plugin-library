@@ -1,8 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MCPAPI } from './MCPAPI';
+import { globalEventBus } from '@/infrastructure/event-bus';
+import { MCP_CONFIG_CHANGED } from '@/infrastructure/mcp/configEvents';
 
 const invokeMock = vi.hoisted(() => vi.fn());
-const scopeMock = vi.hoisted(() => ({ assertCurrent: vi.fn() }));
+const scopeMock = vi.hoisted(() => ({ surfaceId: 'local', assertCurrent: vi.fn() }));
 vi.mock('./ApiClient', () => ({ api: { invoke: invokeMock } }));
 vi.mock('@/infrastructure/peer-device/deviceSurface', () => ({
   getActiveSurfaceScope: () => scopeMock,
@@ -34,6 +36,23 @@ describe('MCP JSON save acknowledgement', () => {
     scopeMock.assertCurrent.mockImplementationOnce(() => { throw new Error('Surface changed'); });
     await expect(MCPAPI.enableServer('imported')).rejects.toThrow('Surface changed');
     expect(invokeMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('notifies cached lists only for acknowledged persistence, including pending runtime cleanup', async () => {
+    const changed = vi.fn();
+    const unsubscribe = globalEventBus.on(MCP_CONFIG_CHANGED, changed);
+    try {
+      invokeMock.mockResolvedValueOnce(undefined);
+      await MCPAPI.saveMCPJsonConfig('{}', 'revision');
+      expect(changed).toHaveBeenCalledWith({ surfaceId: 'local' });
+      changed.mockClear();
+      invokeMock.mockRejectedValueOnce('MCP configuration changed; reload before saving');
+      await expect(MCPAPI.saveMCPJsonConfig('{}', 'revision')).rejects.toBeDefined();
+      expect(changed).not.toHaveBeenCalled();
+      invokeMock.mockRejectedValueOnce('MCP config was saved, but runtime reconciliation failed: offline');
+      await MCPAPI.saveMCPJsonConfig('{}', 'revision');
+      expect(changed).toHaveBeenCalledTimes(1);
+    } finally { unsubscribe(); }
   });
 
   it('accepts the existing void success response', async () => {
