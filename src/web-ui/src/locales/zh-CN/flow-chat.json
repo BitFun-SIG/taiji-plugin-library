@@ -1303,7 +1303,8 @@
       "emptyWorkspace": "当前工作区没有可审核的变更",
       "emptyExplicitScope": "请求的文件或目录没有工作区变更",
       "missingExplicitScope": "请求的文件或目录在当前工作区中不存在",
-      "unresolvedTarget": "无法将审核目标准备为有界证据，请打开对应工作区或缩小目标后重试",
+      "unresolvedTarget": "无法读取待审核的文件或代码差异，请确认已打开对应工作区、审核目标有效，并查看日志中的具体错误",
+      "notGitRepository": "当前工作区未找到 Git 仓库，暂时无法启动审核。请打开包含 Git 仓库且已有提交记录的项目后重试",
       "repositoryUntrusted": "该目录属于其他用户，Git 拒绝读取此仓库。请在提示中信任该目录后重新启动审核",
       "uncertain": "审核请求可能已经在运行。会话已保留，可安全检查或重试",
       "unknown": "审核启动失败，请重试"
