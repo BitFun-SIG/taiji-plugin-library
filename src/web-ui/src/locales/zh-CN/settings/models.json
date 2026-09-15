@@ -241,6 +241,10 @@
     "tokendance": {
       "name": "词元跳动",
       "description": "统一的大模型 API 网关"
+    },
+    "codebuddy": {
+      "name": "CodeBuddy",
+      "description": "腾讯 AI 编程助手"
     }
   },
   "tabs": {

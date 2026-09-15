@@ -324,6 +324,48 @@
       "help_url": "https://opencode.ai/console",
       "description": "A model subscription plan from OpenCode.",
       "name": "OpenCode Go"
+    },
+    {
+      "id": "codebuddy",
+      "display_order": 130,
+      "region": "cn",
+      "name": "CodeBuddy",
+      "description": "CodeBuddy AI coding assistant",
+      "help_url": "https://copilot.tencent.com",
+      "requires_api_key": true,
+      "catalog_provider_ids": [],
+      "endpoints": [
+        {
+          "id": "default",
+          "base_url": "https://copilot.tencent.com/v2",
+          "api_format": "openai",
+          "label": "default",
+          "is_default": true,
+          "trusted_for_auto_detection": true,
+          "catalog_provider_ids": []
+        }
+      ],
+      "model_policy": {
+        "mode": "curated",
+        "curated_models": [
+          "hy4-preview",
+          "hy3",
+          "hy3-x",
+          "glm-5.3",
+          "glm-5.3-flash",
+          "glm-5.2",
+          "glm-5.1",
+          "glm-5v-turbo",
+          "minimax-m3-pay",
+          "minimax-m2.7",
+          "kimi-k3-2",
+          "kimi-k2.7",
+          "kimi-k2.6",
+          "deepseek-v4-pro",
+          "deepseek-v4-flash"
+        ],
+        "additional_models": []
+      }
     }
   ]
 }

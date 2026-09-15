@@ -222,12 +222,26 @@ pub(crate) async fn send_stream(
         ttft_timeout,
         trace,
         || {
-            shared::apply_affinity_headers(
+            let builder = shared::apply_affinity_headers(
                 client,
                 common::apply_headers(client, client.client.post(&url)),
                 &url,
                 request_context.as_ref(),
-            )
+            );
+            if !url.contains("copilot.tencent.com") {
+                return builder;
+            }
+            let mut builder = builder;
+            let turn_request_id =
+                taiji_codebuddy_adapter::codebuddy_turn_request_id(&request_body.to_string());
+            for (name, value) in taiji_codebuddy_adapter::codebuddy_request_headers(
+                &client.config,
+                &url,
+                Some(turn_request_id.as_str()),
+            ) {
+                builder = builder.header(name, value);
+            }
+            builder
         },
         move |response, tx, tx_raw, remaining_ttft_timeout| {
             handle_openai_stream(

@@ -877,7 +877,26 @@ impl WorkspaceManager {
 
         if let Some(workspace_id) = existing_workspace_id {
             if let Some(workspace) = self.workspaces.get_mut(&workspace_id) {
+                let previous_kind = workspace.workspace_kind.clone();
                 workspace.workspace_kind = options.workspace_kind.clone();
+
+                // A kind flip must move the id between the two recent lists. The recent lists are
+                // validated by kind at load time (`recent_workspaces` rejects assistant workspaces),
+                // so leaving a stale id behind produces a persistence file that can never load again.
+                if previous_kind != workspace.workspace_kind {
+                    self.recent_workspaces.retain(|id| id != &workspace_id);
+                    self.recent_assistant_workspaces
+                        .retain(|id| id != &workspace_id);
+                    match workspace.workspace_kind {
+                        WorkspaceKind::Assistant => {
+                            self.recent_assistant_workspaces.insert(0, workspace_id.clone())
+                        }
+                        WorkspaceKind::Normal | WorkspaceKind::Remote => {
+                            self.recent_workspaces.insert(0, workspace_id.clone())
+                        }
+                    }
+                }
+
                 workspace.assistant_id = if options.workspace_kind == WorkspaceKind::Assistant {
                     options.assistant_id.clone()
                 } else {
@@ -1431,7 +1450,50 @@ pub struct WorkspaceManagerStatistics {
 
 #[cfg(test)]
 mod tests {
-    use super::{WorkspaceIdentity, WorkspaceIdentityRuntimeExt};
+    use super::{WorkspaceIdentity, WorkspaceIdentityRuntimeExt, WorkspaceKind, WorkspaceManager};
+
+    #[test]
+    fn kind_flip_moves_workspace_between_recent_lists() {
+        let mut manager = WorkspaceManager::new(super::WorkspaceManagerConfig::default());
+        let id = "local_demo".to_string();
+
+        manager.recent_workspaces = vec![id.clone()];
+        manager.recent_assistant_workspaces = Vec::new();
+
+        // Simulate the upsert path flipping Normal -> Assistant.
+        let workspace_id = id.clone();
+        let previous_kind = WorkspaceKind::Normal;
+        let new_kind = WorkspaceKind::Assistant;
+        assert_ne!(previous_kind, new_kind);
+        manager.recent_workspaces.retain(|id| id != &workspace_id);
+        manager
+            .recent_assistant_workspaces
+            .retain(|id| id != &workspace_id);
+        manager
+            .recent_assistant_workspaces
+            .insert(0, workspace_id.clone());
+
+        assert!(
+            manager.recent_workspaces.is_empty(),
+            "kind flip must remove the id from the non-assistant recent list"
+        );
+        assert_eq!(
+            manager.recent_assistant_workspaces,
+            vec![id.clone()],
+            "kind flip must add the id to the assistant recent list"
+        );
+
+        // And back Assistant -> Normal.
+        let workspace_id = id.clone();
+        manager.recent_workspaces.retain(|id| id != &workspace_id);
+        manager
+            .recent_assistant_workspaces
+            .retain(|id| id != &workspace_id);
+        manager.recent_workspaces.insert(0, workspace_id);
+
+        assert_eq!(manager.recent_workspaces, vec![id.clone()]);
+        assert!(manager.recent_assistant_workspaces.is_empty());
+    }
 
     #[test]
     fn workspace_identity_reads_optional_avatar_without_requiring_it() {

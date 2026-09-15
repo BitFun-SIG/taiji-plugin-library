@@ -601,6 +601,13 @@ impl HookFunctionRuntime for OpenCodeHookFunctionRuntime {
         request: HookFunctionToolRequest,
         deadline: Duration,
     ) -> PortResult<HookFunctionToolResult> {
+        let context_value = serde_json::to_value(&request.context).map_err(|error| {
+            PortError::new(
+                PortErrorKind::InvalidRequest,
+                format!("plugin tool context is invalid: {error}"),
+            )
+        })?;
+        log::debug!("execute_tool wire context: {context_value}");
         let result = self
             .client
             .execute_tool(
@@ -608,12 +615,7 @@ impl HookFunctionRuntime for OpenCodeHookFunctionRuntime {
                 &request.execution_id,
                 &request.registration_id,
                 request.args,
-                serde_json::to_value(request.context).map_err(|error| {
-                    PortError::new(
-                        PortErrorKind::InvalidRequest,
-                        format!("plugin tool context is invalid: {error}"),
-                    )
-                })?,
+                context_value,
                 deadline,
             )
             .await;
@@ -907,7 +909,7 @@ impl PluginHostClient {
         deadline: Duration,
     ) -> Result<Value, PluginHostError> {
         self.require_generation_fencing()?;
-        let result = self
+        let result = match self
             .request(
                 "host.tool.execute",
                 json!({
@@ -921,7 +923,19 @@ impl PluginHostClient {
                 }),
                 deadline,
             )
-            .await?;
+            .await
+        {
+            Ok(value) => value,
+            Err(error) => {
+                if let PluginHostError::Rpc {
+                    data: Some(data), ..
+                } = &error
+                {
+                    log::warn!("host.tool.execute RPC error data: {data}");
+                }
+                return Err(error);
+            }
+        };
         validate_fenced_response(&result, lease, Some(execution_id))?;
         result.get("result").cloned().ok_or_else(|| {
             PluginHostError::Protocol("host.tool.execute response is missing result".to_string())

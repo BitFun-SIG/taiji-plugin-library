@@ -4728,6 +4728,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "92daf443525c4cce67b150400bc2316076100ce0b3686209eb8cf3c31612e6f0"
 
 [[package]]
+name = "lnfu-host-seam"
+version = "0.1.0"
+dependencies = [
+ "lnfu-seam-contracts",
+]
+
+[[package]]
+name = "lnfu-seam-contracts"
+version = "0.1.0"
+dependencies = [
+ "indexmap 2.14.0",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "local-ip-address"
 version = "0.6.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5880,6 +5896,7 @@ dependencies = [
  "hex",
  "keyring-core",
  "libc",
+ "lnfu-host-seam",
  "log",
  "openbitfun-agent-stream",
  "openbitfun-core-types",
@@ -5889,6 +5906,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "taiji-codebuddy-adapter",
  "tokio",
  "tokio-stream",
  "tokio-util",
@@ -10169,6 +10187,15 @@ dependencies = [
  "pkg-config",
  "toml 0.8.2",
  "version-compare",
+]
+
+[[package]]
+name = "taiji-codebuddy-adapter"
+version = "0.1.0"
+dependencies = [
+ "openbitfun-agent-stream",
+ "openbitfun-core-types",
+ "serde_json",
 ]
 
 [[package]]

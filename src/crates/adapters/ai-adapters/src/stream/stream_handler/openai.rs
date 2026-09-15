@@ -10,6 +10,7 @@ use openbitfun_core_types::errors::AiProviderError;
 use reqwest::Response;
 use serde_json::Value;
 use std::time::Duration;
+use taiji_codebuddy_adapter::normalize_response as normalize_degenerate_finish_reason;
 use tokio::sync::mpsc;
 
 const OPENAI_CHAT_COMPLETION_CHUNK_OBJECT: &str = "chat.completion.chunk";
@@ -32,7 +33,13 @@ impl OpenAIResponseNormalizer {
     }
 
     fn normalize_response(&mut self, response: UnifiedResponse) -> Vec<UnifiedResponse> {
-        self.inline_think_parser.normalize_response(response)
+        self.inline_think_parser
+            .normalize_response(response)
+            .into_iter()
+            // SEAM (user-side): repair protocol-deviant frames. Value-based, so
+            // it needs no provider id / URL match / signature change.
+            .map(normalize_degenerate_finish_reason)
+            .collect()
     }
 
     fn flush(&mut self) -> Vec<UnifiedResponse> {
@@ -269,9 +276,16 @@ pub async fn handle_openai_stream(
 #[cfg(test)]
 mod tests {
     use super::{
-        extract_sse_api_error, extract_sse_api_error_message, is_valid_chat_completion_chunk_weak,
+        extract_sse_api_error, extract_sse_api_error_message,
+        is_valid_chat_completion_chunk_weak, OpenAIResponseNormalizer,
     };
+    use crate::stream::types::unified::UnifiedResponse;
     use openbitfun_core_types::errors::ErrorCategory;
+
+    // SEAM (user-side): the host-side capability entrance the accessed software
+    // calls to hand a capability result back. The body lives outside the
+    // upstream git tree (see Cargo.toml, the user-side seal above).
+    use lnfu_host_seam::deliver_capability_result;
 
     #[test]
     fn weak_filter_accepts_chat_completion_chunk() {
@@ -357,5 +371,40 @@ mod tests {
             "object": "chat.completion.chunk"
         });
         assert!(extract_sse_api_error_message(&event).is_none());
+    }
+
+    #[test]
+    fn non_codebuddy_normalizer_passthrough_unchanged() {
+        // Providers that follow the OpenAI contract are unaffected: the seam
+        // only rewrites degenerate (empty/whitespace) finish reasons.
+        let mut normalizer = OpenAIResponseNormalizer::new(false);
+        let responses = normalizer.normalize_response(UnifiedResponse {
+            finish_reason: Some("stop".to_string()),
+            ..Default::default()
+        });
+        assert_eq!(responses.len(), 1);
+        assert_eq!(responses[0].finish_reason.as_deref(), Some("stop"));
+    }
+
+    #[test]
+    fn degenerate_empty_finish_reason_is_dropped_through_normalizer() {
+        let mut normalizer = OpenAIResponseNormalizer::new(false);
+        let responses = normalizer.normalize_response(UnifiedResponse {
+            finish_reason: Some("".to_string()),
+            ..Default::default()
+        });
+        assert_eq!(responses.len(), 1);
+        assert!(responses[0].finish_reason.is_none());
+    }
+
+    #[test]
+    fn host_seam_entrance_accepts_a_capability_result() {
+        // SEAM (user-side): the accessed software reaches the host-side entrance
+        // through the imported name, so the entrance is a callable entry on this
+        // side of the seam. A non-empty payload is delivered and reported as a
+        // success outcome.
+        let outcome = deliver_capability_result("ai-adapters", "normalize-response", "stop")
+            .expect("a non-empty payload is delivered");
+        assert_eq!(outcome.payload.as_deref(), Some("stop"));
     }
 }
