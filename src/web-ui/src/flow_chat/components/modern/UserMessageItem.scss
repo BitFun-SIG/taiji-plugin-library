@@ -25,13 +25,14 @@
    * its radius so the horizontal edges' tangent points meet that column.
    * Padding subtracts the border width to put message text on the same axis.
    */
-  width: auto;
+  width: fit-content;
+  max-width: min(72%, 48rem);
   padding: 0.46rem var(--_user-message-padding-inline);
   background: var(--openbitfun-color-action-quiet-hover);
   border: var(--_user-message-border-width) solid color-mix(in srgb, var(--openbitfun-color-border-default) 72%, transparent);
   border-radius: var(--_user-message-radius);
   margin-block: 0;
-  margin-inline: calc(-1 * var(--_user-message-radius));
+  margin-inline: auto calc(-1 * var(--_user-message-radius));
   box-shadow: none;
   transition: opacity 140ms ease;
   /*
@@ -50,6 +51,12 @@
     border-color: color-mix(in srgb, color-mix(in srgb, var(--openbitfun-color-accent-hover) 40%, transparent) 68%, var(--openbitfun-color-border-default));
   }
 
+}
+
+.user-message-item--editing {
+  width: auto;
+  max-width: none;
+  margin-inline: calc(-1 * var(--_user-message-radius));
 }
 
 .user-message-item__timestamp {
@@ -235,13 +242,37 @@
   background: var(--openbitfun-color-status-success-surface);
 }
 
+.user-message-item__edit-layout {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--openbitfun-control-flow-chat-inline-gap);
+}
+
 .user-message-edit-composer {
   width: 100%;
+
+  // The surrounding user-message bubble already communicates the editing
+  // boundary. Keep Composer's layout, but avoid stacking its border, shadow,
+  // and focus ring into a visually heavy double frame.
+  > [data-openbitfun-part='surface'],
+  > [data-openbitfun-part='surface']:focus-within {
+    min-block-size: 0;
+    gap: var(--openbitfun-control-flow-chat-inline-gap);
+    padding: 0;
+    border-color: transparent;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  > [data-openbitfun-part='surface'] > [data-openbitfun-part='editor'] {
+    padding: 0;
+  }
 }
 
 .user-message-edit-composer__textarea {
   width: 100%;
-  min-height: 5.5rem;
+  min-height: var(--openbitfun-control-height-sm);
   max-height: 45vh;
   overflow-y: auto;
   font-size: var(--openbitfun-type-flow-control-font-size);
@@ -250,12 +281,12 @@
 
 .user-message-edit-composer__rich-input {
   position: relative;
-  min-height: 5.5rem;
+  min-height: var(--openbitfun-control-height-sm);
   max-height: 45vh;
   overflow-y: auto;
 
   .rich-text-input {
-    min-height: 4.4rem;
+    min-height: var(--openbitfun-control-height-sm);
     padding: 0;
     border: none;
     background: transparent;
@@ -290,8 +321,10 @@
 .user-message-item__images {
   display: flex;
   flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 6px;
-  margin-top: 6px;
+  margin-block: 0 6px;
+  margin-inline-end: calc(-1 * var(--_user-message-radius));
 }
 
 .user-message-item__image-thumb {

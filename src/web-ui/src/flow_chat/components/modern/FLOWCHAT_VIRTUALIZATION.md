@@ -271,14 +271,22 @@ numbers. The number is additive presentation metadata, never annotation identity
 legacy excerpts without it remain readable. New numbers follow the loaded session
 family's saved, queued and pending annotations, not a cross-controller global counter.
 
-`ConversationExcerptMarkers` paints numbered superscripts at each selected text
-fragment's trailing caret in a row-local overlay. Selections in the same block keep
-separate anchors, and wrapping follows the caret's current line. It validates the
-frozen text anchor, omits hidden/clipped endpoints, observes only
+`ConversationExcerptMarkers` paints numbered superscripts above the top-right
+of each selected fragment's full text bounds in a row-local overlay. It measures
+the badge group and overlaps the selection's upper-right corner by 6px on both axes,
+leaving the marker body above the selected text. The marker may cover surrounding
+text or another marker so a dense layout never hides the annotation.
+Selection bounds use selected text runs, excluding full-width block rectangles.
+Selections with different starts keep separate anchors even when
+their ends match. It validates the frozen text anchor, clips partially visible anchors
+to the row's visible bounds, omits fully hidden anchors, observes only
 mounted rows and releases observers on unmount. It changes neither transcript text
-nor row keys, row height, or scroll position. Images and individual annotation tiles
-share the composer attachment strip. Source superscripts and composer attachments
-open `ConversationExcerptDialog`; creation shares its compact editor content.
+nor row keys, row height, or scroll position. Persistent CSS highlights follow the
+draft, queued and sent annotation inventory and release their row-owned ranges on
+unmount. Images and an annotation-count capsule share the composer attachment strip.
+The capsule opens a hover/focus/click detail list with individual edit/remove actions.
+Source superscripts and detail edit actions open `ConversationExcerptDialog`;
+creation shares its compact editor content.
 Both modes show one ellipsized, quoted source line, with both quote marks outside
 the clipped text so the closing quote remains visible. Pending annotations use an
 unlabelled textarea with an accessible name. Sent-message entries always view

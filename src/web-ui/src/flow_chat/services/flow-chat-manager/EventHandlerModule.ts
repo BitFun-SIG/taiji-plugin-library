@@ -1000,6 +1000,7 @@ async function handleAcpPermissionRequest(rawEvent: unknown): Promise<void> {
  */
 function handleSessionCreated(context: FlowChatContext, event: any): void {
   const { sessionId, sessionName, agentType } = event;
+  if (agentType === 'OpenBitFun') return; // The control host registers its dedicated presentation reference.
 
   const store = FlowChatStore.getInstance();
   const existing = store.getState().sessions.get(sessionId);

@@ -22,6 +22,32 @@ function extractBlock(source: string, selector: string): string {
 }
 
 describe('UserMessageItem metadata visibility', () => {
+  it('keeps image editing vertically ordered and compact', () => {
+    const stylesheet = readFileSync(
+      fileURLToPath(new URL('./UserMessageItem.scss', import.meta.url)),
+      'utf8',
+    ).replace(/\r\n?/g, '\n');
+    const editLayout = extractBlock(stylesheet, '\n.user-message-item__edit-layout {');
+    const composer = extractBlock(stylesheet, '\n.user-message-edit-composer {');
+    const textarea = extractBlock(stylesheet, '\n.user-message-edit-composer__textarea {');
+    const richInput = extractBlock(stylesheet, '\n.user-message-edit-composer__rich-input {');
+    const bubble = extractBlock(stylesheet, '\n.user-message-item {');
+    const editingBubble = extractBlock(stylesheet, '\n.user-message-item--editing {');
+
+    expect(editLayout).toContain('flex-direction: column;');
+    expect(editLayout).toContain('gap: var(--openbitfun-control-flow-chat-inline-gap);');
+    expect(composer).toContain('min-block-size: 0;');
+    expect(composer).toContain('padding: 0;');
+    expect(textarea).toContain('min-height: var(--openbitfun-control-height-sm);');
+    expect(richInput).toContain('min-height: var(--openbitfun-control-height-sm);');
+    expect(bubble).toContain('width: fit-content;');
+    expect(bubble).toContain('max-width: min(72%, 48rem);');
+    expect(editingBubble).toContain('width: auto;');
+    expect(editingBubble).toContain('max-width: none;');
+    expect(stylesheet).not.toContain('.user-message-item__images--editing');
+    expect(stylesheet).not.toContain('min-height: 5.5rem;');
+  });
+
   it('shows the copy, edit, and rollback actions as one always-available cluster', () => {
     const stylesheet = readFileSync(
       fileURLToPath(new URL('./UserMessageItem.scss', import.meta.url)),
@@ -66,7 +92,7 @@ describe('UserMessageItem metadata visibility', () => {
     const bubble = extractBlock(stylesheet, '\n.user-message-item {');
     expect(bubble).toContain('padding: 0.46rem var(--_user-message-padding-inline);');
     expect(shell).toContain('--_user-message-padding-inline: max(0px, calc(var(--_user-message-radius) - var(--_user-message-border-width)));');
-    expect(bubble).toContain('margin-inline: calc(-1 * var(--_user-message-radius));');
+    expect(bubble).toContain('margin-inline: auto calc(-1 * var(--_user-message-radius));');
     expect(meta).toContain('padding-inline: 0;');
     expect(meta).toContain('padding-block: calc(var(--openbitfun-space-1) / 2) 0;');
     expect(meta).toContain('pointer-events: auto;');

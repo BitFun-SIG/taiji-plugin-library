@@ -40,6 +40,12 @@ User bubbles apply `type.modifier.leading.tight` for 18px leading, with 12px
 padding on all sides and a 12px corner radius. They fit their content and wrap
 within the conversation width; a single line is 42px high at the default size.
 
+`VoiceCallTranscript` exposes its `entries` part for host-owned reading insets
+and `data-scrolled` when records have moved below their starting position. Hosts
+can layer compact controls above that viewport without creating another scroller.
+Each entry may supply `activity` beneath its message; the host owns its real
+processing state, localized accessible label, and completion lifecycle.
+
 `VoiceParticleLogo` is also exported independently. Its `readAudio` callback
 reads `{ user, assistant, assistantSpeaking }` once per animation frame. The
 two spectra are FFT byte bins from analysers configured with `fftSize = 256`;

@@ -534,39 +534,55 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
         </div>
       );
     }
+
+    const messageImageGallery = messageImages.length > 0 ? (
+      <div
+        className="user-message-item__images"
+        data-openbitfun-product-component="user-message-item"
+        data-openbitfun-product-part="images"
+      >
+        {messageImages.map(img => (
+          <UserMessageImage key={img.id} image={img} onPreview={setLightboxImage} />
+        ))}
+      </div>
+    ) : null;
     
     return (
       <div className="user-message-item-shell" ref={shellRef}>
+        {messageImageGallery}
+
         <div
           data-openbitfun-product-component="user-message-item"
           data-openbitfun-product-part="root"
           data-openbitfun-state={[expanded && 'expanded', isFailed && 'failed'].filter(Boolean).join(' ') || undefined}
           ref={containerRef}
-          className={`user-message-item ${expanded ? 'user-message-item--expanded' : ''}${isFailed ? ' user-message-item--failed' : ''}`}
+          className={`user-message-item ${expanded ? 'user-message-item--expanded' : ''}${isFailed ? ' user-message-item--failed' : ''}${isEditing ? ' user-message-item--editing' : ''}`}
           data-testid="chat-user-message"
           data-turn-id={turnId}
           data-status={resolvedTurnStatus || ''}
           data-failed={isFailed ? 'true' : 'false'}
         >
         {isEditing ? (
-          <UserMessageEditComposer
-            value={editDraft}
-            isSubmitting={isEditSubmitting}
-            submitLabel={t('message.saveEdit')}
-            cancelLabel={t('message.cancelEdit')}
-            placeholder={t('message.editPlaceholder')}
-            onChange={setEditDraft}
-            onSubmit={handleSubmitEdit}
-            onCancel={cancelEdit}
-            presentation={composerPresentation}
-            workspacePath={currentSession?.workspacePath}
-            workspaceId={currentSession?.workspaceId}
-            remoteConnectionId={
-              currentSession?.remoteConnectionId
-              || currentSession?.config?.remoteConnectionId
-            }
-            excludeSessionId={resolvedSessionId}
-          />
+          <div className="user-message-item__edit-layout">
+            <UserMessageEditComposer
+              value={editDraft}
+              isSubmitting={isEditSubmitting}
+              submitLabel={t('message.saveEdit')}
+              cancelLabel={t('message.cancelEdit')}
+              placeholder={t('message.editPlaceholder')}
+              onChange={setEditDraft}
+              onSubmit={handleSubmitEdit}
+              onCancel={cancelEdit}
+              presentation={composerPresentation}
+              workspacePath={currentSession?.workspacePath}
+              workspaceId={currentSession?.workspaceId}
+              remoteConnectionId={
+                currentSession?.remoteConnectionId
+                || currentSession?.config?.remoteConnectionId
+              }
+              excludeSessionId={resolvedSessionId}
+            />
+          </div>
         ) : (
           <div className="user-message-item__main" data-openbitfun-product-component="user-message-item" data-openbitfun-product-part="main">
           <div
@@ -578,7 +594,7 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
           >
             {isFailed ? (
               <div className="user-message-item__failed-body">
-                <div 
+                <div
                   ref={contentRef}
                   className="user-message-item__content"
                   data-openbitfun-product-component="user-message-item"
@@ -603,7 +619,7 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
               </div>
             ) : (
               <>
-                <div 
+                <div
                   ref={contentRef}
                   className="user-message-item__content"
                   data-openbitfun-product-component="user-message-item"
@@ -628,14 +644,6 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
               </>
             )}
             </div>
-          </div>
-        )}
-
-        {message.images && message.images.length > 0 && (
-          <div className="user-message-item__images" data-openbitfun-product-component="user-message-item" data-openbitfun-product-part="images">
-            {message.images.map(img => (
-              <UserMessageImage key={img.id} image={img} onPreview={setLightboxImage} />
-            ))}
           </div>
         )}
 

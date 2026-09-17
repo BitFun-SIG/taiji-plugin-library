@@ -30,6 +30,7 @@ import {
 import {
   useActiveSession,
   useModernFlowChatStore,
+  useModernFlowChatStoreApi,
   useVirtualItems,
   type VirtualItem,
 } from '../../store/modernFlowChatStore';
@@ -378,6 +379,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
   useEffect(() => {
     noteFlowListCommit();
   });
+  const modernStore = useModernFlowChatStoreApi();
   const canonicalVirtualItems = useVirtualItems();
   const virtualItems = items ?? canonicalVirtualItems;
   const { exploreGroupStates } = useFlowChatVolatileContext();
@@ -958,7 +960,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     const currentTurn = currentTurnId
       ? userMessageItems.find(({ item }) => item.turnId === currentTurnId)
       : undefined;
-    const store = useModernFlowChatStore.getState();
+    const store = modernStore.getState();
 
     if (!currentTurn || currentTurn.item.type !== 'user-message') {
       if (store.visibleTurnInfo !== null) store.setVisibleTurnInfo(null);
@@ -980,7 +982,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       && previous.visibleTurnIds.length === visibleTurnIds.length
       && previous.visibleTurnIds.every((turnId, index) => turnId === visibleTurnIds[index]);
     if (!unchanged) store.setVisibleTurnInfo(nextVisibleTurnInfo);
-  }, [isFollowingOutputNow, userMessageItems]);
+  }, [isFollowingOutputNow, modernStore, userMessageItems]);
 
   const scheduleVisibleTurnInfoUpdate = useCallback(() => {
     if (visibleTurnUpdateFrameRef.current !== null) return;
@@ -2460,9 +2462,9 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
 
   useEffect(() => {
     if (userMessageItems.length === 0) {
-      useModernFlowChatStore.getState().setVisibleTurnInfo(null);
+      modernStore.getState().setVisibleTurnInfo(null);
     }
-  }, [userMessageItems.length]);
+  }, [modernStore, userMessageItems.length]);
 
   const handleScrollerRef = useCallback((element: HTMLElement | null) => {
     const scroller = element;
