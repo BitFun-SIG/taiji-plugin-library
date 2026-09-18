@@ -27,6 +27,7 @@ import './DispatchTargetPicker.scss';
 interface DispatchTargetPickerProps {
   target: DispatchTarget;
   sourceWorkspacePath?: string;
+  sourceWorkspaceId?: string;
   locked: boolean;
   disabled?: boolean;
   localWorktreeControl?: {
@@ -47,6 +48,7 @@ const RemoteConnectDialog = lazy(
 export const DispatchTargetPicker: React.FC<DispatchTargetPickerProps> = ({
   target,
   sourceWorkspacePath,
+  sourceWorkspaceId,
   locked,
   disabled = false,
   localWorktreeControl,
@@ -344,7 +346,7 @@ export const DispatchTargetPicker: React.FC<DispatchTargetPickerProps> = ({
       <DispatchInstallDialog
         open={!!configureTarget}
         target={configureTarget}
-        sourceWorkspacePath={sourceWorkspacePath}
+        sourceWorkspaceId={sourceWorkspaceId} sourceWorkspacePath={sourceWorkspacePath}
         onClose={() => setConfigureTarget(null)}
         onReady={selection => {
           setConfigureTarget(null);

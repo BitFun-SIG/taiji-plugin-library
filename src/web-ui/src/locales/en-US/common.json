@@ -785,9 +785,9 @@
     "backupFailed": "Encrypted backup · Sync needs attention",
     "statusUnavailable": "Other-device status is unavailable; local work is unaffected",
     "connectOtherDevices": "Connect another device",
-    "backToThisDevice": "Return to this device",
-    "returningToThisDevice": "Returning to this device…",
-    "returnedToThisDevice": "Returned to this device"
+    "backToThisDevice": "Return to local device",
+    "returningToThisDevice": "Returning to local device…",
+    "returnedToThisDevice": "Returned to local device"
   },
   "accountLogin": {
     "signedInAccount": "Signed-in account",

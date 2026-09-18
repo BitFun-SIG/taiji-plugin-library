@@ -30,7 +30,7 @@ export function useSkillMarket({
 }: UseSkillMarketOptions) {
   const { t } = useTranslation('scenes/skills');
   const notification = useNotification();
-  const { hasWorkspace, workspacePath, isRemoteWorkspace } = useWorkspaceManagerSync();
+  const { workspace, hasWorkspace, isRemoteWorkspace } = useWorkspaceManagerSync();
 
   const [marketSkills, setMarketSkills] = useState<SkillMarketItem[]>([]);
   const [marketLoading, setMarketLoading] = useState(true);
@@ -41,7 +41,7 @@ export function useSkillMarket({
   const [currentPage, setCurrentPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const marketRequestIdRef = useRef(0);
-  const capabilityKey = `${enabled}\u0000${workspacePath ?? ''}\u0000${isRemoteWorkspace}`;
+  const capabilityKey = `${enabled}\u0000${workspace?.id ?? ''}\u0000${isRemoteWorkspace}`;
   const capabilityRef = useRef({ key: capabilityKey, epoch: 0, enabled });
   useLayoutEffect(() => {
     if (capabilityRef.current.key !== capabilityKey) {
@@ -224,7 +224,7 @@ export function useSkillMarket({
       const result = await configAPI.downloadSkillMarket({
         packageId: skill.installId,
         level: resolvedLevel,
-        workspacePath: resolvedLevel === 'project' ? workspacePath || undefined : undefined,
+        workspaceId: resolvedLevel === 'project' ? workspace?.id : undefined,
       });
       if (!capabilityIsCurrent(capabilityEpoch)) {
         return;
@@ -246,7 +246,7 @@ export function useSkillMarket({
         setDownloadingPackage(null);
       }
     }
-  }, [capabilityIsCurrent, currentCapabilityEpoch, hasWorkspace, isRemoteWorkspace, notification, onInstalledChanged, t, workspacePath]);
+  }, [capabilityIsCurrent, currentCapabilityEpoch, hasWorkspace, isRemoteWorkspace, notification, onInstalledChanged, t, workspace?.id]);
 
   return {
     marketSkills: paginatedSkills,

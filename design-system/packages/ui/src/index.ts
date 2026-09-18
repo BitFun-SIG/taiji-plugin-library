@@ -15,10 +15,13 @@ export {
   useDismissibleLayer,
   useHasOverlayLayers,
   useOverlayLayerActions,
+  usePresence,
   type OverlayDismissReason,
   type OverlayLayerScope,
   type OverlayPortalContainer,
   type OverlayPortalTarget,
+  type PresenceSnapshot,
+  type PresenceState,
   type UseDismissibleLayerOptions,
 } from "./overlay";
 

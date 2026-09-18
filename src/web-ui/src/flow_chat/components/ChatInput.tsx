@@ -118,7 +118,7 @@ import {
   isSessionWorktreeBindingLocked,
 } from '../utils/sessionWorktree';
 import { chatInputSessionSubscriptionKey } from '../utils/chatInputSessionSubscription';
-import { isRemoteWorkspaceSession, sessionProjectWorkspacePath } from '../utils/sessionWorkspace';
+import { isLocalWorkspaceSession, sessionProjectWorkspacePath } from '../utils/sessionWorkspace';
 import { findWorkspaceForSession } from '../utils/workspaceScope';
 import { isTauriRuntime, isWindowsDesktopRuntime } from '@/infrastructure/runtime';
 import { OverflowText, Tooltip } from '@openbitfun/ui';
@@ -1109,6 +1109,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       ? findWorkspaceForSession(effectiveTargetSession, openedWorkspaces.values())
       : workspace ?? undefined
   ), [effectiveTargetSession, openedWorkspaces, workspace]);
+  // Workspace record the input addresses: the targeted session's own record,
+  // or the context workspace while no session exists yet. An empty string means
+  // the targeted session has no record; it must not fall back to the context.
+  const inputWorkspaceId = effectiveTargetSession
+    ? effectiveTargetSession.workspaceId ?? ''
+    : contextWorkspace?.id;
   const sessionBoundRemoteConnectionId = (
     hasRegisteredWorkspace
       ? registration?.remoteConnectionId
@@ -1143,14 +1149,26 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         || ''
       ).trim();
     const isWorktreeSession = !!effectiveTargetSession?.config.executionTarget?.worktreeId;
-    const sessionUsesDifferentRoot = !!sessionPath
-      && (!contextPath || !isSamePath(sessionPath, contextPath))
-      && !(
-        isWorktreeSession
-        && !!contextPath
-        && !!sessionProjectPath
-        && isSamePath(sessionProjectPath, contextPath)
-      );
+    // Workspace identity decides whether the session belongs to the current
+    // workspace; a session in a linked worktree still belongs to its owning
+    // project. Path comparison only serves sessions that predate workspace IDs.
+    const sessionWorkspaceId = hasRegisteredWorkspace
+      ? undefined
+      : (effectiveTargetSession?.workspaceId || effectiveTargetSession?.config.workspaceId);
+    const sessionProjectWorkspaceId = hasRegisteredWorkspace
+      ? undefined
+      : (effectiveTargetSession?.projectWorkspaceId || effectiveTargetSession?.config.projectWorkspaceId);
+    const contextWorkspaceId = hasRegisteredWorkspace ? undefined : workspace?.id;
+    const sessionUsesDifferentRoot = sessionWorkspaceId && contextWorkspaceId
+      ? sessionWorkspaceId !== contextWorkspaceId && sessionProjectWorkspaceId !== contextWorkspaceId
+      : !!sessionPath
+        && (!contextPath || !isSamePath(sessionPath, contextPath))
+        && !(
+          isWorktreeSession
+          && !!contextPath
+          && !!sessionProjectPath
+          && isSamePath(sessionProjectPath, contextPath)
+        );
     if (name && !sessionUsesDifferentRoot) return name;
     if (isWorktreeSession && sessionProjectPath) return path.basename(sessionProjectPath);
     if (chatStripRepositoryPath) return path.basename(chatStripRepositoryPath);
@@ -1158,10 +1176,15 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   }, [
     chatStripRepositoryPath,
     effectiveTargetSession?.config.executionTarget?.worktreeId,
+    effectiveTargetSession?.config.projectWorkspaceId,
     effectiveTargetSession?.config.projectWorkspacePath,
+    effectiveTargetSession?.config.workspaceId,
+    effectiveTargetSession?.projectWorkspaceId,
     effectiveTargetSession?.projectWorkspacePath,
+    effectiveTargetSession?.workspaceId,
     effectiveTargetSession?.workspacePath,
     hasRegisteredWorkspace,
+    workspace?.id,
     workspaceName,
     workspacePath,
   ]);
@@ -1390,7 +1413,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     (async () => {
       try {
         const subagents = await SubagentAPI.listSubagents({
-          workspacePath: targetWorkspacePath || undefined,
+          workspaceId: inputWorkspaceId,
         });
         const normalizedTargetAgentType = targetAgentType.toLowerCase();
         const targetSubagent = subagents.find(subagent =>
@@ -1415,7 +1438,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [effectiveSendAgentType, isSubagentInputTarget, targetWorkspacePath]);
+  }, [
+    effectiveSendAgentType,
+    isSubagentInputTarget,
+    inputWorkspaceId,
+    targetWorkspacePath,
+  ]);
 
   useEffect(() => {
     if (isSubagentInputTarget) {
@@ -1529,8 +1557,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     enabled: canSelectMcp && contextTriggerState.isActive,
     surfaceEpoch: deviceSurfaceScope.epoch,
     modeId: effectiveSendAgentType,
-    workspacePath: sessionBoundWorkspacePath || undefined,
-    remoteConnectionId: sessionBoundRemoteConnectionId || undefined,
+    workspaceId: effectiveTargetSession?.workspaceId || contextWorkspace?.id,
+    workspaceKind: contextWorkspace?.workspaceKind,
   });
   const {
     skills: resolvedModeSkills,
@@ -1549,7 +1577,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     surfaceEpoch: deviceSurfaceScope.epoch,
     connectionId: sessionBoundRemoteConnectionId,
     modeId: effectiveSendAgentType,
-    workspacePath: targetWorkspacePath,
+    workspaceId: inputWorkspaceId,
   });
   const skillReferenceNames = useMemo(
     () => Object.fromEntries(resolvedModeSkills.map(skill => [skill.key, skill.name])),
@@ -1646,7 +1674,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }
     try {
       const snapshot = await externalSourcesAPI.getSnapshot(
-        sessionBoundWorkspacePath || undefined,
+        inputWorkspaceId,
         forceRefresh,
       );
       if (requestId !== externalPromptCatalogRequestRef.current) return undefined;
@@ -1676,7 +1704,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         setExternalPromptCommandsLoading(false);
       }
     }
-  }, [isAcpInputSession, sessionBoundWorkspacePath]);
+  }, [isAcpInputSession, inputWorkspaceId]);
 
   useEffect(() => {
     externalPromptCatalogRequestRef.current += 1;
@@ -2666,7 +2694,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
    * materializes the worktree after it has visibly been submitted.
    */
   const remoteWorkspaceSession =
-    isRemoteWorkspaceSession(effectiveTargetSession, workspace);
+    !isLocalWorkspaceSession(effectiveTargetSession, workspace);
 
   const worktreeControl = useMemo(() => {
     if (!effectiveTargetSessionId || !effectiveTargetSession) return undefined;
@@ -2981,14 +3009,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   }, [conversationScope]);
 
   const refreshWorkspaceModeCatalog = useWorkspaceModeCatalog(
-    {
-      workspacePath: targetWorkspacePath || undefined,
-      remoteConnectionId:
-        effectiveTargetSession?.remoteConnectionId ||
-        effectiveTargetSession?.config.remoteConnectionId,
-      remoteSshHost:
-        effectiveTargetSession?.remoteSshHost || effectiveTargetSession?.config.remoteSshHost,
-    },
+    { workspaceId: inputWorkspaceId },
     modes => {
       dispatchMode({ type: 'SET_AVAILABLE_MODES', payload: modes });
     },
@@ -3897,6 +3918,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         message,
         effectiveTargetSession.workspacePath,
         effectiveTargetSession.remoteConnectionId,
+        effectiveTargetSession.workspaceId,
       );
       if (prepared.mode === 'strict' && prepared.requiresConsent) {
         const confirmed = await confirmDeepReviewLaunch(prepared.runManifest, {
@@ -4077,6 +4099,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   ): Promise<boolean> => {
     const submissionSessionId = effectiveTargetSessionId;
     const submissionWorkspacePath = sessionBoundWorkspacePath;
+    const submissionWorkspaceId = inputWorkspaceId;
     const submissionComposerValue = inputValueRef.current;
     const submissionTargetIsCurrent = () => isExternalPromptSubmissionTargetCurrent(
       submissionSessionId,
@@ -4132,7 +4155,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     if (explicitNativeCandidate) {
       try {
         const nativeConflictSnapshot = await externalSourcesAPI.getNativePromptCommandConflicts(
-          submissionWorkspacePath || undefined,
+          submissionWorkspaceId,
           nativeCommands,
         );
         if (!submissionTargetIsCurrent()) return true;
@@ -4146,7 +4169,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           && nativeConflict.selectedCandidateId !== explicitNativeCandidate.candidateId)
           || nativeReconfirmation) {
           await externalSourcesAPI.setNativePromptCommandConflictChoice(
-            submissionWorkspacePath || undefined,
+            submissionWorkspaceId,
             nativeCommands,
             explicitNativeCandidate.candidateId,
             nativeConflictSnapshot.preferenceRevision,
@@ -4166,7 +4189,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     try {
       const nativeConflictSnapshot = nativeCommands.length > 0
         ? await externalSourcesAPI.getNativePromptCommandConflicts(
-            submissionWorkspacePath || undefined,
+            submissionWorkspaceId,
             nativeCommands,
           )
         : undefined;
@@ -4225,7 +4248,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       let nativeConflictKey = nativeConflict?.conflictKey;
       if (resolution.item.conflictKey) {
         const snapshot = await externalSourcesAPI.setConflictChoice(
-          submissionWorkspacePath || undefined,
+          submissionWorkspaceId,
           resolution.item.conflictKey,
           resolution.item.candidateId,
           resolution.item.expectedPreferenceRevision ?? 0,
@@ -4237,7 +4260,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         && selectedExternalPromptCandidateId === resolution.item.candidateId
         && nativeConflict.selectedCandidateId !== resolution.item.candidateId) {
         const updatedNativeConflicts = await externalSourcesAPI.setNativePromptCommandConflictChoice(
-          submissionWorkspacePath || undefined,
+          submissionWorkspaceId,
           nativeCommands,
           resolution.item.candidateId,
           expectedPreferenceRevision,
@@ -4256,7 +4279,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         expectedPreferenceRevision,
       } : undefined;
       let expanded = await externalSourcesAPI.expandPromptCommand(
-        submissionWorkspacePath || undefined,
+        submissionWorkspaceId,
         resolution.item.command.slice(1),
         resolution.arguments,
         resolution.item.candidateId,
@@ -4276,7 +4299,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         if (!decision || !submissionTargetIsCurrent()) return true;
         shellReviewCount += 1;
         expanded = await externalSourcesAPI.expandPromptCommand(
-          submissionWorkspacePath || undefined,
+          submissionWorkspaceId,
           resolution.item.command.slice(1),
           resolution.arguments,
           resolution.item.candidateId,
@@ -4374,7 +4397,29 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       );
     }
     return true;
-  }, [addToHistory, clearPendingLargePastes, confirmPromptCacheGuardIfNeeded, contexts, dispatchInput, effectiveTargetSessionId, externalPromptCommands, externalPromptCommandsIssue, externalPromptCommandsLoading, externalPromptCommandsPending, getSlashPickerItems, refreshExternalPromptCommands, replacePendingLargePastes, selectedExternalPromptCandidateId, selectedNonExternalSlashCandidateId, selectedNonExternalSlashCommand, sendMessage, sessionBoundWorkspacePath, setQueuedInput, t]);
+  }, [
+    addToHistory,
+    clearPendingLargePastes,
+    confirmPromptCacheGuardIfNeeded,
+    contexts,
+    dispatchInput,
+    effectiveTargetSessionId,
+    externalPromptCommands,
+    externalPromptCommandsIssue,
+    externalPromptCommandsLoading,
+    externalPromptCommandsPending,
+    getSlashPickerItems,
+    refreshExternalPromptCommands,
+    replacePendingLargePastes,
+    selectedExternalPromptCandidateId,
+    selectedNonExternalSlashCandidateId,
+    selectedNonExternalSlashCommand,
+    sendMessage,
+    sessionBoundWorkspacePath,
+    setQueuedInput,
+    t,
+    inputWorkspaceId,
+  ]);
 
   const handleCancelCurrentTask = useCallback(async () => {
     if (effectiveTargetSessionId) {
@@ -4614,8 +4659,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
   const externalFileAvailability = resolveExternalFileIntakeAvailability({
     desktopRuntime: isTauriRuntime(),
-    remoteWorkspace: Boolean(sessionBoundRemoteConnectionId)
-      || isRemoteWorkspaceSession(effectiveTargetSession, contextWorkspace),
+    remoteWorkspace: !isLocalWorkspaceSession(effectiveTargetSession, contextWorkspace),
     peerDevice: isPeerDeviceModeActive(),
     detachedDispatch: Boolean(effectiveTargetSession?.config.dispatchJobId)
       || isNonLocalDispatchTarget(effectiveTargetSession?.config.dispatchTarget),
@@ -5946,6 +5990,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   );
   const workspaceStrip = workspaceStripVisible ? (
     <ChatInputWorkspaceStrip
+      workspaceId={inputWorkspaceId ?? ''}
       repositoryPath={chatStripRepositoryPath}
       workspaceLabel={chatStripWorkspaceLabel}
       executionTarget={effectiveTargetSession?.config.executionTarget}

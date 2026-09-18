@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "digest": "fnv1a64:14f5edbe63a604b8",
+  "digest": "fnv1a64:5fd9f0407289f440",
   "retiredCommandPrefixes": [
     {
       "prefix": "lsp_",
@@ -24,6 +24,7 @@
       "cancel_tool",
       "tool_catalog",
       "chat_mcp_catalog_v1",
+      "workspace_id_references_v1",
       "user_question_response",
       "user_question_interaction_v1"
     ],
@@ -43,6 +44,7 @@
       "cancel_tool",
       "tool_catalog",
       "chat_mcp_catalog_v1",
+      "workspace_id_references_v1",
       "user_question_response",
       "user_question_interaction_v1"
     ],
@@ -57,6 +59,7 @@
       "cancel_tool",
       "tool_catalog",
       "chat_mcp_catalog_v1",
+      "workspace_id_references_v1",
       "user_question_response",
       "user_question_interaction_v1"
     ]

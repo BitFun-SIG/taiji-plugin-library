@@ -1,5 +1,14 @@
 # FlowChat Virtualization
 
+## Measured row spacing
+
+`VirtualItemRenderer` establishes a `flow-root` on the measured wrapper so
+descendant block margins remain inside its border box. A row replaced by virtual
+padding must retain its full occupied height, including trailing item spacing.
+Do not substitute clipping overflow: user-message decorations and controls can
+extend outside the reading column. The rhythm test protects this stylesheet
+contract; it does not prove browser layout or end-to-end scroll stability.
+
 ## Interrupted turn continuity
 
 Cancelled rounds remain in the ordinary transcript. The display projection removes
@@ -179,10 +188,12 @@ embedded transcripts without a rail keep their own layout. The scroller remains
 full width.
 The shared content-padding token defaults to 0.75rem on wide and narrow surfaces,
 keeping the reading column compact while leaving room for decoration and targets.
-The bubble extends into that gutter by its corner radius. Its horizontal border
-tangent points define the same leading and trailing edges as user text, timestamps,
-reply prose, and completion metadata. Inner padding is the radius minus the border
-width; borderless failed messages keep the same tangent points and content axis.
+The borderless bubble extends into that gutter by its corner radius, and its inner
+padding matches that radius so user text, timestamps, reply prose, and completion
+metadata keep the same content axis. Content-fit bubbles have an 8rem minimum that
+is capped by the 72% message-width limit on narrow surfaces. Content below that
+minimum stays shrink-wrapped and centered; content that reaches the available line
+width retains leading text alignment and wraps normally.
 Both metadata rows align the last icon frame with the content's trailing edge,
 retaining 28px hit targets and the same compact action gap. Each action cluster
 wraps as a whole when space is limited. A half-space-1 gap groups user metadata

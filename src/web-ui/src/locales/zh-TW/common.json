@@ -785,9 +785,9 @@
     "backupFailed": "加密備份 · 同步遇到問題",
     "statusUnavailable": "其他裝置狀態暫時無法使用，本機工作不受影響",
     "connectOtherDevices": "連線其他裝置",
-    "backToThisDevice": "返回這台裝置",
-    "returningToThisDevice": "正在返回這台裝置…",
-    "returnedToThisDevice": "已返回這台裝置"
+    "backToThisDevice": "返回本地裝置",
+    "returningToThisDevice": "正在返回本地裝置…",
+    "returnedToThisDevice": "已返回本地裝置"
   },
   "accountLogin": {
     "signedInAccount": "已登入帳號",

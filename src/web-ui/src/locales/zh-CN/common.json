@@ -785,9 +785,9 @@
     "backupFailed": "加密备份 · 同步遇到问题",
     "statusUnavailable": "其他设备状态暂不可用，本机工作不受影响",
     "connectOtherDevices": "连接其他设备",
-    "backToThisDevice": "返回这台设备",
-    "returningToThisDevice": "正在返回这台设备…",
-    "returnedToThisDevice": "已返回这台设备"
+    "backToThisDevice": "返回本地设备",
+    "returningToThisDevice": "正在返回本地设备…",
+    "returnedToThisDevice": "已返回本地设备"
   },
   "accountLogin": {
     "signedInAccount": "已登录账号",

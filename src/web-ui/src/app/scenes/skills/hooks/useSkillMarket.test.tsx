@@ -40,7 +40,7 @@ vi.mock('@/infrastructure/api', () => ({
 }));
 vi.mock('@/infrastructure/hooks/useWorkspaceManagerSync', () => ({
   useWorkspaceManagerSync: () => ({
-    workspacePath: 'D:/workspace/project',
+    workspace: { id: 'project-workspace-id', rootPath: 'D:/workspace/project' },
     hasWorkspace: true,
     isRemoteWorkspace: false,
   }),
@@ -176,6 +176,22 @@ describe('useSkillMarket', () => {
 
     expect(currentMarket?.marketSkills).toEqual([]);
     expect(container.textContent).toBe('idle');
+  });
+
+  it('passes the workspace id when installing a project skill', async () => {
+    downloadSkillMarketMock.mockResolvedValue({ installedSkills: ['review'] });
+    const skill = {
+      id: 'review', name: 'review', installId: 'skillhub:https://corp#team/review',
+      source: 'https://corp', installs: 0, description: '', url: '',
+    } as SkillMarketItem;
+    await act(async () => root.render(<Harness enabled />));
+    await act(async () => currentMarket?.handleDownload(skill, 'project'));
+    expect(downloadSkillMarketMock).toHaveBeenCalledWith({
+      packageId: skill.installId,
+      level: 'project',
+      workspaceId: 'project-workspace-id',
+    });
+    expect(installedChangedMock).toHaveBeenCalledTimes(1);
   });
 
   it('does not notify or reload after a pending download loses desktop capability', async () => {
