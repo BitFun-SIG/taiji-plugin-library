@@ -1,7 +1,7 @@
 //! SkillHub's ClawHub-compatible discovery and ZIP download protocol.
 //! No npm subprocess or controller-side filesystem is involved.
 
-use reqwest::{Client, Url};
+use reqwest::Url;
 use serde::Deserialize;
 use std::collections::BTreeMap;
 use std::io::{Cursor, Read};
@@ -15,7 +15,7 @@ pub const ORIGIN_FILE: &str = ".openbitfun-skillhub.json";
 
 pub struct SkillHubClient {
     base: Url,
-    client: Client,
+    client: reqwest::Client,
     token: String,
 }
 
