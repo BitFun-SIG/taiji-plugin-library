@@ -1,13 +1,13 @@
 {
   "schemaVersion": 2,
   "generatedFrom": "src/shared/interactive-capabilities/catalog.json",
-  "catalogDigest": "5473331e06ecd4bfafbf9b547d48b4fe1561ccf69d86fdfde51ea10dc919531c",
-  "commandCount": 661,
+  "catalogDigest": "6587344a6b5e75a80457ea4ba2670bf37cf3038bdb436089ae402eb7b5a5a025",
+  "commandCount": 664,
   "coverage": {
-    "commandCount": 661,
-    "documentedCommandCount": 614,
-    "implementationCommandCount": 47,
-    "implementationDigest": "401fd0a5f64377e65573d1b0883fbfa844570096adfafd4c11a999d749ba5859"
+    "commandCount": 664,
+    "documentedCommandCount": 616,
+    "implementationCommandCount": 48,
+    "implementationDigest": "f6d38a24a70708988cb47ada81d07eccf0668684e8734c9ee5155b9ffa7e3db8"
   },
   "commands": [
     {
@@ -269,6 +269,22 @@
       "remoteWorkspacePolicy": "WorkspaceAgnostic"
     },
     {
+      "id": "account_relay_capabilities",
+      "moduleId": "remote_connect",
+      "capabilityId": "feature.remote-connect",
+      "capabilityIds": [
+        "feature.remote-connect"
+      ],
+      "documentedItemIds": [
+        "feature.remote-connect:devices"
+      ],
+      "visibility": "documented",
+      "rustPath": "api::remote_connect_api::account_relay_capabilities",
+      "sourceFile": "src/apps/desktop/src/api/remote_connect_api.rs",
+      "signature": "fn account_relay_capabilities() -> Result<Vec<String>, String>",
+      "remoteWorkspacePolicy": "WorkspaceAgnostic"
+    },
+    {
       "id": "account_status",
       "moduleId": "remote_connect",
       "capabilityId": "feature.remote-connect",
@@ -324,6 +340,22 @@
       "rustPath": "api::remote_connect_api::account_unsubscribe_session",
       "sourceFile": "src/apps/desktop/src/api/remote_connect_api.rs",
       "signature": "fn account_unsubscribe_session(request: UnsubscribeSessionRequest) -> Result<(), String>",
+      "remoteWorkspacePolicy": "WorkspaceAgnostic"
+    },
+    {
+      "id": "account_update_device_alias",
+      "moduleId": "remote_connect",
+      "capabilityId": "feature.remote-connect",
+      "capabilityIds": [
+        "feature.remote-connect"
+      ],
+      "documentedItemIds": [
+        "feature.remote-connect:devices"
+      ],
+      "visibility": "documented",
+      "rustPath": "api::remote_connect_api::account_update_device_alias",
+      "sourceFile": "src/apps/desktop/src/api/remote_connect_api.rs",
+      "signature": "fn account_update_device_alias( request: AccountUpdateDeviceAliasRequest, ) -> Result<(), String>",
       "remoteWorkspacePolicy": "WorkspaceAgnostic"
     },
     {
@@ -2185,7 +2217,7 @@
       "visibility": "documented",
       "rustPath": "download_skill_market",
       "sourceFile": "src/apps/desktop/src/api/skill_api.rs",
-      "signature": "fn download_skill_market( _state: State<'_, AppState>, request: SkillMarketDownloadRequest, ) -> Result<SkillMarketDownloadResponse, String>",
+      "signature": "fn download_skill_market( state: State<'_, AppState>, request: SkillMarketDownloadRequest, ) -> Result<SkillMarketDownloadResponse, String>",
       "remoteWorkspacePolicy": "LegacyUnaudited"
     },
     {
@@ -2201,7 +2233,7 @@
       "visibility": "documented",
       "rustPath": "api::update_api::download_update",
       "sourceFile": "src/apps/desktop/src/api/update_api.rs",
-      "signature": "fn download_update( app: AppHandle, request: PendingUpdateRequest, ) -> Result<PendingUpdateResponse, String>",
+      "signature": "fn download_update( app: AppHandle, request: DownloadUpdateRequest, ) -> Result<PendingUpdateResponse, String>",
       "remoteWorkspacePolicy": "WorkspaceAgnostic"
     },
     {
@@ -3204,6 +3236,20 @@
       "rustPath": "api::insights_api::get_latest_insights",
       "sourceFile": "src/apps/desktop/src/api/insights_api.rs",
       "signature": "fn get_latest_insights() -> Result<Vec<InsightsReportMeta>, String>",
+      "remoteWorkspacePolicy": "LocalOnly"
+    },
+    {
+      "id": "get_local_models_dev_catalogs",
+      "moduleId": "commands",
+      "capabilityId": "feature.projects",
+      "capabilityIds": [
+        "feature.projects"
+      ],
+      "documentedItemIds": [],
+      "visibility": "implementation",
+      "rustPath": "get_local_models_dev_catalogs",
+      "sourceFile": "src/apps/desktop/src/api/commands.rs",
+      "signature": "fn get_local_models_dev_catalogs( ) -> Result<openbitfun_core::LocalModelsDevCatalogs, String>",
       "remoteWorkspacePolicy": "LocalOnly"
     },
     {
@@ -5137,7 +5183,7 @@
       "visibility": "documented",
       "rustPath": "list_skill_market",
       "sourceFile": "src/apps/desktop/src/api/skill_api.rs",
-      "signature": "fn list_skill_market( _state: State<'_, AppState>, request: SkillMarketListRequest, ) -> Result<Vec<SkillMarketItem>, String>",
+      "signature": "fn list_skill_market( state: State<'_, AppState>, request: SkillMarketListRequest, ) -> Result<SkillMarketResponse, String>",
       "remoteWorkspacePolicy": "LegacyUnaudited"
     },
     {
@@ -8370,7 +8416,7 @@
       "visibility": "documented",
       "rustPath": "search_skill_market",
       "sourceFile": "src/apps/desktop/src/api/skill_api.rs",
-      "signature": "fn search_skill_market( _state: State<'_, AppState>, request: SkillMarketSearchRequest, ) -> Result<Vec<SkillMarketItem>, String>",
+      "signature": "fn search_skill_market( state: State<'_, AppState>, request: SkillMarketSearchRequest, ) -> Result<SkillMarketResponse, String>",
       "remoteWorkspacePolicy": "LegacyUnaudited"
     },
     {
