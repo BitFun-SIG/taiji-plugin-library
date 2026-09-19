@@ -4017,6 +4017,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "indexmap-nostd"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8e04e2fd2b8188ea827b32ef11de88377086d690286ab35747ef7f9bf3ccb590"
+
+[[package]]
 name = "indoc"
 version = "2.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4726,6 +4732,22 @@ name = "litemap"
 version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "92daf443525c4cce67b150400bc2316076100ce0b3686209eb8cf3c31612e6f0"
+
+[[package]]
+name = "lnfu-host-seam"
+version = "0.3.0"
+dependencies = [
+ "lnfu-seam-contracts-standalone",
+]
+
+[[package]]
+name = "lnfu-seam-contracts-standalone"
+version = "0.1.0"
+dependencies = [
+ "indexmap 2.14.0",
+ "serde",
+ "serde_json",
+]
 
 [[package]]
 name = "local-ip-address"
@@ -5880,6 +5902,7 @@ dependencies = [
  "hex",
  "keyring-core",
  "libc",
+ "lnfu-host-seam",
  "log",
  "openbitfun-agent-stream",
  "openbitfun-core-types",
@@ -5889,6 +5912,9 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "taiji-codebuddy-adapter",
+ "taiji-qoder-adapter",
+ "token-shaper",
  "tokio",
  "tokio-stream",
  "tokio-util",
@@ -6095,6 +6121,7 @@ dependencies = [
  "openbitfun-events",
  "openbitfun-external-sources",
  "openbitfun-legacy-migration-adapters",
+ "openbitfun-lnfu-adapter",
  "openbitfun-opencode-adapter",
  "openbitfun-opencode-plugin-host",
  "openbitfun-pi-adapter",
@@ -6329,6 +6356,19 @@ dependencies = [
  "tempfile",
  "tokio",
  "uuid",
+]
+
+[[package]]
+name = "openbitfun-lnfu-adapter"
+version = "0.3.0"
+dependencies = [
+ "dirs 6.0.0",
+ "hex",
+ "openbitfun-product-domains",
+ "openbitfun-static-hook-support",
+ "serde_json",
+ "sha2",
+ "toml 0.9.12+spec-1.1.0",
 ]
 
 [[package]]
@@ -10172,6 +10212,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "taiji-codebuddy-adapter"
+version = "0.3.0"
+dependencies = [
+ "openbitfun-agent-stream",
+ "openbitfun-core-types",
+ "serde_json",
+]
+
+[[package]]
+name = "taiji-qoder-adapter"
+version = "0.3.0"
+dependencies = [
+ "anyhow",
+ "getrandom 0.2.17",
+ "openbitfun-core-types",
+ "reqwest",
+ "rustls",
+ "serde_json",
+ "tokio",
+ "wasmi",
+]
+
+[[package]]
 name = "tao"
 version = "0.36.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10915,6 +10978,13 @@ name = "tinyvec_macros"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
+
+[[package]]
+name = "token-shaper"
+version = "0.3.0"
+dependencies = [
+ "serde_json",
+]
 
 [[package]]
 name = "tokio"
@@ -11807,6 +11877,46 @@ dependencies = [
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
+]
+
+[[package]]
+name = "wasmi"
+version = "0.31.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "77a8281d1d660cdf54c76a3efa9ddd0c270cada1383a995db3ccb43d166456c7"
+dependencies = [
+ "smallvec",
+ "spin",
+ "wasmi_arena",
+ "wasmi_core",
+ "wasmparser-nostd",
+]
+
+[[package]]
+name = "wasmi_arena"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "104a7f73be44570cac297b3035d76b169d6599637631cf37a1703326a0727073"
+
+[[package]]
+name = "wasmi_core"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dcf1a7db34bff95b85c261002720c00c3a6168256dcb93041d3fa2054d19856a"
+dependencies = [
+ "downcast-rs",
+ "libm",
+ "num-traits",
+ "paste",
+]
+
+[[package]]
+name = "wasmparser-nostd"
+version = "0.100.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d5a015fe95f3504a94bb1462c717aae75253e39b9dd6c3fb1062c934535c64aa"
+dependencies = [
+ "indexmap-nostd",
 ]
 
 [[package]]

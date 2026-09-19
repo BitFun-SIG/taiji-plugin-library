@@ -51,20 +51,29 @@ enum StreamSendOutcome {
     TtftTimeout,
 }
 
+/// A user-side seam may supply a body that already carries its own encoding (an
+/// encrypted payload, say). It replaces the JSON body byte-for-byte; when absent
+/// the request is serialised from `request_body` exactly as before, so every
+/// other provider keeps its previous wire shape.
 async fn send_stream_request(
     request: reqwest::RequestBuilder,
     request_body: &serde_json::Value,
+    raw_body: Option<Vec<u8>>,
     ttft_timeout: Option<Duration>,
 ) -> StreamSendOutcome {
+    let finalize = |request: reqwest::RequestBuilder| match raw_body.clone() {
+        Some(bytes) => request.body(bytes),
+        None => request.json(request_body),
+    };
     match ttft_timeout {
         Some(timeout) => {
-            match tokio::time::timeout(timeout, request.json(request_body).send()).await {
+            match tokio::time::timeout(timeout, finalize(request).send()).await {
                 Ok(Ok(response)) => StreamSendOutcome::Response(response),
                 Ok(Err(error)) => StreamSendOutcome::Transport(error),
                 Err(_) => StreamSendOutcome::TtftTimeout,
             }
         }
-        None => match request.json(request_body).send().await {
+        None => match finalize(request).send().await {
             Ok(response) => StreamSendOutcome::Response(response),
             Err(error) => StreamSendOutcome::Transport(error),
         },
@@ -297,6 +306,7 @@ pub(crate) async fn execute_sse_request<BuildRequest, BuildHandler, HandlerFutur
     label: &str,
     url: &str,
     request_body: &serde_json::Value,
+    raw_body: Option<Vec<u8>>,
     max_tries: usize,
     ttft_timeout: Option<Duration>,
     trace: Option<ModelExchangeTraceConfig>,
@@ -342,7 +352,8 @@ where
             None
         };
         let request_start_time = std::time::Instant::now();
-        let send_outcome = send_stream_request(request, request_body, ttft_timeout).await;
+        let send_outcome =
+            send_stream_request(request, request_body, raw_body.clone(), ttft_timeout).await;
 
         let response = match send_outcome {
             StreamSendOutcome::Response(resp) => {
@@ -846,6 +857,7 @@ mod tests {
                 "OpenAI Streaming API",
                 &url,
                 &body,
+                None,
                 1,
                 Some(Duration::from_secs(1)),
                 None,
@@ -905,6 +917,7 @@ mod tests {
             "OpenAI Streaming API",
             &url,
             &body,
+            None,
             1,
             Some(Duration::from_millis(100)),
             None,
@@ -926,6 +939,7 @@ mod tests {
             "OpenAI Streaming API",
             &url,
             &body,
+            None,
             1,
             Some(Duration::from_millis(100)),
             None,
@@ -938,6 +952,7 @@ mod tests {
             "OpenAI Streaming API",
             &url,
             &body,
+            None,
             1,
             Some(Duration::from_millis(100)),
             None,
@@ -981,6 +996,7 @@ mod tests {
             "OpenAI Streaming API",
             &url,
             &serde_json::json!({}),
+            None,
             1,
             Some(Duration::from_millis(20)),
             None,
@@ -1028,6 +1044,7 @@ mod tests {
                 "OpenAI Streaming API",
                 &url,
                 &body,
+                None,
                 1,
                 Some(Duration::from_millis(100)),
                 None,
@@ -1156,6 +1173,7 @@ mod tests {
             "OpenAI Streaming API",
             &url,
             &request_body,
+            None,
             3,
             None,
             None,
@@ -1194,6 +1212,7 @@ mod tests {
             "OpenAI Streaming API",
             &url,
             &request_body,
+            None,
             1,
             None,
             None,

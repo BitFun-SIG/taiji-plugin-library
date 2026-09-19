@@ -258,6 +258,7 @@ pub(crate) async fn send_stream(
         "Codex ChatGPT Responses API",
         &url,
         &request_body,
+        None,
         max_tries,
         ttft_timeout,
         trace,

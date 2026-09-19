@@ -631,6 +631,7 @@ pub(crate) async fn send_stream(
             "Gemini Code Assist Streaming API",
             url,
             &request_body,
+            None,
             max_tries,
             ttft_timeout,
             trace.clone(),
