@@ -143,7 +143,7 @@
     --openbitfun-control-switch-track-height: 16px;
     --openbitfun-control-switch-track-width: 28px;
     --openbitfun-control-tab-group-gap: var(--openbitfun-space-2);
-    --openbitfun-control-tab-group-item-action-inset: var(--openbitfun-space-2);
+    --openbitfun-control-tab-group-item-action-inset: var(--openbitfun-space-1);
     --openbitfun-control-tab-group-item-action-size: var(--openbitfun-space-5);
     --openbitfun-control-tab-group-item-gap: 6px;
     --openbitfun-control-tab-group-item-gap-sm: var(--openbitfun-space-1);

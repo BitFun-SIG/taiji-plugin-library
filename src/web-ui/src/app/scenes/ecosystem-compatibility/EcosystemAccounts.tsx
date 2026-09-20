@@ -67,7 +67,7 @@ export default function EcosystemAccounts({ provider, supported, refreshVersion,
       </span>
     </div>
     <div role="row" hidden={!expanded}><div id={id} role="cell" aria-colspan={3} className="ecosystem-compatibility__content-expanded">
-      {expanded ? <Card appearance="subtle" padding="sm" className="ecosystem-compatibility__account-panel">
+      {expanded ? <Card appearance="subtle" padding="sm" radius="none" className="ecosystem-compatibility__account-panel">
         <CardHeader
           title={<OverflowText>{account?.account || t(`content.accounts.providers.${provider}`)}</OverflowText>}
           description={supported && loading
