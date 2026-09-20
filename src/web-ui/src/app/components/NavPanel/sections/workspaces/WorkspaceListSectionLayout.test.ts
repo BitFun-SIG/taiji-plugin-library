@@ -159,6 +159,19 @@ describe('WorkspaceListSection layout styles', () => {
     expect(source.match(/data-testid="nav-workspace-new-session-btn"/g)).toHaveLength(2);
   });
 
+  it('keeps the scheduled-job badge on the trailing slot of both workspace rows', () => {
+    const source = readWorkspaceItemSource();
+
+    // The workspace row and the assistant-group row both flatten their ActionItem
+    // label slot with `display: contents`, so the badge must stay one flex sibling of
+    // the name and be rendered by each variant from a single source.
+    expect(source).toContain('const scheduledJobBadge = scheduledJobCount > 0 ? (');
+    expect(source.match(/metadata=\{scheduledJobBadge\}/g)).toHaveLength(2);
+    expect(source).not.toContain('{scheduledJobCount > 0 ?');
+    expect(source).toContain('className="openbitfun-nav-panel__inline-item-cron-badge"');
+    expect(source).toContain("title={t('nav.scheduledJobs.badgeTooltip', { count: scheduledJobCount })}");
+  });
+
   it('keeps workspace and assistant rows flat on hover', () => {
     const stylesheet = readWorkspaceListStylesheet();
 

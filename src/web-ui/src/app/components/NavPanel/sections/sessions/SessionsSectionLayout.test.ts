@@ -170,6 +170,8 @@ describe('SessionsSection layout styles', () => {
     const btwBadgeBlock = extractInlineItemBlock(stylesheet, 'btw-badge');
     const reviewBadgeBlock = extractInlineItemBlock(stylesheet, 'review-badge');
     const backgroundSubagentBadgeBlock = extractInlineItemBlock(stylesheet, 'background-subagent-badge');
+    // Shared by session rows and workspace rows, so it must hold its slot width.
+    const cronBadgeBlock = extractInlineItemBlock(stylesheet, 'cron-badge');
 
     expect(labelBlock).toContain('flex: 1 1 0;');
     expect(labelBlock).toContain('overflow: hidden;');
@@ -189,6 +191,10 @@ describe('SessionsSection layout styles', () => {
     expect(backgroundSubagentBadgeBlock).toContain('line-height: 0;');
     expect(backgroundSubagentBadgeBlock).toContain('width: var(--openbitfun-control-icon-size-md);');
     expect(backgroundSubagentBadgeBlock).toContain('height: var(--openbitfun-control-icon-size-md);');
+    expect(cronBadgeBlock).toContain('flex: 0 0 auto;');
+    expect(cronBadgeBlock).toContain('display: inline-flex;');
+    expect(cronBadgeBlock).toContain('align-items: center;');
+    expect(cronBadgeBlock).toContain('white-space: nowrap;');
 
     const backgroundSubagentIconBlock = extractInlineItemBlock(stylesheet, 'background-subagent-icon');
     expect(backgroundSubagentIconBlock).toContain('place-self: center;');
