@@ -36,6 +36,10 @@ const retiredIdentityDataBoundaryPrefixes = Object.freeze([
   'src/crates/assembly/core/src/legacy_migration/',
   'src/crates/services/legacy-migration/',
   'src/crates/services/legacy-migration-adapters/',
+  // Pinned legacy updater feeds reproduce the historical 0.2.x manifests
+  // (download URLs and file names included) so old clients keep resolving
+  // their last real release; they must not be rewritten to the new identity.
+  'scripts/fixtures/legacy-update-feeds/',
 ]);
 const noncanonicalIdentityDataBoundaryFiles = new Set([
   'OPENBITFUN_LEGACY_DATA_MIGRATION_INVENTORY.md',
