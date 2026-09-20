@@ -579,6 +579,7 @@
     "addImage": "Add image",
     "maxImagesWarning": "Maximum {{count}} images allowed",
     "imagePasteFailed": "Image paste failed",
+    "clipboardImageToolsUnavailable": "The clipboard image could not be read: install wl-clipboard (Wayland) or xclip (X11) and try again.",
     "externalFiles": {
       "clipboardPathsUnavailable": "The clipboard reported files, but their local paths could not be read.",
       "dropPathsUnavailable": "This file drop did not expose local paths. Copy the files and paste them into the composer instead.",
