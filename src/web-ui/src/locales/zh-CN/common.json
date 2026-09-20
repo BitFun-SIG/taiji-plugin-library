@@ -758,6 +758,7 @@
     "footerDistributedExecution": "{{count}} 台设备正在执行",
     "current": "当前",
     "currentUse": "当前使用",
+    "currentLocalDevice": "当前本地设备",
     "controlling": "正在控制",
     "executingTasks": "{{count}} 个任务",
     "connectedDevices": "协同设备",
