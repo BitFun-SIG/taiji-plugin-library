@@ -132,7 +132,10 @@ export const CronToolCard: React.FC<ToolCardProps> = React.memo(({ toolItem }) =
 
   const action = resultData?.action ?? inputData.action ?? 'list';
   const job = resultData?.job;
-  const jobs = Array.isArray(resultData?.jobs) ? resultData.jobs : [];
+  const jobs = useMemo(
+    () => (Array.isArray(resultData?.jobs) ? resultData.jobs : []),
+    [resultData?.jobs]
+  );
   const jobId = job?.id ?? resultData?.job_id ?? inputData.job_id;
   const jobName = job?.name
     ?? inputData.job?.name
