@@ -1,11 +1,18 @@
 import type { Session } from '../types/flow-chat';
 import type { SessionMetadata } from '@/shared/types/session-history';
-/** Session list membership is the owning host's workspace ID, never a path. */
+/**
+ * Session list membership is the owning execution workspace ID (`workspaceId`),
+ * never a path. `projectWorkspaceId` is only the persistence owner (the main
+ * project for linked worktrees) and a legacy fallback for records created
+ * before execution-workspace stamping; it must never widen membership to
+ * sibling worktrees of the same project.
+ */
 export function sessionBelongsToWorkspaceNavRow(
   session: Pick<Session, 'workspaceId' | 'projectWorkspaceId'>,
   workspaceId?: string,
 ): boolean {
-  return Boolean(workspaceId && (session.workspaceId === workspaceId || session.projectWorkspaceId === workspaceId));
+  if (!workspaceId) return false;
+  return (session.workspaceId ?? session.projectWorkspaceId) === workspaceId;
 }
 
 export function getSessionSortTimestamp(session: Pick<Session, 'createdAt' | 'lastFinishedAt'>): number {

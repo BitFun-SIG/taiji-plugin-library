@@ -104,6 +104,22 @@ describe('sessionOrdering', () => {
     expect(sessionBelongsToWorkspaceNavRow({ workspaceId: 'host-b-project' }, 'host-a-project')).toBe(false);
   });
 
+  it('does not show a worktree session under its main project group', () => {
+    const worktreeSession = {
+      workspaceId: 'worktree-cli',
+      projectWorkspaceId: 'main-project',
+    };
+    expect(sessionBelongsToWorkspaceNavRow(worktreeSession, 'worktree-cli')).toBe(true);
+    expect(sessionBelongsToWorkspaceNavRow(worktreeSession, 'main-project')).toBe(false);
+    expect(sessionBelongsToWorkspaceNavRow(worktreeSession, 'sibling-worktree')).toBe(false);
+  });
+
+  it('still attributes a legacy record that only carries the project ID', () => {
+    const legacySession = { projectWorkspaceId: 'main-project' };
+    expect(sessionBelongsToWorkspaceNavRow(legacySession, 'main-project')).toBe(true);
+    expect(sessionBelongsToWorkspaceNavRow(legacySession, 'other-project')).toBe(false);
+  });
+
   it('does not guess membership from a missing or stale ID', () => {
     expect(sessionBelongsToWorkspaceNavRow({}, 'known')).toBe(false);
     expect(sessionBelongsToWorkspaceNavRow({ workspaceId: 'stale' }, 'known')).toBe(false);
