@@ -10,6 +10,7 @@ import {
   AmbientToolCardHeader,
   CommandToolCard,
   ContextCompressionToolCard,
+  CronToolCard,
   DefaultToolCard,
   DirectoryListToolCard,
   FileDiffToolCard,
@@ -585,6 +586,11 @@ test("every migrated FlowChat tool view publishes a stable concrete card identit
       status: "completed",
       summary: "Completed",
       toolName: "custom_tool",
+    })],
+    ["cron", createElement(CronToolCard, {
+      action: "Scheduled job:",
+      status: "completed",
+      summary: "Created scheduled job",
     })],
     ["directory-list", createElement(DirectoryListToolCard, {
       results: [{ key: "src", title: "src/" }],

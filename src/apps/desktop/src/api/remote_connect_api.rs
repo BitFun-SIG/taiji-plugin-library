@@ -487,6 +487,7 @@ fn should_fanout_peer_ui_event(event: &str) -> bool {
             | "permission://event"
             | AI_MODEL_CATALOG_UPDATED_EVENT
             | openbitfun_core::service::workspace::WORKSPACE_CATALOG_CHANGED_EVENT
+            | openbitfun_core::service::cron::CRON_JOBS_CHANGED_EVENT
     )
 }
 
@@ -3589,6 +3590,12 @@ mod peer_event_tests {
     fn workspace_catalog_hints_are_fanned_out_to_peer_controllers() {
         assert!(should_fanout_peer_ui_event("workspace-catalog-changed"));
         assert!(!should_fanout_peer_ui_event("workspace-identity-changed"));
+    }
+
+    #[test]
+    fn cron_job_change_hints_are_fanned_out_to_peer_controllers() {
+        assert!(should_fanout_peer_ui_event("cron://jobs-changed"));
+        assert!(!should_fanout_peer_ui_event("cron://internal"));
     }
 }
 

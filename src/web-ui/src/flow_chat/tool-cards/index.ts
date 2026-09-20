@@ -57,6 +57,7 @@ import { ReviewSessionSummaryCard } from './ReviewSessionSummaryCard';
 import { SessionControlToolCard } from './SessionControlToolCard';
 import { SessionMessageToolCard } from './SessionMessageToolCard';
 import { ComputerUseToolCard } from './ComputerUseToolCard';
+import { CronToolCard } from './CronToolCard';
 import { ViewImageToolCard } from './ViewImageToolCard';
 import { OpenBitFunControlToolCard } from './OpenBitFunControlToolCard';
 
@@ -103,6 +104,9 @@ export const STANDARD_TOOL_CARD_ADAPTERS = {
   // Session tools
   'SessionControl': SessionControlToolCard,
   'SessionMessage': SessionMessageToolCard,
+
+  // Scheduled jobs
+  'Cron': CronToolCard,
 
   // Code-mode agents: one program per step instead of one card per action
   'RunCode': RunCodeToolCard,

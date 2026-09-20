@@ -79,6 +79,11 @@ import {
 import { useDispatchJobStore } from '@/features/dispatch/dispatchJobStore';
 import { resolveDispatchNavPresentation } from '@/features/dispatch/dispatchNavPresentation';
 import {
+  ensureCronJobCountsListener,
+  getCronJobCountsSnapshot,
+  subscribeCronJobCounts,
+} from '@/app/components/scheduled-jobs/cronJobCountsStore';
+import {
   SESSION_METADATA_DEFERRED_FALLBACK_MS,
   SESSION_METADATA_DEFERRED_FRAME_COUNT,
   SESSION_METADATA_DEFERRED_SIGNAL,
@@ -220,6 +225,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
 }) => {
   useDeviceDirectory();
   const { t } = useI18n('common');
+  useEffect(() => { ensureCronJobCountsListener(); }, []);
   const storedSessionOrdering = useWorkspaceSessionViewStore(state => state.ordering);
   const storedSessionShow = useWorkspaceSessionViewStore(state => state.show);
   const storedSessionFilters = useWorkspaceSessionViewStore(state => state.filters);
@@ -292,6 +298,12 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
     return new Set([...flowChatState.sessions.keys()].filter(sessionNavStatusService.isRunning));
   }, [flowChatState.sessions, orderingRevision]);
   const [scheduledJobsSessionId, setScheduledJobsSessionId] = useState<string | null>(null);
+  const cronJobCountsRevision = useSyncExternalStore(
+    subscribeCronJobCounts,
+    () => getCronJobCountsSnapshot(),
+    () => getCronJobCountsSnapshot(),
+  );
+  const cronJobCountsBySession = cronJobCountsRevision.bySessionId;
   const [batchWorkspace, setBatchWorkspace] = useState<WorkspaceSessionScope | null>(null);
   const editInputRef = useRef<HTMLInputElement>(null);
   const sessionMenuPopoverRef = useRef<HTMLDivElement>(null);
@@ -1500,6 +1512,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
             : undefined;
           const backgroundSubagentActivityCount = backgroundSubagentActivity?.totalCount ?? 0;
           const showBackgroundSubagentActivity = !isChildSession && backgroundSubagentActivityCount > 0;
+          const scheduledJobCount = cronJobCountsBySession.get(session.sessionId) ?? 0;
           const parentSessionId = relationship.parentSessionId;
           const parentSession = parentSessionId ? flowChatState.sessions.get(parentSessionId) : undefined;
           const parentTitle = parentSession ? resolveSessionTitle(parentSession) : '';
@@ -1710,6 +1723,15 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                       ><OverflowText>
                         {dispatchPresentation?.badgeLabel}
                       </OverflowText></span>
+                    ) : null}
+                    {scheduledJobCount > 0 ? (
+                      <span
+                        className="openbitfun-nav-panel__inline-item-cron-badge"
+                        title={t('nav.scheduledJobs.badgeTooltip', { count: scheduledJobCount })}
+                      >
+                        <Icon name="clock" size="2xs" aria-hidden />
+                        {scheduledJobCount}
+                      </span>
                     ) : null}
                     {reviewActivityKind ? (
                       <span className="openbitfun-nav-panel__inline-item-review-badge">
