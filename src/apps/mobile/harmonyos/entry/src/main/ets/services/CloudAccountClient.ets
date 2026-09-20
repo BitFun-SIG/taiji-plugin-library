@@ -142,6 +142,7 @@ export const DEFAULT_CLOUD_RELAY_URL: string = OFFICIAL_RELAY_URL;
 
 /** Device kinds the relay accepts; mirrors `relay-service/src/db.rs::DEVICE_KINDS`. */
 const DEVICE_KIND_DESKTOP: string = 'desktop';
+const DEVICE_KIND_CLI: string = 'cli';
 const DEVICE_KIND_MOBILE: string = 'mobile';
 const DEVICE_KIND_WATCH: string = 'watch';
 
@@ -158,19 +159,21 @@ const DEVICE_KIND_WATCH: string = 'watch';
 const KNOWN_NON_DESKTOP_DEVICE_NAMES: string[] = ['harmonyos phone', 'harmonyos watch'];
 
 /**
- * Whether a relay device row is a desktop, and so controllable from a phone.
+ * Whether a relay device row is a host, and so controllable from a phone.
  *
- * A row that reports its kind is taken at its word. A row without one predates
- * the relay learning about kinds, and is judged by two weaker signals: this
- * phone's own row is never a desktop, and neither is one carrying a name our
- * own builds register under. Anything else stays visible — hiding a real
- * desktop would strand the user, while a stale phone row disappears the next
- * time that phone logs in against a relay that stores kinds.
+ * A row that reports its kind is taken at its word: a desktop and a CLI host run
+ * the same control plane, so both are targets, while a phone or a watch is only
+ * ever a controller. A row without one predates the relay learning about kinds,
+ * and is judged by two weaker signals: this phone's own row is never a host, and
+ * neither is one carrying a name our own builds register under. Anything else
+ * stays visible — hiding a real host would strand the user, while a stale phone
+ * row disappears the next time that phone logs in against a relay that stores
+ * kinds.
  */
-function isDesktopDeviceRow(device: CloudAccountDeviceWire, selfDeviceId: string): boolean {
+function isHostDeviceRow(device: CloudAccountDeviceWire, selfDeviceId: string): boolean {
   const kind = (device.device_kind || '').trim();
   if (kind.length > 0) {
-    return kind === DEVICE_KIND_DESKTOP;
+    return kind === DEVICE_KIND_DESKTOP || kind === DEVICE_KIND_CLI;
   }
   if (selfDeviceId.length > 0 && device.device_id === selfDeviceId) {
     return false;
@@ -332,9 +335,9 @@ export class CloudAccountClient {
     selfDeviceId: string = ''
   ): Promise<CloudAccountDevice[]> {
     const devices = await this.request<CloudAccountDeviceWire[]>(relayUrl, '/api/devices', 'GET', undefined, session.token);
-    const desktops = devices.filter((device: CloudAccountDeviceWire): boolean =>
-      isDesktopDeviceRow(device, selfDeviceId));
-    return desktops.map((device: CloudAccountDeviceWire): CloudAccountDevice => ({
+    const hosts = devices.filter((device: CloudAccountDeviceWire): boolean =>
+      isHostDeviceRow(device, selfDeviceId));
+    return hosts.map((device: CloudAccountDeviceWire): CloudAccountDevice => ({
       deviceId: device.device_id,
       deviceName: device.device_name || device.device_id,
       deviceKind: device.device_kind,
