@@ -2,6 +2,8 @@
 
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { InteractionMotion } from '@/shared/utils/motionPreference';
 import type { SceneTab, SceneTabId } from './types';
@@ -13,6 +15,11 @@ import { clearAgentCanvasForPeerSwitch, switchAgentCanvasWorkspace, useAgentCanv
 import { activateSurface } from '@/infrastructure/peer-device/deviceSurface';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+
+const sceneBarStyles = readFileSync(
+  resolve(process.cwd(), 'src/app/components/SceneBar/SceneBar.scss'),
+  'utf8',
+);
 
 const sceneHarness = vi.hoisted(() => ({
   state: {
@@ -342,6 +349,13 @@ describe('SceneBar overflow navigation', () => {
 
     expect(tabs.scrollLeft).toBe(72);
     expect(container.querySelector<HTMLButtonElement>('[data-openbitfun-part="scrollPrevious"]')?.disabled).toBe(false);
+  });
+
+  it('removes unavailable edge controls from layout and paints the overflow fade directly', () => {
+    expect(sceneBarStyles).toMatch(/&:disabled\s*\{\s*display:\s*none;/);
+    expect(sceneBarStyles).toContain('background: linear-gradient(');
+    expect(sceneBarStyles).not.toContain('mask-image: linear-gradient(');
+    expect(sceneBarStyles).not.toContain('backdrop-filter: var(--openbitfun-effect-blur-subtle)');
   });
 
   it('scrolls a newly active off-screen tab into view', () => {

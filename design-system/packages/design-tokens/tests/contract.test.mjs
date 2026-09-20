@@ -88,7 +88,7 @@ test("TabGroup geometry preserves the capsule selected and outline contract", as
   assert.equal(tokens["control.tabGroup.itemPaddingBlockSm"], "7px");
   assert.equal(tokens["control.tabGroup.itemPaddingInlineSm"], "12px");
   assert.equal(tokens["control.tabGroup.itemActionSize"], "20px");
-  assert.equal(tokens["control.tabGroup.itemActionInset"], "8px");
+  assert.equal(tokens["control.tabGroup.itemActionInset"], "4px");
   assert.equal(systemDocument.control.tabGroup.itemRadius.$value, "{radius.pill}");
   assert.equal(tokens["control.tabGroup.itemRadius"], "9999px");
 });

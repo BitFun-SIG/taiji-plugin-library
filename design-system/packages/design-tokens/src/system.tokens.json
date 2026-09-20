@@ -600,7 +600,7 @@
       "itemPaddingBlockSm": { "$value": "7px" },
       "itemPaddingInlineSm": { "$value": "{space.3}" },
       "itemActionSize": { "$value": "{space.5}" },
-      "itemActionInset": { "$value": "{space.2}" },
+      "itemActionInset": { "$value": "{space.1}" },
       "itemRadius": { "$value": "{radius.pill}" }
     },
     "segmentedControl": {
