@@ -125,11 +125,23 @@ export function useDeviceInterconnectionOverview(fallbackLocalDeviceName: string
       : null
   ), [peerContext?.peerMode]);
 
+  // The peer's system and kind are facts only the account directory holds; the
+  // local ones come from this machine's own device info, never from the browser.
+  const localDeviceOs = localDevice?.device_os ?? null;
+  const localDeviceKind = localDevice?.device_kind ?? null;
+  const peerEntry = peer
+    ? directory.devices.find(device => device.device_id === peer.deviceId)
+    : undefined;
+
   const localDeviceName = account.deviceName ?? (localDevice ? resolveDeviceName(localDevice.device_id, localDevice.device_name) : fallbackLocalDeviceName);
   const overview = useMemo(() => projectDeviceInterconnectionOverview({
     localDeviceName,
     fallbackMobileDeviceName,
+    localDeviceOs,
+    localDeviceKind,
     peer,
+    peerDeviceOs: peerEntry?.device_os ?? null,
+    peerDeviceKind: peerEntry?.device_kind ?? null,
     remoteStatus,
     remoteStatusState,
     dispatchJobs: projectedDispatchJobs,
@@ -138,7 +150,10 @@ export function useDeviceInterconnectionOverview(fallbackLocalDeviceName: string
     accountService,
     localDeviceName,
     fallbackMobileDeviceName,
+    localDeviceOs,
+    localDeviceKind,
     peer,
+    peerEntry,
     projectedDispatchJobs,
     remoteStatus,
     remoteStatusState,

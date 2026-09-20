@@ -7,7 +7,9 @@ import { useI18n } from '@/infrastructure/i18n';
 import {
   confirmDanger,
 } from '@/infrastructure/confirm-dialog';
-import { LogIn, Monitor, Pencil, Check, X } from 'lucide-react';
+import { LogIn, Pencil, Check, X } from 'lucide-react';
+import { DeviceSystemGlyph } from '../NavPanel/components/DeviceSystemGlyph';
+import { reportedHostKind } from '../NavPanel/deviceInterconnectionOverview';
 import { remoteConnectAPI, deviceDisplayName, deviceMetadataLabel } from '@/infrastructure/api/service-api/RemoteConnectAPI';
 import type {
   AccountDeviceInfo,
@@ -896,6 +898,18 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
                     : t('accountLogin.removeDevice');
                   const displayName = deviceDisplayName(d);
                   const metadata = deviceMetadataLabel(d);
+                  const reportedKind = (d.device_kind ?? '').trim().toLowerCase();
+                  // A controller reports `mobile` or `watch` and has no host
+                  // system to draw; when the kind is missing, the system the
+                  // device reported is the only fact this row has, so it decides
+                  // the mark. `hostKind` separates a CLI host, which has no
+                  // system silhouette to draw either.
+                  const systemFacts = {
+                    kind: reportedKind === 'mobile' || reportedKind === 'watch' ? 'mobile' as const : 'desktop' as const,
+                    name: displayName,
+                    os: d.device_os,
+                    hostKind: reportedHostKind(d.device_kind),
+                  };
                   const DeviceEntry = isSelectable && editingDeviceId !== d.device_id ? 'button' : 'div';
                   return (
                   <div data-openbitfun-component="remote-account-panel" data-openbitfun-part="deviceCard" key={d.device_id}
@@ -913,7 +927,7 @@ export const AccountPanel: React.FC<AccountPanelProps> = ({
                         'aria-label': t('accountLogin.openDevice', { name: displayName }),
                       } : {})}
                     >
-                      <Monitor size={16} />
+                      <DeviceSystemGlyph device={systemFacts} />
                       <span className="account-panel__device-info">
                         {/* Renaming replaces the name in place: showing the old
                             name next to an editor reads as two device names. */}

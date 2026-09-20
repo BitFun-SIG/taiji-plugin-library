@@ -1834,30 +1834,22 @@ $_section-header-height: 22px;
   .openbitfun-device-overview__carousel-track { transition: none; }
 }
 
-.openbitfun-device-overview__connect-overlay {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  pointer-events: none;
-  z-index: 1;
-
-  > button {
-    pointer-events: auto;
-  }
+// The action sits under the artwork, in the flow, for the same reason it is not
+// centred on it: the system mark owns the screen. Nothing is layered here, so it
+// needs no frosted surface — there is no artwork behind it to separate from.
+// Height comes from the button the card always renders here, never from the
+// state, so this machine and a peer keep one card height (see
+// DeviceStatusControl's connect action).
+.openbitfun-device-overview__connect-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--openbitfun-space-2) var(--openbitfun-space-4) 0;
 }
 
-.openbitfun-device-overview__incompatible {
-  max-width: calc(100% - var(--openbitfun-space-4) * 2);
-  padding: var(--openbitfun-space-1) var(--openbitfun-space-2);
-  border-radius: var(--openbitfun-radius-sm);
-  background: var(--openbitfun-color-action-quiet-hover);
-  color: var(--openbitfun-color-status-warning-content);
-  font-size: var(--openbitfun-type-meta-font-size);
-  line-height: var(--openbitfun-type-modifier-leading-ui-line-height);
-  text-align: center;
-  overflow-wrap: anywhere;
-  pointer-events: auto;
+.openbitfun-device-overview__connect-reserved {
+  visibility: hidden;
+  pointer-events: none;
 }
 
 .openbitfun-device-overview__artwork {
@@ -1892,6 +1884,24 @@ $_section-header-height: 22px;
   width: 38.11849%;
   aspect-ratio: 91.484375 / 70.7421875;
   mask-image: url('./assets/server.svg');
+}
+
+// The system variants keep the neutral device.svg silhouette and size, so only
+// the mask source differs; an unplaceable system falls back to device.svg.
+.openbitfun-device-overview__artwork[data-artwork='windows'] .openbitfun-device-overview__artwork-glyph {
+  mask-image: url('./assets/windows.svg');
+}
+
+.openbitfun-device-overview__artwork[data-artwork='macos'] .openbitfun-device-overview__artwork-glyph {
+  mask-image: url('./assets/macos.svg');
+}
+
+.openbitfun-device-overview__artwork[data-artwork='linux'] .openbitfun-device-overview__artwork-glyph {
+  mask-image: url('./assets/linux.svg');
+}
+
+.openbitfun-device-overview__artwork[data-artwork='harmonyos'] .openbitfun-device-overview__artwork-glyph {
+  mask-image: url('./assets/harmonyos.svg');
 }
 
 .openbitfun-device-overview__device-name {

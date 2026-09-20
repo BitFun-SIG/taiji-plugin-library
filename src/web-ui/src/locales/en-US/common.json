@@ -758,6 +758,7 @@
     "footerDistributedExecution": "{{count}} devices executing",
     "current": "Current",
     "currentUse": "In use",
+    "currentLocalDevice": "Current local device",
     "controlling": "Controlling",
     "executingTasks": "{{count}} tasks",
     "connectedDevices": "Connected devices",

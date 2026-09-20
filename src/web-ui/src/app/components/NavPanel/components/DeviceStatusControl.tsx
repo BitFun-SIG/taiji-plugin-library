@@ -15,11 +15,13 @@ import {
   type ChatAppBrand,
 } from '../../RemoteConnectDialog/ChatAppBrandIcon';
 import {
+  reportedHostKind,
   selectActivityFacts,
   selectAttachedGroups,
   type DeviceOverviewActivityFact,
   type DeviceOverviewDevice,
   type DeviceOverviewDeviceKind,
+  type DeviceOverviewHostKind,
 } from '../deviceInterconnectionOverview';
 import { useDeviceInterconnectionOverview } from './useDeviceInterconnectionOverview';
 import { DeviceArtwork } from './DeviceArtwork';
@@ -158,15 +160,58 @@ const DeviceStatusControl: React.FC<DeviceStatusControlProps> = ({
     overview,
     refresh,
   } = useDeviceInterconnectionOverview(localDeviceLabel, t('remoteConnect.mobileBrowserTitle'));
-  const previewDevices: DeviceOverviewDevice[] = availableTargets?.devices.map(target =>
-    target.device_id === currentId ? overview.primaryDevice
-      : overview.devices.find(device => device.id === target.device_id) ?? {
-        id: target.device_id, name: resolveDeviceName(target.device_id, target.device_alias ?? target.device_name ?? target.device_id), kind: 'desktop',
-        local: target.device_id === availableTargets.localId, activities: [], backgroundTaskCount: 0,
-      }) ?? [overview.primaryDevice];
+  /**
+   * A device says what it is by the kind it reported to the Relay, so the
+   * account directory is enough for any device. A live control link can say
+   * something newer — a host that just changed profile, or one on an older
+   * Relay that could not report the kind — so it wins when it answers.
+   */
+  const deviceHostKind = useCallback((
+    deviceId: string | null | undefined,
+    reportedKind?: string | null,
+  ): DeviceOverviewHostKind | null => {
+    const fromLink = !deviceId || !peerContext
+      ? null
+      : peerContext.peerMode.active && peerContext.peerMode.deviceId === deviceId
+        ? peerContext.currentPeerCapabilities?.hostKind ?? null
+        : peerContext.attachments
+          .find(attachment => attachment.deviceId === deviceId)?.capabilities?.hostKind ?? null;
+    return fromLink ?? reportedHostKind(reportedKind);
+  }, [peerContext]);
+  const previewDevices: DeviceOverviewDevice[] = availableTargets
+    ? availableTargets.devices.map(target => {
+        const known = target.device_id === currentId
+          ? overview.primaryDevice
+          : overview.devices.find(device => device.id === target.device_id);
+        const device: DeviceOverviewDevice = known ?? {
+          id: target.device_id, name: resolveDeviceName(target.device_id, target.device_alias ?? target.device_name ?? target.device_id), kind: 'desktop',
+          local: target.device_id === availableTargets.localId, activities: [], backgroundTaskCount: 0,
+        };
+        return {
+          ...device,
+          os: target.device_os ?? device.os ?? null,
+          hostKind: deviceHostKind(target.device_id, target.device_kind) ?? device.hostKind ?? null,
+        };
+      })
+    : [{
+        // No account directory here, so the only new fact a device can bring is
+        // what its control link says; the projection already carried the rest.
+        ...overview.primaryDevice,
+        hostKind: deviceHostKind(currentId) ?? overview.primaryDevice.hostKind,
+      }];
   const previewIndex = Math.max(0, availableTargets?.devices.findIndex(
     device => device.device_id === (previewTarget?.device_id ?? currentId),
   ) ?? 0);
+  const previewTargetDevice = availableTargets?.devices[previewIndex];
+  // A confirmed-incompatible peer stays in the carousel so its state is legible,
+  // but it never becomes a control target.
+  const previewIncompatible = Boolean(previewTargetDevice
+    && previewTargetDevice.device_id !== availableTargets?.localId
+    && !isDeviceControllable(previewTargetDevice));
+  const previewIncompatibleVersion = previewTargetDevice ? deviceClientVersion(previewTargetDevice) : null;
+  const previewIncompatibleNotice = previewIncompatibleVersion
+    ? t('deviceOverview.deviceClientIncompatibleWithVersion', { version: previewIncompatibleVersion })
+    : t('deviceOverview.deviceClientIncompatible');
   const triggerRef = useRef<HTMLButtonElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
   const popoverLayout = useAnchoredPopoverPosition({
@@ -239,7 +284,11 @@ const DeviceStatusControl: React.FC<DeviceStatusControlProps> = ({
   const deviceActivity = useCallback((device: DeviceOverviewDevice) => {
     const parts: string[] = [];
     if (device.activities.includes('current-use')) {
-      parts.push(t('deviceOverview.currentUse'));
+      // "In use" says nothing about which machine it is; on this machine the row
+      // has to name it, because the artwork above shows a device either way.
+      parts.push(device.local
+        ? t('deviceOverview.currentLocalDevice')
+        : t('deviceOverview.currentUse'));
     }
     if (device.activities.includes('controlling')) {
       parts.push(t('deviceOverview.controlling'));
@@ -376,52 +425,51 @@ const DeviceStatusControl: React.FC<DeviceStatusControlProps> = ({
                   <div className="openbitfun-device-overview__carousel-track"
                     style={{ transform: `translateX(-${previewIndex * 100}%)` }}>
                     {previewDevices.map((device, index) => {
-                      const slideTarget = availableTargets?.devices[index];
-                      // A confirmed-incompatible peer stays in the carousel so its
-                      // state is legible, but it never becomes a control target.
-                      const incompatible = Boolean(slideTarget
-                        && slideTarget.device_id !== availableTargets?.localId
-                        && !isDeviceControllable(slideTarget));
-                      const incompatibleVersion = slideTarget ? deviceClientVersion(slideTarget) : null;
-                      const incompatibleNotice = incompatibleVersion
-                        ? t('deviceOverview.deviceClientIncompatibleWithVersion', { version: incompatibleVersion })
-                        : t('deviceOverview.deviceClientIncompatible');
                       return (
                       <div className="openbitfun-device-overview__carousel-slide" key={availableTargets?.devices[index]?.device_id ?? device.id}
                         aria-hidden={index !== previewIndex}>
                         <div className="openbitfun-device-overview__device-switcher">
                           <DeviceArtwork device={device} />
-                          {index === previewIndex && isPreviewing && (
-                            <div className="openbitfun-device-overview__connect-overlay">
-                              {incompatible ? (
-                                <span
-                                  className="openbitfun-device-overview__incompatible"
-                                  data-testid="nav-device-status-incompatible"
-                                  title={incompatibleNotice}
-                                >
-                                  {incompatibleNotice}
-                                </span>
-                              ) : (
-                                <Button variant="outline" size="sm" disabled={switchingDevice || returningLocal}
-                                  onClick={() => { void connectPreview(); }}>
-                                  {t('deviceOverview.connectDevice')}
-                                </Button>
-                              )}
-                            </div>
-                          )}
                         </div>
                         <span className="openbitfun-device-overview__device-name" title={device.name}>
                           {device.name}
                         </span>
                         <span className="openbitfun-device-overview__activity">
                           {index === previewIndex && !isPreviewing
-                            ? (incompatible ? incompatibleNotice : deviceActivity(overview.primaryDevice))
+                            ? (previewIncompatible ? previewIncompatibleNotice : deviceActivity(overview.primaryDevice))
                             : '\u00a0'}
                         </span>
                       </div>
                       );
                     })}
                   </div>
+                </div>
+                {/* One control in every state, not one control per state: this
+                    machine, a connectable peer, and a rejected peer all render
+                    the same button, so the card keeps one height and cannot
+                    resize while the user browses devices. Only the label text
+                    and the interaction attributes differ, which also keeps the
+                    row equal at any density, theme, or font size.
+                    Below the artwork rather than on top of it: the system mark is
+                    centred on the screen, so an action centred there hides exactly
+                    the part that says which system this device runs. Outside the
+                    track it also stops sliding with the carousel. */}
+                <div className="openbitfun-device-overview__connect-action">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    // A device cannot connect to itself, so this machine's button
+                    // is inert and invisible while still laying the row out.
+                    className={isPreviewing ? undefined : 'openbitfun-device-overview__connect-reserved'}
+                    disabled={!isPreviewing || previewIncompatible || switchingDevice || returningLocal}
+                    aria-hidden={isPreviewing ? undefined : true}
+                    tabIndex={isPreviewing ? undefined : -1}
+                    title={previewIncompatible ? previewIncompatibleNotice : undefined}
+                    data-testid={previewIncompatible ? 'nav-device-status-incompatible' : undefined}
+                    onClick={isPreviewing && !previewIncompatible ? () => { void connectPreview(); } : undefined}
+                  >
+                    {previewIncompatible ? previewIncompatibleNotice : t('deviceOverview.connectDevice')}
+                  </Button>
                 </div>
                 <div className="openbitfun-device-overview__carousel-controls">
                   <IconButton
