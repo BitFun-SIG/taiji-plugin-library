@@ -149,6 +149,20 @@ test('limits retired identity data to the one-time production migration boundary
     ),
     [],
   );
+  assert.deepEqual(
+    violationsFor(
+      `{"url": "https://github.com/example/${retiredLowerName}/releases/download/v0.2.19/${retiredLowerName}_0.2.19_windows-x86_64-setup.exe"}`,
+      'scripts/fixtures/legacy-update-feeds/latest.json',
+    ),
+    [],
+  );
+  assert.equal(
+    violationsFor(
+      `const sourceLabel = "${retiredName}";`,
+      'scripts/fixtures/example.json',
+    ).length,
+    1,
+  );
   assert.equal(
     violationsFor(
       `const SOURCE_PRODUCT: &str = "${retiredLowerName}";`,
