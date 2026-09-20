@@ -4785,8 +4785,13 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       await addClipboardImageFiles(request, [file]);
     } catch (error) {
       log.warn('Native clipboard image read failed', { error });
+      if (String(error).startsWith('clipboard_image_unsupported:')) {
+        notificationService.warning(t('input.clipboardImageToolsUnavailable'), {
+          duration: 4000,
+        });
+      }
     }
-  }, [addClipboardImageFiles, isExternalFileIntakeRequestCurrent]);
+  }, [addClipboardImageFiles, isExternalFileIntakeRequestCurrent, t]);
 
   const addExternalPaths = useCallback(async (
     request: ExternalFileIntakeRequest,

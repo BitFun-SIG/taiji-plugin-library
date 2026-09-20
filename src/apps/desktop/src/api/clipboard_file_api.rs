@@ -251,10 +251,9 @@ mod macos_clipboard {
 #[cfg(target_os = "linux")]
 mod linux_clipboard {
     use super::parse_uri_list;
-    use std::process::Command;
 
     fn read_xclip_uri_list() -> Option<String> {
-        let output = Command::new("xclip")
+        let output = openbitfun_core::util::process_manager::create_command("xclip")
             .args(["-selection", "clipboard", "-t", "text/uri-list", "-o"])
             .output()
             .ok()?;
@@ -267,7 +266,7 @@ mod linux_clipboard {
     }
 
     fn read_wl_paste_uri_list() -> Option<String> {
-        let output = Command::new("wl-paste")
+        let output = openbitfun_core::util::process_manager::create_command("wl-paste")
             .args(["-t", "text/uri-list"])
             .output()
             .ok()?;
@@ -353,59 +352,104 @@ pub(crate) fn sniff_image_mime(bytes: &[u8]) -> Option<&'static str> {
     }
 }
 
+/// Outcome of a Linux clipboard-image probe.
+enum ClipboardImageRead {
+    /// An image payload, base64-encoded with its sniffed MIME type.
+    Image(String, String),
+    /// The reader tools ran; the clipboard simply holds no image payload.
+    Empty,
+    /// Neither `wl-paste` nor `xclip` could be spawned. Surfaced to the user
+    /// instead of silently reporting "no image": a plain-text clipboard and a
+    /// machine missing the reader tools must stay distinguishable.
+    ToolsUnavailable(String),
+}
+
 /// Reads a clipboard image on Linux.
 ///
 /// WebKitGTK delivers paste events with empty `DataTransfer` items, so the
 /// webview itself can never see a pasted image; reading the Wayland/X11
 /// clipboard through the same tools as `get_clipboard_files` is the only
-/// delivery path. Other platforms return `None`: their webviews deliver
-/// clipboard images to the page directly and never need this fallback.
+/// delivery path.
 #[cfg(target_os = "linux")]
-fn read_clipboard_image_internal() -> Option<(String, String)> {
+fn read_clipboard_image_internal() -> ClipboardImageRead {
     use base64::Engine as _;
-    use std::process::Command;
 
-    let read_target = |program: &str, args: &[&str]| -> Option<Vec<u8>> {
-        Command::new(program)
+    /// `Ok(None)` = the tool ran and reported no such payload;
+    /// `Err` = the tool could not be run at all.
+    let read_target = |program: &str, args: &[&str]| -> Result<Option<Vec<u8>>, String> {
+        let output = openbitfun_core::util::process_manager::create_command(program)
             .args(args)
             .output()
-            .ok()
-            .filter(|output| output.status.success() && !output.stdout.is_empty())
-            .map(|output| output.stdout)
+            .map_err(|error| {
+                if error.kind() == std::io::ErrorKind::NotFound {
+                    format!("{program} is not installed")
+                } else {
+                    format!("failed to spawn {program}: {error}")
+                }
+            })?;
+        Ok(output
+            .status
+            .success()
+            .then_some(output.stdout)
+            .filter(|stdout| !stdout.is_empty()))
     };
 
+    let mut runnable_tools = 0usize;
+    let mut last_tool_error = String::new();
     for mime in ["image/png", "image/jpeg"] {
-        let bytes = read_target("wl-paste", &["-t", mime])
-            .or_else(|| read_target("xclip", &["-selection", "clipboard", "-t", mime, "-o"]));
-        if let Some(bytes) = bytes {
-            if let Some(sniffed) = sniff_image_mime(&bytes) {
-                let encoded = base64::engine::general_purpose::STANDARD.encode(&bytes);
-                return Some((encoded, sniffed.to_string()));
+        for (program, args) in [
+            ("wl-paste", vec!["-t", mime]),
+            ("xclip", vec!["-selection", "clipboard", "-t", mime, "-o"]),
+        ] {
+            match read_target(program, &args) {
+                Ok(Some(bytes)) => {
+                    if let Some(sniffed) = sniff_image_mime(&bytes) {
+                        let encoded = base64::engine::general_purpose::STANDARD.encode(&bytes);
+                        return ClipboardImageRead::Image(encoded, sniffed.to_string());
+                    }
+                    runnable_tools += 1;
+                }
+                Ok(None) => runnable_tools += 1,
+                Err(error) => last_tool_error = error,
             }
         }
     }
-    None
+
+    if runnable_tools > 0 {
+        return ClipboardImageRead::Empty;
+    }
+    ClipboardImageRead::ToolsUnavailable(format!(
+        "clipboard_image_unsupported: reading a clipboard image needs wl-paste (Wayland) or \
+         xclip (X11), but neither is available ({last_tool_error}); install wl-clipboard or \
+         xclip and retry"
+    ))
 }
 
 #[cfg(target_os = "linux")]
-fn get_clipboard_image_internal() -> Option<(String, String)> {
+fn get_clipboard_image_internal() -> ClipboardImageRead {
     read_clipboard_image_internal()
 }
 
 #[cfg(not(target_os = "linux"))]
-fn get_clipboard_image_internal() -> Option<(String, String)> {
-    None
+fn get_clipboard_image_internal() -> ClipboardImageRead {
+    // Other platforms deliver clipboard images to the page directly and never
+    // need the host fallback.
+    ClipboardImageRead::Empty
 }
 
 #[tauri::command]
 pub async fn get_clipboard_image() -> Result<ClipboardImageResponse, String> {
-    Ok(match get_clipboard_image_internal() {
-        Some((base64, mime_type)) => ClipboardImageResponse {
+    match get_clipboard_image_internal() {
+        ClipboardImageRead::Image(base64, mime_type) => Ok(ClipboardImageResponse {
             base64: Some(base64),
             mime_type: Some(mime_type),
-        },
-        None => ClipboardImageResponse::default(),
-    })
+        }),
+        ClipboardImageRead::Empty => Ok(ClipboardImageResponse::default()),
+        ClipboardImageRead::ToolsUnavailable(error) => {
+            log::warn!("Clipboard image read unsupported: {}", error);
+            Err(error)
+        }
+    }
 }
 
 /// Pastes clipboard files between controller-local paths.

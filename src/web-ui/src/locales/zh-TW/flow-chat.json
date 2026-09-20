@@ -579,6 +579,7 @@
     "addImage": "新增圖片",
     "maxImagesWarning": "最多隻能選擇{{count}}張圖片",
     "imagePasteFailed": "圖片粘貼失敗",
+    "clipboardImageToolsUnavailable": "無法讀取剪貼簿圖片：請安裝 wl-clipboard（Wayland）或 xclip（X11）後重試。",
     "externalFiles": {
       "clipboardPathsUnavailable": "剪貼簿中包含檔案，但無法讀取其本機路徑。",
       "dropPathsUnavailable": "此次拖放未提供本機路徑，請複製這些檔案後貼到輸入框。",
