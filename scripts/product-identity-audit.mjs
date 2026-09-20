@@ -6,6 +6,12 @@
  * The normal product is OpenBitFun-only. Legacy exceptions are restricted to
  * the exact data-directory ignore entry and the one-time migration documents,
  * migrator app/service boundary, and fixtures used for in-place upgrades.
+ *
+ * The retired token also survives inside two external GitHub identifiers that
+ * must keep their published spelling: the committed-by attribution email and
+ * the organization profile URL. Those are allowed only as whole-line matches
+ * where every retired token on the line belongs to one of those identifiers; a
+ * line that pairs an identifier with any other retired token still fails.
  */
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, statSync } from 'node:fs';
@@ -42,6 +48,38 @@ const noncanonicalIdentityDataBoundaryFiles = new Set([
   'deploy/openbitfun-host/migrate-market-data-v1.py',
 ]);
 
+// Published external GitHub identifiers that embed the retired token. These are
+// names GitHub owns, not product identity, so renaming them would break commit
+// attribution and the repository link instead of removing a legacy product name.
+const attributedExternalIdentities = Object.freeze([
+  `318544290+${retiredProductToken}-ai@users.noreply.github.com`,
+  `https://github.com/${retiredProductToken}-ai`,
+]);
+
+const retiredProductPatternSource = `(?<!open)${retiredProductToken}`;
+
+function isExternalAttributionOnlyLine(lineText) {
+  if (typeof lineText !== 'string') {
+    return false;
+  }
+
+  let remaining = lineText;
+  let foundIdentity = false;
+  for (const identity of attributedExternalIdentities) {
+    if (remaining.includes(identity)) {
+      foundIdentity = true;
+      remaining = remaining.split(identity).join('');
+    }
+  }
+
+  if (!foundIdentity) {
+    return false;
+  }
+
+  // Only the retired tokens that live inside an allowed identifier may remain.
+  return !new RegExp(retiredProductPatternSource, 'iu').test(remaining);
+}
+
 const identityRules = Object.freeze([
   Object.freeze({
     id: 'noncanonical-openbitfun-casing',
@@ -58,10 +96,16 @@ const identityRules = Object.freeze([
   Object.freeze({
     id: 'retired-product-name',
     description: 'retired product name',
-    pattern: new RegExp(`(?<!open)${retiredProductToken}`, 'giu'),
-    allowedMatch: ({ location }) => location.file === '.gitignore'
-      && location.location === 'content'
-      && location.lineText?.trim() === `.${retiredProductToken}/`,
+    pattern: new RegExp(retiredProductPatternSource, 'giu'),
+    allowedMatch: ({ location }) => {
+      if (location.file === '.gitignore'
+        && location.location === 'content'
+        && location.lineText?.trim() === `.${retiredProductToken}/`) {
+        return true;
+      }
+      return location.location === 'content'
+        && isExternalAttributionOnlyLine(location.lineText);
+    },
     allowedFiles: retiredIdentityDataBoundaryFiles,
     allowedFilePrefixes: retiredIdentityDataBoundaryPrefixes,
   }),
