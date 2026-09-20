@@ -456,6 +456,7 @@
       "title": "定時任務",
       "open": "定時任務",
       "shortLabel": "定時任務",
+      "badgeTooltip": "{{count}} 個定時任務",
       "listTitle": "任務列表",
       "assistantFallback": "目前助理",
       "loading": "正在載入定時任務...",
@@ -504,8 +505,7 @@
         }
       },
       "targets": {
-        "session": "會話",
-        "newSession": "新會話"
+        "session": "會話"
       },
       "status": {
         "idle": "待命",

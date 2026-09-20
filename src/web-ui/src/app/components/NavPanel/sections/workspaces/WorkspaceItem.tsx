@@ -54,6 +54,11 @@ import {
   type WorkspaceInfo,
 } from '@/shared/types';
 import { SSHContext } from '@/features/ssh-remote/SSHRemoteContext';
+import {
+  ensureCronJobCountsListener,
+  getCronJobCountsSnapshot,
+  subscribeCronJobCounts,
+} from '@/app/components/scheduled-jobs/cronJobCountsStore';
 import { useWorkspaceSearchIndex } from '@/tools/file-explorer';
 import { WORKSPACE_SEARCH_AVAILABLE } from '@/infrastructure/config/workspaceSearchAvailability';
 import { useSideAnchoredPopoverPosition } from '@/shared/utils/useSideAnchoredPopoverPosition';
@@ -105,6 +110,13 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
 }) => {
   const { t } = useI18n('common');
   const { t: tFiles } = useTranslation('panels/files');
+  useEffect(() => { ensureCronJobCountsListener(); }, []);
+  const cronJobCounts = useSyncExternalStore(
+    subscribeCronJobCounts,
+    getCronJobCountsSnapshot,
+    getCronJobCountsSnapshot,
+  );
+  const scheduledJobCount = cronJobCounts.byWorkspaceId.get(workspace.id) ?? 0;
   const {
     setActiveWorkspace,
     closeWorkspaceById,
@@ -859,6 +871,15 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
               data-workspace-id={workspace.id}
             >
               <OverflowText className="openbitfun-nav-panel__assistant-item-label" data-openbitfun-product-component="workspace-item" data-openbitfun-product-part="label">{workspaceDisplayName}</OverflowText>
+              {scheduledJobCount > 0 ? (
+                <span
+                  className="openbitfun-nav-panel__inline-item-cron-badge"
+                  title={t('nav.scheduledJobs.badgeTooltip', { count: scheduledJobCount })}
+                >
+                  <Icon name="clock" size="2xs" aria-hidden />
+                  {scheduledJobCount}
+                </span>
+              ) : null}
             </ActionItem>
           </Tooltip>
 

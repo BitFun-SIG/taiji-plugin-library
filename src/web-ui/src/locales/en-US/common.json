@@ -456,6 +456,7 @@
       "title": "Scheduled Jobs",
       "open": "Scheduled jobs",
       "shortLabel": "Schedule",
+      "badgeTooltip": "{{count}} scheduled job(s)",
       "listTitle": "Jobs",
       "assistantFallback": "Current assistant",
       "loading": "Loading scheduled jobs...",
@@ -504,8 +505,7 @@
         }
       },
       "targets": {
-        "session": "Session",
-        "newSession": "New session"
+        "session": "Session"
       },
       "status": {
         "idle": "Idle",

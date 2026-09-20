@@ -8,12 +8,14 @@ use super::types::{
     CreateCronJobRequest, CronJob, CronJobPayload, CronJobTarget, CronJobTargetKind,
     CronLaunchSpec, CronSchedule, CronWorkspaceRef, UpdateCronJobRequest, DEFAULT_RETRY_DELAY_MS,
 };
+use super::{CronJobsChangedEvent, CronJobsChangedReason, CRON_JOBS_CHANGED_EVENT};
 use crate::agentic::coordination::{
     ConversationCoordinator, DialogQueuePriority, DialogScheduler, DialogSubmissionPolicy,
     DialogTriggerSource,
 };
 use crate::agentic::core::SessionConfig;
 use crate::agentic::workspace::WorkspaceBinding;
+use crate::infrastructure::events::{emit_global_event, BackendEvent};
 use crate::infrastructure::PathManager;
 use crate::service_agent_runtime::CoreServiceAgentRuntime;
 use crate::util::errors::{OpenBitFunError, OpenBitFunResult};
@@ -124,6 +126,29 @@ impl CronService {
         jobs.values().cloned().collect::<Vec<_>>()
     }
 
+    /// Broadcast a job-set change hint to product surfaces.
+    ///
+    /// The event bus is created later than this service during startup, so an
+    /// early emit is a no-op; surfaces still bootstrap their lists with an
+    /// explicit `list_cron_jobs` fetch.
+    async fn notify_jobs_changed(&self, reason: CronJobsChangedReason, job_id: Option<String>) {
+        let payload = match serde_json::to_value(CronJobsChangedEvent { reason, job_id }) {
+            Ok(payload) => payload,
+            Err(error) => {
+                warn!("Failed to serialize scheduled job change event: {}", error);
+                return;
+            }
+        };
+        if let Err(error) = emit_global_event(BackendEvent::Custom {
+            event_name: CRON_JOBS_CHANGED_EVENT.to_string(),
+            payload,
+        })
+        .await
+        {
+            warn!("Failed to emit scheduled job change event: {}", error);
+        }
+    }
+
     pub async fn list_jobs_filtered(
         &self,
         workspace_id: Option<&str>,
@@ -181,6 +206,8 @@ impl CronService {
 
         self.persist_jobs_locked(&jobs).await?;
         drop(jobs);
+        self.notify_jobs_changed(CronJobsChangedReason::Created, Some(job.id.clone()))
+            .await;
         self.wakeup.notify_one();
 
         Ok(job)
@@ -240,6 +267,8 @@ impl CronService {
         let updated = job.clone();
         self.persist_jobs_locked(&jobs).await?;
         drop(jobs);
+        self.notify_jobs_changed(CronJobsChangedReason::Updated, Some(updated.id.clone()))
+            .await;
         self.wakeup.notify_one();
 
         Ok(updated)
@@ -263,6 +292,8 @@ impl CronService {
         if existed {
             self.persist_jobs_locked(&jobs).await?;
             drop(jobs);
+            self.notify_jobs_changed(CronJobsChangedReason::Deleted, Some(job_id.to_string()))
+                .await;
             self.wakeup.notify_one();
         }
         Ok(existed)
@@ -282,6 +313,8 @@ impl CronService {
         if removed > 0 {
             self.persist_jobs_locked(&jobs).await?;
             drop(jobs);
+            self.notify_jobs_changed(CronJobsChangedReason::Deleted, None)
+                .await;
             self.wakeup.notify_one();
         }
         Ok(removed)
@@ -301,6 +334,11 @@ impl CronService {
 
             self.persist_jobs_locked(&jobs).await?;
             drop(jobs);
+            self.notify_jobs_changed(
+                CronJobsChangedReason::StateChanged,
+                Some(job_id.to_string()),
+            )
+            .await;
             self.wakeup.notify_one();
         }
 
@@ -352,16 +390,21 @@ impl CronService {
     {
         let _guard = self.mutation_lock.lock().await;
         let mut jobs = self.jobs.write().await;
-        let Some(job) = jobs
+        let Some(job_id) = jobs
             .values_mut()
             .find(|job| job.state.active_turn_id.as_deref() == Some(turn_id))
+            .map(|job| {
+                update(job, now_ms());
+                job.id.clone()
+            })
         else {
             return Ok(());
         };
 
-        update(job, now_ms());
         self.persist_jobs_locked(&jobs).await?;
         drop(jobs);
+        self.notify_jobs_changed(CronJobsChangedReason::StateChanged, Some(job_id))
+            .await;
         self.wakeup.notify_one();
         Ok(())
     }
@@ -561,6 +604,11 @@ impl CronService {
 
         self.persist_jobs_locked(&jobs).await?;
         drop(jobs);
+        self.notify_jobs_changed(
+            CronJobsChangedReason::StateChanged,
+            Some(job_id.to_string()),
+        )
+        .await;
         self.wakeup.notify_one();
         Ok(())
     }
