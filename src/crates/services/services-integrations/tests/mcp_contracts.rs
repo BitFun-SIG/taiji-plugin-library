@@ -2227,3 +2227,36 @@ fn mcp_cursor_format_helpers_preserve_cursor_compatibility_contract() {
     assert_eq!(parsed[0].transport, Some(MCPServerTransport::Sse));
     assert_eq!(parsed[0].location, ConfigLocation::User);
 }
+
+#[test]
+fn mcp_config_accepts_camel_case_streamable_http_type() {
+    // Cursor, Cline, and other MCP clients emit `type: "streamableHttp"`.
+    // OpenBitFun must accept it (and other casings) as streamable HTTP.
+    let config = serde_json::json!({
+        "mcpServers": {
+            "remote": {
+                "type": "streamableHttp",
+                "url": "https://example.com/mcp"
+            }
+        }
+    });
+
+    validate_mcp_json_config(&config).expect("camelCase streamableHttp type must validate");
+
+    let parsed = parse_cursor_format(&config);
+    assert_eq!(parsed.len(), 1);
+    assert_eq!(parsed[0].server_type, MCPServerType::Remote);
+    assert_eq!(
+        parsed[0].transport,
+        Some(MCPServerTransport::StreamableHttp)
+    );
+
+    for alias in ["streamable-http", "streamable_http", "streamablehttp", "HTTP"] {
+        validate_mcp_json_config(&serde_json::json!({
+            "mcpServers": {
+                "alias": { "type": alias, "url": "https://example.com/mcp" }
+            }
+        }))
+        .unwrap_or_else(|error| panic!("type '{}' must validate: {}", alias, error));
+    }
+}

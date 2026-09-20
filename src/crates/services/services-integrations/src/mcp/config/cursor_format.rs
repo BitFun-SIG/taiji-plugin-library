@@ -4,6 +4,7 @@ use log::warn;
 
 use crate::mcp::server::{MCPServerConfig, MCPServerTransport, MCPServerType};
 
+use super::json_config::normalized_transport_token;
 use super::ConfigLocation;
 
 fn parse_source(value: &str) -> Option<MCPServerType> {
@@ -15,7 +16,7 @@ fn parse_source(value: &str) -> Option<MCPServerType> {
 }
 
 fn parse_transport(value: &str) -> Option<MCPServerTransport> {
-    match value.trim() {
+    match normalized_transport_token(value).as_str() {
         "stdio" => Some(MCPServerTransport::Stdio),
         "sse" => Some(MCPServerTransport::Sse),
         "http" | "streamable_http" | "streamable-http" | "streamablehttp" => {
@@ -26,7 +27,7 @@ fn parse_transport(value: &str) -> Option<MCPServerTransport> {
 }
 
 fn parse_legacy_type(value: &str) -> Option<(Option<MCPServerType>, Option<MCPServerTransport>)> {
-    match value.trim() {
+    match normalized_transport_token(value).as_str() {
         "stdio" => Some((None, Some(MCPServerTransport::Stdio))),
         "local" => Some((Some(MCPServerType::Local), Some(MCPServerTransport::Stdio))),
         "sse" => Some((Some(MCPServerType::Remote), Some(MCPServerTransport::Sse))),
