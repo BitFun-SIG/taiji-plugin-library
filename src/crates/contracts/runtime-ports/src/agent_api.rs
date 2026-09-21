@@ -1889,6 +1889,16 @@ pub trait AgentTurnSettlementPort: Send + Sync {
 
 #[async_trait::async_trait]
 pub trait AgentDialogTurnPort: Send + Sync {
+    async fn manage_dialog_queue(
+        &self,
+        _request: crate::DialogQueueRequest,
+    ) -> PortResult<crate::DialogQueueSnapshot> {
+        Err(PortError::new(
+            PortErrorKind::NotAvailable,
+            "dialog_queue_v1 is not supported",
+        ))
+    }
+
     async fn submit_dialog_turn(
         &self,
         request: AgentDialogTurnRequest,

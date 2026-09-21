@@ -1,3 +1,4 @@
+import { hostQueueSupported, hostDialogQueue, queueImageAttachments } from '../../services/hostDialogQueue';
 import { requireSessionOwningWorkspaceId, sessionOwningWorkspaceId } from '../../utils/sessionOrdering';
 /**
  * Local session driver: the default flavor backed by this machine's (or the
@@ -321,6 +322,67 @@ export const localSessionDriver: SessionDriver = {
       options,
     } = input;
 
+    const prepareSubmission = async () => {
+      if (readySession.config.worktreeIsolationRequested !== undefined) {
+        const materialization = sessionWorktreeMaterializationPlan(readySession);
+        if (materialization) {
+          log.info('Materializing requested worktree after prompt submission', {
+            sessionId,
+            enabled: materialization.enabled,
+            projectWorkspaceId: materialization.projectWorkspaceId,
+            projectWorkspacePath: materialization.projectWorkspacePath,
+          });
+          const result = await worktreeAPI.bindSession(
+            sessionId,
+            materialization.enabled,
+            globalThis.crypto?.randomUUID?.() ?? `worktree-first-turn-${Date.now()}`,
+            materialization,
+          );
+          surfaceScope.assertCurrent('bind session worktree');
+          context.flowChatStore.updateSessionExecutionTarget(sessionId, {
+            workspacePath: result.workspacePath,
+            projectWorkspacePath: result.projectWorkspacePath,
+            workspaceId: result.workspaceId,
+            projectWorkspaceId: result.projectWorkspaceId,
+            executionTarget: result.executionTarget,
+          });
+          if (result.retainedWorktreePath) {
+            log.warn('Released worktree retained because it contains local work', {
+              sessionId,
+              retainedWorktreePath: result.retainedWorktreePath,
+            });
+          }
+        }
+        context.flowChatStore.setSessionWorktreeIsolationRequested(sessionId, undefined);
+      }
+
+      if (isFirstMessage) {
+        applyGeneratingTitlePlaceholder(context, sessionId, message);
+      }
+
+      if (!acpClientId) {
+        await syncSessionModelSelection(context, sessionId, currentAgentType, surfaceScope);
+      }
+    };
+    if (!acpClientId && hostQueueSupported(sessionId) && (!options?.execution || options.execution.kind === 'standard')) {
+      if (readySession.isHistorical || context.pendingHistoryLoads.has(surfaceScope.key('history-load', surfaceScope.epoch, sessionId))) {
+        throw new Error('Session history is still restoring, please retry once loading finishes');
+      }
+      await prepareSubmission();
+      await inheritReviewPermissionMode(readySession, context.flowChatStore.getState().sessions,
+        () => surfaceScope.assertCurrent('inherit review session permission mode'));
+      tracker.hostSubmitStarted = true;
+      await hostDialogQueue(sessionId).submit({ content: message, displayContent: displayMessage,
+        agentType: currentAgentType, attachments: queueImageAttachments(options?.imageContexts),
+        metadata: options?.userMessageMetadata ?? {} },
+        { composerDraft: options?.pendingQueueDraft, imageContexts: options?.imageContexts, imageDisplayData: options?.imageDisplayData }, options?.turnId);
+      tracker.hostAcceptedTurn = true;
+      surfaceScope.assertCurrent('accept host message');
+      context.flowChatStore.updateSessionLastSubmittedMode(sessionId, currentAgentType);
+      if (isFirstMessage) await updateSessionMetadata(context, sessionId, ['titleMetadata']);
+      return 'completed';
+    }
+
     const dialogTurnId = options?.turnId?.trim() ||
       `dialog_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const hasImages = (options?.imageContexts?.length ?? 0) > 0;
@@ -389,46 +451,7 @@ export const localSessionDriver: SessionDriver = {
       metadata: { sessionId: sessionId, dialogTurnId }
     });
 
-    if (readySession.config.worktreeIsolationRequested !== undefined) {
-      const materialization = sessionWorktreeMaterializationPlan(readySession);
-      if (materialization) {
-        log.info('Materializing requested worktree after prompt submission', {
-          sessionId,
-          enabled: materialization.enabled,
-          projectWorkspaceId: materialization.projectWorkspaceId,
-          projectWorkspacePath: materialization.projectWorkspacePath,
-        });
-        const result = await worktreeAPI.bindSession(
-          sessionId,
-          materialization.enabled,
-          globalThis.crypto?.randomUUID?.() ?? `worktree-first-turn-${Date.now()}`,
-          materialization,
-        );
-        surfaceScope.assertCurrent('bind session worktree');
-        context.flowChatStore.updateSessionExecutionTarget(sessionId, {
-          workspacePath: result.workspacePath,
-          projectWorkspacePath: result.projectWorkspacePath,
-          workspaceId: result.workspaceId,
-          projectWorkspaceId: result.projectWorkspaceId,
-          executionTarget: result.executionTarget,
-        });
-        if (result.retainedWorktreePath) {
-          log.warn('Released worktree retained because it contains local work', {
-            sessionId,
-            retainedWorktreePath: result.retainedWorktreePath,
-          });
-        }
-      }
-      context.flowChatStore.setSessionWorktreeIsolationRequested(sessionId, undefined);
-    }
-
-    if (isFirstMessage) {
-      applyGeneratingTitlePlaceholder(context, sessionId, message);
-    }
-
-    if (!acpClientId) {
-      await syncSessionModelSelection(context, sessionId, currentAgentType, surfaceScope);
-    }
+    await prepareSubmission();
 
     const updatedSession = context.flowChatStore.getState().sessions.get(sessionId);
     if (!updatedSession) {

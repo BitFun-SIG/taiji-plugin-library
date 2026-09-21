@@ -309,3 +309,9 @@ For remote search ID binding without a live SSH connection:
 ```bash
 cargo test --locked -p openbitfun-core --no-default-features --features agent-runtime,git,ssh-remote --lib service::search::remote::identity_tests
 ```
+
+For host-owned user queue admission, cancellation, steering receipts and client disconnects:
+
+```bash
+cargo test --locked -p openbitfun-core --no-default-features --features remote-connect,git --lib host_queue_
+```

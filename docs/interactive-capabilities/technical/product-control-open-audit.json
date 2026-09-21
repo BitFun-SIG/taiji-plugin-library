@@ -69,6 +69,7 @@
       },
       "evidence": [
         "command:start_dialog_turn",
+        "command:manage_dialog_queue",
         "command:steer_dialog_turn",
         "command:interrupt_dialog_turn",
         "command:cancel_dialog_turn",

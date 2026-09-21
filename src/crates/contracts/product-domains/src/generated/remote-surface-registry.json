@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "digest": "fnv1a64:01a7a1c7756afe23",
+  "digest": "fnv1a64:4a41f1e11a6651e1",
   "retiredCommandPrefixes": [
     {
       "prefix": "lsp_",
@@ -9,6 +9,7 @@
   ],
   "capabilities": {
     "ids": [
+      "dialog_queue_v1",
       "idempotent_dialog_submit",
       "inline_image_attachments_v1",
       "btw_initial_model_selection_v1",
@@ -29,6 +30,7 @@
       "user_question_interaction_v1"
     ],
     "desktop": [
+      "dialog_queue_v1",
       "idempotent_dialog_submit",
       "inline_image_attachments_v1",
       "btw_initial_model_selection_v1",
@@ -49,6 +51,7 @@
       "user_question_interaction_v1"
     ],
     "cli": [
+      "dialog_queue_v1",
       "control_conversation_v1",
       "control_conversation_reset_v1",
       "idempotent_dialog_submit",
@@ -4257,6 +4260,17 @@
       "cliPeer": {
         "kind": "unsupported",
         "reason": "the CLI peer host has no handler for this command"
+      }
+    },
+    {
+      "id": "manage_dialog_queue",
+      "surface": "tauri_command",
+      "remoteWorkspace": "RemoteRouted",
+      "peer": {
+        "kind": "proxied"
+      },
+      "cliPeer": {
+        "kind": "handled"
       }
     },
     {

@@ -211,3 +211,32 @@ describe('localSessionDriver review repair permissions', () => {
     expect(mockStartAgenticDialogTurn).not.toHaveBeenCalled();
   });
 });
+
+
+const queueMocks = vi.hoisted(() => ({ supported: vi.fn(() => false), submit: vi.fn() }));
+vi.mock('../../services/hostDialogQueue', () => ({
+  hostQueueSupported: queueMocks.supported,
+  hostDialogQueue: () => ({ submit: queueMocks.submit }),
+  queueImageAttachments: () => [],
+}));
+
+describe('host queue submissions', () => {
+  beforeEach(() => { vi.clearAllMocks(); queueMocks.supported.mockReturnValue(true); queueMocks.submit.mockResolvedValue({ receipt: { status: 'queued' } }); });
+  it('lets authoritative host events start a turn without clearing an existing active presentation', async () => {
+    const { context, session, addedTurns } = createHarness([]);
+    session.mode = 'Standard';
+    context.contentBuffers.set(SESSION_ID, 'active output');
+    context.activeTextItems.set(SESSION_ID, 'active item');
+    const input = { ...startTurnInput(session), acpClientId: undefined, currentAgentType: 'Standard', isFirstMessage: false,
+      options: { turnId: 'stable-request-id' } };
+    const tracker = { createdLocalTurnId: null, hostAcceptedTurn: false };
+    await localSessionDriver.startTurn(context, input, tracker);
+    expect(queueMocks.submit).toHaveBeenCalledWith(expect.objectContaining({ content: 'hello' }), expect.any(Object), 'stable-request-id');
+    expect(mockTransition).not.toHaveBeenCalled();
+    expect(mockStartAgenticDialogTurn).not.toHaveBeenCalled();
+    expect(context.contentBuffers.get(SESSION_ID)).toBe('active output');
+    expect(context.activeTextItems.get(SESSION_ID)).toBe('active item');
+    expect(addedTurns).toHaveLength(0);
+    expect(tracker.hostAcceptedTurn).toBe(true);
+  });
+});

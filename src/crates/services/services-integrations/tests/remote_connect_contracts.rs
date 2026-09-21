@@ -2223,6 +2223,7 @@ fn remote_connect_workspace_response_helpers_own_wire_shape() {
             "workspace_id_references_v1",
             REMOTE_CAPABILITY_HARNESS_PROFILES_V1,
             REMOTE_CAPABILITY_DIALOG_STEER_V1,
+            "dialog_queue_v1",
             REMOTE_CAPABILITY_PLAN_BUILD_V1,
             REMOTE_CAPABILITY_SESSION_ROLLBACK_V1,
             "user_question_interaction_v1",
@@ -2469,6 +2470,7 @@ fn remote_connect_session_response_helpers_own_pagination_and_timestamps() {
             "workspace_id_references_v1",
             REMOTE_CAPABILITY_HARNESS_PROFILES_V1,
             REMOTE_CAPABILITY_DIALOG_STEER_V1,
+            "dialog_queue_v1",
             REMOTE_CAPABILITY_PLAN_BUILD_V1,
             REMOTE_CAPABILITY_SESSION_ROLLBACK_V1,
             "user_question_interaction_v1",
@@ -3665,4 +3667,22 @@ fn file_chunk_revision_is_additive_for_legacy_peers() {
     current["revision"] = serde_json::json!("1:123");
     let response: RemoteResponse = serde_json::from_value(current.clone()).unwrap();
     assert_eq!(serde_json::to_value(response).unwrap(), current);
+}
+
+#[test]
+fn dialog_queue_wire_keeps_legacy_send_messages_readable() {
+    let legacy: RemoteCommand = serde_json::from_value(serde_json::json!({
+        "cmd": "send_message", "session_id": "session", "content": "hello"
+    }))
+    .unwrap();
+    assert!(matches!(
+        legacy,
+        RemoteCommand::SendMessage { turn_id: None, .. }
+    ));
+    let queue = serde_json::json!({"cmd":"dialog_queue", "request":{
+        "sessionId":"session", "queueEpoch":"epoch", "action":"cancel",
+        "turnId":"queued", "operationId":"cancel-1"
+    }});
+    let command: RemoteCommand = serde_json::from_value(queue.clone()).unwrap();
+    assert_eq!(serde_json::to_value(command).unwrap(), queue);
 }

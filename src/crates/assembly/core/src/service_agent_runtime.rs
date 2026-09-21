@@ -325,6 +325,20 @@ struct ConfiguredPluginDialogTurnPort {
 #[cfg(feature = "opencode-plugin-host")]
 #[async_trait::async_trait]
 impl AgentDialogTurnPort for ConfiguredPluginDialogTurnPort {
+    async fn manage_dialog_queue(
+        &self,
+        request: openbitfun_runtime_ports::DialogQueueRequest,
+    ) -> PortResult<openbitfun_runtime_ports::DialogQueueSnapshot> {
+        if matches!(
+            &request.action,
+            openbitfun_runtime_ports::DialogQueueAction::Submit { .. }
+                | openbitfun_runtime_ports::DialogQueueAction::Promote { .. }
+        ) {
+            self.submission.ensure_session(&request.session_id).await;
+        }
+        self.inner.manage_dialog_queue(request).await
+    }
+
     async fn submit_dialog_turn(
         &self,
         request: AgentDialogTurnRequest,
@@ -2760,6 +2774,23 @@ impl<'a> CoreRemoteDialogRuntimeHost<'a> {
             coordinator,
             runtime,
         })
+    }
+
+    pub(crate) async fn manage_dialog_queue(
+        &self,
+        request: openbitfun_runtime_ports::DialogQueueRequest,
+    ) -> Result<openbitfun_runtime_ports::DialogQueueSnapshot, String> {
+        let binding = self.resolve_binding_workspace(&request.session_id).await;
+        if !self.remote_session_exists(&request.session_id).await? {
+            let binding = binding
+                .ok_or_else(|| "Session workspace is unavailable on this host".to_string())?;
+            self.restore_remote_session(&request.session_id, binding)
+                .await?;
+        }
+        self.runtime
+            .manage_dialog_queue(request)
+            .await
+            .map_err(CoreServiceAgentRuntime::runtime_error_message)
     }
 
     pub(crate) async fn steer_dialog(
