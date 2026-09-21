@@ -528,7 +528,6 @@
     "editPlaceholder": "编辑你的消息...",
     "cannotEdit": "无法编辑该消息",
     "editDisabledBusy": "请等待会话空闲后再编辑并重跑。",
-    "editDisabledImages": "暂不支持编辑图片消息",
     "editDisabledRemote": "编辑并重跑需要完整回滚；远程工作区未记录文件快照，因此暂不支持。",
     "editDisabledDispatch": "编辑并重跑需要先回滚历史，远程任务暂不支持此操作。",
     "editDisabledLocalCommand": "无法编辑本地命令消息",

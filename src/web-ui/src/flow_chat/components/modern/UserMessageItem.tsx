@@ -8,6 +8,7 @@ import { withConversationExcerptFallback } from '@/shared/utils/conversationExce
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { RotateCcw, Loader2 } from 'lucide-react';
 import type { DialogTurn, FlowUserSteeringItem } from '../../types/flow-chat';
+import type { ImageContext } from '@/shared/types/context';
 import { flowChatManager } from '../../services/FlowChatManager';
 import { useFlowChatContext } from './FlowChatContext';
 import { useActiveSession } from '../../store/modernFlowChatStore';
@@ -55,6 +56,7 @@ import {
   type ComposerPresentation,
 } from '../../utils/composerPresentation';
 import { restoreImageContextsFromPayload } from '../../utils/imageContextRestoration';
+import { buildImagePayload } from '../../utils/imagePayload';
 import { UserMessagePresentationContent, UserMessageTextContent } from './UserMessagePresentationContent';
 import { UserMessageImage } from './UserMessageImage';
 import { useSubmittedMessageMotion } from './useSubmittedMessageMotion';
@@ -161,6 +163,15 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
         imageDisplayData: messageImages,
       }),
     ], [composerPresentation, message?.id, message?.timestamp, messageImages, turnId]);
+    // The edit composer only owns text and keeps its attachments outside the
+    // editor, so an edit-rerun resubmits the original images instead of losing
+    // them with the rolled-back Turn.
+    const restoredImageContexts = useMemo(
+      () => restoredComposerContexts.filter(
+        (context): context is ImageContext => context.type === 'image',
+      ),
+      [restoredComposerContexts],
+    );
     const isUsageReportMessage = message?.metadata?.localCommandKind === 'usage_report';
     const isGoalLoadingMessage = Boolean(message?.metadata?.threadGoalKickoff);
     const isThreadGoalContinuationCheck = Boolean(message?.metadata?.threadGoalContinuation);
@@ -405,7 +416,10 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
           originalContent: messageContent,
           editedContent,
           agentType: currentSession?.mode,
-          rerun: (content, agentType, sessionMutationLeaseId) => {
+          rerun: async (content, agentType, sessionMutationLeaseId) => {
+            const imagePayload = await buildImagePayload(restoredImageContexts);
+            const attachments = imagePayload ?? {};
+
             if (!editedPresentation) {
               return flowChatManager.sendMessage(
                 content,
@@ -413,7 +427,7 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
                 undefined,
                 agentType,
                 undefined,
-                { sessionMutationLeaseId },
+                { ...attachments, sessionMutationLeaseId },
               );
             }
 
@@ -426,6 +440,7 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
               undefined,
               {
                 userMessageMetadata: payload.userMessageMetadata,
+                ...attachments,
                 sessionMutationLeaseId,
               },
             );
@@ -447,6 +462,7 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
       editDraft,
       isEditSubmitting,
       messageContent,
+      restoredImageContexts,
       resolvedSessionId,
       setEditSubmitting,
       t,
