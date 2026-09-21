@@ -26,6 +26,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -40,6 +41,7 @@ import com.openbitfun.mobile.app.R
 import com.openbitfun.mobile.core.feature.session.ConversationRow
 import com.openbitfun.mobile.core.feature.session.QuestionAnswer
 import com.openbitfun.mobile.core.feature.workspace.RemoteFileDownloadUiState
+import kotlinx.coroutines.flow.distinctUntilChanged
 
 /** Pure decisions for keeping a forward timeline at its visual tail. */
 internal object ConversationScrollPolicy {
@@ -63,6 +65,18 @@ internal object ConversationScrollPolicy {
      */
     fun lastItemIndex(rowCount: Int, hasMoreMessages: Boolean): Int =
         if (hasMoreMessages) rowCount else (rowCount - 1).coerceAtLeast(0)
+}
+
+/** One automatic page per deliberate drag; layout and bounce cannot re-arm it. */
+internal class HistoryPageArrivalTracker {
+    private var consumed = true
+    fun beginGesture() { consumed = false }
+    fun arrived(atStart: Boolean): Boolean {
+        if (!atStart || consumed) return false
+        consumed = true
+        return true
+    }
+    fun cancelArrival() { consumed = true }
 }
 
 /** Timeline renderer over feature-owned presentation rows; session routing stays above it. */
@@ -98,11 +112,12 @@ internal fun ConversationTimelineView(
     var stickToBottom by rememberSaveable { mutableStateOf(true) }
     val atBottom by remember(listState) { derivedStateOf { !listState.canScrollForward } }
 
+    val historyArrival = remember { HistoryPageArrivalTracker() }
     var userDragging by remember { mutableStateOf(false) }
     LaunchedEffect(listState.interactionSource) {
         listState.interactionSource.interactions.collect { interaction ->
             when (interaction) {
-                is DragInteraction.Start -> { userDragging = true; stickToBottom = false }
+                is DragInteraction.Start -> { historyArrival.beginGesture(); userDragging = true; stickToBottom = false }
                 is DragInteraction.Stop, is DragInteraction.Cancel -> userDragging = false
             }
         }
@@ -128,6 +143,31 @@ internal fun ConversationTimelineView(
         }
     }
 
+    // Reaching the start of the loaded transcript asks for the next page by
+    // itself; the header stays as the loading and retry state. Busy gestures
+    // are consumed so completion cannot silently queue another page.
+    val canRequestOlder by rememberUpdatedState(
+        enabled && hasMoreMessages && historyLoadState != HistoryLoadState.LOADING
+            && historyLoadState != HistoryLoadState.FAILED,
+    )
+    val requestOlder by rememberUpdatedState {
+        stickToBottom = false
+        onLoadOlder()
+    }
+    LaunchedEffect(listState, hasMoreMessages) {
+        // Index zero is the "load older messages" header, so seeing it is the
+        // reader standing at the start of what is loaded. Following the tail is
+        // excluded: a first page that does not fill the pane is at the start
+        // without the reader having gone there, and asking from there would
+        // fight the initial tail scroll.
+        snapshotFlow { userDragging && listState.firstVisibleItemIndex == 0 && !stickToBottom }
+            .distinctUntilChanged()
+            .collect { readerReachedStart ->
+                if (!historyArrival.arrived(readerReachedStart)) return@collect
+                if (canRequestOlder) requestOlder()
+            }
+    }
+
     Box(modifier = modifier) {
         LazyColumn(
             state = listState,
@@ -144,7 +184,7 @@ internal fun ConversationTimelineView(
                 item(key = "load-older-messages") {
                     Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                         TextButton(
-                            onClick = { stickToBottom = false; onLoadOlder() },
+                            onClick = { historyArrival.cancelArrival(); stickToBottom = false; onLoadOlder() },
                             enabled = enabled && historyLoadState != HistoryLoadState.LOADING,
                             colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurfaceVariant),
                         ) {

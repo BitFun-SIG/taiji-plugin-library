@@ -114,6 +114,7 @@ class RemoteSessionStoreTest {
             put("session_id", "s-code"); put("event", "relay://session-gap"); put("payload", buildJsonObject { put("reason", "host stream restarted") })
         })
         transport.streamEvents.emit(richRecord("s-code", "new", 0, 1, "completed", "after restart"))
+        transport.streamEvents.emit(historyReady(false))
         runCurrent()
         val timeline = assertIs<RemoteSessionUiState.Ready>(store.state.value).timeline!!
         assertEquals(listOf("after restart"), timeline.persistedMessages.filter { it.role == "assistant" }.map { it.text })
@@ -1465,7 +1466,7 @@ class RemoteSessionStoreTest {
         for (supported in listOf(false, true)) {
             val transport = FakeSessionTransport().apply {
                 capabilitiesJson = if (supported) "[\"host_stream_v1\",\"dialog_steer_v1\"]" else "[\"host_stream_v1\"]"
-                initialEvents = listOf(richRecord("s-code", "active-1", 0, 1, "inprogress", "Working"))
+                initialEvents = listOf(richRecord("s-code", "t-1", 0, 1, "inprogress", "Working"))
             }
             val store = RemoteSessionStore(this, transport)
             store.dispatch(RemoteSessionIntent.Load); advanceUntilIdle()
@@ -1475,12 +1476,23 @@ class RemoteSessionStoreTest {
             store.dispatch(RemoteSessionIntent.SendMessage("s-code", "steer me", listOf(image))); runCurrent()
             val sent = transport.commands.last { it.cmd in listOf("send_message", "steer_turn") }
             assertEquals(if (supported) "steer_turn" else "send_message", sent.cmd)
-            assertEquals(if (supported) "active-1" else null, sent.turnId)
+            assertEquals(if (supported) "t-1" else null, sent.turnId)
             assertEquals(if (supported) "steer me" else null, sent.displayContent)
             assertEquals(image.dataUrl, sent.imageContexts!!.single().dataUrl)
             val ready = assertIs<RemoteSessionUiState.Ready>(store.state.value)
             assertEquals("", ready.draft)
-            assertEquals("active-1", ready.timeline?.activeTurn?.turnId)
+            assertEquals("t-1", ready.timeline?.activeTurn?.turnId)
+            assertEquals(1, ready.timeline!!.conversationRows().count {
+                it.kind == ConversationRowKind.USER && it.text == "steer me"
+            })
+            // A second submission into the same running turn is a distinct bubble.
+            store.dispatch(RemoteSessionIntent.SendMessage("s-code", "steer me", listOf(image))); runCurrent()
+            transport.streamEvents.emit(richRecord("s-code", "t-1", 0, 2, "inprogress", "Still working"))
+            runCurrent()
+            val twice = assertIs<RemoteSessionUiState.Ready>(store.state.value)
+            assertEquals(2, twice.timeline!!.conversationRows().count {
+                it.kind == ConversationRowKind.USER && it.text == "steer me"
+            })
             store.stop()
         }
     }

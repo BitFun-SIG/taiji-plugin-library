@@ -383,7 +383,6 @@
     <string name="chat_empty_title">No messages yet</string>
     <string name="chat_empty_hint">Ask the agent anything about this workspace.</string>
     <string name="chat_empty_loading">Loading conversation…</string>
-    <string name="chat_pending">Sending…</string>
     <string name="chat_send_failed">Send failed. Check the connection and retry.</string>
     <!-- The agent's reply started and stopped partway; the user's never left the device. -->
     <string name="chat_reply_interrupted">Reply interrupted.</string>

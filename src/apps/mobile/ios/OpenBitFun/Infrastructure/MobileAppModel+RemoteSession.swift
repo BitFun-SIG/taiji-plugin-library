@@ -784,6 +784,11 @@ extension MobileAppModel {
     }
 
     func loadOlderRemoteMessages() {
+        // A rejected tap used to be invisible: the store's own gates decide
+        // whether a load starts, so state the inputs next to the request.
+        #if DEBUG
+        mobilePerformanceLog.info("Load older requested surface=\(String(describing: self.surface), privacy: .public) connected=\(self.remoteConnected) has_more=\(self.remoteHasMoreMessages) busy=\(self.busy) loading=\(self.remoteHistoryLoading)")
+        #endif
         guard surface == .remote, remoteConnected, remoteHasMoreMessages, !busy else { return }
         coreAdapter?.loadOlderRemoteMessages()
     }
@@ -950,6 +955,16 @@ extension MobileAppModel {
             expectedEpoch: remoteTargetEpoch
         ) else { return }
         guard let ready = state as? RemoteSessionUiStateReady else {
+            if let failed = state as? RemoteSessionUiStateFailed,
+               RemoteSessionFailureProjectionPolicy.keepsVisibleConversation(reasonName: failed.reason.name) {
+                // A dropped transport is not a lost conversation. The store keeps
+                // polling and republishes the transcript on its next successful
+                // response, so the projection stays exactly where it is and only
+                // the connection phase reports the interruption. Clearing here
+                // would discard a conversation the store never considered lost.
+                setPublishedIfChanged(\.busy, to: false)
+                return
+            }
             permissionMailbox = nil
             remoteOpenedSessionID = nil
             remoteInitialSessionReady = false
@@ -1091,7 +1106,7 @@ extension MobileAppModel {
                 let users = projectedRows.filter { $0.kind == "USER" }
                 let previousUsers = timelineRows.filter { $0.kind == "USER" }
                 let removedUsers = Set(previousUsers.map(\.id)).subtracting(users.map(\.id)).count
-                mobilePerformanceLog.info("Timeline projection rows=\(projectedRows.count) user_rows=\(users.count) previous_user_rows=\(previousUsers.count) removed_user_ids=\(removedUsers) pending_users=\(users.filter(\.pending).count) live_rows=\(projectedRows.filter(\.live).count) blocks=\(projectedRows.reduce(0) { $0 + $1.blocks.count }) busy=\(ready.busy)")
+                mobilePerformanceLog.info("Timeline projection rows=\(projectedRows.count) user_rows=\(users.count) previous_user_rows=\(previousUsers.count) removed_user_ids=\(removedUsers) live_rows=\(projectedRows.filter(\.live).count) blocks=\(projectedRows.reduce(0) { $0 + $1.blocks.count }) busy=\(ready.busy)")
                 #if DEBUG
                 if users.map(\.id) != previousUsers.map(\.id) {
                     let identities = timeline.persistedMessages.filter { $0.role == "user" }.map {

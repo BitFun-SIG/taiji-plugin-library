@@ -292,3 +292,23 @@ enum ComposerSendSettlementPolicy {
         !acknowledged && sentSession == currentSession && draftIsEmpty && attachmentsAreEmpty
     }
 }
+
+/// Whether a failed remote state ends the conversation or only interrupts it.
+///
+/// The shared store retries a transport-class failure without discarding its
+/// transcript, and publishes `Failed` for those reasons only when it has no
+/// ready snapshot to hand over yet. That is a cold open or a just-rebound
+/// target, not a lost conversation, so the projection must survive the blip and
+/// let the connection state alone report the interruption. A deterministic
+/// failure — the session is gone, the host cannot stream, the command was
+/// refused — still ends the projection.
+enum RemoteSessionFailureProjectionPolicy {
+    static func keepsVisibleConversation(reasonName: String) -> Bool {
+        // Mirrors the retryable set in `RemoteSessionStore.handleFailure`,
+        // which maps exactly these reasons to `ConnectionPhase.RECONNECTING`.
+        switch reasonName {
+        case "NETWORK", "TIMEOUT", "TRANSPORT": return true
+        default: return false
+        }
+    }
+}

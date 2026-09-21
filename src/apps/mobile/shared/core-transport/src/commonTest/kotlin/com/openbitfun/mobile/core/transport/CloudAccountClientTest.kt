@@ -413,7 +413,7 @@ class CloudAccountClientTest {
             assertTrue(request.url.encodedPath.endsWith("/key"), "HTTP must only read the authenticated public key")
             onKeyRead()
             json("""{"public_key":"${Base64.Default.encode(peerPublic)}"}""")
-        }), realtimeFactory = { _, _, token ->
+        }), processingDispatcher = kotlinx.coroutines.Dispatchers.Unconfined, realtimeFactory = { _, _, token ->
             assertEquals("token-1", token)
             FakeRpc(notifications, reply)
         })
