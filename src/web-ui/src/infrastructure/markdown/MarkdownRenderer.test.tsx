@@ -901,4 +901,99 @@ describe('Markdown file links', () => {
       'remote-connection-1',
     );
   });
+
+  it('previews the resolved bytes of a markdown image and closes on the scrim or the close button', async () => {
+    await act(async () => {
+      root.render(
+        <MarkdownRenderer
+          content={'![ReLU 图像](relu.png)'}
+          basePath={EXAMPLE_WORKSPACE}
+          onFileViewRequest={onFileViewRequest}
+        />,
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const image = container.querySelector<HTMLImageElement>('img[alt="ReLU 图像"]');
+    expect(image?.classList.contains('markdown-image--previewable')).toBe(true);
+
+    act(() => image?.click());
+
+    const overlay = document.querySelector<HTMLElement>('.image-lightbox');
+    expect(overlay).not.toBeNull();
+    expect(overlay?.getAttribute('data-openbitfun-native-webview-occlusion')).toBe('true');
+    // The preview shows the bytes the inline image resolved, not the raw path.
+    const preview = overlay?.querySelector<HTMLImageElement>('img');
+    expect(preview?.getAttribute('src')).toBe('data:image/png;base64,cmVsdS1wbmc=');
+    expect(preview?.getAttribute('data-openbitfun-part')).toBe('image');
+    const surface = overlay?.querySelector<HTMLElement>('.image-lightbox-surface');
+    expect(surface?.getAttribute('aria-label')).toBe('ReLU 图像');
+
+    // Clicking the previewed image itself must not dismiss the overlay.
+    act(() => preview?.click());
+    expect(document.querySelector('.image-lightbox')).not.toBeNull();
+
+    act(() => surface?.click());
+    expect(document.querySelector('.image-lightbox')).toBeNull();
+
+    act(() => image?.click());
+    act(() => document.querySelector<HTMLButtonElement>('.image-lightbox-close')?.click());
+    expect(document.querySelector('.image-lightbox')).toBeNull();
+  });
+
+  it('leaves images owned by a markdown link to that link', async () => {
+    await act(async () => {
+      root.render(
+        <MarkdownRenderer
+          content={'[![Badge](data:image/png;base64,YQ==)](README.md)'}
+          basePath={EXAMPLE_WORKSPACE}
+          onFileViewRequest={onFileViewRequest}
+        />,
+      );
+      await Promise.resolve();
+    });
+
+    const image = container.querySelector<HTMLImageElement>('img[alt="Badge"]');
+    expect(image?.classList.contains('markdown-image--previewable')).toBe(true);
+
+    act(() => image?.click());
+
+    expect(document.querySelector('.image-lightbox')).toBeNull();
+    // The file link still owns the click.
+    expect(onFileViewRequest).toHaveBeenCalled();
+  });
+
+  it('does not offer a preview before an inline image resolves', async () => {
+    mocks.readFileContent.mockImplementationOnce(() => new Promise<string>(() => {}));
+    await act(async () => {
+      root.render(
+        <MarkdownRenderer
+          content={'![Pending](pending.png)'}
+          basePath={EXAMPLE_WORKSPACE}
+          onFileViewRequest={onFileViewRequest}
+        />,
+      );
+      await Promise.resolve();
+    });
+
+    const image = container.querySelector<HTMLImageElement>('img[alt="Pending"]');
+    expect(image?.classList.contains('markdown-image--previewable')).toBe(false);
+    act(() => image?.click());
+    expect(document.querySelector('.image-lightbox')).toBeNull();
+  });
+
+  it('closes an open image preview when the surface switches hosts', async () => {
+    await act(async () => {
+      root.render(<MarkdownRenderer content={'![Preview](data:image/png;base64,YQ==)'} />);
+    });
+
+    act(() => container.querySelector<HTMLImageElement>('img')?.click());
+    expect(document.querySelector('.image-lightbox')).not.toBeNull();
+
+    await act(async () => activateSurface('peer:output-second'));
+
+    // The previewed bytes belonged to the previous host.
+    expect(document.querySelector('.image-lightbox')).toBeNull();
+  });
 });

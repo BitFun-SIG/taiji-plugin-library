@@ -470,6 +470,16 @@
   opacity: 0.75;
 }
 
+/* Only sources with real bytes reach this state, so the affordance is honest. */
+.markdown-renderer .markdown-image--previewable {
+  cursor: zoom-in;
+}
+
+/* A linked image belongs to its link, not to the preview affordance. */
+.markdown-renderer :is(a, button):has(> img) > img.markdown-image--previewable {
+  cursor: pointer;
+}
+
 .markdown-renderer .markdown-image-fallback {
   display: inline-flex;
   align-items: center;
