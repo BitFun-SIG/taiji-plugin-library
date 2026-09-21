@@ -1,5 +1,5 @@
 import { useDeviceDirectory, resolveDeviceName } from '@/infrastructure/account/deviceDirectory';
-import { requireSessionWorkspaceId } from '@/flow_chat/utils/sessionWorkspace';
+import { requireSessionOwningWorkspaceId } from '@/flow_chat/utils/sessionOrdering';
 /**
  * SessionsSection — inline accordion content for the "Sessions" nav item.
  *
@@ -1211,7 +1211,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
           {
             sessionId: session.sessionId,
             title: resolveSessionTitle(session),
-            workspaceId: requireSessionWorkspaceId(session),
+            workspaceId: requireSessionOwningWorkspaceId(session),
           },
           scope
         );

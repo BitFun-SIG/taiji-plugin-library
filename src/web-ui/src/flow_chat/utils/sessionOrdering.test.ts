@@ -6,6 +6,7 @@ import {
   compareSessionsForNavStable,
   getSessionMetadataSortTimestamp,
   getSessionSortTimestamp,
+  requireSessionOwningWorkspaceId,
   sessionBelongsToWorkspaceNavRow,
   sessionOwningWorkspaceId,
 } from './sessionOrdering';
@@ -173,5 +174,19 @@ describe('sessionOrdering', () => {
     expect(sessionOwningWorkspaceId({ config: { projectWorkspaceId: 'main-project' } }))
       .toBe('main-project');
     expect(sessionOwningWorkspaceId({})).toBeUndefined();
+  });
+
+  it('addresses session commands through the owning project, not the execution worktree', () => {
+    expect(requireSessionOwningWorkspaceId({
+      workspaceId: 'worktree-cli', projectWorkspaceId: 'main-project',
+      config: {
+        executionTarget: { kind: 'managedWorktree', worktreeId: 'worktree-cli', rootPath: '/tmp/tree' },
+      },
+    })).toBe('main-project');
+    expect(requireSessionOwningWorkspaceId({ workspaceId: 'main-project' })).toBe('main-project');
+  });
+
+  it('refuses to address session commands when the session carries no workspace identity', () => {
+    expect(() => requireSessionOwningWorkspaceId({})).toThrow('Session workspace ID is unavailable');
   });
 });

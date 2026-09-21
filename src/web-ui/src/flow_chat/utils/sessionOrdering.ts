@@ -63,6 +63,22 @@ export function sessionBelongsToWorkspaceNavRow(
   return sessionOwningWorkspaceId(session) === workspaceId;
 }
 
+/**
+ * Owning workspace ID every session-scoped host request is addressed with.
+ *
+ * Persistence, session state, and the session's own configuration catalogs all
+ * belong to the workspace that owns the session, never to its execution
+ * directory. An isolated session's worktree record is created on demand for
+ * execution and is normally not an open workspace, so a request addressed with
+ * that record is rejected outright while the same request addressed with the
+ * owning project resolves to the identical session directory.
+ */
+export function requireSessionOwningWorkspaceId(session: SessionNavigationOwner): string {
+  const workspaceId = sessionOwningWorkspaceId(session);
+  if (!workspaceId) throw new Error('Session workspace ID is unavailable');
+  return workspaceId;
+}
+
 export function getSessionSortTimestamp(session: Pick<Session, 'createdAt' | 'lastFinishedAt'>): number {
   return session.lastFinishedAt ?? session.createdAt;
 }

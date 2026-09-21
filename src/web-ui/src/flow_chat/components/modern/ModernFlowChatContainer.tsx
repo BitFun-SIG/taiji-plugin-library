@@ -1,4 +1,4 @@
-import { requireSessionWorkspaceId } from '../../utils/sessionWorkspace';
+import { requireSessionOwningWorkspaceId } from '../../utils/sessionOrdering';
 /**
  * Modern FlowChat container.
  * Uses virtual scrolling with Zustand and syncs legacy store state.
@@ -2463,7 +2463,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
         { confirmText: t('flowChatHeader.agentTreeDelete') },
       );
       if (!confirmed) return false;
-      await deleteSessionTreeBranch({ sessionId: selection.sessionId, workspaceId: requireSessionWorkspaceId(flowChatStore.getState().sessions.get(selection.sessionId) || activeSession!) }, scope);
+      await deleteSessionTreeBranch({ sessionId: selection.sessionId, workspaceId: requireSessionOwningWorkspaceId(flowChatStore.getState().sessions.get(selection.sessionId) || activeSession!) }, scope);
       return true;
     } catch (error) {
       if (!isSurfaceChangedError(error)) {
