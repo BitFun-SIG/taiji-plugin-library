@@ -1886,9 +1886,13 @@ $_section-header-height: 22px;
   mask: url('./assets/device.svg') center / contain no-repeat;
 }
 
+// A headless host is drawn, not a system: the row mark's three rack units, which
+// are a tall stack where every other artwork here is a landscape laptop. It takes
+// less of the width and more of the height instead, so it carries the same weight
+// in the 2:1 artwork as the silhouettes beside it.
 .openbitfun-device-overview__artwork[data-artwork='server'] .openbitfun-device-overview__artwork-glyph {
-  width: 38.11849%;
-  aspect-ratio: 91.484375 / 70.7421875;
+  width: 30%;
+  aspect-ratio: 24 / 29.4629;
   mask-image: url('./assets/server.svg');
 }
 

@@ -1,10 +1,18 @@
 /**
  * Monochrome contours of the systems a host can report, for a row-sized mark.
- * Windows, macOS and HarmonyOS are the CC0 simple-icons vectors, `server` is the
- * server silhouette the device artwork draws, and Linux is the Font Awesome Linux
- * brand icon (CC BY 4.0, see THIRD_PARTY_NOTICES.md): the artwork's Tux is drawn
- * as a fine-line illustration that reads as a different kind of drawing at this
- * size, and the abstract flat penguin marks are not recognisable as Linux at all.
+ * Windows, macOS and HarmonyOS are the CC0 simple-icons vectors, and Linux is the
+ * Font Awesome Linux brand icon (CC BY 4.0, see THIRD_PARTY_NOTICES.md): the
+ * artwork's Tux is drawn as a fine-line illustration that reads as a different
+ * kind of drawing at this size, and the abstract flat penguin marks are not
+ * recognisable as Linux at all.
+ *
+ * `server` is not a system mark at all: a headless host reports no system this
+ * client can draw a logo for, so it stands for the machine instead. It is this
+ * product's own drawing — three rack units, their status lights punched out as
+ * negative space — on the same unit grid, in the same solid ink, and in the same
+ * box as the Windows mark. It is deliberately not the artwork's outline rack:
+ * traced into this slot that read as the one hollow, undersized mark in a row of
+ * solid logos. The card artwork masks this same shape.
  *
  * Every mark renders at one width instead of one height: each view box is the
  * mark's own ink box, measured with getBBox, given the height of the tallest mark
@@ -56,8 +64,8 @@ export const DEVICE_SYSTEM_MARKS: Record<
     opticalShift: 0,
   },
   server: {
-    viewBox: '0 -20.783 91.4844 112.3082',
-    path: 'M11.5234 70.7422C3.90625 70.7422 0 66.875 0 59.3359V11.4062C0 3.86719 3.90625 0 11.5234 0H79.9609C87.6172 0 91.4844 3.90625 91.4844 11.4062V59.3359C91.4844 66.8359 87.6172 70.7422 79.9609 70.7422H11.5234ZM4.84375 11.6797V22.1875H86.6406V11.6797C86.6406 7.14844 84.1797 4.84375 79.8828 4.84375H11.6016C7.22656 4.84375 4.84375 7.14844 4.84375 11.6797ZM72.6172 18.4375C70.0781 18.4766 67.8516 16.25 67.8516 13.7109C67.8516 11.0938 70.0781 8.94531 72.6172 8.94531C75.1562 8.94531 77.3047 11.0938 77.3047 13.7109C77.3047 16.25 75.1562 18.3984 72.6172 18.4375ZM4.84375 44.0625H86.6406V26.7578H4.84375V44.0625ZM72.6172 40.0781C70.0781 40.1172 67.8516 37.8906 67.8516 35.3516C67.8516 32.7344 70.0781 30.5859 72.6172 30.5859C75.1562 30.5859 77.3047 32.7344 77.3047 35.3516C77.3047 37.8906 75.1562 40.0391 72.6172 40.0781ZM11.6016 65.8984H79.8828C84.1797 65.8984 86.6406 63.5938 86.6406 59.0625V48.6328H4.84375V59.0625C4.84375 63.5938 7.22656 65.8984 11.6016 65.8984ZM72.6172 61.7188C70.0781 61.7578 67.8516 59.5312 67.8516 56.9922C67.8516 54.375 70.0781 52.1875 72.6172 52.1875C75.1562 52.1875 77.3047 54.375 77.3047 56.9922C77.3047 59.5312 75.1562 61.6797 72.6172 61.7188Z',
+    viewBox: '0 -2.7315 24 29.4629',
+    path: 'M1.5 0H22.5A1.5 1.5 0 0 1 24 1.5V4.5A1.5 1.5 0 0 1 22.5 6H1.5A1.5 1.5 0 0 1 0 4.5V1.5A1.5 1.5 0 0 1 1.5 0ZM20.1 3A1.5 1.5 0 0 0 17.1 3A1.5 1.5 0 0 0 20.1 3ZM1.5 9H22.5A1.5 1.5 0 0 1 24 10.5V13.5A1.5 1.5 0 0 1 22.5 15H1.5A1.5 1.5 0 0 1 0 13.5V10.5A1.5 1.5 0 0 1 1.5 9ZM20.1 12A1.5 1.5 0 0 0 17.1 12A1.5 1.5 0 0 0 20.1 12ZM1.5 18H22.5A1.5 1.5 0 0 1 24 19.5V22.5A1.5 1.5 0 0 1 22.5 24H1.5A1.5 1.5 0 0 1 0 22.5V19.5A1.5 1.5 0 0 1 1.5 18ZM20.1 21A1.5 1.5 0 0 0 17.1 21A1.5 1.5 0 0 0 20.1 21Z',
     opticalShift: 0,
   },
 };
