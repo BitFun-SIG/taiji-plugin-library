@@ -3562,3 +3562,21 @@ fn file_chunk_revision_is_additive_for_legacy_peers() {
     let response: RemoteResponse = serde_json::from_value(current.clone()).unwrap();
     assert_eq!(serde_json::to_value(response).unwrap(), current);
 }
+
+#[test]
+fn dialog_queue_wire_keeps_legacy_send_messages_readable() {
+    let legacy: RemoteCommand = serde_json::from_value(serde_json::json!({
+        "cmd": "send_message", "session_id": "session", "content": "hello"
+    }))
+    .unwrap();
+    assert!(matches!(
+        legacy,
+        RemoteCommand::SendMessage { turn_id: None, .. }
+    ));
+    let queue = serde_json::json!({"cmd":"dialog_queue", "request":{
+        "sessionId":"session", "queueEpoch":"epoch", "action":"cancel",
+        "turnId":"queued", "operationId":"cancel-1"
+    }});
+    let command: RemoteCommand = serde_json::from_value(queue.clone()).unwrap();
+    assert_eq!(serde_json::to_value(command).unwrap(), queue);
+}

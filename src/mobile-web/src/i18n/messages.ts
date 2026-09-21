@@ -8,6 +8,24 @@ type MessageTree = { readonly [key: string]: MessageLeaf | MessageTree };
 
 export const messages: Record<MobileLanguage, MessageTree> = {
   'en-US': {
+    queue: {
+      "title": "Host message queue",
+      "memoryNotice": "Accepted messages run while this page is closed. Restarting the execution device clears pending messages.",
+      "queued": "Queued",
+      "blocked": "Waiting for recovery",
+      "steeringPending": "Waiting to steer",
+      "sendNow": "Send now",
+      "cancel": "Remove from queue",
+      "refresh": "Refresh",
+      "unknown": "Delivery is unconfirmed. Check before sending again.",
+      "checkRetry": "Check / retry",
+      "copyDraft": "Copy text to composer",
+      "dismiss": "Dismiss local reminder",
+      "attachments": "{count} attachments",
+      "edit": "Restore draft",
+      "noDraft": "The complete draft is only available on the device that submitted it.",
+      "legacy": "Saved drafts from the previous queue. Send or restore each explicitly."
+},
     shared: SHARED_TERMS_BY_LOCALE['en-US'],
     common: {
       questionTimeoutActive: 'Could not stop the question timeout. Submit promptly or update the execution device.',
@@ -341,6 +359,24 @@ export const messages: Record<MobileLanguage, MessageTree> = {
     },
   },
   'zh-CN': {
+    queue: {
+      "title": "宿主消息队列",
+      "memoryNotice": "消息接受后，关闭此页面仍会执行。执行设备重启会清空待执行消息。",
+      "queued": "排队中",
+      "blocked": "等待恢复",
+      "steeringPending": "等待注入",
+      "sendNow": "立即发送",
+      "cancel": "移出队列",
+      "refresh": "刷新",
+      "unknown": "尚未确认是否送达，请先检查再重发。",
+      "checkRetry": "检查 / 重试",
+      "copyDraft": "复制文字到输入框",
+      "dismiss": "关闭本地提醒",
+      "attachments": "{count} 个附件",
+      "edit": "恢复草稿",
+      "noDraft": "完整草稿仅在提交消息的设备上可用。",
+      "legacy": "旧队列中的草稿，请逐条发送或恢复。"
+},
     shared: SHARED_TERMS_BY_LOCALE['zh-CN'],
     common: {
       questionTimeoutActive: '未能停止提问计时，请尽快提交或更新执行设备。',
@@ -674,6 +710,24 @@ export const messages: Record<MobileLanguage, MessageTree> = {
     },
   },
   'zh-TW': {
+    queue: {
+      "title": "主機訊息佇列",
+      "memoryNotice": "訊息接受後，關閉此頁面仍會執行。執行裝置重新啟動會清空待執行訊息。",
+      "queued": "排隊中",
+      "blocked": "等待恢復",
+      "steeringPending": "等待注入",
+      "sendNow": "立即傳送",
+      "cancel": "移出佇列",
+      "refresh": "重新整理",
+      "unknown": "尚未確認是否送達，請先檢查再重新傳送。",
+      "checkRetry": "檢查 / 重試",
+      "copyDraft": "複製文字到輸入框",
+      "dismiss": "關閉本機提醒",
+      "attachments": "{count} 個附件",
+      "edit": "恢復草稿",
+      "noDraft": "完整草稿僅在提交訊息的裝置上可用。",
+      "legacy": "舊佇列中的草稿，請逐條傳送或恢復。"
+},
     shared: SHARED_TERMS_BY_LOCALE['zh-TW'],
     common: {
       questionTimeoutActive: '無法停止提問計時，請儘快提交或更新執行裝置。',

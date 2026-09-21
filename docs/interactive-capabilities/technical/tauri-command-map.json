@@ -2,10 +2,10 @@
   "schemaVersion": 2,
   "generatedFrom": "src/shared/interactive-capabilities/catalog.json",
   "catalogDigest": "6587344a6b5e75a80457ea4ba2670bf37cf3038bdb436089ae402eb7b5a5a025",
-  "commandCount": 664,
+  "commandCount": 665,
   "coverage": {
-    "commandCount": 664,
-    "documentedCommandCount": 616,
+    "commandCount": 665,
+    "documentedCommandCount": 617,
     "implementationCommandCount": 48,
     "implementationDigest": "f6d38a24a70708988cb47ada81d07eccf0668684e8734c9ee5155b9ffa7e3db8"
   },
@@ -5423,6 +5423,22 @@
       "sourceFile": "src/apps/desktop/src/api/commands.rs",
       "signature": "fn logout_subscription_account( request: SubscriptionProviderRequest, ) -> Result<openbitfun_core::infrastructure::subscription_auth::SubscriptionLogoutResult, String>",
       "remoteWorkspacePolicy": "LocalOnly"
+    },
+    {
+      "id": "manage_dialog_queue",
+      "moduleId": "agentic",
+      "capabilityId": "feature.ai-assistant",
+      "capabilityIds": [
+        "feature.ai-assistant"
+      ],
+      "documentedItemIds": [
+        "feature.ai-assistant:turn-control"
+      ],
+      "visibility": "documented",
+      "rustPath": "api::agentic_api::manage_dialog_queue",
+      "sourceFile": "src/apps/desktop/src/api/agentic_api.rs",
+      "signature": "fn manage_dialog_queue( runtime: State<'_, DesktopRuntimeContext>, request: openbitfun_runtime_ports::DialogQueueRequest, ) -> Result<openbitfun_runtime_ports::DialogQueueSnapshot, String>",
+      "remoteWorkspacePolicy": "RemoteRouted"
     },
     {
       "id": "mark_announcement_seen",

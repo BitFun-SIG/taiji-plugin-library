@@ -2879,5 +2879,23 @@
     "loadFailed": "暂时无法打开助手",
     "retry": "重试",
     "loading": "正在打开助手…"
+  },
+  "hostQueue": {
+    "title": "宿主消息队列",
+    "memoryNotice": "消息接受后，关闭此页面仍会执行。执行设备重启会清空待执行消息。",
+    "queued": "排队中",
+    "blocked": "等待恢复",
+    "steeringPending": "等待注入",
+    "sendNow": "立即发送",
+    "cancel": "移出队列",
+    "refresh": "刷新",
+    "unknown": "尚未确认是否送达，请先检查再重发。",
+    "checkRetry": "检查 / 重试",
+    "copyDraft": "复制文字到输入框",
+    "dismiss": "关闭本地提醒",
+    "attachments": "{{count}} 个附件",
+    "edit": "恢复草稿",
+    "noDraft": "完整草稿仅在提交消息的设备上可用。",
+    "legacy": "旧队列中的草稿，请逐条发送或恢复。"
   }
 }

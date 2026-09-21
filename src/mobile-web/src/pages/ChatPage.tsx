@@ -1,3 +1,4 @@
+import { MobileHostQueue } from '../components/MobileHostQueue';
 import { downloadRuntimeFile } from '../services/RuntimeFileDownload';
 import { PermissionMailbox } from '../components/PermissionMailbox';
 import { QuestionInteractionContext } from "../components/ChatAskQuestionCard";
@@ -142,6 +143,9 @@ const ChatPage: React.FC<ChatPageProps> = ({
   const isLoadingMoreRef = useRef(false);
   const hasMoreRef = useRef(true);
   const controlTargetEpoch = useControlTargetEpoch(sessionMgr);
+  const queueSupported = sessionMgr.supportsHostCapability('dialog_queue_v1');
+  const hostQueue = useMemo(() => queueSupported ? sessionMgr.dialogQueue(sessionId) : null,
+    [sessionMgr, sessionId, controlTargetEpoch, queueSupported]);
   const cacheScope = useMemo(() => createRemoteCacheScope(
     authenticatedUserId,
     controlTarget?.deviceId ?? sessionMgr.controlTargetDeviceId,
@@ -904,8 +908,10 @@ const ChatPage: React.FC<ChatPageProps> = ({
       setPendingImages(current => current.filter(image => !imgs.includes(image)));
       if (!wasStreaming && draftUnchanged) setInputExpanded(false);
       streamRef.current?.nudge();
-      if (wasStreaming) {
+      if (hostQueue?.getSnapshot().snapshot?.receipt?.status === 'queued') {
         setInfoToast(t('chat.messageQueued'));
+      } else if (!hostQueue && wasStreaming) {
+        setInfoToast(t('common.submitted'));
       }
     } catch (e: any) {
       if (!isChatTargetCurrent(targetEpoch)) return;
@@ -918,7 +924,7 @@ const ChatPage: React.FC<ChatPageProps> = ({
         setOptimisticMsg(null);
       }
     }
-  }, [captureChatTargetEpoch, imageAnalyzing, input, isChatTargetCurrent, isStreaming, pendingImages, sessionAgentType, sessionId, sessionMgr, setError, t]);
+  }, [captureChatTargetEpoch, hostQueue, imageAnalyzing, input, isChatTargetCurrent, isStreaming, pendingImages, sessionAgentType, sessionId, sessionMgr, setError, t]);
 
   const handleImageSelect = useCallback(() => {
     fileInputRef.current?.click();
@@ -1111,6 +1117,8 @@ const ChatPage: React.FC<ChatPageProps> = ({
         style={{ display: 'none' }}
         onChange={handleFileChange}
       />
+      {hostQueue && <MobileHostQueue key={`${sessionId}:${controlTargetEpoch}`} queue={hostQueue}
+        onRestore={content => { setInput(current => current ? `${current}\n\n${content}` : content); setInputExpanded(true); }} />}
       <ChatComposerBar
         cancelling={isCancelling}
         containerRef={inputBarRef}

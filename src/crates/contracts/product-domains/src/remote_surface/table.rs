@@ -444,6 +444,7 @@ pub(super) const OPERATIONS: &[OperationDefinition] = &[
     op("load_session_turns",                                         Unaudited,   Proxied,          HANDLED),
     op("local_file_download",                                       Agnostic,    ControllerLocal,  REFUSED),
     op("logout_subscription_account",                                LocalOnly,   Proxied,          CLI_NOT_IMPLEMENTED),
+    op("manage_dialog_queue",                                      Routed,      Proxied,          HANDLED),
     op("mark_announcement_seen",                                     Agnostic,    ControllerLocal,  REFUSED),
     op("mark_openbitfun_control_surface_ready",                          Agnostic,    ControllerLocal,  REFUSED),
     op("mark_openbitfun_control_surface_unready",                        Agnostic,    ControllerLocal,  REFUSED),

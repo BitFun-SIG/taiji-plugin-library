@@ -565,6 +565,7 @@ fn remote_host_capabilities() -> Vec<String> {
         "workspace_id_references_v1".to_string(),
         REMOTE_CAPABILITY_HARNESS_PROFILES_V1.to_string(),
         REMOTE_CAPABILITY_DIALOG_STEER_V1.to_string(),
+        "dialog_queue_v1".to_string(),
         REMOTE_CAPABILITY_PLAN_BUILD_V1.to_string(),
         REMOTE_CAPABILITY_USER_QUESTION_INTERACTION_V1.to_string(),
         REMOTE_CAPABILITY_HOST_STREAM_V1.to_string(),
@@ -2564,6 +2565,9 @@ pub struct RemoteControlClient {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "cmd", rename_all = "snake_case")]
 pub enum RemoteCommand {
+    DialogQueue {
+        request: openbitfun_runtime_ports::DialogQueueRequest,
+    },
     /// Retired: relay-stored session history. Kept so older controllers get an
     /// explicit upgrade message instead of an unknown-command failure.
     GetSessionKey {
@@ -2803,6 +2807,9 @@ pub enum RemoteCommand {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "resp", rename_all = "snake_case")]
 pub enum RemoteResponse {
+    DialogQueue {
+        snapshot: openbitfun_runtime_ports::DialogQueueSnapshot,
+    },
     /// Retired shape; new hosts never produce it but older peers may still send it.
     SessionKey {
         session_id: String,
@@ -3056,6 +3063,13 @@ pub trait RemoteCommandRuntimeHost: Send + Sync {
         }
     }
 
+    async fn manage_dialog_queue(
+        &self,
+        _request: openbitfun_runtime_ports::DialogQueueRequest,
+    ) -> Result<openbitfun_runtime_ports::DialogQueueSnapshot, String> {
+        Err("dialog_queue_v1 is not supported".into())
+    }
+
     async fn submit_dialog(
         &self,
         request: RemoteDialogSubmissionRequest<Self::ImageContext>,
@@ -3083,6 +3097,12 @@ where
     H: RemoteCommandRuntimeHost + ?Sized,
 {
     match command {
+        RemoteCommand::DialogQueue { request } => {
+            match host.manage_dialog_queue(request.clone()).await {
+                Ok(snapshot) => RemoteResponse::DialogQueue { snapshot },
+                Err(message) => RemoteResponse::Error { message },
+            }
+        }
         RemoteCommand::Ping { .. } => RemoteResponse::Pong,
 
         RemoteCommand::GetWorkspaceInfo

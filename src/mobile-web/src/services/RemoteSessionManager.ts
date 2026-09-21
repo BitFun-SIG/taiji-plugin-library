@@ -1,3 +1,4 @@
+import { HostDialogQueue, type QueueSnapshot } from '../../../shared/dialog-queue/HostDialogQueue';
 import { normalizeWorkspaceRouting } from './workspaceIdentity';
 import {
   REMOTE_CAPABILITY_HOST_STREAM_V1, UNSUPPORTED_HOST_MESSAGE,
@@ -744,6 +745,28 @@ export class RemoteSessionManager {
     };
   }
 
+  private queueClients = new Map<string, HostDialogQueue>();
+
+  dialogQueue(sessionId: string): HostDialogQueue {
+    const target = this.client.getControlTargetSnapshot();
+    const account = this.client.accountUserId;
+    const epoch = this.controlTargetEpoch;
+    const scope = JSON.stringify([account, target.deviceId, sessionId]);
+    const key = JSON.stringify([scope, this.controlTargetEpoch]);
+    let queue = this.queueClients.get(key);
+    if (!queue) {
+      queue = new HostDialogQueue(scope, sessionId, async request => {
+        if (this.client.accountUserId !== account || this.controlTargetEpoch !== epoch) throw new Error('Queue target changed');
+        if (!this.supportsHostCapability('dialog_queue_v1')) throw new Error('Host message queue is unsupported');
+        const response = await this.request<{ snapshot: QueueSnapshot }>({ cmd: 'dialog_queue', request }, target);
+        if (this.client.accountUserId !== account || this.controlTargetEpoch !== epoch) throw new Error('Queue target changed');
+        return response.snapshot;
+      });
+      this.queueClients.set(key, queue);
+    }
+    return queue;
+  }
+
   async sendMessage(
     sessionId: string,
     content: string,
@@ -756,6 +779,15 @@ export class RemoteSessionManager {
       metadata?: Record<string, unknown>;
     }>,
   ): Promise<string> {
+    if (this.supportsHostCapability('dialog_queue_v1')) {
+      const result = await this.dialogQueue(sessionId).submit({ content, agentType: agentType || 'Standard',
+        attachments: (imageContexts ?? []).map(image => ({ kind: 'remote_image', id: image.id,
+          metadata: { ...(image.data_url ? { dataUrl: image.data_url } : {}),
+            ...(image.image_path ? { imagePath: image.image_path } : {}), mimeType: image.mime_type,
+            metadata: image.metadata } })), metadata: {} });
+      if (!result.receipt) throw new Error('Host did not acknowledge the submitted message');
+      return result.receipt.turnId;
+    }
     const resp = await this.request<{ resp: string; turn_id: string }>({
       cmd: 'send_message',
       session_id: sessionId,
