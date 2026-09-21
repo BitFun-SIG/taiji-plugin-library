@@ -223,6 +223,7 @@ import {
 } from '../utils/tokenUsageDisplay';
 import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
 import type { SessionPermissionMode } from '@/infrastructure/api/service-api/AgentAPI';
+import { isSessionInUseError } from '@/infrastructure/api/errors/TauriCommandError';
 import { isPeerDeviceModeActive } from '@/infrastructure/peer-device/peerModeFlag';
 import { usePeerDeviceModeOptional } from '@/infrastructure/peer-device/peerDeviceContextState';
 import { isBtwSessionDraft } from '../utils/modelSelectionTarget';
@@ -577,6 +578,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   // other open session.
   const [sessionPermissionMode, setSessionPermissionMode] =
     useState<SessionPermissionMode | null>(null);
+  // A failed read leaves `sessionPermissionMode` at null, which makes the control
+  // fall back to the user-level default. That fallback is safe, but it must not
+  // pass for the Session's own selection: this flag keeps the two apart.
+  const [sessionPermissionModeUnread, setSessionPermissionModeUnread] = useState(false);
   // One-off state has two owners: the idle composer arms a future submission,
   // while an executing turn keeps a mutable override until it ends.
   const [armedTurnPermissionMode, setArmedTurnPermissionMode] =
@@ -589,6 +594,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     sessionId: string | null;
     activeTurnId: string | null;
   }>({ sessionId: null, activeTurnId: null });
+  // Reports a fallback to the default once per Session: the read effect re-runs
+  // on every Session and turn change, so without this the same unresolved read
+  // would notify on each pass.
+  const permissionModeUnreadNotifiedRef = useRef<string | null>(null);
   const { addMessage: addToHistory, getSessionHistory } = useInputHistoryStore();
   
   const conversationScope = useConversationViewScope();
@@ -2426,6 +2435,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     if (sessionChanged) {
       setArmedTurnPermissionMode(null);
       setActiveTurnPermissionMode(null);
+      setSessionPermissionModeUnread(false);
     } else if (activeTurnChanged) {
       // A locally submitted one-off becomes the active turn's initial mode.
       // Keep it armed until start_dialog_turn acknowledges so a failed send
@@ -2437,6 +2447,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
     if (!effectiveTargetSessionId || isAcpTargetSession) {
       setSessionPermissionMode(null);
+      setSessionPermissionModeUnread(false);
       setArmedTurnPermissionMode(null);
       setActiveTurnPermissionMode(null);
       return undefined;
@@ -2455,15 +2466,27 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         });
         if (permissionModeRequestGenerationRef.current !== generation) return;
         setSessionPermissionMode(response.mode ?? null);
+        setSessionPermissionModeUnread(false);
+        permissionModeUnreadNotifiedRef.current = null;
         if (activePermissionTurnId && response.activeTurnId === activePermissionTurnId) {
           setActiveTurnPermissionMode(response.turnMode ?? null);
         }
       } catch (error) {
         log.warn('Failed to read session permission mode', error);
         // Falling back to the global default is the safe read: it never shows a
-        // wider mode than the session actually runs with.
+        // wider mode than the session actually runs with. Report the fallback
+        // once per Session so it cannot pass for that Session's own selection.
         if (permissionModeRequestGenerationRef.current === generation) {
           setSessionPermissionMode(null);
+          setSessionPermissionModeUnread(true);
+          if (permissionModeUnreadNotifiedRef.current !== effectiveTargetSessionId) {
+            permissionModeUnreadNotifiedRef.current = effectiveTargetSessionId;
+            notificationService.error(t(
+              isSessionInUseError(error)
+                ? 'chatInput.permissionMode.unreadSessionInUse'
+                : 'chatInput.permissionMode.unread',
+            ));
+          }
         }
       }
     })();
@@ -2477,6 +2500,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     effectiveTargetSession?.parentSessionId,
     isBtwDraftTarget,
     isAcpTargetSession,
+    t,
   ]);
 
   const applySessionPermissionMode = useCallback(async (
@@ -2509,6 +2533,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         && effectiveTargetSessionIdRef.current === targetSessionId
       ) {
         setSessionPermissionMode(response.mode ?? null);
+        setSessionPermissionModeUnread(false);
+        permissionModeUnreadNotifiedRef.current = null;
         setActiveTurnPermissionMode(null);
       }
     } catch (error) {
@@ -2521,7 +2547,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         if (activePermissionTurnIdRef.current === targetTurnId) {
           setActiveTurnPermissionMode(previousActiveTurnMode);
         }
-        notificationService.error(t('chatInput.permissionMode.changeFailed'));
+        notificationService.error(t(
+          isSessionInUseError(error)
+            ? 'chatInput.permissionMode.changeFailedSessionInUse'
+            : 'chatInput.permissionMode.changeFailed',
+        ));
       }
     } finally {
       setPermissionModeSaving(false);
@@ -2625,6 +2655,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         && activePermissionTurnIdRef.current === targetTurnId
       ) {
         setSessionPermissionMode(response.mode ?? null);
+        setSessionPermissionModeUnread(false);
+        permissionModeUnreadNotifiedRef.current = null;
         setActiveTurnPermissionMode(response.turnMode ?? null);
       }
     } catch (error) {
@@ -2635,7 +2667,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         && activePermissionTurnIdRef.current === targetTurnId
       ) {
         setActiveTurnPermissionMode(previousMode);
-        notificationService.error(t('chatInput.permissionMode.changeFailed'));
+        notificationService.error(t(
+          isSessionInUseError(error)
+            ? 'chatInput.permissionMode.changeFailedSessionInUse'
+            : 'chatInput.permissionMode.changeFailed',
+        ));
       }
     } finally {
       setPermissionModeSaving(false);
@@ -6095,6 +6131,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({
               saving: permissionModeSaving,
               scopeLabel: t('chatInput.permissionMode.sessionScope'),
               overridden: permissionModeOverridden,
+              // The trigger falls back to the user-level default when the read
+              // failed, so the menu must not mark that fallback as this
+              // Session's own selection.
+              unread: sessionPermissionModeUnread,
               nextTurnMode: temporaryPermissionMode
                 ? chatInputPermissionMode(temporaryPermissionMode)
                 : null,

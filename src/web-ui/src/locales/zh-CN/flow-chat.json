@@ -830,6 +830,7 @@
       "globalScope": "全局",
       "current": "权限：{{mode}}",
       "changeFailed": "切换权限模式失败。",
+      "changeFailedSessionInUse": "此会话正在另一个 OpenBitFun 实例中被写入。请关闭其他实例后重试。",
       "ask": {
         "label": "需要确认",
         "description": "外部访问，修改文件和执行命令需要确认。"
@@ -858,6 +859,10 @@
       "currentSessionOverride": "权限：{{mode}}（仅当前会话）",
       "resetToDefault": "跟随默认模式",
       "noSession": "请先打开或新建会话，再修改其权限模式。",
+      "unread": "无法读取此会话的权限模式，当前显示的是默认模式。",
+      "unreadSessionInUse": "此会话正在另一个 OpenBitFun 实例中被写入，无法读取其权限模式，当前显示的是默认模式。请关闭其他实例后重新打开此会话。",
+      "unreadTooltip": "无法读取权限模式，当前显示默认模式：{{mode}}",
+      "unreadMenuNotice": "无法读取此会话自身的模式，因此未标记任何模式。",
       "turnScope": "仅下一条消息",
       "turnSettings": "下一条消息设置",
       "followSessionMode": "跟随当前会话",
