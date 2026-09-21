@@ -87,4 +87,13 @@ describe('session workspace ownership', () => {
     expect(resolveSessionSceneWorkspace(worktreeIsolated({ projectWorkspaceId: 'closed' }), [project, worktree]))
       .toBeUndefined();
   });
+
+  it('keys the tab of a worktree session by its project before that project is open', () => {
+    const value = worktreeIsolated();
+    const projectTab = resolveSessionSceneTarget(session({ workspaceId: project.id }), [], 'local').workspaceKey;
+
+    expect(resolveSessionSceneTarget(value, [], 'local').workspaceKey).toBe(projectTab);
+    expect(resolveSessionSceneTarget(session({ workspaceId: worktree.id }), [], 'local').workspaceKey)
+      .not.toBe(projectTab);
+  });
 });

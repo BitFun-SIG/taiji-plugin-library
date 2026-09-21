@@ -1,4 +1,3 @@
-import { requireSessionWorkspaceId } from '../utils/sessionWorkspace';
 import { workspaceManager } from '@/infrastructure/services/business/workspaceManager';
 import { resolveLegacySessionWorkspace } from '@/infrastructure/api/service-api/legacyWorkspaceCompatibility';
 import { projectUserQuestionTiming } from '../utils/userQuestionTiming';
@@ -81,6 +80,7 @@ import {
   deriveSessionRelationshipFromMetadata,
   normalizeSessionRelationship,
 } from '../utils/sessionMetadata';
+import { sessionOwningWorkspaceId } from '../utils/sessionOrdering';
 import { sessionProjectWorkspacePath } from '../utils/sessionWorkspace';
 import type { SessionTitleDescriptor } from '../utils/sessionTitle';
 import { deriveContextUsageFromTurns } from '../utils/tokenUsageDisplay';
@@ -2791,9 +2791,21 @@ export class FlowChatStore {
     }
   }
 
-  private sessionWorkspaceId(sessionId: string): string {
+  /**
+   * Workspace identity every persisted-history read is addressed with.
+   *
+   * The ID is a storage selector, not the execution directory: the backend
+   * resolves the session directory through the workspace record it is given, and
+   * an isolated worktree record resolves to the same directory as the project it
+   * belongs to. A worktree record is created on demand and can be absent from the
+   * open workspace set, which the backend rejects outright, so history is always
+   * read through the owning project the navigation list groups the session under.
+   */
+  private sessionHistoryWorkspaceId(sessionId: string): string {
     const session = this.state.sessions.get(sessionId);
-    const workspaceId = session?.workspaceId ?? session?.config.workspaceId;
+    const workspaceId = session
+      ? sessionOwningWorkspaceId(session)
+      : undefined;
     if (!workspaceId) throw new Error(`Workspace ID is unavailable for session: ${sessionId}`);
     return workspaceId;
   }
@@ -3036,7 +3048,7 @@ export class FlowChatStore {
     }
 
     const canonicalTurns = canonicalSessionTurns(session);
-    const workspaceId = session.workspaceId ?? session.config.workspaceId;
+    const workspaceId = sessionOwningWorkspaceId(session);
     if (!workspaceId || canonicalTurns.length === 0) {
       return false;
     }
@@ -3106,7 +3118,7 @@ export class FlowChatStore {
     );
     if (!hydrationRequest) {
       const canonicalTurns = canonicalSessionTurns(session);
-      const workspaceId = session.workspaceId ?? session.config.workspaceId;
+      const workspaceId = sessionOwningWorkspaceId(session);
       if (!workspaceId || canonicalTurns.length === 0) {
         this.fullHistoryProjectionApplyRequests.delete(sessionId);
         return false;
@@ -4672,7 +4684,8 @@ export class FlowChatStore {
    * Apply a backend session rebind (worktree isolation toggled on or off).
    * The project root stays put; only the execution directory moves. A binding
    * that reports the owning project fills a project identity the session was
-   * created without.
+   * created without, and the workspace a session moves away from supplies it
+   * when the binding reports none.
    */
   public updateSessionExecutionTarget(
     sessionId: string,
@@ -4689,18 +4702,28 @@ export class FlowChatStore {
       if (!session) return prev;
 
       const newSessions = new Map(prev.sessions);
+      // A binding that moves this session into an isolated execution directory
+      // must never leave it without an owning project: the worktree record it
+      // then carries is an on-demand execution record that owns no navigation
+      // row the user can open. A backend that reports no project ID is answered
+      // with the workspace the session moved away from, which is that project.
+      const isolated = !!binding.executionTarget && binding.executionTarget.kind !== 'local';
+      const owningProjectWorkspaceId = binding.projectWorkspaceId
+        ?? session.projectWorkspaceId
+        ?? session.config.projectWorkspaceId
+        ?? (isolated ? session.workspaceId ?? session.config.workspaceId : undefined);
       newSessions.set(sessionId, {
         ...session,
         workspacePath: binding.workspacePath,
         projectWorkspacePath: binding.projectWorkspacePath,
         workspaceId: binding.workspaceId ?? session.workspaceId,
-        projectWorkspaceId: binding.projectWorkspaceId ?? session.projectWorkspaceId,
+        projectWorkspaceId: owningProjectWorkspaceId,
         config: {
           ...session.config,
           workspacePath: binding.workspacePath,
           projectWorkspacePath: binding.projectWorkspacePath,
           workspaceId: binding.workspaceId ?? session.config.workspaceId,
-          projectWorkspaceId: binding.projectWorkspaceId ?? session.config.projectWorkspaceId,
+          projectWorkspaceId: owningProjectWorkspaceId,
           executionTarget: binding.executionTarget,
         },
         lastActiveAt: Date.now(),
@@ -5207,7 +5230,7 @@ export class FlowChatStore {
 
           await agentAPI.deleteSession(
             id,
-            requireSessionWorkspaceId(sess!)
+            this.sessionHistoryWorkspaceId(id)
           );
         })
       );
@@ -7009,7 +7032,7 @@ export class FlowChatStore {
 
       await sessionAPI.saveSessionTurn(
         turnData,
-        requireSessionWorkspaceId(session));
+        this.sessionHistoryWorkspaceId(sessionId));
     } catch (error) {
       log.error('Failed to save cancelled dialog turn', { sessionId, turnId, error });
     }
@@ -7845,7 +7868,7 @@ export class FlowChatStore {
 
     const restored = await agentAPI.restoreSessionView(
       sessionId,
-      this.sessionWorkspaceId(sessionId),
+      this.sessionHistoryWorkspaceId(sessionId),
       `peer-refresh-${sessionId.slice(0, 8)}`,
       undefined,
       PEER_SESSION_REFRESH_TAIL_TURN_COUNT,
@@ -8105,7 +8128,7 @@ export class FlowChatStore {
 
     const restored = await agentAPI.restoreSessionView(
       sessionId,
-      this.sessionWorkspaceId(sessionId),
+      this.sessionHistoryWorkspaceId(sessionId),
       `settled-turn-${turnId.slice(0, 8)}`,
       initialSession.sessionKind === 'subagent',
       SETTLED_TURN_RECONCILE_TAIL_TURN_COUNT,
@@ -8392,7 +8415,7 @@ export class FlowChatStore {
               try {
                 const restoredPromise = agentAPI.restoreSessionWithTurns(
                   sessionId,
-      this.sessionWorkspaceId(sessionId),
+                  this.sessionHistoryWorkspaceId(sessionId),
                   sessionTraceId,
                   options?.includeInternal,
                 );
@@ -8420,7 +8443,7 @@ export class FlowChatStore {
 
             const restoredSessionPromise = agentAPI.restoreSession(
               sessionId,
-      this.sessionWorkspaceId(sessionId),
+              this.sessionHistoryWorkspaceId(sessionId),
               sessionTraceId,
               options?.includeInternal,
             );
@@ -8436,7 +8459,7 @@ export class FlowChatStore {
             try {
               const restoredPromise = agentAPI.restoreSessionView(
                 sessionId,
-      this.sessionWorkspaceId(sessionId),
+                this.sessionHistoryWorkspaceId(sessionId),
                 sessionTraceId,
                 options?.includeInternal,
                 historicalSessionInitialTailTurnCount(remote),
@@ -8518,7 +8541,7 @@ export class FlowChatStore {
           sessionTraceId,
         });
         const { sessionAPI } = await import('@/infrastructure/api/service-api/SessionAPI');
-        turns = await sessionAPI.loadSessionTurns(sessionId, requireSessionWorkspaceId(initialSession!), options?.limit);
+        turns = await sessionAPI.loadSessionTurns(sessionId, this.sessionHistoryWorkspaceId(sessionId), options?.limit);
         startupTrace.markPhase('historical_session_turns_load_end', {
           remote,
           sessionId,
@@ -8762,7 +8785,7 @@ export class FlowChatStore {
         } else if (!deferFullHistoryUntilActive) {
           this.scheduleCompleteSessionHistoryLoad({
             sessionId,
-            workspaceId: this.sessionWorkspaceId(sessionId),
+            workspaceId: this.sessionHistoryWorkspaceId(sessionId),
             remoteConnectionId,
             remoteSshHost,
             includeInternal: options?.includeInternal,

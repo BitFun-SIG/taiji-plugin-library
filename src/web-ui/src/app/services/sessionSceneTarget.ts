@@ -34,7 +34,9 @@ export function resolveSessionSceneTarget(
   surfaceId: string,
 ): SessionSceneTarget {
   const workspace = resolveSessionSceneWorkspace(session, workspaces);
-  const workspaceId = workspace?.id || session.workspaceId;
+  // The owning identity keys the tab even before that workspace is open, so a
+  // tab never migrates from the execution worktree to the project it belongs to.
+  const workspaceId = workspace?.id ?? sessionOwningWorkspaceId(session);
   // An unresolved legacy session remains individually addressable. Never group
   // it with another workspace through a guessed folder key.
   const workspaceKey = workspaceId
