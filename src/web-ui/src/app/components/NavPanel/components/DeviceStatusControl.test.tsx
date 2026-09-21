@@ -391,6 +391,35 @@ describe('device status card', () => {
     expect(attachedDesktop()?.querySelector('svg')).not.toBeNull();
   });
 
+  it('draws a group of headless hosts with the mark the list draws for them', () => {
+    const footer = () => element('nav-footer-device-status');
+    const headlessGroup = () => footer()
+      .querySelector('[data-openbitfun-device-kind="execution-host"]');
+
+    // A dispatch job running on another host is what puts that group in the
+    // footer, and the group names a class rather than one device: it has no row
+    // to read a system from.
+    state.overview = overview({
+      localDeviceName: 'Workstation',
+      localDeviceOs: 'macOS',
+      dispatchJobs: [{
+        id: 'job-1',
+        state: 'running',
+        target: { kind: 'device', id: 'peer-2', name: 'Build host' },
+      }],
+    });
+    render();
+
+    const drawnPath = (scope: Element | null | undefined) => (
+      scope?.querySelector('svg[data-system="server"] path')?.getAttribute('d')
+    );
+    const listRow = element('nav-device-status-connected-devices')
+      .querySelector('[data-openbitfun-device-kind="execution-host"]');
+    // One drawing, whatever slot it lands in: the group is not a second glyph.
+    expect(drawnPath(headlessGroup())).not.toBeNull();
+    expect(drawnPath(headlessGroup())).toBe(drawnPath(listRow));
+  });
+
   it('marks a device name with the system that device runs', () => {
     state.overview = overview({
       localDeviceName: 'Workstation',

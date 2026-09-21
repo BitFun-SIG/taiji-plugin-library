@@ -1,7 +1,7 @@
 import { useDeviceDirectory, resolveDeviceName, isDeviceControllable, deviceClientVersion } from '@/infrastructure/account/deviceDirectory';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { subscribeOverlayInteraction, createOverlayPortal, OverflowText, Button, Card, CardBody, CardFooter, CardHeader, Icon, IconButton, ScrollArea, type IconSize } from '@openbitfun/ui';
-import { ChevronLeft, ChevronRight, MessageCircle, Monitor, Server, Smartphone, Undo2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, MessageCircle, Monitor, Smartphone, Undo2 } from 'lucide-react';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { useAnchoredPopoverPosition } from '@/shared/utils/useAnchoredPopoverPosition';
@@ -43,6 +43,24 @@ function chatAppBrandFromIdentity(identity: string | null | undefined): ChatAppB
   return null;
 }
 
+/**
+ * The class of headless hosts the footer names as one group. A group is not a
+ * device, so it carries the facts its mark is resolved from and nothing else:
+ * the kind already decides that mark, and the name, system and host kind a row
+ * would answer with do not exist at this level.
+ */
+const HEADLESS_HOST_CLASS: React.ComponentProps<typeof DeviceSystemGlyph>['device'] = {
+  kind: 'execution-host',
+  name: '',
+  os: null,
+  hostKind: null,
+};
+
+/**
+ * The kinds that are not a system: a phone, a chat app, and the neutral monitor
+ * for a kind this build cannot place. A desktop and a headless host are the
+ * machines the device marks draw, so they never reach this switch.
+ */
 function DeviceIcon({
   identity,
   kind,
@@ -55,8 +73,6 @@ function DeviceIcon({
   switch (kind) {
     case 'mobile':
       return <Icon glyph={Smartphone} size={size} />;
-    case 'execution-host':
-      return <Icon glyph={Server} size={size} />;
     case 'message-app': {
       const chatApp = chatAppBrandFromIdentity(identity);
       if (chatApp) {
@@ -385,6 +401,12 @@ const DeviceStatusControl: React.FC<DeviceStatusControlProps> = ({
                   // the group names the same device the list does, rather than a
                   // second generic monitor.
                   <DeviceMark device={thisMachine} size="xs" />
+                ) : group.kind === 'execution-host' ? (
+                  // A group of headless hosts is a class, not one device, so there
+                  // is no row to read a system from: it draws the mark the list
+                  // draws for each of them, the way the desktop group does, rather
+                  // than a second server glyph of its own.
+                  <DeviceSystemGlyph device={HEADLESS_HOST_CLASS} size="xs" />
                 ) : (
                   <DeviceIcon
                     identity={group.kind === 'message-app' ? attachedMessageAppIdentity : null}
