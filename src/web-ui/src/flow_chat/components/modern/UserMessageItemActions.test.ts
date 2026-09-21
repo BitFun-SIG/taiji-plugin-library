@@ -106,7 +106,10 @@ describe('UserMessageItem metadata visibility', () => {
     const bubble = extractBlock(stylesheet, '\n.user-message-item {');
     expect(bubble).toContain('padding: 0.46rem var(--_user-message-padding-inline);');
     expect(shell).toContain('--_user-message-padding-inline: var(--_user-message-radius);');
-    expect(bubble).toContain('margin-inline: auto calc(-1 * var(--_user-message-radius));');
+    // The bubble's surface ends on the reading column's content edge instead of
+    // one radius past it, so a sent message lines up with the tool cards and the
+    // composer card that share that edge.
+    expect(bubble).toContain('margin-inline: auto 0;');
     expect(meta).toContain('padding-inline: 0;');
     expect(meta).toContain('padding-block: calc(var(--openbitfun-space-1) / 2) 0;');
     expect(meta).toContain('pointer-events: auto;');

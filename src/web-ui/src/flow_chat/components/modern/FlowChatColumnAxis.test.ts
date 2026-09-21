@@ -50,4 +50,16 @@ describe('FlowChat transcript column axis', () => {
       /width: calc\(100% - #\{\$turn-rail-offset \+ \$turn-rail-width\} - var\(--openbitfun-space-1\) - var\(--openbitfun-space-2\)\);/,
     );
   });
+
+  it('ends the sent-message bubble on the same column content edge as the cards', () => {
+    const stylesheet = readSource('./UserMessageItem.scss');
+
+    // The bubble is the one row whose painted surface, not its text, reads as
+    // the message edge, so its radius must not lift it off the column the tool
+    // cards and the composer card end on. The attachment gallery is a sibling of
+    // the bubble and shares that edge.
+    expect(stylesheet).toContain('margin-inline: auto 0;');
+    expect(stylesheet).not.toContain('margin-inline: auto calc(-1 * var(--_user-message-radius));');
+    expect(stylesheet).not.toContain('margin-inline-end: calc(-1 * var(--_user-message-radius));');
+  });
 });
