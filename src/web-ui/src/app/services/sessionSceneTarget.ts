@@ -20,6 +20,24 @@ export function sessionSceneWorkspaceKey(workspaceId: string): string {
   return JSON.stringify(['workspace', workspaceId]);
 }
 
+/**
+ * Workspace a session is listed under, and therefore the one navigation must
+ * activate. A session in a linked worktree belongs to its execution workspace;
+ * its project only owns persistence, so activating the project would move the
+ * surface into a workspace the session is not listed under, where the workspace
+ * bootstrap then replaces the selection. Legacy path resolution only serves
+ * pre-ID records that carry no workspace identity at all.
+ */
+export function resolveSessionActivationWorkspace(session: Session, workspaces: Iterable<WorkspaceInfo>) {
+  return findWorkspaceForSession({
+    ...session,
+    workspaceId: session.workspaceId || session.config?.workspaceId || session.projectWorkspaceId || session.config?.projectWorkspaceId,
+    workspacePath: sessionProjectWorkspacePath(session),
+    remoteConnectionId: session.remoteConnectionId || session.config?.remoteConnectionId,
+    remoteSshHost: session.remoteSshHost || session.config?.remoteSshHost,
+  }, workspaces);
+}
+
 export function resolveSessionSceneTarget(
   session: Session,
   workspaces: Iterable<WorkspaceInfo>,
