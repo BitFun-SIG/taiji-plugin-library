@@ -36,12 +36,21 @@
     height: 100%;
     position: relative;
     z-index: 1; // Keep scroll content below overlays.
+    //
     // Reserve the native scrollbar even when collapsed content fits. Some
-    // desktop WebViews do not reserve custom scrollbar space with gutter alone.
+    // desktop WebViews do not reserve custom scrollbar space with overflow
+    // alone.
+    //
+    // Both edges, not the trailing edge only. The reading column is centred
+    // inside this content box, while the composer is centred on the panel, so a
+    // one-sided gutter moved the whole column — cards, text, tool metadata —
+    // half a scrollbar toward the leading edge and left it off the composer's
+    // edge. Reserving the same width on both edges puts the column back on the
+    // panel axis the composer and the header already share.
     overflow-y: scroll;
     overflow-x: hidden;
     overflow-anchor: none;
-    scrollbar-gutter: stable;
+    scrollbar-gutter: stable both-edges;
 
     // Fade the transcript pixels themselves at both viewport edges: content
     // entering beneath the top chrome appears gradually, while content leaving
