@@ -37,6 +37,36 @@ describe('worktree isolated session row', () => {
     expect(sessionsSectionStyles).toContain('&__inline-item-worktree-badge {');
   });
 
+  it('keeps the worktree badge icon-only', () => {
+    // The marker sits beside the title, so it carries no label text: the tooltip
+    // and the aria-label stay as the accessible explanation.
+    expect(sessionsSection).not.toContain("t('nav.sessions.worktreeBadge')");
+    expect(sessionsSection).toMatch(
+      /inline-item-worktree-badge"[\s\S]{0,400}?<FolderGit2 className="openbitfun-nav-panel__inline-item-worktree-icon" aria-hidden \/>\s*<\/span>/,
+    );
+    expect(sessionsSectionStyles).toMatch(
+      /&__inline-item-worktree-badge \{[\s\S]*?inline-size: 14px;/,
+    );
+  });
+
+  it('counts only the rows a linked worktree owns when sizing the expand toggle', () => {
+    // A linked worktree shares its main workspace's session directory, so the
+    // metadata page total counts the project's sessions too and must not drive
+    // the expand toggle.
+    expect(sessionsSection).toMatch(
+      /const sectionWorkspace = workspaceId\s*\n\s*\? openedWorkspacesList\.find\(workspace => workspace\.id === workspaceId\) \?\? null\s*\n\s*: null;/,
+    );
+    expect(sessionsSection).toContain(
+      'const countOnlyOwnedTopLevelSessions = isLinkedWorktreeWorkspace(sectionWorkspace);',
+    );
+    expect(sessionsSection).toMatch(
+      /!hasActiveSessionFilter && !workspaceScopes\?\.length && !countOnlyOwnedTopLevelSessions\s*\n\s*\? getEffectiveTopLevelSessionCount\(/,
+    );
+    expect(sessionsSection).toMatch(
+      /import \{ isLinkedWorktreeWorkspace \} from '@\/shared\/types\/global-state';/,
+    );
+  });
+
   it('explains the worktree execution in the row tooltip and badge title', () => {
     const occurrences = sessionsSection.match(
       /t\('nav\.sessions\.worktreeTooltip', \{ path: worktreeRootPath \}\)/g,
@@ -81,9 +111,10 @@ describe('worktree row copy', () => {
       ) as { nav: { sessions: Record<string, string> } };
       const sessions = catalog.nav.sessions;
 
-      expect(sessions.worktreeBadge).toBeTruthy();
       expect(sessions.openWorktreeWorkspace).toBeTruthy();
       expect(sessions.openWorktreeWorkspaceFailed).toBeTruthy();
+      // The badge is icon-only, so it keeps no visible label copy.
+      expect(sessions.worktreeBadge).toBeUndefined();
       // The badge title and the tooltip both interpolate the directory.
       expect(sessions.worktreeTooltip).toContain('{{path}}');
     });

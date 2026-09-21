@@ -19,6 +19,7 @@ import { useSceneStore } from '../../../../stores/sceneStore';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
 import { createLogger } from '@/shared/utils/logger';
 import { isSamePath } from '@/shared/utils/pathUtils';
+import { isLinkedWorktreeWorkspace } from '@/shared/types/global-state';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { useAgentCanvasStore } from '@/app/components/panels/content-canvas/stores';
 import {
@@ -845,16 +846,32 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
     });
   }, [topLevelSessions.length, expandLevel, level2DisplayCount, showAllWithoutLimit]);
 
-  const totalTopLevelSessionCount = !hasActiveSessionFilter && !workspaceScopes?.length
-    ? getEffectiveTopLevelSessionCount(
-        metadataPageState.totalTopLevelCount,
-        metadataPageState.syncedTopLevelCount,
-        allTopLevelSessions.length,
-        metadataPageState.isLoading,
-      )
-    : topLevelSessions.length;
+  // A linked worktree stores its sessions in its main workspace's session root,
+  // so a metadata page loaded for that directory counts the project's sessions
+  // as well. That total cannot describe this row: the extra rows it counts belong
+  // to the project, and a "show more" affordance built on it promises rows this
+  // list can never reveal. Only the rows this workspace owns are counted here.
+  // Resolve the row's own workspace, not the active one, because a nested row
+  // renders while another workspace is active.
+  const sectionWorkspace = workspaceId
+    ? openedWorkspacesList.find(workspace => workspace.id === workspaceId) ?? null
+    : null;
+  const countOnlyOwnedTopLevelSessions = isLinkedWorktreeWorkspace(sectionWorkspace);
+
+  const totalTopLevelSessionCount =
+    !hasActiveSessionFilter && !workspaceScopes?.length && !countOnlyOwnedTopLevelSessions
+      ? getEffectiveTopLevelSessionCount(
+          metadataPageState.totalTopLevelCount,
+          metadataPageState.syncedTopLevelCount,
+          allTopLevelSessions.length,
+          metadataPageState.isLoading,
+        )
+      : topLevelSessions.length;
   const hasMoreUnloadedSessions =
-    !hasActiveSessionFilter && !workspaceScopes?.length && allTopLevelSessions.length < totalTopLevelSessionCount;
+    !hasActiveSessionFilter
+    && !workspaceScopes?.length
+    && !countOnlyOwnedTopLevelSessions
+    && allTopLevelSessions.length < totalTopLevelSessionCount;
   const expandToggleState = getSessionExpandToggleState(totalTopLevelSessionCount, expandLevel);
   // The visible label stays short ("Show more") and the remaining count rides in
   // a trailing `+N` chip; screen readers get the full sentence via aria-label.
@@ -1777,13 +1794,14 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                       </OverflowText></span>
                     ) : null}
                     {worktreeIsolated ? (
+                      // Icon-only marker: the badge sits next to the title, where a
+                      // label competes with it. The tooltip carries the worktree path.
                       <span
                         className="openbitfun-nav-panel__inline-item-worktree-badge"
                         title={t('nav.sessions.worktreeTooltip', { path: worktreeRootPath })}
                         aria-label={t('nav.sessions.worktreeTooltip', { path: worktreeRootPath })}
                       >
                         <FolderGit2 className="openbitfun-nav-panel__inline-item-worktree-icon" aria-hidden />
-                        <OverflowText>{t('nav.sessions.worktreeBadge')}</OverflowText>
                       </span>
                     ) : null}
                     {reviewActivityKind ? (
