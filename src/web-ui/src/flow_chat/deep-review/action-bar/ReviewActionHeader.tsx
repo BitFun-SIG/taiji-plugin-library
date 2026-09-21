@@ -15,6 +15,8 @@ interface ReviewActionHeaderProps {
   phaseIconClass: string;
   phaseTitle: string;
   errorMessage?: string | null;
+  errorSummary?: string;
+  errorDetailsLabel?: string;
   minimizeLabel: string;
   onMinimize: () => void;
 }
@@ -26,6 +28,8 @@ export const ReviewActionHeader: React.FC<ReviewActionHeaderProps> = ({
   phaseIconClass,
   phaseTitle,
   errorMessage,
+  errorSummary,
+  errorDetailsLabel,
   minimizeLabel,
   onMinimize,
 }) => (
@@ -54,9 +58,15 @@ export const ReviewActionHeader: React.FC<ReviewActionHeaderProps> = ({
         className={`deep-review-action-bar__icon ${phaseIconClass}`}
       />
       <span className="deep-review-action-bar__status-title">{phaseTitle}</span>
-      {errorMessage && (
-        <span className="deep-review-action-bar__error-message">{errorMessage}</span>
-      )}
     </div>
+    {errorMessage && (
+      <div className="deep-review-action-bar__error-message" role="status">
+        {errorSummary && errorSummary !== errorMessage && (
+          <div>{errorSummary}</div>
+        )}
+        {errorDetailsLabel && <div>{errorDetailsLabel}</div>}
+        <div>{errorMessage}</div>
+      </div>
+    )}
   </>
 );
