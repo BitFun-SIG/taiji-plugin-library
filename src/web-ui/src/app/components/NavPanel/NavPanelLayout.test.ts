@@ -163,4 +163,22 @@ describe('NavPanel layout styles', () => {
       '> span:not([data-overflow-content]):not(.openbitfun-nav-panel__top-action-icon-circle)',
     );
   });
+
+  it('keeps the miniapp row pill on the full row width', () => {
+    const stylesheet = readNavPanelStylesheet();
+    const itemBlock = extractBlock(stylesheet, '&__miniapp-item');
+    const trailingBlock = extractBlock(
+      stylesheet,
+      "&__miniapp-item > [data-openbitfun-part='actions']",
+    );
+
+    // The row paints its hover/selected pill on the ActionItem trigger, so the
+    // trailing actions region must stay out of the trigger's flex line: as an
+    // in-flow sibling it took the root gap plus its own margin off the row and
+    // left the pill short of the row's right edge.
+    expect(itemBlock).toContain('position: relative;');
+    expect(trailingBlock).toContain('position: absolute;');
+    expect(trailingBlock).toContain('inset-inline-end: var(--openbitfun-space-2);');
+    expect(trailingBlock).not.toContain('margin-inline-end');
+  });
 });

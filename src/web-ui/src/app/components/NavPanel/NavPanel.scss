@@ -663,14 +663,23 @@ $_section-header-height: 22px;
 
   &__miniapp-item {
     display: flex;
+    // Anchors the trailing app bubbles, which trail as an overlay.
+    position: relative;
     width: 100%;
     min-height: var(--openbitfun-layout-navigation-panel-item-height);
     padding: 0;
     background: transparent;
   }
 
+  // Every nav row paints its hover/selected pill on the ActionItem trigger. This
+  // row's root also lays the trailing actions region out in flow, so the root gap
+  // plus that region's own inset pushed the trigger 12px off the row's right edge
+  // and the pill stopped short with it. Trailing the region as an overlay keeps
+  // the bubbles on their existing gutter and lets the pill span the full row.
   &__miniapp-item > [data-openbitfun-part='actions'] {
-    margin-inline-end: var(--openbitfun-space-2);
+    position: absolute;
+    inset-block: 0;
+    inset-inline-end: var(--openbitfun-space-2);
   }
 
   &__miniapp-entry {
