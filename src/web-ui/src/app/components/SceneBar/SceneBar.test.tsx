@@ -11,7 +11,7 @@ import SceneBar from './SceneBar';
 import { useSceneStore } from '../../stores/sceneStore';
 import { useContentResourceStore } from '../../workbench/contentResourceStore';
 import { writeSessionTabDrag } from '../../workbench/canvasTabTransfer';
-import { clearAgentCanvasForPeerSwitch, switchAgentCanvasWorkspace, useAgentCanvasStore } from '../panels/content-canvas/stores';
+import { clearAgentCanvasForPeerSwitch, switchAgentCanvasScope, useAgentCanvasStore } from '../panels/content-canvas/stores';
 import { activateSurface } from '@/infrastructure/peer-device/deviceSurface';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
@@ -170,7 +170,7 @@ describe('SceneBar overflow navigation', () => {
     elsewhere.remove();
   });
 
-  it.each(['end', 'remove', 'workspace-switch', 'device-switch'])('withdraws availability when the source is invalidated: %s', action => {
+  it.each(['end', 'remove', 'scope-switch', 'device-switch'])('withdraws availability when the source is invalidated: %s', action => {
     renderSceneBar();
     act(() => { startSessionTabDrag(); });
     expect(container.querySelector('[data-openbitfun-part="dropHint"]')).not.toBeNull();
@@ -178,7 +178,7 @@ describe('SceneBar overflow navigation', () => {
       const store = useAgentCanvasStore.getState();
       if (action === 'end') store.endDrag();
       if (action === 'remove') store.detachTab(store.draggingTabId!, 'primary');
-      if (action === 'workspace-switch') switchAgentCanvasWorkspace(undefined, 'another-workspace');
+      if (action === 'scope-switch') switchAgentCanvasScope('another-session');
       if (action === 'device-switch') activateSurface('peer');
     });
     expect(container.querySelector('[data-openbitfun-part="dropHint"]')).toBeNull();

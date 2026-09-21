@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Session } from '@/flow_chat/types/flow-chat';
 import type { WorkspaceInfo } from '@/shared/types';
 import { getSessionSceneTabId } from '../components/SceneBar/types';
-import { resolveSessionSceneTarget } from './sessionSceneTarget';
+import { resolveSessionActivationWorkspace, resolveSessionSceneTarget, resolveSessionSceneWorkspace } from './sessionSceneTarget';
 
 const session = (overrides: Partial<Session>): Session => ({
   sessionId: 'session', title: 'Session', config: {}, dialogTurns: [],
@@ -45,5 +45,31 @@ describe('workspace session tab identity', () => {
     const remote = session({ workspacePath: '/project', remoteSshHost: 'server' });
     expect(tabId(remote, 'local', [local])).toBe(tabId(remote));
     expect(tabId(remote, 'local', [local])).not.toBe(tabId(session({ workspaceId: local.id })));
+  });
+});
+
+describe('session activation workspace identity', () => {
+  const project = { id: 'project', rootPath: '/project' } as WorkspaceInfo;
+  const worktree = { id: 'worktree', rootPath: '/worktrees/task' } as WorkspaceInfo;
+
+  it('activates the worktree a session is listed under, not its persistence project', () => {
+    const value = session({
+      workspaceId: worktree.id, projectWorkspaceId: project.id,
+      workspacePath: worktree.rootPath, projectWorkspacePath: project.rootPath,
+    });
+
+    expect(resolveSessionSceneWorkspace(value, [project, worktree])?.id).toBe(project.id);
+    expect(resolveSessionActivationWorkspace(value, [project, worktree])?.id).toBe(worktree.id);
+  });
+
+  it('falls back to the project only for records that carry no workspace identity', () => {
+    expect(resolveSessionActivationWorkspace(session({ workspacePath: '/project' }), [project])?.id).toBe(project.id);
+    expect(resolveSessionActivationWorkspace(session({ projectWorkspaceId: project.id }), [project])?.id).toBe(project.id);
+    expect(resolveSessionActivationWorkspace(session({ config: { workspaceId: worktree.id } }), [project, worktree])?.id)
+      .toBe(worktree.id);
+  });
+
+  it('stays unresolved when the listed workspace is not open here', () => {
+    expect(resolveSessionActivationWorkspace(session({ workspaceId: 'closed' }), [project, worktree])).toBeUndefined();
   });
 });

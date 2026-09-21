@@ -5,7 +5,8 @@ import { getActiveSurfaceId, isSurfaceChangedError } from '@/infrastructure/peer
 import { createLogger } from '@/shared/utils/logger';
 import { registerSessionSceneNavigation, useSceneStore } from '../stores/sceneStore';
 import { isSessionSceneId, type SessionSceneTarget } from '../components/SceneBar/types';
-import { resolveSessionSceneTarget, resolveSessionSceneWorkspace } from './sessionSceneTarget';
+import { startSessionAuxPaneMemory } from '../scenes/session/sessionAuxPaneMemory';
+import { resolveSessionActivationWorkspace, resolveSessionSceneTarget, resolveSessionSceneWorkspace } from './sessionSceneTarget';
 
 const log = createLogger('SessionSceneLifecycle');
 
@@ -15,6 +16,7 @@ const log = createLogger('SessionSceneLifecycle');
  */
 export function startSessionSceneLifecycle(): () => void {
   const stopProjectionSync = startAutoSync();
+  const stopAuxPaneMemory = startSessionAuxPaneMemory();
   const current = () => {
     const session = flowChatStore.getActiveSession();
     return session ? resolveSessionSceneTarget(
@@ -27,7 +29,11 @@ export function startSessionSceneLifecycle(): () => void {
       if (target.surfaceId !== getActiveSurfaceId() || current()?.sessionId !== target.sessionId) return false;
       const session = flowChatStore.getActiveSession()!;
       const state = workspaceManager.getState();
-      const workspace = resolveSessionSceneWorkspace(session, state.openedWorkspaces.values());
+      // The execution workspace owns the session, not the project that persists a
+      // linked worktree. Comparing the project would make the scene permanently
+      // inactive there and re-activate it — and the project workspace — on every
+      // change, which also cancels the selection the user made.
+      const workspace = resolveSessionActivationWorkspace(session, state.openedWorkspaces.values());
       return workspace ? workspace.id === state.activeWorkspaceId : !state.currentWorkspace;
     },
     activate: async (target, isCurrent) => {
@@ -112,6 +118,7 @@ export function startSessionSceneLifecycle(): () => void {
     unsubscribeScenes();
     unsubscribeWorkspaces();
     stopNavigation();
+    stopAuxPaneMemory();
     stopProjectionSync();
   };
 }
