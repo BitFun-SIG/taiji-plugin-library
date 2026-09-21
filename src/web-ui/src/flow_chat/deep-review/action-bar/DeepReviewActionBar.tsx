@@ -926,6 +926,7 @@ export const ReviewActionBar: React.FC<ReviewActionBarProps> = ({ childSessionId
       onTouchMove={stopNestedScrollPropagation}
     >
       <ReviewActionHeader
+        isReviewRunning={phase === 'review_running'}
         reviewData={reviewData}
         PhaseIcon={PhaseIcon}
         phaseIconClass={phaseConfig.iconClass}
