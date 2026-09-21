@@ -945,9 +945,15 @@ $_section-header-height: 22px;
   }
 
   &__section-action {
-    flex: 0 0 var(--_nav-icon-slot-size);
-    inline-size: var(--_nav-icon-slot-size);
-    block-size: var(--_nav-icon-slot-size);
+    // The header's three actions sit directly above the workspace row's three hover
+    // actions and read as one set of icon columns, so the cluster uses the row's
+    // compact 20px box instead of the 22px `--_nav-icon-slot-size` slot. The row
+    // pitch is 20px + the 4px `__section-actions` gap below, and only that pair
+    // puts every icon centre on the row's column centres. The `size="sm"` glyph
+    // stays 14px and remains centred inside the smaller box.
+    flex: 0 0 20px;
+    inline-size: 20px;
+    block-size: 20px;
     color: var(--_nav-icon-color);
 
     &:hover {
@@ -964,8 +970,8 @@ $_section-header-height: 22px;
     position: relative;
     display: inline-flex;
     align-items: center;
-    inline-size: var(--_nav-icon-slot-size);
-    block-size: var(--_nav-icon-slot-size);
+    inline-size: 20px;
+    block-size: 20px;
   }
 
   /* Positioning-only overrides; the design-system Menu owns the surface look. */

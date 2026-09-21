@@ -80,8 +80,12 @@ describe('NavPanel layout styles', () => {
     const itemsOverrides = [...navStylesheet.matchAll(/&__items\s*\{(?<body>[^}]*)\}/g)]
       .map(match => match.groups?.body ?? '')
       .filter(body => body.includes('padding:'));
+    const sectionActionsBlock = extractBlock(navStylesheet, '&__section-actions');
     const workspaceItemBlock = extractBlock(workspaceListStylesheet, '&__workspace-item');
     const workspaceActionsBlock = extractBlock(workspaceListStylesheet, '&__workspace-item-actions');
+    const workspaceActionMenuBlock = extractBlock(workspaceListStylesheet, '&__workspace-item-menu');
+    const workspaceActionTriggerBlock =
+      extractBlock(workspaceListStylesheet, '&__workspace-item-menu-trigger');
 
     // A single trailing-edge owner keeps the column from being silently undone by
     // a later block, so assert the count as part of the contract.
@@ -97,6 +101,14 @@ describe('NavPanel layout styles', () => {
       'padding-right: calc(var(--openbitfun-space-1) + var(--openbitfun-border-width-default));',
     );
     expect(headerTrailing).not.toContain('padding-right: var(--openbitfun-space-2);');
+
+    // Matching trailing edges are not enough: the pitch has to match too, or the
+    // first and second icons drift 2px and 4px off the row columns. Both clusters
+    // are therefore a 20px box on a 4px gap.
+    expect(workspaceActionTriggerBlock).toContain('width: 20px;');
+    expect(workspaceActionTriggerBlock).toContain('height: 20px;');
+    expect(workspaceActionMenuBlock).toContain('gap: 4px;');
+    expect(sectionActionsBlock).toContain('gap: 4px;');
   });
 
   it('keeps the sessions section header static and visually flat', () => {
@@ -109,13 +121,19 @@ describe('NavPanel layout styles', () => {
     expect(stylesheet).not.toContain('&__collapsible');
   });
 
-  it('keeps section actions on the shared compact icon-button token', () => {
+  it('keeps section actions on the compact row action box', () => {
     const stylesheet = readNavPanelStylesheet();
     const sectionActionBlock = extractBlock(stylesheet, '&__section-action');
+    const actionWrapBlock = extractBlock(stylesheet, '&__workspace-action-wrap');
     const itemActionBlock = extractBlock(stylesheet, '&__item-action');
 
-    expect(sectionActionBlock).toContain('inline-size: var(--_nav-icon-slot-size);');
-    expect(sectionActionBlock).toContain('block-size: var(--_nav-icon-slot-size);');
+    // The header cluster shares the workspace row's geometry so the two groups
+    // stack on one set of icon columns; the wrap has to follow the button, or it
+    // reserves a box the button does not fill and the columns drift again.
+    expect(sectionActionBlock).toContain('inline-size: 20px;');
+    expect(sectionActionBlock).toContain('block-size: 20px;');
+    expect(actionWrapBlock).toContain('inline-size: 20px;');
+    expect(actionWrapBlock).toContain('block-size: 20px;');
     expect(itemActionBlock).toContain('width: 20px;');
     expect(itemActionBlock).toContain('height: 20px;');
   });
