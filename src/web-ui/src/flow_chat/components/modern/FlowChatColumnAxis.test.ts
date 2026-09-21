@@ -32,4 +32,22 @@ describe('FlowChat transcript column axis', () => {
       /@mixin reading-column \{[\s\S]*?max-width: 900px;/,
     );
   });
+
+  it('keeps both reading-column insets equal so the column stays on the panel axis', () => {
+    const transcriptLayout = readSource('../../_transcript-layout.scss');
+    const readingColumn = transcriptLayout.slice(
+      transcriptLayout.indexOf('@mixin reading-column {'),
+      transcriptLayout.indexOf('// Transcript containers own the reading column'),
+    );
+
+    // A lane that rides on the rail side only (rail lane plus a small opposite
+    // inset) centres the column just while the centring slack covers the lane.
+    // Below that panel width the lane wins and moves the column up to 10px off
+    // the axis the composer, the header, and the welcome surface stay on.
+    expect(readingColumn).toContain('margin-inline: auto;');
+    expect(readingColumn).not.toContain('margin-inline-start: max(');
+    expect(readingColumn).toMatch(
+      /width: calc\(100% - #\{\$turn-rail-offset \+ \$turn-rail-width\} - var\(--openbitfun-space-1\) - var\(--openbitfun-space-2\)\);/,
+    );
+  });
 });
