@@ -1513,6 +1513,17 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
           const backgroundSubagentActivityCount = backgroundSubagentActivity?.totalCount ?? 0;
           const showBackgroundSubagentActivity = !isChildSession && backgroundSubagentActivityCount > 0;
           const scheduledJobCount = cronJobCountsBySession.get(session.sessionId) ?? 0;
+          // Same mark the session status indicator draws, in the same trailing
+          // cell: one 12px secondary clock on the row's right edge, no count.
+          // Sessions with a status to report keep that status instead.
+          const scheduledJobMark = scheduledJobCount > 0 ? (
+            <Icon
+              name="clock"
+              size="xs"
+              tone="secondary"
+              label={t('nav.scheduledJobs.badgeTooltip', { count: scheduledJobCount })}
+            />
+          ) : undefined;
           const parentSessionId = relationship.parentSessionId;
           const parentSession = parentSessionId ? flowChatState.sessions.get(parentSessionId) : undefined;
           const parentTitle = parentSession ? resolveSessionTitle(parentSession) : '';
@@ -1724,15 +1735,6 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                         {dispatchPresentation?.badgeLabel}
                       </OverflowText></span>
                     ) : null}
-                    {scheduledJobCount > 0 ? (
-                      <span
-                        className="openbitfun-nav-panel__inline-item-cron-badge"
-                        title={t('nav.scheduledJobs.badgeTooltip', { count: scheduledJobCount })}
-                      >
-                        <Icon name="clock" size="2xs" aria-hidden />
-                        {scheduledJobCount}
-                      </span>
-                    ) : null}
                     {reviewActivityKind ? (
                       <span className="openbitfun-nav-panel__inline-item-review-badge">
                         <Loader2 className="openbitfun-nav-panel__inline-item-review-icon" aria-hidden />
@@ -1770,7 +1772,10 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                     </span>
                   </span>
                   <div className="openbitfun-nav-panel__inline-item-trailing">
-                    <SessionStatusIndicator sessionId={session.sessionId} />
+                    <SessionStatusIndicator
+                      sessionId={session.sessionId}
+                      idleFallback={scheduledJobMark}
+                    />
                     <div
                       className={`openbitfun-nav-panel__inline-item-actions${openMenuSessionId === session.sessionId ? ' is-open' : ''}`}
                       data-openbitfun-component="sessions-section"

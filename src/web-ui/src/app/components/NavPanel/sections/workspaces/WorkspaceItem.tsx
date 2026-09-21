@@ -54,11 +54,6 @@ import {
   type WorkspaceInfo,
 } from '@/shared/types';
 import { SSHContext } from '@/features/ssh-remote/SSHRemoteContext';
-import {
-  ensureCronJobCountsListener,
-  getCronJobCountsSnapshot,
-  subscribeCronJobCounts,
-} from '@/app/components/scheduled-jobs/cronJobCountsStore';
 import { useWorkspaceSearchIndex } from '@/tools/file-explorer';
 import { WORKSPACE_SEARCH_AVAILABLE } from '@/infrastructure/config/workspaceSearchAvailability';
 import { useSideAnchoredPopoverPosition } from '@/shared/utils/useSideAnchoredPopoverPosition';
@@ -110,25 +105,6 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
 }) => {
   const { t } = useI18n('common');
   const { t: tFiles } = useTranslation('panels/files');
-  useEffect(() => { ensureCronJobCountsListener(); }, []);
-  const cronJobCounts = useSyncExternalStore(
-    subscribeCronJobCounts,
-    getCronJobCountsSnapshot,
-    getCronJobCountsSnapshot,
-  );
-  const scheduledJobCount = cronJobCounts.byWorkspaceId.get(workspace.id) ?? 0;
-  // Rendered through ActionItem's trailing slot so both name rows keep the badge on
-  // the name line. The rows flatten that label slot with `display: contents`, so a
-  // badge appended to the label children would silently break if that rule changed.
-  const scheduledJobBadge = scheduledJobCount > 0 ? (
-    <span
-      className="openbitfun-nav-panel__inline-item-cron-badge"
-      title={t('nav.scheduledJobs.badgeTooltip', { count: scheduledJobCount })}
-    >
-      <Icon name="clock" size="2xs" aria-hidden />
-      {scheduledJobCount}
-    </span>
-  ) : undefined;
   const {
     setActiveWorkspace,
     closeWorkspaceById,
@@ -878,7 +854,6 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
               className="openbitfun-nav-panel__assistant-item-name-action"
               triggerClassName="openbitfun-nav-panel__assistant-item-name-btn"
               labelBehavior="static"
-              metadata={scheduledJobBadge}
               onClick={e => { e.stopPropagation(); handleCollapseToggle(); }}
               data-testid="nav-workspace-name-btn"
               data-workspace-id={workspace.id}
@@ -1185,7 +1160,6 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
                   className="openbitfun-nav-panel__workspace-item-name-action"
                   triggerClassName="openbitfun-nav-panel__workspace-item-name-btn"
                   labelBehavior="static"
-                  metadata={scheduledJobBadge}
                   onClick={e => { e.stopPropagation(); handleCollapseToggle(); }}
                   data-testid="nav-workspace-name-btn"
                   data-workspace-id={workspace.id}
