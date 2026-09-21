@@ -363,12 +363,12 @@
 
   &__inline-item-worktree-badge {
     flex: 0 0 auto;
-    // Icon-only circle with the same 14px height as the neighbouring row badges,
-    // so the marker stays scannable without carrying a label beside the title.
+    // Icon-only circle sized like the neighbouring background-subagent badge, so
+    // the marker reads at a normal icon size without a label beside the title.
     display: inline-grid;
     place-items: center;
-    inline-size: 14px;
-    block-size: 14px;
+    inline-size: var(--openbitfun-control-icon-size-md);
+    block-size: var(--openbitfun-control-icon-size-md);
     border: 1px dashed var(--openbitfun-color-border-subtle);
     border-radius: 999px;
     background: var(--openbitfun-color-action-quiet-hover);
@@ -377,10 +377,8 @@
     line-height: 0;
 
     .openbitfun-nav-panel__inline-item-worktree-icon {
-      // Same 2xs glyph as the neighbouring cron badge, at the badge's own
-      // secondary colour so the marker stays legible without a label.
-      inline-size: var(--openbitfun-control-icon-size2xs);
-      block-size: var(--openbitfun-control-icon-size2xs);
+      inline-size: var(--openbitfun-control-icon-size-xs);
+      block-size: var(--openbitfun-control-icon-size-xs);
     }
   }
 

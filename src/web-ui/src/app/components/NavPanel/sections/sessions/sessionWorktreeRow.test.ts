@@ -45,7 +45,11 @@ describe('worktree isolated session row', () => {
       /inline-item-worktree-badge"[\s\S]{0,400}?<FolderGit2 className="openbitfun-nav-panel__inline-item-worktree-icon" aria-hidden \/>\s*<\/span>/,
     );
     expect(sessionsSectionStyles).toMatch(
-      /&__inline-item-worktree-badge \{[\s\S]*?inline-size: 14px;/,
+      /&__inline-item-worktree-badge \{[\s\S]*?inline-size: var\(--openbitfun-control-icon-size-md\);/,
+    );
+    // The glyph keeps a normal icon size inside the badge circle.
+    expect(sessionsSectionStyles).toMatch(
+      /\.openbitfun-nav-panel__inline-item-worktree-icon \{[\s\S]*?inline-size: var\(--openbitfun-control-icon-size-xs\);/,
     );
   });
 
