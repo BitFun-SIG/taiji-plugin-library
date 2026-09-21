@@ -1,9 +1,11 @@
 import { InvalidationSync } from '../../../shared/relay-transport/InvalidationSync';
 import type { RelayFailureAction } from '../../../shared/relay-transport/RelayFailure';
+import { DeviceSystemMark } from '../components/DeviceSystemMark';
 import { deviceFailurePresentation } from '../services/deviceFailureCopy';
 import {
   ChevronLeft as LucideChevronLeft,
   Monitor as LucideMonitor,
+  Pencil as LucidePencil,
   RefreshCw as LucideRefreshCw,
   UserRoundSearch as LucideUserRoundSearch,
 } from 'lucide-react';
@@ -57,10 +59,6 @@ const BackIcon = () => (
 
 const RefreshIcon = () => (
   <LucideRefreshCw width="16" height="16" stroke="currentColor" aria-hidden="true" />
-);
-
-const DeviceIcon = () => (
-  <LucideMonitor width="20" height="20" stroke="currentColor" aria-hidden="true" />
 );
 
 const NoIdentityIcon = () => (
@@ -304,7 +302,7 @@ const DevicesPage: React.FC<Props> = ({ client, onBack, onDeviceSelected = onBac
                 </div>
               </div>
             ) : (
-              <>
+              <div className="devices-page__device-line">
               <MobileListRow
                 appearance="surface"
                 className={[
@@ -315,7 +313,11 @@ const DevicesPage: React.FC<Props> = ({ client, onBack, onDeviceSelected = onBac
                 ].filter(Boolean).join(' ')}
                 disabled={!clickable}
                 onClick={() => clickable && selectDevice(d)}
-                leading={<span className="devices-page__device-icon"><DeviceIcon /></span>}
+                leading={(
+                  <span className="devices-page__device-icon">
+                    <DeviceSystemMark deviceKind={d.device_kind} os={d.device_os} size={20} />
+                  </span>
+                )}
                 label={(
                   <span className="devices-page__device-name-row">
                     <span className="devices-page__device-name">
@@ -348,10 +350,18 @@ const DevicesPage: React.FC<Props> = ({ client, onBack, onDeviceSelected = onBac
 
                 selected={isCurrent}
               />
-              <div className="devices-page__alias-actions">
-                <MobileButton size="sm" disabled={!aliasSupported} onClick={() => { setEditingId(d.device_id); setAliasDraft(d.device_alias ?? ''); }}>{t('devices.editAlias')}</MobileButton>
+              {/* Renaming is an action on the row, so it sits on the row's own line
+                  instead of a block under it: one line per device at every width. */}
+              <MobileIconButton
+                appearance="plain"
+                className="devices-page__device-edit"
+                disabled={!aliasSupported}
+                icon={<LucidePencil width="18" height="18" stroke="currentColor" aria-hidden="true" />}
+                aria-label={t('devices.editAlias')}
+                title={t('devices.editAlias')}
+                onClick={() => { setEditingId(d.device_id); setAliasDraft(d.device_alias ?? ''); }}
+              />
               </div>
-              </>
             )}
             </div>
           );

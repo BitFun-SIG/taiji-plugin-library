@@ -125,10 +125,16 @@ export function useDeviceInterconnectionOverview(fallbackLocalDeviceName: string
       : null
   ), [peerContext?.peerMode]);
 
-  // The peer's system and kind are facts only the account directory holds; the
-  // local ones come from this machine's own device info, never from the browser.
-  const localDeviceOs = localDevice?.device_os ?? null;
-  const localDeviceKind = localDevice?.device_kind ?? null;
+  // A system and a kind are facts a device reports to the Relay, so the account
+  // directory row is where they are stated for every device. That holds for this
+  // machine too: the device info call answers with identity only, and the row is
+  // the same one the device list draws. Never the browser's own platform, which
+  // identifies the window rather than the machine.
+  const localEntry = directory.localId
+    ? directory.devices.find(device => device.device_id === directory.localId)
+    : undefined;
+  const localDeviceOs = localEntry?.device_os ?? null;
+  const localDeviceKind = localEntry?.device_kind ?? null;
   const peerEntry = peer
     ? directory.devices.find(device => device.device_id === peer.deviceId)
     : undefined;

@@ -25,6 +25,7 @@ import {
 } from '../deviceInterconnectionOverview';
 import { useDeviceInterconnectionOverview } from './useDeviceInterconnectionOverview';
 import { DeviceArtwork } from './DeviceArtwork';
+import { DeviceSystemGlyph } from './DeviceSystemGlyph';
 
 interface DeviceStatusControlProps {
   open: boolean;
@@ -66,6 +67,27 @@ function DeviceIcon({
     default:
       return <Icon glyph={Monitor} size={size} />;
   }
+}
+
+/**
+ * The mark in front of a device's name. A host answers with the system it runs,
+ * the same mark the device list draws. A phone and a chat app are the two kinds
+ * that are not a system — one is drawn as a phone and one as its brand — so they
+ * keep the silhouette that says what they are.
+ */
+function DeviceMark({
+  device,
+  identity,
+  size = 'sm',
+}: {
+  device: DeviceOverviewDevice;
+  identity?: string | null;
+  size?: IconSize;
+}) {
+  if (device.kind === 'mobile' || device.kind === 'message-app') {
+    return <DeviceIcon identity={identity} kind={device.kind} size={size} />;
+  }
+  return <DeviceSystemGlyph device={device} size={size} />;
 }
 
 const DeviceStatusControl: React.FC<DeviceStatusControlProps> = ({
@@ -160,6 +182,17 @@ const DeviceStatusControl: React.FC<DeviceStatusControlProps> = ({
     overview,
     refresh,
   } = useDeviceInterconnectionOverview(localDeviceLabel, t('remoteConnect.mobileBrowserTitle'));
+  /**
+   * This machine as the overview sees it: its own entry while a peer is in use,
+   * the primary device while none is. The attached cluster draws its system
+   * instead of a generic kind icon, so a controller reads as the device it is,
+   * the way the same device reads in the device list.
+   */
+  const thisMachine = useMemo(() => (
+    overview.primaryDevice.local
+      ? overview.primaryDevice
+      : overview.devices.find(device => device.local) ?? overview.primaryDevice
+  ), [overview]);
   /**
    * A device says what it is by the kind it reported to the Relay, so the
    * account directory is enough for any device. A live control link can say
@@ -326,7 +359,10 @@ const DeviceStatusControl: React.FC<DeviceStatusControlProps> = ({
         data-openbitfun-part="deviceStatus"
         data-openbitfun-state={overview.mode}
       >
-        <DeviceIcon kind={overview.primaryDevice.kind} size="sm" />
+        {/* The label names a device, and this mark says which system that device
+            is: the machine the window works on, whichever end of the connection
+            it sits on. */}
+        <DeviceMark device={overview.primaryDevice} size="sm" />
         <OverflowText className="openbitfun-nav-panel__footer-device-status-label">
           {overview.currentWorkDeviceName}
         </OverflowText>
@@ -341,11 +377,21 @@ const DeviceStatusControl: React.FC<DeviceStatusControlProps> = ({
                 data-openbitfun-device-kind={group.kind}
                 key={group.kind}
               >
-                <DeviceIcon
-                  identity={group.kind === 'message-app' ? attachedMessageAppIdentity : null}
-                  kind={group.kind}
-                  size="xs"
-                />
+                {group.kind === 'desktop' ? (
+                  // The only desktop a client can be attached to is itself: the
+                  // overview marks this machine's own entry as the controlling
+                  // one, and a peer is the device being used instead of an
+                  // attached one. It draws the system this machine reported, so
+                  // the group names the same device the list does, rather than a
+                  // second generic monitor.
+                  <DeviceMark device={thisMachine} size="xs" />
+                ) : (
+                  <DeviceIcon
+                    identity={group.kind === 'message-app' ? attachedMessageAppIdentity : null}
+                    kind={group.kind}
+                    size="xs"
+                  />
+                )}
                 {group.count > 1 && (
                   <span className="openbitfun-nav-panel__footer-device-status-attached-count">
                     {group.count}
@@ -406,9 +452,9 @@ const DeviceStatusControl: React.FC<DeviceStatusControlProps> = ({
                           data-openbitfun-activities={device.activities.join(' ')}
                         >
                           <span className="openbitfun-device-overview__device-icon" aria-hidden="true">
-                            <DeviceIcon
+                            <DeviceMark
+                              device={device}
                               identity={`${device.id} ${device.name}`}
-                              kind={device.kind}
                               size="md"
                             />
                           </span>

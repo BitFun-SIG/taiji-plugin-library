@@ -1375,6 +1375,11 @@ $_section-header-height: 22px;
 
   > svg {
     flex-shrink: 0;
+    // A line box is split by the font's ascent and descent, not by the glyphs
+    // drawn in it, so centring the mark on that box leaves its ink about a pixel
+    // above the text's own ink centre. One pixel, measured in the browser, puts
+    // the two on one optical centre.
+    transform: translateY(1px);
   }
 
   &:hover,
@@ -1402,15 +1407,17 @@ $_section-header-height: 22px;
 }
 
 // Attached remote parties are shown once per device kind with unframed icons.
-// Message-app marks inherit the theme foreground; connection state is already
-// communicated by the device overview rather than by recoloring the brand.
+// One row of peers is one set of marks, so they all take the theme foreground: a
+// brand, system or kind silhouette drawn a step quieter reads as a disabled or
+// offline party instead of as another drawing. Connection state is communicated
+// by the device overview, never by recoloring a mark.
 .openbitfun-nav-panel__footer-device-status-attached {
   display: flex;
   flex-shrink: 0;
   align-items: center;
   gap: 4px;
   margin-left: 1px;
-  color: var(--openbitfun-color-content-secondary);
+  color: var(--openbitfun-color-content-primary);
 }
 
 .openbitfun-nav-panel__footer-device-status-attached-group {
@@ -1426,7 +1433,6 @@ $_section-header-height: 22px;
   &[data-openbitfun-device-kind='message-app'] {
     border: 0;
     background: transparent;
-    color: var(--openbitfun-color-content-primary);
   }
 }
 
