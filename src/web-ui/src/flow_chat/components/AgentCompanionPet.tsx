@@ -482,6 +482,7 @@ export const AgentCompanionPet: React.FC<AgentCompanionPetProps> = ({
           data-pet-action={spriteAction ?? undefined}
           className={`openbitfun-agent-companion-pet__petdex openbitfun-agent-companion-pet__petdex--${mood}`}
           style={{
+            imageRendering: pet.source === 'preset' && pet.id === 'bitblob' ? 'auto' : undefined,
             '--openbitfun-petdex-src': `url("${petSrc}")`,
             '--openbitfun-petdex-row': row,
             '--openbitfun-petdex-frames': frames,
