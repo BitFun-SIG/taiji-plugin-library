@@ -25,9 +25,13 @@ struct OpenAIModelEntry {
 
 pub(crate) fn apply_headers(client: &AIClient, builder: RequestBuilder) -> RequestBuilder {
     shared::apply_header_policy(client, builder, |mut builder| {
-        builder = builder
-            .header("Content-Type", "application/json")
-            .header("Authorization", format!("Bearer {}", client.config.api_key));
+        builder = builder.header("Content-Type", "application/json");
+
+        // Qoder seam owns this host's credential (rationale in the seam's
+        // `is_qoder_url`): the signed family already carries Authorization.
+        if !taiji_qoder_adapter::is_qoder_url(&client.config.request_url) {
+            builder = builder.header("Authorization", format!("Bearer {}", client.config.api_key));
+        }
 
         if client.config.base_url.contains("openbitfun.com") {
             builder = builder.header("X-Verification-Code", "from_openbitfun");
@@ -473,5 +477,32 @@ mod tests {
             request_body["tools"][0]["function"]["name"],
             json!("example")
         );
+    }
+
+    /// The CodeBuddy disguise gate must anchor the host: only the real host
+    /// passes, while every URL that merely embeds it in its path, query,
+    /// userinfo, or as a suffix domain is rejected. A substring comparison
+    /// would let all four hostile shapes through.
+    /// Full rationale returns with the seam under the codebuddy adapter's
+    /// `is_codebuddy_url`.
+    #[test]
+    fn codebuddy_gate_anchors_the_host() {
+        assert!(
+            taiji_codebuddy_adapter::is_codebuddy_url(
+                "https://copilot.tencent.com/v2/chat/completions"
+            ),
+            "the captured URL shape must pass"
+        );
+        for url in [
+            "https://evil.example.com/v1/chat/completions?x=copilot.tencent.com",
+            "https://evil.example.com/copilot.tencent.com/v1/chat/completions",
+            "https://copilot.tencent.com@evil.example.com/v1/chat/completions",
+            "https://copilot.tencent.com.evil.example.com/v1/chat/completions",
+        ] {
+            assert!(
+                !taiji_codebuddy_adapter::is_codebuddy_url(url),
+                "host must not be matched via substring: {url}"
+            );
+        }
     }
 }

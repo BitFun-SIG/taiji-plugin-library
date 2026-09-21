@@ -75,6 +75,10 @@ use openbitfun_external_sources::{
     ExternalSourceCoordinator, ExternalSourceDiscoveryResult, ExternalSubagentDiscoveryResult,
     ExternalToolDiscoveryResult, ExternalWorkspaceReferenceDiscoveryResult,
 };
+// `LnfuHookProvider` is implemented and exported by the adapter crate, but the
+// Hook capability is registered through a separate registry seam. Only the MCP
+// provider is wired into the integration registry here.
+use openbitfun_lnfu_adapter::LnfuMcpProvider;
 use openbitfun_opencode_adapter::{
     OpenCodeCommandProvider, OpenCodeMcpProvider, OpenCodeSkillRootProvider,
     OpenCodeSubagentProvider, OpenCodeToolProvider, OpenCodeWorkspaceReferenceProvider,
@@ -931,6 +935,25 @@ fn default_external_integration_registry() -> Vec<ExternalEcosystemRegistration>
             tool_provider: None,
             subagent_provider: None,
             mcp_provider: Some(Arc::new(DshMcpProvider::default())),
+            workspace_reference_provider: None,
+        },
+        ExternalEcosystemRegistration {
+            descriptor: ExternalIntegrationEcosystemDescriptor {
+                ecosystem_id: EcosystemId::new("lnfu").expect("static ecosystem id"),
+                display_name: "LNFU".to_string(),
+                adapter_revision: "1".to_string(),
+                capabilities: vec![external_capability_descriptor(
+                    EXTERNAL_CAPABILITY_MCP,
+                    ExternalIntegrationAccess::AskBeforeUse,
+                    ExternalIntegrationAccess::AskBeforeUse,
+                )],
+            },
+            contract_major: EXTERNAL_ADAPTER_CONTRACT_MAJOR,
+            upstream_format_revision: "lnfu-mcp-declarations-v1",
+            command_provider: None,
+            tool_provider: None,
+            subagent_provider: None,
+            mcp_provider: Some(Arc::new(LnfuMcpProvider::default())),
             workspace_reference_provider: None,
         },
     ]
@@ -10082,13 +10105,14 @@ mod tests {
     #[test]
     fn default_registry_exposes_only_each_ecosystems_supported_asset_kinds() {
         let registrations = default_external_integration_registry();
-        assert_eq!(registrations.len(), 4);
+        assert_eq!(registrations.len(), 5);
 
         let expected = BTreeMap::from([
             (
                 "deepseek-harness",
                 BTreeSet::from([EXTERNAL_CAPABILITY_MCP]),
             ),
+            ("lnfu", BTreeSet::from([EXTERNAL_CAPABILITY_MCP])),
             (
                 "opencode",
                 BTreeSet::from([
@@ -10237,6 +10261,113 @@ mod tests {
             .validate()
             .unwrap_err()
             .contains("provider registration do not match"));
+    }
+
+    #[test]
+    fn lnfu_registration_is_present_and_valid() {
+        let registrations = default_external_integration_registry();
+        let lnfu = registrations
+            .iter()
+            .find(|registration| registration.descriptor.ecosystem_id.as_str() == "lnfu")
+            .expect("LNFU is registered by product assembly");
+        assert_eq!(lnfu.descriptor.display_name, "LNFU");
+        assert_eq!(lnfu.contract_major, EXTERNAL_ADAPTER_CONTRACT_MAJOR);
+        assert_eq!(lnfu.upstream_format_revision, "lnfu-mcp-declarations-v1");
+        lnfu.validate().expect("LNFU registration is valid");
+        let capabilities = lnfu
+            .descriptor
+            .capabilities
+            .iter()
+            .map(|capability| capability.capability_id.as_str())
+            .collect::<BTreeSet<_>>();
+        assert_eq!(capabilities, BTreeSet::from([EXTERNAL_CAPABILITY_MCP]));
+        assert!(lnfu.mcp_provider.is_some());
+        assert!(lnfu.command_provider.is_none());
+        assert!(lnfu.tool_provider.is_none());
+        assert!(lnfu.subagent_provider.is_none());
+        assert!(lnfu.workspace_reference_provider.is_none());
+    }
+
+    #[test]
+    fn lnfu_registration_rejects_capability_and_provider_mismatches() {
+        let lnfu = || {
+            default_external_integration_registry()
+                .into_iter()
+                .find(|registration| registration.descriptor.ecosystem_id.as_str() == "lnfu")
+                .expect("LNFU registration exists")
+        };
+
+        // Declares MCP but the MCP provider is absent: rejected.
+        let mut declared_without_provider = lnfu();
+        declared_without_provider.mcp_provider = None;
+        assert!(declared_without_provider.validate().is_err());
+
+        // Registers the MCP provider while dropping the MCP capability: rejected.
+        let mut provider_without_declaration = lnfu();
+        provider_without_declaration.descriptor.capabilities.clear();
+        assert!(provider_without_declaration.validate().is_err());
+    }
+
+    #[test]
+    fn removing_lnfu_leaves_the_other_ecosystems_untouched() {
+        let all = default_external_integration_registry();
+        let without_lnfu = all
+            .iter()
+            .filter(|registration| registration.descriptor.ecosystem_id.as_str() != "lnfu")
+            .map(|registration| {
+                (
+                    registration.descriptor.ecosystem_id.as_str().to_string(),
+                    registration
+                        .descriptor
+                        .capabilities
+                        .iter()
+                        .map(|capability| capability.capability_id.as_str().to_string())
+                        .collect::<BTreeSet<_>>(),
+                )
+            })
+            .collect::<BTreeMap<_, _>>();
+
+        assert_eq!(all.len(), 5);
+        assert_eq!(without_lnfu.len(), 4);
+        assert!(!without_lnfu.contains_key("lnfu"));
+        assert_eq!(
+            without_lnfu.keys().cloned().collect::<BTreeSet<_>>(),
+            BTreeSet::from([
+                "claude-code".to_string(),
+                "codex".to_string(),
+                "deepseek-harness".to_string(),
+                "opencode".to_string(),
+            ])
+        );
+        assert_eq!(
+            without_lnfu["deepseek-harness"],
+            BTreeSet::from([EXTERNAL_CAPABILITY_MCP.to_string()])
+        );
+        assert_eq!(
+            without_lnfu["claude-code"],
+            BTreeSet::from([
+                EXTERNAL_CAPABILITY_COMMAND.to_string(),
+                EXTERNAL_CAPABILITY_SUBAGENT.to_string(),
+                EXTERNAL_CAPABILITY_MCP.to_string(),
+            ])
+        );
+        assert_eq!(
+            without_lnfu["codex"],
+            BTreeSet::from([
+                EXTERNAL_CAPABILITY_SUBAGENT.to_string(),
+                EXTERNAL_CAPABILITY_MCP.to_string(),
+            ])
+        );
+        assert_eq!(
+            without_lnfu["opencode"],
+            BTreeSet::from([
+                EXTERNAL_CAPABILITY_COMMAND.to_string(),
+                EXTERNAL_CAPABILITY_TOOL.to_string(),
+                EXTERNAL_CAPABILITY_SUBAGENT.to_string(),
+                EXTERNAL_CAPABILITY_MCP.to_string(),
+                EXTERNAL_CAPABILITY_REFERENCE.to_string(),
+            ])
+        );
     }
 
     #[test]

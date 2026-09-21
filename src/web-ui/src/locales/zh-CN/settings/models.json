@@ -241,6 +241,14 @@
     "tokendance": {
       "name": "词元跳动",
       "description": "统一的大模型 API 网关"
+    },
+    "qoder": {
+      "name": "Qoder",
+      "description": "Qoder AI 编程助手（中国区）"
+    },
+    "codebuddy": {
+      "name": "CodeBuddy",
+      "description": "CodeBuddy AI 编程助手"
     }
   },
   "tabs": {

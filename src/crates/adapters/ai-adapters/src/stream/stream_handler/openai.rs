@@ -1,15 +1,16 @@
 use super::inline_think::InlineThinkParser;
 use super::stream_stats::StreamStats;
-use super::{next_stream_item, StreamTimeoutController, StreamTimeoutStage, TimedStreamItem};
+use super::{StreamTimeoutController, StreamTimeoutStage, TimedStreamItem, next_stream_item};
 use crate::stream::types::openai::OpenAISSEData;
 use crate::stream::types::unified::UnifiedResponse;
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use eventsource_stream::Eventsource;
 use log::{error, trace, warn};
 use openbitfun_core_types::errors::AiProviderError;
 use reqwest::Response;
 use serde_json::Value;
 use std::time::Duration;
+use taiji_codebuddy_adapter::normalize_response as normalize_degenerate_finish_reason;
 use tokio::sync::mpsc;
 
 const OPENAI_CHAT_COMPLETION_CHUNK_OBJECT: &str = "chat.completion.chunk";
@@ -32,7 +33,13 @@ impl OpenAIResponseNormalizer {
     }
 
     fn normalize_response(&mut self, response: UnifiedResponse) -> Vec<UnifiedResponse> {
-        self.inline_think_parser.normalize_response(response)
+        self.inline_think_parser
+            .normalize_response(response)
+            .into_iter()
+            // SEAM (user-side): repair protocol-deviant frames. Value-based, so
+            // it needs no provider id / URL match / signature change.
+            .map(normalize_degenerate_finish_reason)
+            .collect()
     }
 
     fn flush(&mut self) -> Vec<UnifiedResponse> {
@@ -79,6 +86,12 @@ fn extract_sse_api_error(event_json: &Value) -> Option<AiProviderError> {
     ))
 }
 
+/// Timeout policy shared by the OpenAI stream entry point.
+struct OpenAiStreamPolicy {
+    ttft_timeout: Option<Duration>,
+    idle_timeout: Option<Duration>,
+}
+
 /// Convert a byte stream into a structured response stream
 ///
 /// # Arguments
@@ -93,6 +106,30 @@ pub async fn handle_openai_stream(
     ttft_timeout: Option<Duration>,
     idle_timeout: Option<Duration>,
 ) {
+    handle_openai_stream_inner(
+        response,
+        tx_event,
+        tx_raw_sse,
+        inline_think_in_text,
+        OpenAiStreamPolicy {
+            ttft_timeout,
+            idle_timeout,
+        },
+    )
+    .await
+}
+
+async fn handle_openai_stream_inner(
+    response: Response,
+    tx_event: mpsc::UnboundedSender<Result<UnifiedResponse>>,
+    tx_raw_sse: Option<mpsc::UnboundedSender<String>>,
+    inline_think_in_text: bool,
+    policy: OpenAiStreamPolicy,
+) {
+    let OpenAiStreamPolicy {
+        ttft_timeout,
+        idle_timeout,
+    } = policy;
     let mut stream = response.bytes_stream().eventsource();
     let mut stats = StreamStats::new("OpenAI");
     let mut timeout_controller = StreamTimeoutController::new(ttft_timeout, idle_timeout);
@@ -149,11 +186,37 @@ pub async fn handle_openai_stream(
             }
         };
 
-        let raw = sse.data;
+        let mut raw = sse.data;
         stats.record_sse_event("data");
         trace!(target: AI_STREAM_RESPONSE_TARGET, "OpenAI SSE: {:?}", raw);
         if let Some(ref tx) = tx_raw_sse {
             let _ = tx.send(raw.clone());
+        }
+        // A user-side seam may answer in its provider's own envelope rather than
+        // plain OpenAI frames. The Qoder CN gateway does exactly that — every
+        // chunk arrives as `{"headers":…,"body":"<openai chunk>",…}` — so the
+        // seam unwraps it first. Non-Qoder traffic never enters this branch, so
+        // every other provider stays byte-identical.
+        let prefixed = format!("data:{raw}");
+        if let Some(unfolded) = taiji_qoder_adapter::unfold_frame(&prefixed) {
+            match unfolded {
+                taiji_qoder_adapter::UnfoldedFrame::Data(payload) => {
+                    raw = payload
+                        .strip_prefix("data:")
+                        .unwrap_or(&payload)
+                        .to_string();
+                }
+                taiji_qoder_adapter::UnfoldedFrame::Done => {
+                    for normalized_response in normalizer.flush() {
+                        stats.record_unified_response(&normalized_response);
+                        let _ = tx_event.send(Ok(normalized_response));
+                    }
+                    stats.increment("marker:done");
+                    stats.log_summary("done_marker_received");
+                    return;
+                }
+                taiji_qoder_adapter::UnfoldedFrame::Skip => continue,
+            }
         }
         if raw == "[DONE]" {
             for normalized_response in normalizer.flush() {
@@ -269,9 +332,16 @@ pub async fn handle_openai_stream(
 #[cfg(test)]
 mod tests {
     use super::{
-        extract_sse_api_error, extract_sse_api_error_message, is_valid_chat_completion_chunk_weak,
+        OpenAIResponseNormalizer, extract_sse_api_error, extract_sse_api_error_message,
+        is_valid_chat_completion_chunk_weak,
     };
+    use crate::stream::types::unified::UnifiedResponse;
     use openbitfun_core_types::errors::ErrorCategory;
+
+    // SEAM (user-side): the host-side capability entrance the accessed software
+    // calls to hand a capability result back. The body lives outside the
+    // upstream git tree (see Cargo.toml, the user-side seal above).
+    use lnfu_host_seam::deliver_capability_result;
 
     #[test]
     fn weak_filter_accepts_chat_completion_chunk() {
@@ -279,6 +349,32 @@ mod tests {
             "object": "chat.completion.chunk"
         });
         assert!(is_valid_chat_completion_chunk_weak(&event));
+    }
+
+    /// The Qoder gateway answers every chunk inside its own envelope. Without
+    /// unwrapping, the frame carries no `choices` field and the weak filter
+    /// drops it, so the stream never yields content. Both halves are asserted:
+    /// the raw envelope is rejected, the unwrapped payload is accepted.
+    #[test]
+    fn qoder_envelope_is_unwrapped_before_the_weak_filter() {
+        let envelope = r#"{"headers":{"Content-Type":["application/json"]},"body":"{\"choices\":[{\"delta\":{\"content\":\"P\",\"role\":\"assistant\"},\"index\":0}],\"model\":\"auto\",\"object\":\"chat.completion.chunk\"}","statusCodeValue":200,"statusCode":"OK"}"#;
+        let as_openai = serde_json::from_str::<serde_json::Value>(envelope).expect("valid json");
+        assert!(
+            !is_valid_chat_completion_chunk_weak(&as_openai),
+            "the raw envelope must not look like an OpenAI chunk"
+        );
+
+        let unfolded = taiji_qoder_adapter::unfold_frame(&format!("data:{envelope}"))
+            .expect("the seam recognises its own envelope");
+        let taiji_qoder_adapter::UnfoldedFrame::Data(payload) = unfolded else {
+            panic!("expected a data frame, got {unfolded:?}");
+        };
+        let inner = payload.strip_prefix("data:").unwrap_or(&payload);
+        let parsed = serde_json::from_str::<serde_json::Value>(inner).expect("inner parses");
+        assert!(
+            is_valid_chat_completion_chunk_weak(&parsed),
+            "the unwrapped payload must pass the weak filter"
+        );
     }
 
     #[test]
@@ -357,5 +453,40 @@ mod tests {
             "object": "chat.completion.chunk"
         });
         assert!(extract_sse_api_error_message(&event).is_none());
+    }
+
+    #[test]
+    fn non_codebuddy_normalizer_passthrough_unchanged() {
+        // Providers that follow the OpenAI contract are unaffected: the seam
+        // only rewrites degenerate (empty/whitespace) finish reasons.
+        let mut normalizer = OpenAIResponseNormalizer::new(false);
+        let responses = normalizer.normalize_response(UnifiedResponse {
+            finish_reason: Some("stop".to_string()),
+            ..Default::default()
+        });
+        assert_eq!(responses.len(), 1);
+        assert_eq!(responses[0].finish_reason.as_deref(), Some("stop"));
+    }
+
+    #[test]
+    fn degenerate_empty_finish_reason_is_dropped_through_normalizer() {
+        let mut normalizer = OpenAIResponseNormalizer::new(false);
+        let responses = normalizer.normalize_response(UnifiedResponse {
+            finish_reason: Some("".to_string()),
+            ..Default::default()
+        });
+        assert_eq!(responses.len(), 1);
+        assert!(responses[0].finish_reason.is_none());
+    }
+
+    #[test]
+    fn host_seam_entrance_accepts_a_capability_result() {
+        // SEAM (user-side): the accessed software reaches the host-side entrance
+        // through the imported name, so the entrance is a callable entry on this
+        // side of the seam. A non-empty payload is delivered and reported as a
+        // success outcome.
+        let outcome = deliver_capability_result("ai-adapters", "normalize-response", "stop")
+            .expect("a non-empty payload is delivered");
+        assert_eq!(outcome.payload.as_deref(), Some("stop"));
     }
 }

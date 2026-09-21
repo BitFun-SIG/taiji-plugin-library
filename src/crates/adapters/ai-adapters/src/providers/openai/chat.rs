@@ -132,6 +132,27 @@ fn try_build_request_body_with_context(
 
     common::attach_tools(&mut request_body, openai_tools, "ai::openai_stream_request");
 
+    // Prefix-stability seam (Type-A pure function, logic lives outside the
+    // upstream tree in `taiji-custom/token-shaper`). Must run AFTER attach_tools
+    // so the tools array exists, and BEFORE the body leaves this function so no
+    // later stage can reorder it again. Reordering tools costs the whole cache,
+    // so it is done once, deterministically, never per-request.
+    match token_shaper::stabilize_prefix(&mut request_body) {
+        token_shaper::PrefixAction::Unchanged => {}
+        token_shaper::PrefixAction::ToolsReordered => debug!(
+            target: "ai::openai_stream_request",
+            "token-shaper: tools reordered into deterministic order to keep the provider prefix cache stable"
+        ),
+    }
+    let volatile_regions = token_shaper::volatile_regions(&request_body);
+    if !volatile_regions.is_empty() {
+        warn!(
+            target: "ai::openai_stream_request",
+            "token-shaper: volatile content found in a prefix-cached region ({:?}); every such request busts the prefix cache",
+            volatile_regions
+        );
+    }
+
     Ok(request_body)
 }
 
@@ -214,20 +235,62 @@ pub(crate) async fn send_stream(
     let idle_timeout = client.stream_options.idle_timeout;
     let ttft_timeout = client.stream_options.ttft_timeout;
 
+    let request_body_text = request_body.to_string();
+
+    // Qoder CN seam: returns the signed URL plus the encrypted body, or `None`
+    // for every other provider (both left untouched).
+    let qoder_seam = taiji_qoder_adapter::qoder_body_override(&client.config, &url, &request_body_text);
+    let (url, raw_body) = match qoder_seam.as_ref() {
+        Some((signed_url, encrypted)) => (
+            signed_url.as_str(),
+            Some(encrypted.as_bytes().to_vec()),
+        ),
+        None => (url.as_str(), None),
+    };
+
     execute_sse_request(
         "OpenAI Streaming API",
-        &url,
+        url,
         &request_body,
+        raw_body,
         max_tries,
         ttft_timeout,
         trace,
         || {
-            shared::apply_affinity_headers(
+            // Qoder seam header policy (rationale in the seam's
+            // `inject_qoder_headers`): the signed family is the whole header set.
+            if qoder_seam.is_some() {
+                return taiji_qoder_adapter::inject_qoder_headers(
+                    client.client.post(url),
+                    url,
+                    &client.config,
+                    &request_body_text,
+                    qoder_seam
+                        .as_ref()
+                        .map(|(_, encrypted)| encrypted.as_str()),
+                );
+            }
+            let builder = shared::apply_affinity_headers(
                 client,
-                common::apply_headers(client, client.client.post(&url)),
-                &url,
+                common::apply_headers(client, client.client.post(url)),
+                url,
                 request_context.as_ref(),
-            )
+            );
+            if !taiji_codebuddy_adapter::is_codebuddy_url(url) {
+                return builder;
+            }
+            let mut builder = builder;
+            let turn_request_id =
+                taiji_codebuddy_adapter::codebuddy_turn_request_id(&request_body_text);
+            for (name, value) in taiji_codebuddy_adapter::codebuddy_request_headers(
+                &client.config,
+                url,
+                Some(turn_request_id.as_str()),
+                &request_body_text,
+            ) {
+                builder = builder.header(name, value);
+            }
+            builder
         },
         move |response, tx, tx_raw, remaining_ttft_timeout| {
             handle_openai_stream(

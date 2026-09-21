@@ -241,6 +241,14 @@
     "tokendance": {
       "name": "TokenDance",
       "description": "Unified AI model gateway"
+    },
+    "qoder": {
+      "name": "Qoder",
+      "description": "Qoder AI coding assistant (China region)"
+    },
+    "codebuddy": {
+      "name": "CodeBuddy",
+      "description": "CodeBuddy AI coding assistant"
     }
   },
   "tabs": {

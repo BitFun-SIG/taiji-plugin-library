@@ -1,0 +1,9 @@
+data: {"id":"chatcmpl_codebuddy","object":"chat.completion.chunk","created":301,"model":"deepseek-v4-flash","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_cb_1","type":"function","function":{"name":"get_weather","arguments":"{\"city\":"}}]},"finish_reason":""}],"usage":null}
+
+data: {"id":"chatcmpl_codebuddy","object":"chat.completion.chunk","created":302,"model":"deepseek-v4-flash","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"type":"function","function":{"name":null,"arguments":"\"Beijing\""}}]},"finish_reason":""}],"usage":null}
+
+data: {"id":"chatcmpl_codebuddy","object":"chat.completion.chunk","created":303,"model":"deepseek-v4-flash","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"type":"function","function":{"name":null,"arguments":"}"}}]},"finish_reason":""}],"usage":null}
+
+data: {"id":"chatcmpl_codebuddy","object":"chat.completion.chunk","created":304,"model":"deepseek-v4-flash","choices":[{"index":0,"delta":{},"finish_reason":""}],"usage":{"prompt_tokens":5,"completion_tokens":7,"total_tokens":12}}
+
+data: [DONE]

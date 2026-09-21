@@ -528,6 +528,7 @@ pub(crate) async fn send_stream(
         "Anthropic Streaming API",
         &url,
         &request_body,
+        None,
         max_tries,
         ttft_timeout,
         trace,

@@ -176,10 +176,12 @@ pub struct HookFunctionAfterRequest {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HookFunctionToolContext {
+    #[serde(rename = "sessionID")]
     pub session_id: String,
+    #[serde(rename = "messageID")]
     pub message_id: String,
     pub agent: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "callID", default, skip_serializing_if = "Option::is_none")]
     pub call_id: Option<String>,
 }
 
