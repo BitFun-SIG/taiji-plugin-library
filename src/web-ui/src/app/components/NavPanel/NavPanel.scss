@@ -2581,6 +2581,13 @@ $_section-header-height: 22px;
     height: 22px;
     margin: 0 6px;
     padding: 0 var(--openbitfun-space-2);
+    // Trailing edge of the shared action column, not the header's own padding
+    // gutter. The sessions list below starts at the 6px list inset and every row
+    // ends its last action 4px inside its own 1px row border, so the header has to
+    // reach one border-width further in than its 8px gutter to land on that
+    // column. Without it the header icons sit 3px inside the workspace row
+    // actions and read as a second, accidental axis.
+    padding-right: calc(var(--openbitfun-space-1) + var(--openbitfun-border-width-default));
     border-radius: var(--openbitfun-radius-sm);
     opacity: 1;
     transition:

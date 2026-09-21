@@ -18,6 +18,14 @@ function readNavPanelTypographyStylesheet(): string {
   return stylesheet.replace(/\r\n/g, '\n');
 }
 
+function readWorkspaceListStylesheet(): string {
+  const stylesheet = readFileSync(
+    fileURLToPath(new URL('./sections/workspaces/WorkspaceListSection.scss', import.meta.url)),
+    'utf8',
+  );
+  return stylesheet.replace(/\r\n/g, '\n');
+}
+
 function extractBlock(stylesheet: string, selector: string): string {
   const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const match = stylesheet.match(new RegExp(`${escapedSelector}\\s*\\{(?<body>[\\s\\S]*?)\\n\\s*\\}`));
@@ -55,6 +63,40 @@ describe('NavPanel layout styles', () => {
     expect(topActionExpandBlock).toContain('gap: calc(var(--openbitfun-space-1) / 2);');
     expect(topActionSublistBlock).toContain('gap: calc(var(--openbitfun-space-1) / 2);');
     expect(sectionHeaderBlock).toContain('margin: 0 var(--openbitfun-space-1);');
+  });
+
+  it('ends the section header actions on the workspace row action column', () => {
+    const navStylesheet = readNavPanelStylesheet();
+    const workspaceListStylesheet = readWorkspaceListStylesheet();
+
+    // The sticky section header and the rows below it live in different
+    // stylesheets, so their trailing edges only agree if both resolve to the same
+    // column: the 6px list inset plus the row's own transparent 1px border plus
+    // the 4px row-action offset. The header override has to give up exactly that
+    // border width, or its icons sit 3px inside the workspace row actions.
+    const trailingHeaderOverrides = [...navStylesheet.matchAll(/&__section-header\s*\{(?<body>[^}]*)\}/g)]
+      .map(match => match.groups?.body ?? '')
+      .filter(body => body.includes('padding-right:'));
+    const itemsOverrides = [...navStylesheet.matchAll(/&__items\s*\{(?<body>[^}]*)\}/g)]
+      .map(match => match.groups?.body ?? '')
+      .filter(body => body.includes('padding:'));
+    const workspaceItemBlock = extractBlock(workspaceListStylesheet, '&__workspace-item');
+    const workspaceActionsBlock = extractBlock(workspaceListStylesheet, '&__workspace-item-actions');
+
+    // A single trailing-edge owner keeps the column from being silently undone by
+    // a later block, so assert the count as part of the contract.
+    expect(trailingHeaderOverrides).toHaveLength(1);
+    const headerTrailing = trailingHeaderOverrides[0]!;
+    const itemsTrailing = itemsOverrides[itemsOverrides.length - 1]!;
+
+    expect(itemsTrailing).toContain('padding: 2px 6px;');
+    expect(workspaceItemBlock).toContain('border: 1px solid transparent;');
+    expect(workspaceActionsBlock).toContain('right: 4px;');
+    expect(headerTrailing).toContain('margin: 0 6px;');
+    expect(headerTrailing).toContain(
+      'padding-right: calc(var(--openbitfun-space-1) + var(--openbitfun-border-width-default));',
+    );
+    expect(headerTrailing).not.toContain('padding-right: var(--openbitfun-space-2);');
   });
 
   it('keeps the sessions section header static and visually flat', () => {
