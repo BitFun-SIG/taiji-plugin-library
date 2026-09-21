@@ -23,6 +23,7 @@ import {
   STATUS_DANGER,
 } from './Theme';
 import { ChatMessageBubble, ChatUserMessageRow } from './ChatMessageBubble';
+import { HistoryPageArrivalTracker } from '../policy/HistoryPageArrivalTracker';
 import { RemoteLogger } from '../../services/RemoteLogger';
 
 /**
@@ -115,9 +116,11 @@ struct ChatAssistantTimelineRow {
 export struct ChatTimeline {
   @Param interactionMailbox: InteractionMailboxState = new InteractionMailboxState();
   private readonly listScroller: Scroller = new Scroller();
+  private readonly historyArrival: HistoryPageArrivalTracker = new HistoryPageArrivalTracker();
   private followTimerId: number = 0;
   private followedActiveTurnKey: string = '';
   private userScrollActive: boolean = false;
+  private historyTouchActive: boolean = false;
   // Whether new content should pull the viewport down with it. True until the
   // user scrolls up to read back through the transcript: at that point taking
   // the viewport away from them would be worse than letting the reply grow off
@@ -201,7 +204,11 @@ export struct ChatTimeline {
               .width('100%')
               .padding({ top: 10, bottom: 10 })
               .onClick(() => {
-                if (!this.historyLoading) this.onLoadOlder();
+                if (!this.historyLoading) {
+                  this.historyArrival.cancelArrival();
+                  this.stickToBottom = false;
+                  this.onLoadOlder();
+                }
               })
           }
         }
@@ -338,8 +345,17 @@ export struct ChatTimeline {
       .stackFromEnd(true)
       // Keeps the read position when older messages are prepended above.
       .maintainVisibleContentPosition(true)
+      .edgeEffect(EdgeEffect.Spring, { alwaysEnabled: true })
       .scrollBar(BarState.Off)
       .cachedCount(4)
+      .onTouch((event: TouchEvent) => {
+        if (event.type === TouchType.Down) {
+          this.historyTouchActive = true;
+          this.historyArrival.beginGesture();
+        } else if (event.type === TouchType.Up || event.type === TouchType.Cancel) {
+          this.historyTouchActive = false;
+        }
+      })
       .onWillScroll((_scrollOffset: number, _scrollState: ScrollState, scrollSource: ScrollSource) => {
         if (this.isUserScrollSource(scrollSource)) {
           this.userScrollActive = true;
@@ -351,6 +367,7 @@ export struct ChatTimeline {
         } else if (this.userScrollActive) {
           this.stickToBottom = false;
         }
+        this.evaluateHistoryStart();
         if (scrollState === ScrollState.Idle) {
           this.userScrollActive = false;
         }
@@ -432,6 +449,31 @@ export struct ChatTimeline {
       return '';
     }
     return ChatTimelineRevisionTracker.itemKey(activeItems[activeItems.length - 1]);
+  }
+
+  /**
+   * Asks for the next history page when the reader arrives at the start.
+   *
+   * What counts is the reader's position, not the content's: the list keeps the
+   * visible content in place while a page is prepended above it, so the arrival
+   * it answered is spent by it and reaching the start again is a deliberate
+   * scroll back. A timeline still following the tail is excluded — a first page
+   * that does not fill the viewport sits at the start without the reader having
+   * gone there — except while the reader is dragging, where the arrival is
+   * theirs even if the drag never leaves the end.
+   */
+  private evaluateHistoryStart(): void {
+    const atStart: boolean = this.listScroller.currentOffset().yOffset <= 0;
+    const readerOwnsPosition: boolean = this.historyTouchActive && this.userScrollActive;
+    if (!this.historyArrival.arrived(atStart && readerOwnsPosition)) {
+      return;
+    }
+    if (this.hasMoreMessages && !this.historyLoading && !this.historyFailed) {
+      this.stickToBottom = false;
+      this.onLoadOlder();
+      return;
+    }
+    // A drag made while busy is consumed, not queued for after completion.
   }
 
   private requestFollowToBottom(reason: string): void {

@@ -51,6 +51,7 @@ import com.openbitfun.mobile.core.transport.HostStreamUnsupportedException
 import com.openbitfun.mobile.core.transport.REMOTE_CAPABILITY_HOST_STREAM_V1
 import com.openbitfun.mobile.core.transport.RemoteSessionStreamTransport
 import com.openbitfun.mobile.core.transport.STREAM_EVENT_GAP
+import com.openbitfun.mobile.core.transport.STREAM_EVENT_HISTORY_STARTED
 import com.openbitfun.mobile.core.transport.STREAM_EVENT_READY
 import com.openbitfun.mobile.core.transport.STREAM_EVENT_RESUMED
 import kotlinx.coroutines.flow.collect
@@ -628,6 +629,7 @@ public class RemoteSessionStore internal constructor(
         // The next connection may reach a different build; ask it again.
         hostCapabilitiesKnown = false
         transcriptWrite?.cancel()
+        forgetWrittenTranscript()
         _connectionPhase.value = ConnectionPhase.DISCONNECTED
     }
 
@@ -992,6 +994,17 @@ public class RemoteSessionStore internal constructor(
     private var transcriptWrite: Job? = null
 
     /**
+     * True while the transcript changed without a write behind it.
+     *
+     * A history page is read oldest-first, so every record of the burst prepends
+     * to the window and no already written row can be reused: writing during the
+     * burst rewrites the whole transcript per record, on the thread that draws
+     * the screen, for a page nobody has finished reading yet. The page flushes
+     * once when it settles.
+     */
+    private var transcriptDirty = false
+
+    /**
      * Holds the transcript write to one per [TRANSCRIPT_WRITE_DEBOUNCE_MS] while a turn streams.
      *
      * Every chunk of a streaming reply restates the whole session, and writing
@@ -1000,18 +1013,30 @@ public class RemoteSessionStore internal constructor(
      * reopened, so only the last write of a burst ever mattered.
      */
     private fun scheduleTranscriptWrite(sessionId: String) {
+        transcriptDirty = true
         if (transcriptWrite?.isActive == true) return
         transcriptWrite = scope.launch {
             delay(TRANSCRIPT_WRITE_DEBOUNCE_MS)
             persistTranscript(sessionId, preserveOlder = sessionHistoryHasMore)
+            transcriptDirty = false
         }
+    }
+
+    /** Defers a page-in-flight write until the page settles; see [transcriptDirty]. */
+    private fun deferTranscriptWrite() {
+        transcriptDirty = true
     }
 
     private fun writeTranscriptNow(sessionId: String) {
         transcriptWrite?.cancel()
         transcriptWrite = null
         persistTranscript(sessionId, preserveOlder = sessionHistoryHasMore)
+        transcriptDirty = false
     }
+
+    /** True while a history page is being read, so its records arrive as one burst. */
+    private fun historyLoading(): Boolean =
+        (_state.value as? RemoteSessionUiState.Ready)?.historyLoadState == HistoryLoadState.LOADING
 
     private fun publishDurableTimeline() {
         val current = _state.value as? RemoteSessionUiState.Ready ?: return
@@ -1026,6 +1051,7 @@ public class RemoteSessionStore internal constructor(
         permissionMailbox.select(sessionId)
         sessionUpdates?.cancel()
         transcriptWrite?.cancel()
+        forgetWrittenTranscript()
         sessionHistoryHasMore = false
         sessionUpdates = scope.launch {
             try {
@@ -1036,6 +1062,7 @@ public class RemoteSessionStore internal constructor(
                 if (hostCapabilitiesKnown && REMOTE_CAPABILITY_HOST_STREAM_V1 !in hostCapabilities) throw HostStreamUnsupportedException()
                 var records = SessionRecordReplica(sessionId)
                 var caughtUp = false
+                var replayingHistory = false
                 /**
                  * Renders everything received so far and reports the turn's phase.
                  *
@@ -1079,13 +1106,16 @@ public class RemoteSessionStore internal constructor(
                                 val kind = (payload["toolEvent"] as? JsonObject)?.get("event_type")?.jsonPrimitive?.content
                                 if (kind in setOf("ConfirmationNeeded", "Confirmed", "Rejected", "Cancelled")) permissionMailbox.invalidate()
                             }
-                            if (caughtUp) {
+                            if (caughtUp && replayingHistory) deferTranscriptWrite()
+                            if (caughtUp && !replayingHistory) {
                                 val phase = render()
                                 publishDurableTimeline()
                                 // A streaming turn rewrites the same rows on every
-                                // chunk; anything else is a settled transcript worth
-                                // keeping now.
-                                if (phase == ChatSyncPhase.STREAMING) scheduleTranscriptWrite(sessionId)
+                                // chunk, and a history page arrives as dozens of
+                                // records in one burst. Neither is worth a write per
+                                // record; the page is flushed when it settles.
+                                if (historyLoading()) deferTranscriptWrite()
+                                else if (phase == ChatSyncPhase.STREAMING) scheduleTranscriptWrite(sessionId)
                                 else writeTranscriptNow(sessionId)
                             }
                         }
@@ -1093,14 +1123,22 @@ public class RemoteSessionStore internal constructor(
                         // The host restarted this stream: everything derived from
                         // the previous replay is stale and the latest page follows.
                         STREAM_EVENT_GAP -> {
+                            replayingHistory = true
                             records = SessionRecordReplica(sessionId)
                             timelineStore.reset(sessionId)
                             permissionMailbox.invalidate()
                         }
+                        STREAM_EVENT_HISTORY_STARTED -> replayingHistory = true
                         STREAM_EVENT_READY -> {
+                            replayingHistory = false
                             sessionHistoryHasMore = payload["hasMore"]?.jsonPrimitive?.content == "true"
                             val current = _state.value as? RemoteSessionUiState.Ready
-                            if (current != null) _state.value = current.copy(hasMoreMessages = sessionHistoryHasMore)
+                            if (caughtUp) {
+                                render()
+                                publishDurableTimeline()
+                            } else if (current != null) {
+                                _state.value = current.copy(hasMoreMessages = sessionHistoryHasMore)
+                            }
                         }
                         "session-state" -> {
                             val status = payload["status"]?.jsonPrimitive?.content
@@ -1110,7 +1148,7 @@ public class RemoteSessionStore internal constructor(
                                 "failed", "error" -> ChatSyncPhase.ERROR
                                 else -> ChatSyncPhase.IDLE
                             })
-                            if (caughtUp) publishDurableTimeline()
+                            if (caughtUp && !replayingHistory) publishDurableTimeline()
                         }
                     }
                 }
@@ -1180,6 +1218,9 @@ public class RemoteSessionStore internal constructor(
                             _state.value = it.copy(historyLoadState = HistoryLoadState.IDLE)
                         }
                     }
+                    // The page's records were written at most once; this is where
+                    // the settled transcript lands.
+                    if (transcriptDirty) writeTranscriptNow(sessionId)
                 }
             }
         }
@@ -1438,6 +1479,7 @@ public class RemoteSessionStore internal constructor(
                     RemoteCommand(cmd = "delete_session", sessionId = normalized),
                 )
                 locallyCreatedSessions.remove(normalized)
+                forgetWrittenTranscript(normalized)
                 if (persistenceEnabled) {
                     persistedSessionSlice()?.let { persisted ->
                         val persistedSessions = persisted.sessions
@@ -1598,7 +1640,12 @@ public class RemoteSessionStore internal constructor(
                 )
                 if (!isCurrentWork(operationToken)) return@launch
                 response.turnId?.takeIf(String::isNotBlank)?.let { turnId ->
-                    timelineStore.acknowledgeOptimisticTurn(local.id, turnId)
+                    // A running-input acknowledgement names the existing execution,
+                    // not this user message. Its initial user bubble must not consume
+                    // the newly submitted bubble through turn-based deduplication.
+                    if (turnId != activeTurnId) {
+                        timelineStore.acknowledgeOptimisticTurn(local.id, turnId)
+                    }
                     if (!steering && current.timeline?.activeTurn == null) timelineStore.setLocalActiveTurn(turnId)
                 } ?: timelineStore.clearPendingActiveTurn(pendingActiveId)
                 (transport as? RemoteSessionStreamTransport)?.wakeSessionStreams()
@@ -1909,6 +1956,31 @@ public class RemoteSessionStore internal constructor(
         RemotePermissionMode.Unknown -> SessionPermissionMode.UNKNOWN
     }
 
+    /**
+     * Rows this store last wrote for a session, kept so the next write can reuse them.
+     *
+     * A record restates the whole transcript and a write re-encodes it, deletes the
+     * table and inserts it again — megabytes of work on the thread that draws the
+     * screen, repeated for every record that arrives. Most of a transcript does not
+     * change between two writes, so keeping the last written rows lets a write touch
+     * only the messages that changed. This store is the only writer of that table.
+     */
+    private class WrittenTranscript(
+        /** The window as written, in order, parallel to [windowRows]. */
+        val messages: List<ChatMessage>,
+        /** The persisted form of each window message. */
+        val windowRows: List<PersistedRemoteMessage>,
+        /** Cached rows in front of the window that the loaded records do not cover. */
+        val older: List<PersistedRemoteMessage>,
+    )
+
+    private var writtenTranscript: Pair<String, WrittenTranscript>? = null
+
+    private fun forgetWrittenTranscript(sessionId: String? = null) {
+        val current = writtenTranscript ?: return
+        if (sessionId == null || current.first.endsWith("::$sessionId")) writtenTranscript = null
+    }
+
     private fun persistTranscript(sessionId: String, preserveOlder: Boolean = true) {
         if (!persistenceEnabled || sessionId.isEmpty()) return
         val snapshot = timelineStore.snapshot()
@@ -1916,16 +1988,38 @@ public class RemoteSessionStore internal constructor(
         try {
             val p = persistence!!
             val persistedDeviceKey = deviceKey!!
-            val window = snapshot.persistedMessages.map { toPersisted(sessionId, it) }
-            val windowIds = window.mapTo(mutableSetOf()) { it.messageId }
+            val key = "$persistedDeviceKey::$sessionId"
+            val previous = writtenTranscript?.takeIf { it.first == key }?.second
+            val messages = snapshot.persistedMessages
+            val windowIds = messages.mapTo(mutableSetOf()) { it.id }
             // A paginated re-read (limit 100) must not truncate pages the user already
             // loaded: keep older cached rows the current window does not cover.
             val older = if (preserveOlder) {
-                p.remoteTranscripts.load(persistedDeviceKey, sessionId).filterNot { it.messageId in windowIds }
+                previous?.older?.filterNot { it.messageId in windowIds }
+                    ?: p.remoteTranscripts.load(persistedDeviceKey, sessionId).filterNot { it.messageId in windowIds }
             } else {
                 emptyList()
             }
-            p.remoteTranscripts.replace(persistedDeviceKey, sessionId, older + window)
+            val windowRows = messages.mapIndexed { index, message ->
+                // Encoding is the expensive half of a write, and an unchanged message
+                // is still the instance the replica handed out last time.
+                val known = previous?.messages
+                if (known != null && index < known.size && known[index] === message) previous.windowRows[index]
+                else toPersisted(sessionId, message)
+            }
+            val rows = older + windowRows
+            val writtenRows = previous?.let { it.older + it.windowRows }
+            // Reused rows are the very instances written last time, so comparing by
+            // identity separates "this transcript did not change" and "only its tail
+            // did" from a rewrite, without reading anything back.
+            val shared = if (writtenRows == null) 0 else rows.indices.takeWhile { writtenRows.size > it && rows[it] === writtenRows[it] }.size
+            if (writtenRows == null || shared != rows.size || writtenRows.size != rows.size) {
+                // A strict prefix still has stale rows behind it, and a changed head
+                // (a page strictly prepends) cannot be appended to.
+                if (shared >= 1 && shared < rows.size) p.remoteTranscripts.append(persistedDeviceKey, sessionId, shared, rows.drop(shared))
+                else p.remoteTranscripts.replace(persistedDeviceKey, sessionId, rows)
+            }
+            writtenTranscript = key to WrittenTranscript(messages, windowRows, older)
             p.remoteTranscripts.saveCursor(persistedDeviceKey, sessionId, PersistedRemoteCursor(
                 pollVersion = snapshot.cursor.pollVersion.toString(),
                 knownMessageCount = snapshot.cursor.knownMessageCount,

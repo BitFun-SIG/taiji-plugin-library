@@ -67,6 +67,7 @@ export class ChatSessionController {
   private completedTurnId: string = '';
   private hasMoreMessages: boolean = false;
   private historyLoading: boolean = false;
+  private historyReplaying: boolean = false;
   private historyFailed: boolean = false;
   private modelReadVersion: number = 0;
   private pendingModelCatalog?: RemoteModelCatalog;
@@ -83,7 +84,7 @@ export class ChatSessionController {
     this.stop(); this.sessionId = sessionId; this.cursor = cursor;
     this.reducer = new DurableSessionReducer(); this.mailbox.select(sessionId); this.stopped = false; this.caughtUp = false;
     this.sessionState = 'idle'; this.completedTurnId = ''; this.hasMoreMessages = false;
-    this.historyLoading = false; this.historyFailed = false;
+    this.historyLoading = false; this.historyReplaying = false; this.historyFailed = false;
     this.pendingModelCatalog = undefined;
     const epoch = this.generation;
     void this.loadInitialModelCatalog(sessionId, epoch);
@@ -95,20 +96,24 @@ export class ChatSessionController {
           // must not delay the serial transcript stream or its durable cursor.
           if (event.event === 'session-interaction-changed') { void this.mailbox.refresh(); return; }
           if (!this.reducer.apply(event)) return;
-          if (this.caughtUp) this.publish();
+          if (this.caughtUp && !this.historyReplaying) this.publish();
         },
         onResumed: async (): Promise<void> => { if (this.current(epoch)) void this.mailbox.refresh(); },
         onGap: async (): Promise<void> => {
           // The desktop restarted the stream: everything reduced so far came
           // from its previous epoch and is replayed from the latest page.
           if (!this.current(epoch)) return;
+          this.historyReplaying = true;
           this.reducer = new DurableSessionReducer(); this.hasMoreMessages = false;
         },
         onCaughtUp: async (): Promise<void> => {
           if (!this.current(epoch)) return;
-          this.caughtUp = true; this.publish();
+          this.caughtUp = true; this.historyReplaying = false; this.publish();
         },
         onHistory: (hasMore: boolean): void => { this.hasMoreMessages = hasMore; },
+        onHistoryReplay: (active: boolean): void => {
+          if (this.current(epoch)) this.historyReplaying = active;
+        },
         onHistoryState: (loading: boolean, failed: boolean): void => {
           if (!this.current(epoch)) return;
           this.historyLoading = loading; this.historyFailed = failed;
@@ -127,7 +132,7 @@ export class ChatSessionController {
       const catalog = await this.sessionManager.getModelCatalog(sessionId);
       if (!this.current(epoch) || version !== this.modelReadVersion) return;
       this.pendingModelCatalog = catalog;
-      if (this.caughtUp) this.publish();
+      if (this.caughtUp && !this.historyReplaying) this.publish();
     } catch (error) {
       if (this.current(epoch) && version === this.modelReadVersion) this.callbacks.onError(error);
     }

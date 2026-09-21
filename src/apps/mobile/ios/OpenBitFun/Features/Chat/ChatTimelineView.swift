@@ -13,10 +13,9 @@ struct ChatTimelineView: View {
     /// is why this one number still has to be passed in.
     var bottomOverlayInset: CGFloat = 0
     @StateObject private var scrollController = TimelineScrollController()
-    @State private var historyAnchor: (id: String, top: CGFloat, firstID: String)?
 
     var body: some View {
-        ScrollViewReader { proxy in
+        ScrollViewReader { _ in
             ScrollView(showsIndicators: false) {
                 VStack(spacing: MobileDesignGeometry.messageSpacing) {
                     // History is already paged by the session store. Measure the
@@ -26,23 +25,7 @@ struct ChatTimelineView: View {
                     VStack(spacing: MobileDesignGeometry.messageSpacing) {
                         if model.surface == .remote && model.remoteHasMoreMessages {
                             Button {
-                                #if DEBUG
-                                Logger(subsystem: "com.openbitfun.mobile.ios", category: "timeline-scroll").info("History capture frames=\(scrollController.rowFrames.count)")
-                                #endif
-                                if let row = scrollController.rowFrames.filter({ $0.value.maxY > 0 })
-                                    .min(by: { $0.value.minY < $1.value.minY })
-                                {
-                                    historyAnchor = (row.key, row.value.minY, model.timelineRows.first?.id ?? "")
-                                    #if DEBUG
-                                    Logger(subsystem: "com.openbitfun.mobile.ios", category: "timeline-scroll").info("History capture top=\(row.value.minY) height=\(row.value.height)")
-                                    #endif
-                                }
-                                scrollController.stopFollowing()
-                                if let onLoadOlderMessages {
-                                    onLoadOlderMessages()
-                                } else {
-                                    model.loadOlderRemoteMessages()
-                                }
+                                requestOlderHistoryPage()
                             } label: {
                                 HStack(spacing: 7) {
                                     if model.remoteHistoryLoading { ProgressView().controlSize(.small) }
@@ -69,59 +52,41 @@ struct ChatTimelineView: View {
                     OpenBitFunTheme.transparent.frame(height: 1).id("timeline-bottom")
                 }
                 .padding(.horizontal, MobileDesignGeometry.contentGutter)
-                .padding(.top, MobileDesignGeometry.timelineTopPadding)
-                .padding(.bottom, 14)
+                // No top padding of its own: the top overlay's inset already ends
+                // where the header's fade does, which is the same content start
+                // Android's contentPadding and HarmonyOS's contentStartOffset use.
+                .padding(.bottom, 14 + scrollController.historyBottomSpace)
                 .background(TimelineScrollProbe(controller: scrollController))
             }
             .coordinateSpace(name: "chat-timeline")
             .onPreferenceChange(TimelineRowFramesKey.self) { frames in
                 scrollController.rowFrames = frames
-                // Apply corrections from this measurement directly. Publishing
-                // frames into State adds a second, potentially stale layout pass.
-                guard let anchor = historyAnchor else { return }
-                if scrollController.isUserScrolling {
-                    historyAnchor = nil
-                } else if historyRestoreRequest != nil, model.timelineRows.first?.id != anchor.firstID,
-                    let frame = frames[anchor.id]
-                {
-                    // Preserve the actual visible row, including its partial offset,
-                    // rather than guessing from a lazy stack's total height.
-                    scrollController.preserveAnchor(displacement: frame.minY - anchor.top)
-                }
+                scrollController.restoreHistoryAnchor()
             }
-            .task(id: historyRestoreRequest) {
-                #if DEBUG
-                Logger(subsystem: "com.openbitfun.mobile.ios", category: "timeline-scroll").info("History task available=\(historyRestoreRequest != nil)")
-                #endif
-                guard let request = historyRestoreRequest else { return }
-                await Task.yield()
-                guard !Task.isCancelled, !scrollController.isUserScrolling,
-                    historyRestoreRequest == request
-                else { return }
-                // Explicitly key restoration by both the captured anchor and the
-                // new transcript. State used only inside callbacks may otherwise
-                // arrive after the list's first layout notification.
-                proxy.scrollTo(scrollTargetID(request.id), anchor: .top)
-                await Task.yield()
-                guard !Task.isCancelled, historyRestoreRequest == request else { return }
-                if let frame = scrollController.rowFrames[request.id] {
-                    scrollController.preserveAnchor(displacement: frame.minY - request.top)
-                }
+            .onChange(of: model.remoteHistoryLoading) { loading in
+                scrollController.historyLoadingChanged(loading)
             }
             .scrollDismissesKeyboard(.interactively)
-            .onAppear { scrollController.open(session: model.selectedSessionID) }
+            .onAppear {
+                scrollController.open(session: model.selectedSessionID)
+                // Reaching the start of the loaded transcript asks for the next
+                // page by itself; the row stays as the loading and retry state.
+                // Layout changes and busy gestures do not queue another page.
+                scrollController.onHistoryStartReached = {
+                    guard canRequestOlderHistoryPage else { return false }
+                    requestOlderHistoryPage()
+                    return true
+                }
+            }
             .onChange(of: model.selectedSessionID) { session in
-                historyAnchor = nil
                 scrollController.open(session: session)
             }
             .onChange(of: model.composerSendGeneration) { _ in
-                historyAnchor = nil
                 scrollController.followBottom()
             }
             .overlay(alignment: .bottomTrailing) {
                 if !scrollController.followsBottom {
                     Button {
-                        historyAnchor = nil
                         scrollController.followBottom()
                     } label: {
                         Image(systemName: "chevron.down")
@@ -142,22 +107,6 @@ struct ChatTimelineView: View {
             }
             .background(OpenBitFunTheme.page)
         }
-    }
-
-    private struct HistoryRestoreRequest: Equatable {
-        let session: String
-        let firstID: String
-        let id: String
-        let top: CGFloat
-    }
-
-    private var historyRestoreRequest: HistoryRestoreRequest? {
-        guard let anchor = historyAnchor, let first = model.timelineRows.first?.id,
-            first != anchor.firstID
-        else { return nil }
-        return HistoryRestoreRequest(
-            session: model.selectedSessionID, firstID: first,
-            id: anchor.id, top: anchor.top)
     }
 
     private var currentTurnStart: Int {
@@ -193,6 +142,33 @@ struct ChatTimelineView: View {
 
     private var historyRows: ArraySlice<MobileConversationRow> {
         model.timelineRows.prefix(currentTurnStart)
+    }
+
+    /// Whether the store would accept another page right now.
+    ///
+    /// A failed page stays a tap on the row: an automatic retry would keep
+    /// asking a host that has already said no, and the row is on screen saying so.
+    private var canRequestOlderHistoryPage: Bool {
+        model.surface == .remote && (onLoadOlderMessages != nil || model.remoteConnected) && model.remoteHasMoreMessages
+            && !model.remoteHistoryLoading && !model.remoteHistoryFailed && !model.busy
+    }
+
+    /// The one place a history page is asked for, from the row and from arriving
+    /// at the start of the loaded transcript.
+    ///
+    /// The anchor is captured before the request so the page that lands above the
+    /// reader does not move what they were reading, and following the bottom is
+    /// dropped so a page arriving cannot drag the viewport away from it.
+    private func requestOlderHistoryPage() {
+        guard onLoadOlderMessages != nil || model.remoteConnected,
+              model.remoteHasMoreMessages, !model.busy, !model.remoteHistoryLoading,
+              scrollController.beginHistoryRequest() else { return }
+        if let onLoadOlderMessages {
+            onLoadOlderMessages()
+            scrollController.historyLoadingChanged(model.remoteHistoryLoading)
+        } else {
+            model.loadOlderRemoteMessages()
+        }
     }
 
     private func timelineRow(_ row: MobileConversationRow, identity: String? = nil) -> some View {
@@ -316,11 +292,6 @@ private struct ConversationRowView: View, Equatable {
                 .padding(.vertical, MobileDesignGeometry.messageBubbleVerticalPadding)
                 .background(OpenBitFunTheme.soft)
                 .clipShape(RoundedRectangle(cornerRadius: MobileDesignGeometry.messageBubbleRadius))
-            }
-            if row.pending {
-                Text(model.localized("正在发送"))
-                    .font(MobileDesignTypography.labelSmall.font)
-                    .foregroundStyle(OpenBitFunTheme.muted)
             }
             if row.showRetry {
                 Button { model.retryMessage(row.text, images: row.images) } label: {
@@ -1092,15 +1063,9 @@ private struct TimelineImageGrid: View {
         LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 7) {
             ForEach(images) { image in
                 Button { selected = image } label: {
-                    if let uiImage = image.uiImage {
-                        Image(uiImage: uiImage).resizable().scaledToFill()
-                            .frame(height: images.count == 1 ? 180 : 112).frame(maxWidth: .infinity)
-                            .clipped().clipShape(RoundedRectangle(cornerRadius: 14))
-                    } else {
-                        Image(systemName: "photo").foregroundStyle(OpenBitFunTheme.muted)
-                            .frame(maxWidth: .infinity, minHeight: 112).background(OpenBitFunTheme.soft)
-                            .clipShape(RoundedRectangle(cornerRadius: 14))
-                    }
+                    AsyncDecodedImage(dataURL: image.dataURL, fill: true)
+                        .frame(height: images.count == 1 ? 180 : 112).frame(maxWidth: .infinity)
+                        .clipped().clipShape(RoundedRectangle(cornerRadius: 14))
                 }
                 .buttonStyle(.plain)
             }
@@ -1116,7 +1081,7 @@ private struct FullScreenTimelineImage: View {
     var body: some View {
         ZStack(alignment: .topTrailing) {
             OpenBitFunTheme.mediaBackground.ignoresSafeArea()
-            if let uiImage = image.uiImage { Image(uiImage: uiImage).resizable().scaledToFit().ignoresSafeArea() }
+            AsyncDecodedImage(dataURL: image.dataURL).ignoresSafeArea()
             Button { dismiss() } label: {
                 Image(systemName: "xmark").font(.system(size: 15, weight: .semibold)).foregroundStyle(OpenBitFunTheme.contentOnAction)
                     .frame(width: 44, height: 44).background(OpenBitFunTheme.mediaControlBackground).clipShape(Circle())
@@ -1126,10 +1091,42 @@ private struct FullScreenTimelineImage: View {
     }
 }
 
-private extension MobileTimelineImage {
-    var uiImage: UIImage? {
-        guard let marker = dataURL.range(of: "base64,") else { return nil }
-        return Data(base64Encoded: String(dataURL[marker.upperBound...])).flatMap(UIImage.init(data:))
+/// Decode once off the UI executor, and discard results after source changes.
+struct AsyncDecodedImage: View {
+    var data: Data? = nil
+    var dataURL: String? = nil
+    var fill = false
+    @State private var image: UIImage?
+    @State private var loading = true
+    private struct Source: Equatable { let data: Data?; let url: String? }
+    var body: some View {
+        Group {
+            if let image {
+                Image(uiImage: image).resizable().aspectRatio(contentMode: fill ? .fill : .fit)
+            } else if loading {
+                ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                Image(systemName: "photo").foregroundStyle(OpenBitFunTheme.muted)
+            }
+        }
+        .task(id: Source(data: data, url: dataURL)) {
+            image = nil
+            loading = true
+            let bytes = data
+            let url = dataURL
+            let decoded = await Task.detached(priority: .userInitiated) {
+                let source: Data?
+                if let bytes { source = bytes }
+                else if let url, let marker = url.range(of: "base64,") {
+                    source = Data(base64Encoded: String(url[marker.upperBound...]))
+                } else { source = nil }
+                guard let source, let original = UIImage(data: source) else { return nil as UIImage? }
+                return original.preparingForDisplay() ?? original
+            }.value
+            guard !Task.isCancelled else { return }
+            image = decoded
+            loading = false
+        }
     }
 }
 

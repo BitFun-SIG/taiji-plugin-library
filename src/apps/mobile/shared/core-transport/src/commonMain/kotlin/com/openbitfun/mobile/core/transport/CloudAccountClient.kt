@@ -1,5 +1,8 @@
 package com.openbitfun.mobile.core.transport
 
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.filter
@@ -163,6 +166,7 @@ public class CloudAccountClient internal constructor(
     private val client: HttpClient,
     private val log: TransportLog = TransportLog.None,
     legacyMobileDeviceNames: Set<String> = emptySet(),
+    private val processingDispatcher: CoroutineDispatcher = Dispatchers.Default,
     private val realtimeFactory: (HttpClient, String, String) -> AccountRpcConnection = { client, url, token -> AccountRealtime(client, url, token, log) },
 ) {
     private class Connection(val url: String, val token: String, val socket: AccountRpcConnection)
@@ -184,11 +188,30 @@ public class CloudAccountClient internal constructor(
 
     /** Retain the closed binding so stale transports cannot reopen a signed-out account. */
     private val historyReaders = mutableMapOf<String, Channel<CompletableDeferred<Unit>>>()
+    /**
+     * Asks the subscribed stream for one older page and waits for its answer.
+     *
+     * The stream answers every request it is handed, including by failing the
+     * ones it cannot serve before it ends, so a session that is still subscribed
+     * never leaves this waiting. A session without a live subscription is an
+     * error rather than a silently dropped tap.
+     */
     public suspend fun loadOlderSession(targetDeviceId: String, sessionId: String) {
-        val channel = historyReaders[targetDeviceId + ":" + sessionId] ?: error("Session is not subscribed")
+        val channel = historyReaders[targetDeviceId + ":" + sessionId]
+            ?: error("Session is not subscribed")
         val request = CompletableDeferred<Unit>()
-        channel.send(request)
-        request.await()
+        log.info("history request started session=${sessionId.take(24)}")
+        try {
+            channel.send(request)
+            request.await()
+            log.info("history request answered session=${sessionId.take(24)}")
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Throwable) {
+            // Ids and failure kinds only, like the stream reader's own reports.
+            log.warn("history request failed session=${sessionId.take(24)} type=${error::class.simpleName} message=${error.message}")
+            throw error
+        }
     }
     private val foregroundResumes = MutableSharedFlow<Long>(extraBufferCapacity = 1)
     public fun resumeSessionStreams() { foregroundResumes.tryEmit(0L) }
@@ -367,19 +390,23 @@ public class CloudAccountClient internal constructor(
         if (target.isEmpty()) throw CloudAccountException(CloudAccountFailure.MALFORMED_RESPONSE)
         val socket = connection(relayUrl, session.token)
         val messageKey = peerMessageKey(relayUrl, session, target)
-        val nonce = DeviceIdentity.randomBytes(12)
-        val plain = RelayJson.encodeToString(RemoteCommand.serializer(), command).encodeToByteArray()
-        val encrypted = CloudAccountCipher.encrypt(plain, messageKey, nonce)
-        val payload = EncryptedPayload(Base64.Default.encode(encrypted), Base64.Default.encode(nonce))
+        val payload = withContext(processingDispatcher) {
+            val nonce = DeviceIdentity.randomBytes(12)
+            val plain = RelayJson.encodeToString(RemoteCommand.serializer(), command).encodeToByteArray()
+            val encrypted = CloudAccountCipher.encrypt(plain, messageKey, nonce)
+            EncryptedPayload(Base64.Default.encode(encrypted), Base64.Default.encode(nonce))
+        }
         val response = RelayJson.decodeFromJsonElement(EncryptedPayload.serializer(),
             socket.call(target,
                 RelayJson.encodeToJsonElement(EncryptedPayload.serializer(), payload), timeoutMs))
         val decoded = try {
-            CloudAccountCipher.decrypt(
-                decode(response.encryptedData),
-                messageKey,
-                decode(response.nonce),
-            ).decodeToString()
+            withContext(processingDispatcher) {
+                CloudAccountCipher.decrypt(
+                    decode(response.encryptedData), messageKey, decode(response.nonce),
+                ).decodeToString()
+            }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (error: CloudAccountException) {
             throw error
         } catch (cause: Throwable) {
@@ -388,7 +415,9 @@ public class CloudAccountClient internal constructor(
             throw CloudAccountException(CloudAccountFailure.MALFORMED_RESPONSE, null, cause)
         }
         return try {
-            RelayJson.decodeFromString(deserializer, decoded)
+            withContext(processingDispatcher) { RelayJson.decodeFromString(deserializer, decoded) }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (cause: Throwable) {
             log.error("device rpc undecodable cmd=${command.cmd} bytes=${decoded.length} ${decodeDetail(cause)}")
             throw CloudAccountException(CloudAccountFailure.MALFORMED_RESPONSE, null, cause)
@@ -404,7 +433,8 @@ public class CloudAccountClient internal constructor(
         deserializer: DeserializationStrategy<Response>,
         token: String,
         timeoutMs: Long,
-    ): Response = execute(relayUrl, path, method, RelayJson.encodeToString(serializer, body), deserializer, token, timeoutMs)
+    ): Response = execute(relayUrl, path, method,
+        withContext(processingDispatcher) { RelayJson.encodeToString(serializer, body) }, deserializer, token, timeoutMs)
 
     private suspend fun <Response> requestWithoutBody(
         relayUrl: String,
@@ -448,7 +478,9 @@ public class CloudAccountClient internal constructor(
             throw statusFailure(response.status.value)
         }
         return try {
-            RelayJson.decodeFromString(deserializer, text)
+            withContext(processingDispatcher) { RelayJson.decodeFromString(deserializer, text) }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (cause: Throwable) {
             // The body itself is never logged: it carries whatever the desktop
             // was asked for, and on this path that is the user's own sessions.

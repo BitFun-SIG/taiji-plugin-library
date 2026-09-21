@@ -759,7 +759,7 @@ private fun AttachmentStrip(
     ) {
         items(images, key = { it.id }) { image ->
             Box(modifier = Modifier.size(64.dp)) {
-                val bitmap = remember(image.dataUrl) { decodeInlineImage(image.dataUrl) }
+                val bitmap = rememberInlineImage(image.dataUrl)
                 if (bitmap != null) {
                     Image(
                         bitmap = bitmap.asImageBitmap(),

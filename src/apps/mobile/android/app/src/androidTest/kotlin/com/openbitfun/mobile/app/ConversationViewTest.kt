@@ -25,6 +25,8 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeDown
+import androidx.compose.ui.test.performScrollToIndex
+import com.openbitfun.mobile.core.feature.session.HistoryLoadState
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.test.platform.app.InstrumentationRegistry
@@ -232,6 +234,38 @@ class ConversationViewTest {
         composeRule.onNodeWithText("reader-tail-marker", substring = true).assertIsDisplayed()
         composeRule.onNodeWithContentDescription(string(R.string.chat_scroll_to_bottom))
             .assertDoesNotExist()
+    }
+
+    @Test
+    fun historyPrependKeepsVisibleMessagesAndRepeatedDragsDoNotQueueRequests() {
+        val rows = mutableStateOf((0..5).map { assistantRow("history-$it", "history-$it") })
+        val loading = mutableStateOf(HistoryLoadState.IDLE)
+        var requests = 0
+        composeRule.setContent {
+            OpenBitFunTheme(dark = false) {
+                TimelineForTest(rows.value, hasMoreMessages = true, historyLoadState = loading.value,
+                    onLoadOlder = { requests++; loading.value = HistoryLoadState.LOADING })
+            }
+        }
+        val list = composeRule.onNodeWithTag(CONVERSATION_LIST_TEST_TAG)
+        repeat(3) { list.performTouchInput { swipeDown() }; composeRule.waitForIdle() }
+        composeRule.runOnIdle { assertEquals(1, requests) }
+        val before = composeRule.onNodeWithText("history-0").getUnclippedBoundsInRoot().top
+        composeRule.runOnIdle {
+            rows.value = (-12..-1).map { assistantRow("history-$it", "history-$it") } + rows.value
+            loading.value = HistoryLoadState.IDLE
+        }
+        composeRule.waitForIdle()
+        val after = composeRule.onNodeWithText("history-0").getUnclippedBoundsInRoot().top
+        assertTrue("Prepending moved the visible row from $before to $after", kotlin.math.abs((after - before).value) < 4)
+        composeRule.runOnIdle { assertEquals(1, requests) }
+        // Moving the list without a gesture must not fetch another page.
+        list.performScrollToIndex(0)
+        composeRule.waitForIdle()
+        composeRule.runOnIdle { assertEquals(1, requests) }
+        list.performTouchInput { swipeDown() }
+        composeRule.waitForIdle()
+        composeRule.runOnIdle { assertEquals(2, requests) }
     }
 
     @Test
@@ -487,13 +521,16 @@ class ConversationViewTest {
         hasMoreMessages: Boolean = false,
         topInset: Dp = 0.dp,
         bottomInset: Dp = 0.dp,
+        historyLoadState: HistoryLoadState = HistoryLoadState.IDLE,
+        onLoadOlder: () -> Unit = {},
     ) {
         ConversationTimelineView(
             rows = rows,
             hasMoreMessages = hasMoreMessages,
             topInset = topInset,
             bottomInset = bottomInset,
-            onLoadOlder = {},
+            historyLoadState = historyLoadState,
+            onLoadOlder = onLoadOlder,
             enabled = true,
             onApproveTool = { _, _ -> },
             onRejectTool = { _, _ -> },
@@ -525,7 +562,6 @@ class ConversationViewTest {
         blocks = emptyList(),
         streaming = streaming,
         typing = false,
-        pending = false,
         showRetry = false,
         error = null,
         live = false,
