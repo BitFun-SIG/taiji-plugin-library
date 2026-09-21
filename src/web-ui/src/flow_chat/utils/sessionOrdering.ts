@@ -5,7 +5,7 @@ import type { SessionMetadata } from '@/shared/types/session-history';
  * optional so metadata-only and legacy call sites keep working.
  */
 type SessionNavigationOwner = Pick<Session, 'workspaceId' | 'projectWorkspaceId'> & {
-  config?: Pick<Session['config'], 'executionTarget'>;
+  config?: Pick<Session['config'], 'executionTarget' | 'workspaceId' | 'projectWorkspaceId'>;
 };
 
 /**
@@ -20,27 +20,47 @@ export function isWorktreeIsolatedSession(session: SessionNavigationOwner): bool
 }
 
 /**
+ * Workspace ID of the navigation row that owns the session.
+ *
+ * This is the one session-to-workspace identity the whole shell shares: the left
+ * navigation list, the workspace bootstrap that selects a session, the scene tab
+ * key, and session activation. They must never disagree, or a session is listed
+ * under one workspace while activation moves the surface to another.
+ *
+ * A worktree-isolated session is stamped with the worktree's own workspace record
+ * but is owned by the project it was started from, so the project ID wins. Every
+ * other session is owned by the workspace it was created in — including one
+ * created while browsing a linked worktree as its own workspace, which stays in
+ * that worktree row even though the worktree's `project_workspace_id` points at
+ * the main checkout.
+ *
+ * Top-level IDs are authoritative; `config` copies serve legacy records that were
+ * persisted without them.
+ */
+export function sessionOwningWorkspaceId(session: SessionNavigationOwner): string | undefined {
+  const projectId = session.projectWorkspaceId ?? session.config?.projectWorkspaceId;
+  const executionId = session.workspaceId ?? session.config?.workspaceId;
+  return isWorktreeIsolatedSession(session) ? projectId ?? executionId : executionId ?? projectId;
+}
+
+/**
  * Session list membership is the owning project workspace ID, never a path.
  *
  * The backend stamps a worktree-isolated session with the worktree's own
  * workspace record, but that record is created on demand and is normally not an
  * open workspace. Following it would drop the session out of every navigation
  * group the user can see, so an isolated session stays under the project that
- * owns it — `projectWorkspaceId` is the identity the worktree cannot outlive.
+ * owns it — the project identity is the one the worktree cannot outlive.
  *
- * `projectWorkspaceId` is a legacy fallback for records created before
- * execution-workspace stamping, and it must still never widen membership to
- * sibling worktrees: only the session's own owning project matches.
+ * Legacy records without any workspace identity stay unresolved instead of being
+ * grouped by a guessed folder.
  */
 export function sessionBelongsToWorkspaceNavRow(
   session: SessionNavigationOwner,
   workspaceId?: string,
 ): boolean {
   if (!workspaceId) return false;
-  const ownerWorkspaceId = isWorktreeIsolatedSession(session)
-    ? (session.projectWorkspaceId ?? session.workspaceId)
-    : (session.workspaceId ?? session.projectWorkspaceId);
-  return ownerWorkspaceId === workspaceId;
+  return sessionOwningWorkspaceId(session) === workspaceId;
 }
 
 export function getSessionSortTimestamp(session: Pick<Session, 'createdAt' | 'lastFinishedAt'>): number {

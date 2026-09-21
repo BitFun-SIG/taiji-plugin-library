@@ -7,6 +7,7 @@ import {
   getSessionMetadataSortTimestamp,
   getSessionSortTimestamp,
   sessionBelongsToWorkspaceNavRow,
+  sessionOwningWorkspaceId,
 } from './sessionOrdering';
 
 function createSession(overrides: Partial<Session> = {}): Session {
@@ -156,5 +157,21 @@ describe('sessionOrdering', () => {
     expect(sessionBelongsToWorkspaceNavRow({}, 'known')).toBe(false);
     expect(sessionBelongsToWorkspaceNavRow({ workspaceId: 'stale' }, 'known')).toBe(false);
     expect(sessionBelongsToWorkspaceNavRow({ workspaceId: 'known' }, undefined)).toBe(false);
+  });
+
+  it('names one owning workspace ID per session shape', () => {
+    expect(sessionOwningWorkspaceId({
+      workspaceId: 'worktree-cli', projectWorkspaceId: 'main-project',
+      config: {
+        executionTarget: { kind: 'managedWorktree', worktreeId: 'worktree-cli', rootPath: '/tmp/tree' },
+      },
+    })).toBe('main-project');
+    expect(sessionOwningWorkspaceId({
+      workspaceId: 'worktree-ws', projectWorkspaceId: 'main-project',
+      config: { executionTarget: { kind: 'local', rootPath: '/tmp/tree' } },
+    })).toBe('worktree-ws');
+    expect(sessionOwningWorkspaceId({ config: { projectWorkspaceId: 'main-project' } }))
+      .toBe('main-project');
+    expect(sessionOwningWorkspaceId({})).toBeUndefined();
   });
 });

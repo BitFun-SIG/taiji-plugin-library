@@ -5,7 +5,7 @@ import { flowChatManager } from './FlowChatManager';
 import { syncSessionToModernStore } from './storeSync';
 import { workspaceManager } from '@/infrastructure/services/business/workspaceManager';
 import { getActiveSurfaceScope } from '@/infrastructure/peer-device/deviceSurface';
-import { resolveSessionActivationWorkspace } from '@/app/services/sessionSceneTarget';
+import { resolveSessionSceneWorkspace } from '@/app/services/sessionSceneTarget';
 import { sessionProjectWorkspacePath } from '../utils/sessionWorkspace';
 import { i18nService } from '@/infrastructure/i18n';
 
@@ -38,7 +38,7 @@ export async function activateMainSession(sessionId: string, options?: SessionAc
   const isCurrent = () => scope.isCurrent() && request === activationRequest && (options?.isCurrent?.() ?? true);
   if (!isCurrent()) return false;
   const session = flowChatStore.getState().sessions.get(sessionId);
-  const workspace = session && resolveSessionActivationWorkspace(session, workspaceManager.getState().openedWorkspaces.values());
+  const workspace = session && resolveSessionSceneWorkspace(session, workspaceManager.getState().openedWorkspaces.values());
   const workspaceId = options?.workspaceId ?? workspace?.id;
   if (session && sessionProjectWorkspacePath(session) && !workspaceId
     && workspaceManager.getState().currentWorkspace) {
