@@ -214,6 +214,8 @@ export interface ChatImageAttachment {
 
 export interface ChatMessage {
   turn_id?: string;
+  /** Storage turn index for `turn_id`, used as the rollback staleness guard. */
+  turn_index?: number;
   status?: string;
   error?: string;
   id: string;
@@ -225,6 +227,13 @@ export interface ChatMessage {
   thinking?: string;
   items?: ChatMessageItem[];
   images?: ChatImageAttachment[];
+}
+
+export interface SessionRollbackResult {
+  retired_turn_ids: string[];
+  restored_files: string[];
+  composer_text?: string;
+  changed: boolean;
 }
 
 export interface ActiveTurnSnapshot {
@@ -796,6 +805,49 @@ export class RemoteSessionManager {
 
   async deleteSession(sessionId: string): Promise<void> {
     await this.request({ cmd: 'delete_session', session_id: sessionId });
+  }
+
+  /**
+   * Retire `targetTurnId` and every turn after it on the host and restore the files
+   * those turns wrote. `expectedStorageTurnIndex` comes from the same message
+   * the user targeted, so a transcript that moved since it was loaded fails
+   * instead of rolling back a different turn.
+   */
+  async rollbackSessionToTurn(
+    sessionId: string,
+    targetTurnId: string,
+    expectedStorageTurnIndex?: number,
+  ): Promise<SessionRollbackResult> {
+    if (!this.supportsHostCapability('session_rollback_v1')) {
+      throw new Error('This host does not support session rollback. Update the host to use this action.');
+    }
+    const resp = await this.request<{
+      resp: string;
+      session_id: string;
+      retired_turn_ids?: string[];
+      restored_files?: string[];
+      composer_text?: string;
+      changed?: boolean;
+    }>({
+      cmd: 'rollback_session_to_turn',
+      session_id: sessionId,
+      target_turn_id: targetTurnId,
+      expected_storage_turn_index: expectedStorageTurnIndex,
+    });
+    if (resp.resp !== 'session_rolled_back' || resp.session_id !== sessionId
+      || !Array.isArray(resp.retired_turn_ids) || !Array.isArray(resp.restored_files)
+      || !resp.retired_turn_ids.every(id => typeof id === 'string')
+      || !resp.restored_files.every(path => typeof path === 'string')
+      || (resp.composer_text !== undefined && typeof resp.composer_text !== 'string')
+      || typeof resp.changed !== 'boolean') {
+      throw new Error('Invalid session rollback response');
+    }
+    return {
+      retired_turn_ids: resp.retired_turn_ids,
+      restored_files: resp.restored_files,
+      composer_text: resp.composer_text,
+      changed: resp.changed ?? false,
+    };
   }
 
   async renameSession(sessionId: string, title: string): Promise<void> {

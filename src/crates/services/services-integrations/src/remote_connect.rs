@@ -557,6 +557,7 @@ pub const REMOTE_FILE_MAX_CHUNK_BYTES: u64 = 3 * 1024 * 1024;
 pub const REMOTE_CAPABILITY_HARNESS_PROFILES_V1: &str = "harness_profiles_v1";
 pub const REMOTE_CAPABILITY_DIALOG_STEER_V1: &str = "dialog_steer_v1";
 pub const REMOTE_CAPABILITY_USER_QUESTION_INTERACTION_V1: &str = "user_question_interaction_v1";
+pub const REMOTE_CAPABILITY_SESSION_ROLLBACK_V1: &str = "session_rollback_v1";
 pub const REMOTE_CAPABILITY_PLAN_BUILD_V1: &str = "plan_build_v1";
 pub use host_stream::REMOTE_CAPABILITY_HOST_STREAM_V1;
 
@@ -566,6 +567,7 @@ fn remote_host_capabilities() -> Vec<String> {
         REMOTE_CAPABILITY_HARNESS_PROFILES_V1.to_string(),
         REMOTE_CAPABILITY_DIALOG_STEER_V1.to_string(),
         REMOTE_CAPABILITY_PLAN_BUILD_V1.to_string(),
+        REMOTE_CAPABILITY_SESSION_ROLLBACK_V1.to_string(),
         REMOTE_CAPABILITY_USER_QUESTION_INTERACTION_V1.to_string(),
         REMOTE_CAPABILITY_HOST_STREAM_V1.to_string(),
     ]
@@ -1368,6 +1370,32 @@ pub fn remote_session_deleted_response(session_id: impl Into<String>) -> RemoteR
     }
 }
 
+/// What the host observed while rolling a session back to a turn.
+///
+/// This mirrors the fields the desktop rollback result exposes that a remote
+/// transcript actually needs, so this crate keeps describing the wire contract
+/// without depending on the runtime port types.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct RemoteSessionRollbackOutcome {
+    pub retired_turn_ids: Vec<String>,
+    pub restored_files: Vec<String>,
+    pub composer_text: Option<String>,
+    pub changed: bool,
+}
+
+pub fn remote_session_rolled_back_response(
+    session_id: impl Into<String>,
+    outcome: RemoteSessionRollbackOutcome,
+) -> RemoteResponse {
+    RemoteResponse::SessionRolledBack {
+        session_id: session_id.into(),
+        retired_turn_ids: outcome.retired_turn_ids,
+        restored_files: outcome.restored_files,
+        composer_text: outcome.composer_text,
+        changed: outcome.changed,
+    }
+}
+
 #[async_trait::async_trait]
 pub trait RemoteSessionRuntimeHost: Send + Sync {
     async fn workspace_by_id(&self, _workspace_id: &str) -> Result<RemoteWorkspaceFacts, String> {
@@ -1413,6 +1441,16 @@ pub trait RemoteSessionRuntimeHost: Send + Sync {
         session_storage_dir: &Path,
         session_id: &str,
     ) -> Result<(Vec<ChatMessage>, bool), String>;
+    /// Roll the session back to `target_turn_id`, retiring that turn and the
+    /// ones after it and restoring the files those turns wrote. Hosts are
+    /// expected to reuse the same targeted-rollback path the desktop uses rather
+    /// than hiding turns, and to reject sessions whose workspace they do not own.
+    async fn rollback_session_to_turn(
+        &self,
+        session_id: &str,
+        target_turn_id: &str,
+        expected_storage_turn_index: Option<usize>,
+    ) -> Result<RemoteSessionRollbackOutcome, String>;
     async fn delete_session(
         &self,
         session_storage_dir: &Path,
@@ -1687,6 +1725,29 @@ where
                     host.remove_tracker(session_id);
                     remote_session_deleted_response(session_id.clone())
                 }
+                Err(message) => RemoteResponse::Error { message },
+            }
+        }
+        RemoteCommand::RollbackSessionToTurn {
+            session_id,
+            target_turn_id,
+            expected_storage_turn_index,
+        } => {
+            if target_turn_id.trim().is_empty() {
+                return RemoteResponse::Error {
+                    message: "Rollback requires a target turn id".into(),
+                };
+            }
+
+            match host
+                .rollback_session_to_turn(
+                    session_id,
+                    target_turn_id.trim(),
+                    *expected_storage_turn_index,
+                )
+                .await
+            {
+                Ok(outcome) => remote_session_rolled_back_response(session_id.clone(), outcome),
                 Err(message) => RemoteResponse::Error { message },
             }
         }
@@ -2202,6 +2263,11 @@ pub struct ChatMessage {
     pub metadata: Option<serde_json::Value>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub turn_id: Option<String>,
+    /// Storage turn index for `turn_id`, carried so a remote rollback can send
+    /// the same optimistic-concurrency guard the desktop sends and cannot
+    /// retire a different turn after the transcript moved underneath it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub turn_index: Option<usize>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub status: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -2235,6 +2301,7 @@ pub struct ChatMessageItem {
 #[derive(Debug, Clone, PartialEq)]
 pub struct RemoteChatHistoryTurn {
     pub turn_id: String,
+    pub turn_index: usize,
     pub user_message_id: String,
     pub user_display_content: String,
     pub user_timestamp_ms: u64,
@@ -2300,6 +2367,7 @@ pub fn build_remote_chat_messages(turns: Vec<RemoteChatHistoryTurn>) -> Vec<Chat
             timestamp: (turn.user_timestamp_ms / 1000).to_string(),
             metadata: None,
             turn_id: Some(turn.turn_id.clone()),
+            turn_index: Some(turn.turn_index),
             status: None,
             error: None,
             tools: None,
@@ -2462,6 +2530,9 @@ pub fn build_remote_chat_messages(turns: Vec<RemoteChatHistoryTurn>) -> Vec<Chat
             timestamp: (assistant_ts / 1000).to_string(),
             metadata: None,
             turn_id: Some(turn.turn_id),
+            // Rollback targets user turns only, so the assistant projection
+            // deliberately carries no storage index.
+            turn_index: None,
             status: Some(turn.status),
             error: turn.error,
             tools: if tools_flat.is_empty() {
@@ -2679,6 +2750,19 @@ pub enum RemoteCommand {
     },
     DeleteSession {
         session_id: String,
+    },
+    /// Retire `target_turn_id` and every turn after it, then restore the
+    /// workspace files those turns touched, matching the desktop targeted
+    /// rollback. The target turn is withdrawn too, and its prompt comes back as
+    /// `composer_text` so the client can offer it for editing. The client reads
+    /// both identity fields off the user `ChatMessage` it is targeting;
+    /// `expected_storage_turn_index` is the stale-view guard, so omitting it
+    /// only widens the race window and never changes which turn is addressed.
+    RollbackSessionToTurn {
+        session_id: String,
+        target_turn_id: String,
+        #[serde(default)]
+        expected_storage_turn_index: Option<usize>,
     },
     CancelTool {
         tool_id: String,
@@ -2913,6 +2997,19 @@ pub enum RemoteResponse {
     SessionDeleted {
         session_id: String,
     },
+    SessionRolledBack {
+        session_id: String,
+        /// Turns the host retired, including the target turn itself. Reported so
+        /// a client can tell the user what was withdrawn; the transcript itself
+        /// is repaired by the next poll's authoritative `message_snapshot`.
+        retired_turn_ids: Vec<String>,
+        restored_files: Vec<String>,
+        /// Prompt text the desktop would have put back into its composer, so a
+        /// remote client can offer the same "edit and resend" continuation.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        composer_text: Option<String>,
+        changed: bool,
+    },
     InitialSync {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         workspace_id: Option<String>,
@@ -3097,7 +3194,8 @@ where
         | RemoteCommand::SetSessionModel { .. }
         | RemoteCommand::UpdateSessionTitle { .. }
         | RemoteCommand::GetSessionMessages { .. }
-        | RemoteCommand::DeleteSession { .. } => host.handle_session_command(command).await,
+        | RemoteCommand::DeleteSession { .. }
+        | RemoteCommand::RollbackSessionToTurn { .. } => host.handle_session_command(command).await,
 
         RemoteCommand::PollSession { .. } => host.handle_poll_command(command).await,
 
@@ -4610,6 +4708,7 @@ mod tests {
         model_updates: Mutex<Vec<(String, String, Option<Option<String>>)>>,
         removed_trackers: Mutex<Vec<String>>,
         history_error: Option<String>,
+        rollback_requests: Mutex<Vec<(String, String, Option<usize>)>>,
     }
 
     fn fake_workspace(
@@ -4797,7 +4896,8 @@ mod tests {
                     content: "hello".to_string(),
                     timestamp: "1".to_string(),
                     metadata: None,
-                    turn_id: None,
+                    turn_id: Some("turn-1".to_string()),
+                    turn_index: Some(0),
                     status: None,
                     error: None,
                     images: None,
@@ -4807,6 +4907,25 @@ mod tests {
                 }],
                 false,
             ))
+        }
+
+        async fn rollback_session_to_turn(
+            &self,
+            session_id: &str,
+            target_turn_id: &str,
+            expected_storage_turn_index: Option<usize>,
+        ) -> Result<RemoteSessionRollbackOutcome, String> {
+            self.rollback_requests.lock().unwrap().push((
+                session_id.to_string(),
+                target_turn_id.to_string(),
+                expected_storage_turn_index,
+            ));
+            Ok(RemoteSessionRollbackOutcome {
+                retired_turn_ids: vec!["turn-2".to_string()],
+                restored_files: vec!["src/main.rs".to_string()],
+                composer_text: Some("previous prompt".to_string()),
+                changed: true,
+            })
         }
 
         async fn delete_session(
@@ -5093,6 +5212,59 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn remote_session_handler_forwards_rollback_target_and_guard() {
+        let host = FakeSessionHost::default();
+
+        let response = handle_remote_session_command(
+            &host,
+            &RemoteCommand::RollbackSessionToTurn {
+                session_id: "session-a".to_string(),
+                target_turn_id: "  turn-1  ".to_string(),
+                expected_storage_turn_index: Some(3),
+            },
+        )
+        .await;
+
+        assert_eq!(
+            response,
+            RemoteResponse::SessionRolledBack {
+                session_id: "session-a".to_string(),
+                retired_turn_ids: vec!["turn-2".to_string()],
+                restored_files: vec!["src/main.rs".to_string()],
+                composer_text: Some("previous prompt".to_string()),
+                changed: true,
+            }
+        );
+        assert_eq!(
+            host.rollback_requests.lock().unwrap().as_slice(),
+            [("session-a".to_string(), "turn-1".to_string(), Some(3))]
+        );
+    }
+
+    #[tokio::test]
+    async fn remote_session_handler_rejects_rollback_without_target_turn() {
+        let host = FakeSessionHost::default();
+
+        let response = handle_remote_session_command(
+            &host,
+            &RemoteCommand::RollbackSessionToTurn {
+                session_id: "session-a".to_string(),
+                target_turn_id: "   ".to_string(),
+                expected_storage_turn_index: None,
+            },
+        )
+        .await;
+
+        assert_eq!(
+            response,
+            RemoteResponse::Error {
+                message: "Rollback requires a target turn id".to_string(),
+            }
+        );
+        assert!(host.rollback_requests.lock().unwrap().is_empty());
+    }
+
+    #[tokio::test]
     async fn remote_session_handler_propagates_history_outcome_unknown() {
         let host = FakeSessionHost {
             history_error: Some("Session history restore is incomplete".to_string()),
@@ -5132,6 +5304,7 @@ mod tests {
             timestamp: "1".to_string(),
             metadata: None,
             turn_id: Some(turn_id.to_string()),
+            turn_index: None,
             status: status.map(str::to_string),
             error: None,
             tools: None,
@@ -5203,6 +5376,7 @@ mod tests {
             timestamp: "1".to_string(),
             metadata: None,
             turn_id: None,
+            turn_index: None,
             status: None,
             error: None,
             tools: None,
@@ -5268,6 +5442,7 @@ mod tests {
                 timestamp: "1".to_string(),
                 metadata: None,
                 turn_id: None,
+                turn_index: None,
                 status: None,
                 error: None,
                 tools: None,
@@ -5317,6 +5492,7 @@ mod tests {
                     timestamp: "1".to_string(),
                     metadata: None,
                     turn_id: None,
+                    turn_index: None,
                     status: None,
                     error: None,
                     tools: None,

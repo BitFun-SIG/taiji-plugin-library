@@ -1713,11 +1713,38 @@ impl DialogScheduler {
         requested_storage_path: &std::path::Path,
         wait_timeout: Duration,
     ) -> OpenBitFunResult<SessionMaintenancePermit> {
+        self.begin_session_maintenance_with_policy(
+            session_id,
+            requested_storage_path,
+            wait_timeout,
+            false,
+        )
+        .await
+    }
+
+    pub(crate) async fn begin_session_maintenance_with_policy(
+        &self,
+        session_id: &str,
+        requested_storage_path: &std::path::Path,
+        wait_timeout: Duration,
+        require_idle: bool,
+    ) -> OpenBitFunResult<SessionMaintenancePermit> {
         openbitfun_core_types::validate_session_id(session_id)
             .map_err(OpenBitFunError::Validation)?;
         let operation_guard = self.lock_session_operation(session_id).await;
         self.session_manager
             .validate_session_storage_path_binding(session_id, requested_storage_path)?;
+        // Check only after admission is locked, before cancelling or retiring anything.
+        // A controller's stream can lag another controller's accepted submission.
+        if require_idle
+            && (self.is_session_busy_or_queued(session_id)
+                || self.queue_depth(session_id) > 0
+                || self.round_injection_buffer.pending_count(session_id) > 0)
+        {
+            return Err(OpenBitFunError::Validation(
+                "Session rollback requires an idle session with an empty queue".to_string(),
+            ));
+        }
         let mut retired_turn_ids = if self.queue_depth(session_id) > 0 {
             self.clear_queue(session_id).await
         } else {
@@ -4542,6 +4569,68 @@ mod tests {
         assert!(scheduler
             .active_turns
             .matches_turn("session-a", "shared-turn"));
+    }
+
+    #[tokio::test]
+    async fn idle_only_maintenance_preserves_work_accepted_before_lock_acquisition() {
+        let (scheduler, session_manager, _, root) = test_scheduler();
+        let session_id = "remote-rollback-busy";
+        let storage = root.path().join("sessions");
+        session_manager
+            .ensure_session_storage_path(session_id, &storage)
+            .unwrap();
+        // The phone may have observed idle before another controller was admitted.
+        let guard = scheduler.lock_session_operation(session_id).await;
+        let request = scheduler.begin_session_maintenance_with_policy(
+            session_id,
+            &storage,
+            Duration::ZERO,
+            true,
+        );
+        tokio::pin!(request);
+        assert!(
+            tokio::time::timeout(Duration::from_millis(10), &mut request)
+                .await
+                .is_err()
+        );
+        scheduler
+            .queues
+            .enqueue(
+                session_id,
+                standard_queued_turn("queued"),
+                DialogQueuePriority::Normal,
+            )
+            .unwrap();
+        scheduler
+            .active_turns
+            .insert(session_id, desktop_active_turn("active"));
+        drop(guard);
+        assert!(request
+            .await
+            .err()
+            .unwrap()
+            .to_string()
+            .contains("idle session"));
+        assert!(scheduler.active_turns.matches_turn(session_id, "active"));
+        assert_eq!(scheduler.queue_depth(session_id), 1);
+
+        scheduler.active_turns.remove(session_id);
+        assert!(
+            scheduler
+                .begin_session_maintenance_with_policy(session_id, &storage, Duration::ZERO, true)
+                .await
+                .is_err(),
+            "idle but queued must also be rejected"
+        );
+        assert_eq!(scheduler.queue_depth(session_id), 1);
+        scheduler.clear_queue(session_id).await;
+        assert!(
+            scheduler
+                .begin_session_maintenance_with_policy(session_id, &storage, Duration::ZERO, true)
+                .await
+                .is_ok(),
+            "empty idle session can be maintained"
+        );
     }
 
     #[tokio::test]
