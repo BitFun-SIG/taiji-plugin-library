@@ -52,7 +52,9 @@ struct ChatTimelineView: View {
                     OpenBitFunTheme.transparent.frame(height: 1).id("timeline-bottom")
                 }
                 .padding(.horizontal, MobileDesignGeometry.contentGutter)
-                .padding(.top, MobileDesignGeometry.timelineTopPadding)
+                // No top padding of its own: the top overlay's inset already ends
+                // where the header's fade does, which is the same content start
+                // Android's contentPadding and HarmonyOS's contentStartOffset use.
                 .padding(.bottom, 14 + scrollController.historyBottomSpace)
                 .background(TimelineScrollProbe(controller: scrollController))
             }
