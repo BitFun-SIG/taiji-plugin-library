@@ -5,6 +5,7 @@ import { getActiveSurfaceId, isSurfaceChangedError } from '@/infrastructure/peer
 import { createLogger } from '@/shared/utils/logger';
 import { registerSessionSceneNavigation, useSceneStore } from '../stores/sceneStore';
 import { isSessionSceneId, type SessionSceneTarget } from '../components/SceneBar/types';
+import { startSessionAuxPaneMemory } from '../scenes/session/sessionAuxPaneMemory';
 import { resolveSessionSceneTarget, resolveSessionSceneWorkspace } from './sessionSceneTarget';
 
 const log = createLogger('SessionSceneLifecycle');
@@ -15,6 +16,7 @@ const log = createLogger('SessionSceneLifecycle');
  */
 export function startSessionSceneLifecycle(): () => void {
   const stopProjectionSync = startAutoSync();
+  const stopAuxPaneMemory = startSessionAuxPaneMemory();
   const current = () => {
     const session = flowChatStore.getActiveSession();
     return session ? resolveSessionSceneTarget(
@@ -112,6 +114,7 @@ export function startSessionSceneLifecycle(): () => void {
     unsubscribeScenes();
     unsubscribeWorkspaces();
     stopNavigation();
+    stopAuxPaneMemory();
     stopProjectionSync();
   };
 }
