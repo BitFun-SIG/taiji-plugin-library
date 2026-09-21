@@ -334,6 +334,111 @@ describe('device status card', () => {
     expect(element('nav-footer-device-status').getAttribute('aria-label')).toContain(name);
   });
 
+  it('draws this machine as the attached desktop, by the system it reported', () => {
+    const footer = () => element('nav-footer-device-status');
+    const attachedDesktop = () => footer()
+      .querySelector('[data-openbitfun-device-kind="desktop"]');
+
+    // A peer in use names itself in the trigger and lands in the carousel; this
+    // machine is the attached desktop, and it reads as the Mac it is.
+    state.overview = overview({
+      localDeviceName: 'Workstation',
+      localDeviceOs: 'macOS',
+      peer: { deviceId: 'peer-1', deviceName: 'Windows box' },
+      peerDeviceOs: 'Windows',
+    });
+    render();
+    expect(footer().textContent).toContain('Windows box');
+    expect(attachedDesktop()?.querySelector('svg[data-system="macos"]')).not.toBeNull();
+    // The peer's own system never stands in for this machine's.
+    expect(attachedDesktop()?.querySelector('svg[data-system="windows"]')).toBeNull();
+
+    // A headless client draws the server silhouette wherever it runs.
+    state.overview = overview({
+      localDeviceName: 'Workstation',
+      localDeviceOs: 'Linux',
+      localDeviceKind: 'cli',
+      peer: { deviceId: 'peer-1', deviceName: 'Windows box' },
+    });
+    render();
+    expect(attachedDesktop()?.querySelector('svg[data-system="server"]')).not.toBeNull();
+
+    // A phone stays a phone: only the desktop group is this machine.
+    state.overview = overview({
+      localDeviceName: 'Workstation',
+      localDeviceOs: 'macOS',
+      peer: { deviceId: 'peer-1', deviceName: 'Windows box' },
+      remoteStatus: {
+        relay_connected: true,
+        relay_url: 'http://192.168.1.2:9700',
+        active_method: 'lan',
+        clients: [{ id: 'mobile-user', name: 'My phone' }],
+        bot_connected: null,
+        bot_verbose_mode: false,
+      },
+    });
+    render();
+    expect(footer().querySelector('[data-openbitfun-device-kind="mobile"] [data-system]')).toBeNull();
+
+    // A system this client cannot place keeps the neutral mark it always drew.
+    state.overview = overview({
+      localDeviceName: 'Workstation',
+      localDeviceOs: 'FreeBSD',
+      peer: { deviceId: 'peer-1', deviceName: 'Windows box' },
+    });
+    render();
+    expect(attachedDesktop()?.querySelector('[data-system]')).toBeNull();
+    expect(attachedDesktop()?.querySelector('svg')).not.toBeNull();
+  });
+
+  it('marks a device name with the system that device runs', () => {
+    state.overview = overview({
+      localDeviceName: 'Workstation',
+      localDeviceOs: 'macOS',
+      peer: { deviceId: 'peer-1', deviceName: 'lwb_server' },
+      peerDeviceKind: 'cli',
+      remoteStatus: {
+        relay_connected: true,
+        relay_url: 'http://192.168.1.2:9700',
+        active_method: 'lan',
+        clients: [{ id: 'mobile-user', name: 'My phone' }],
+        bot_connected: 'weixin',
+        bot_verbose_mode: false,
+      },
+    });
+    render();
+
+    // A host row answers with the system it runs; a phone and a chat app keep
+    // saying what they are, because neither is a system this client can draw.
+    const rows = element('nav-device-status-connected-devices');
+    const row = (text: string) => Array.from(
+      rows.querySelectorAll('.openbitfun-device-overview__device-row'),
+    ).find(candidate => candidate.textContent?.includes(text))!;
+    expect(row('Workstation').querySelector('svg[data-system="macos"]')).not.toBeNull();
+    expect(row('My phone').querySelector('[data-system]')).toBeNull();
+    expect(row('My phone').querySelector('svg')).not.toBeNull();
+    expect(row('remoteConnect.weixin').querySelector('[data-system]')).toBeNull();
+    expect(row('remoteConnect.weixin').querySelector('svg')).not.toBeNull();
+
+    // The trigger names one device and states its system, whichever end of the
+    // connection that device sits on: the peer here, this machine below.
+    const trigger = () => element('nav-footer-device-status');
+    const triggerMark = () => trigger().querySelector('svg');
+    expect(trigger().textContent).toContain('lwb_server');
+    expect(triggerMark()?.getAttribute('data-system')).toBe('server');
+
+    state.overview = overview({ localDeviceName: 'Workstation', localDeviceOs: 'macOS' });
+    render();
+    expect(trigger().textContent).toContain('Workstation');
+    expect(trigger().querySelector('svg[data-system="macos"]')).not.toBeNull();
+
+    // A system this client cannot place keeps the neutral mark, never a guess.
+    state.overview = overview({ localDeviceName: 'Workstation', localDeviceOs: 'FreeBSD' });
+    render();
+    expect(trigger().querySelector('[data-system]')).toBeNull();
+    expect(triggerMark()).not.toBeNull();
+  });
+
   it('keeps an incompatible peer in the switch list but never connects to it', async () => {
     state.identity = { status: 'signed-in', me: { user: { accountId: 'acct', githubId: 42 } } };
     state.getDeviceInfo.mockResolvedValue({ device_id: 'local', device_name: 'This computer' });
