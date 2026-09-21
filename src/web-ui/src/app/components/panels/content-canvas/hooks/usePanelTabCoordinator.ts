@@ -25,6 +25,12 @@ export function usePanelTabCoordinator({
   useEffect(() => {
     const previous = previousRef.current;
     previousRef.current = { visibleTabCount, scopeKey };
+    // A scope change restores the content of the scope being entered. That
+    // scope's open state is owned by the host, which restores it together with
+    // the content, so a restore is not a content transition here.
+    if (previous.scopeKey !== scopeKey) {
+      return;
+    }
     if (
       previous.visibleTabCount > 0
       && visibleTabCount === 0
