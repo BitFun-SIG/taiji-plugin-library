@@ -104,14 +104,46 @@ describe('sessionOrdering', () => {
     expect(sessionBelongsToWorkspaceNavRow({ workspaceId: 'host-b-project' }, 'host-a-project')).toBe(false);
   });
 
-  it('does not show a worktree session under its main project group', () => {
-    const worktreeSession = {
+  it('keeps a session whose execution workspace is not a worktree in its own group', () => {
+    const session = {
       workspaceId: 'worktree-cli',
       projectWorkspaceId: 'main-project',
     };
-    expect(sessionBelongsToWorkspaceNavRow(worktreeSession, 'worktree-cli')).toBe(true);
-    expect(sessionBelongsToWorkspaceNavRow(worktreeSession, 'main-project')).toBe(false);
+    expect(sessionBelongsToWorkspaceNavRow(session, 'worktree-cli')).toBe(true);
+    expect(sessionBelongsToWorkspaceNavRow(session, 'main-project')).toBe(false);
+    expect(sessionBelongsToWorkspaceNavRow(session, 'sibling-worktree')).toBe(false);
+  });
+
+  it('keeps a worktree-isolated session under the project that owns it', () => {
+    const worktreeSession = {
+      workspaceId: 'worktree-cli',
+      projectWorkspaceId: 'main-project',
+      config: {
+        executionTarget: {
+          kind: 'managedWorktree' as const,
+          worktreeId: 'worktree-cli',
+          rootPath: '/tmp/worktrees/cli',
+        },
+      },
+    };
+    expect(sessionBelongsToWorkspaceNavRow(worktreeSession, 'main-project')).toBe(true);
+    expect(sessionBelongsToWorkspaceNavRow(worktreeSession, 'worktree-cli')).toBe(false);
     expect(sessionBelongsToWorkspaceNavRow(worktreeSession, 'sibling-worktree')).toBe(false);
+  });
+
+  it('falls back to the execution workspace when a worktree session has no project ID', () => {
+    const worktreeSession = {
+      workspaceId: 'worktree-only',
+      config: {
+        executionTarget: {
+          kind: 'existingWorktree' as const,
+          worktreeId: 'worktree-only',
+          rootPath: '/tmp/worktrees/only',
+        },
+      },
+    };
+    expect(sessionBelongsToWorkspaceNavRow(worktreeSession, 'worktree-only')).toBe(true);
+    expect(sessionBelongsToWorkspaceNavRow(worktreeSession, 'main-project')).toBe(false);
   });
 
   it('still attributes a legacy record that only carries the project ID', () => {

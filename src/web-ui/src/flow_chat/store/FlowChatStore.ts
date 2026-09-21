@@ -4253,6 +4253,7 @@ export class FlowChatStore {
       reviewTargetEvidence?: Session['reviewTargetEvidence'];
       reviewTargetFilePaths?: Session['reviewTargetFilePaths'];
       projectWorkspacePath?: string;
+      projectWorkspaceId?: string;
       executionTarget?: Session['config']['executionTarget'];
       workspaceId?: string;
     },
@@ -4286,6 +4287,7 @@ export class FlowChatStore {
           projectWorkspacePath: meta?.projectWorkspacePath,
           executionTarget: meta?.executionTarget,
           workspaceId: meta?.workspaceId,
+          projectWorkspaceId: meta?.projectWorkspaceId,
         } as any,
         createdAt: Date.now(),
         lastActiveAt: Date.now(),
@@ -4300,6 +4302,7 @@ export class FlowChatStore {
         workspacePath,
         projectWorkspacePath: meta?.projectWorkspacePath,
         workspaceId: meta?.workspaceId,
+        projectWorkspaceId: meta?.projectWorkspaceId,
         remoteConnectionId,
         remoteSshHost,
         parentSessionId: relationship.parentSessionId,
@@ -4667,7 +4670,9 @@ export class FlowChatStore {
 
   /**
    * Apply a backend session rebind (worktree isolation toggled on or off).
-   * The project root stays put; only the execution directory moves.
+   * The project root stays put; only the execution directory moves. A binding
+   * that reports the owning project fills a project identity the session was
+   * created without.
    */
   public updateSessionExecutionTarget(
     sessionId: string,
@@ -4675,6 +4680,7 @@ export class FlowChatStore {
       workspacePath: string;
       projectWorkspacePath: string;
       workspaceId?: string;
+      projectWorkspaceId?: string;
       executionTarget: Session['config']['executionTarget'];
     },
   ): void {
@@ -4688,11 +4694,13 @@ export class FlowChatStore {
         workspacePath: binding.workspacePath,
         projectWorkspacePath: binding.projectWorkspacePath,
         workspaceId: binding.workspaceId ?? session.workspaceId,
+        projectWorkspaceId: binding.projectWorkspaceId ?? session.projectWorkspaceId,
         config: {
           ...session.config,
           workspacePath: binding.workspacePath,
           projectWorkspacePath: binding.projectWorkspacePath,
           workspaceId: binding.workspaceId ?? session.config.workspaceId,
+          projectWorkspaceId: binding.projectWorkspaceId ?? session.config.projectWorkspaceId,
           executionTarget: binding.executionTarget,
         },
         lastActiveAt: Date.now(),

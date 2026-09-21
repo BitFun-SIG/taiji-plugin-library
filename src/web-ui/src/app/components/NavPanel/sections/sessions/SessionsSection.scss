@@ -361,6 +361,28 @@
     }
   }
 
+  &__inline-item-worktree-badge {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    height: 14px;
+    padding: 0 5px;
+    border: 1px dashed var(--openbitfun-color-border-subtle);
+    border-radius: 999px;
+    background: var(--openbitfun-color-action-quiet-hover);
+    color: var(--openbitfun-color-content-secondary);
+    font-size: var(--openbitfun-type-micro-font-size);
+    font-weight: var(--openbitfun-type-label-selected-font-weight);
+    white-space: nowrap;
+
+    .openbitfun-nav-panel__inline-item-worktree-icon {
+      inline-size: var(--openbitfun-control-icon-size2xs);
+      block-size: var(--openbitfun-control-icon-size2xs);
+      opacity: var(--openbitfun-opacity-muted);
+    }
+  }
+
   &__inline-item-background-subagent-badge {
     flex: 0 0 auto;
     position: relative;

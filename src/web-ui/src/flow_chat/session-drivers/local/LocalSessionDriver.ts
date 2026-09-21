@@ -407,6 +407,7 @@ export const localSessionDriver: SessionDriver = {
           workspacePath: result.workspacePath,
           projectWorkspacePath: result.projectWorkspacePath,
           workspaceId: result.workspaceId,
+          projectWorkspaceId: result.projectWorkspaceId,
           executionTarget: result.executionTarget,
         });
         if (result.retainedWorktreePath) {
