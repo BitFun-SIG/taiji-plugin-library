@@ -2057,7 +2057,9 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
           <span className="openbitfun-nav-panel__inline-toggle-count" aria-hidden>
             +{topLevelSessions.length - sessionDisplayLimit}
           </span>
-          <Icon name="chevron-down" size="xs" className="openbitfun-nav-panel__inline-toggle-chevron" aria-hidden />
+          <span className="openbitfun-nav-panel__inline-toggle-trailing">
+            <Icon name="chevron-down" size="xs" className="openbitfun-nav-panel__inline-toggle-chevron" aria-hidden />
+          </span>
         </button>
       )}
 
@@ -2082,13 +2084,15 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
               +{expandToggleLabels.remainingCount}
             </span>
           )}
-          {metadataPageState.isLoading ? (
-            <Loader2 className="openbitfun-nav-panel__inline-toggle-spinner" aria-hidden />
-          ) : expandToggleLabels.remainingCount === null ? (
-            <Icon name="chevron-up" size="xs" className="openbitfun-nav-panel__inline-toggle-chevron" aria-hidden />
-          ) : (
-            <Icon name="chevron-down" size="xs" className="openbitfun-nav-panel__inline-toggle-chevron" aria-hidden />
-          )}
+          <span className="openbitfun-nav-panel__inline-toggle-trailing">
+            {metadataPageState.isLoading ? (
+              <Loader2 className="openbitfun-nav-panel__inline-toggle-spinner" aria-hidden />
+            ) : expandToggleLabels.remainingCount === null ? (
+              <Icon name="chevron-up" size="xs" className="openbitfun-nav-panel__inline-toggle-chevron" aria-hidden />
+            ) : (
+              <Icon name="chevron-down" size="xs" className="openbitfun-nav-panel__inline-toggle-chevron" aria-hidden />
+            )}
+          </span>
         </button>
       )}
 
