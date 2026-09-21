@@ -4,12 +4,14 @@ import com.openbitfun.mobile.core.domain.ChatMessage
 import com.openbitfun.mobile.core.domain.ChatSessionCursor
 import com.openbitfun.mobile.core.domain.ChatSyncPhase
 import com.openbitfun.mobile.core.domain.ChatTimelineState
+import com.openbitfun.mobile.core.domain.ChatTranscriptOrigin
 import com.openbitfun.mobile.core.protocol.ChatMessageItemResponse
 import com.openbitfun.mobile.core.protocol.RemoteModelCatalog
 import com.openbitfun.mobile.core.protocol.RemoteToolStatusResponse
 import com.openbitfun.mobile.core.protocol.RelayJson
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class ConversationPresentationTest {
@@ -18,6 +20,15 @@ class ConversationPresentationTest {
         val rows = timeline().conversationRows()
 
         assertEquals(listOf(ConversationRowKind.EMPTY), rows.map { it.kind })
+    }
+
+    @Test
+    fun aTimelineThatIsStillThisDevicesCopyIsUnconfirmed() {
+        val stored = timeline().copy(origin = ChatTranscriptOrigin.CACHE)
+        val fromHost = timeline().copy(origin = ChatTranscriptOrigin.HOST)
+
+        assertTrue(stored.transcriptUnconfirmed())
+        assertFalse(fromHost.transcriptUnconfirmed())
     }
 
     @Test
@@ -231,6 +242,7 @@ private fun timeline(
     cursor = ChatSessionCursor(0, 0, 0),
     modelCatalog = RemoteModelCatalog(version = 0),
     selectedModelId = "",
+    origin = ChatTranscriptOrigin.HOST,
 )
 
 private fun message(

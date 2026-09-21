@@ -403,6 +403,7 @@ extension MobileAppModel {
         remoteConversationOpenStartedAt = ProcessInfo.processInfo.systemUptime
         mobilePerformanceLog.info("Remote session open started generation=\(generation, privacy: .public)")
         remoteConversationLoading = false
+        remoteTranscriptUnconfirmed = false
         selectedSessionID = sessionID
         timelineRows = []
         messages = []
@@ -421,6 +422,10 @@ extension MobileAppModel {
             guard let self,
                   self.remoteConversationLoadGeneration == generation,
                   self.remoteConversationOpeningSessionID == sessionID else { return }
+            // A pane that already shows this device's stored copy is not empty: it
+            // carries a "syncing" row while the host has not answered, and a
+            // skeleton over it would hide the only content there is.
+            guard self.timelineRows.isEmpty else { return }
             self.remoteConversationLoading = true
             // What ends this wait is the transcript arriving. One that never
             // arrives would otherwise leave the skeleton standing for the rest
@@ -456,6 +461,7 @@ extension MobileAppModel {
         remoteConversationOpeningSessionID = nil
         remoteConversationOpenStartedAt = nil
         remoteConversationLoading = false
+        remoteTranscriptUnconfirmed = false
     }
 
     private func advancePendingDirectoryRemoteDraftIfReady() {
@@ -1100,6 +1106,7 @@ extension MobileAppModel {
         }
         setPublishedIfChanged(\.modelOptions, to: projectedModelOptions)
         if acceptsTimeline, let timeline = ready.timeline {
+            setPublishedIfChanged(\.remoteTranscriptUnconfirmed, to: timeline.origin != .host)
             let projectedRows = MobileConversationRow.reconcile(
                 timeline.conversationRows().map(Self.mapConversationRow), with: timelineRows)
             if timelineRows != projectedRows {
@@ -1125,8 +1132,16 @@ extension MobileAppModel {
                     )
                 }
             }
-            finishRemoteConversationOpenIfReady(timelineSessionID: timeline.sessionId)
+            // Only the host's own transcript settles the open. Rows restored from
+            // this device's copy can be shown (that is what makes a reopen
+            // instant) but they end inside the turn that ran when the app went
+            // away, so treating their arrival as the answer leaves that turn
+            // standing as the whole conversation until the host's rows land.
+            if timeline.origin == .host {
+                finishRemoteConversationOpenIfReady(timelineSessionID: timeline.sessionId)
+            }
         } else {
+            setPublishedIfChanged(\.remoteTranscriptUnconfirmed, to: false)
             setPublishedIfChanged(\.timelineRows, to: [])
             setPublishedIfChanged(\.messages, to: [])
         }

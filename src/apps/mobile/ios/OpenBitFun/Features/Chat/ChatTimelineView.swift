@@ -23,6 +23,21 @@ struct ChatTimelineView: View {
                     // eager tail can repeatedly invalidate its own placement phases
                     // during keyboard dismissal and long streamed replies.
                     VStack(spacing: MobileDesignGeometry.messageSpacing) {
+                        if model.surface == .remote && model.remoteTranscriptUnconfirmed {
+                            // These rows are this device's stored copy, which stops
+                            // wherever its last write stopped — inside the turn that
+                            // was running when the app went away. Say the rest is on
+                            // its way instead of letting a half-finished turn read as
+                            // the session.
+                            HStack(spacing: 7) {
+                                ProgressView().controlSize(.small)
+                                Text(model.localized("正在同步"))
+                                    .font(MobileDesignTypography.labelSmall.font)
+                            }
+                            .foregroundStyle(OpenBitFunTheme.muted)
+                            .frame(maxWidth: .infinity, minHeight: 38)
+                            .accessibilityIdentifier("timeline.syncing")
+                        }
                         if model.surface == .remote && model.remoteHasMoreMessages {
                             Button {
                                 requestOlderHistoryPage()

@@ -22,6 +22,10 @@ final class MobileAppModel: ObservableObject {
     @Published var remoteHasMoreMessages = false
     @Published var remoteHistoryLoading = false
     @Published var remoteHistoryFailed = false
+    /// The rows on screen are this device's stored copy, not the host's
+    /// transcript: a reopened session shows them at once, and the host has not
+    /// answered for it yet. See `ChatTranscriptOrigin`.
+    @Published var remoteTranscriptUnconfirmed = false
     @Published var permissionMailbox: PermissionMailboxUiState?
     @Published var remoteConversationLoading = false
     @Published var remotePermissionMode = "ASK"

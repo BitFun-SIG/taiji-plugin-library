@@ -13,6 +13,7 @@ import com.openbitfun.mobile.core.persistence.PersistedWorkspaceIdentity
 import com.openbitfun.mobile.core.feature.relay.HostCatalogNotice
 
 import com.openbitfun.mobile.core.domain.ChatSyncPhase
+import com.openbitfun.mobile.core.domain.ChatTranscriptOrigin
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
@@ -944,6 +945,12 @@ public class RemoteSessionStore internal constructor(
             }
         }
         if (current == null) _connectionPhase.value = ConnectionPhase.CONNECTING
+        // Opening is not the host answering: the rows above are this device's
+        // stored copy, which stops wherever its last write stopped — inside the
+        // turn that was running when the app went away. Publishing them says
+        // "here is what this device has", and every consumer of the state has to
+        // be able to tell that apart from the host's own transcript.
+        timelineStore.setTranscriptOrigin(ChatTranscriptOrigin.CACHE)
         val operationToken = beginWork()
         _state.value = (_state.value as? RemoteSessionUiState.Ready)?.copy(busy = true) ?: current?.copy(busy = true)
             ?: RemoteSessionUiState.Loading
@@ -1079,6 +1086,10 @@ public class RemoteSessionStore internal constructor(
                     val active = messages.lastOrNull()?.takeIf { it.role == "assistant" && it.status == "streaming" }
                     timelineStore.setPersistedMessages(if (active == null) messages else messages.dropLast(1))
                     timelineStore.setActiveTurn(active)
+                    // These rows are the host's. A stream that restarted (`gap`)
+                    // cleared the store, so this is also where a re-replayed
+                    // session stops reading as this device's own copy.
+                    timelineStore.setTranscriptOrigin(ChatTranscriptOrigin.HOST)
                     val phase = when (messages.lastOrNull()?.status) {
                         "streaming" -> ChatSyncPhase.STREAMING
                         "failed" -> ChatSyncPhase.ERROR
@@ -1091,6 +1102,10 @@ public class RemoteSessionStore internal constructor(
                     { handleFailure(it, _state.value as? RemoteSessionUiState.Ready) },
                     {
                         caughtUp = true
+                        // The host has answered for this session, so a wait for its
+                        // transcript can end. A session with no records has nothing
+                        // to render and is still an answer.
+                        timelineStore.setTranscriptOrigin(ChatTranscriptOrigin.HOST)
                         if (!records.isEmpty) render()
                         publishDurableTimeline()
                         persistTranscript(sessionId, preserveOlder = sessionHistoryHasMore)
@@ -1985,6 +2000,11 @@ public class RemoteSessionStore internal constructor(
         if (!persistenceEnabled || sessionId.isEmpty()) return
         val snapshot = timelineStore.snapshot()
         if (snapshot.sessionId != sessionId) return
+        // Only a transcript the host has confirmed is written back. A restored
+        // copy is this device's own text, and storing it again would let the
+        // next open read an artifact that claims to be the host's view of the
+        // session — including the unfinished turn that made the copy stale.
+        if (snapshot.origin != ChatTranscriptOrigin.HOST) return
         try {
             val p = persistence!!
             val persistedDeviceKey = deviceKey!!

@@ -79,6 +79,7 @@ import com.openbitfun.mobile.core.feature.session.RemoteSessionUiState
 import com.openbitfun.mobile.core.feature.session.conversationRows
 import com.openbitfun.mobile.core.feature.session.modelOptions
 import com.openbitfun.mobile.core.feature.session.selectedModelOption
+import com.openbitfun.mobile.core.feature.session.transcriptUnconfirmed
 import com.openbitfun.mobile.core.feature.workspace.RemoteFileDownloadUiState
 
 internal const val CONVERSATION_TEST_TAG: String = "conversation"
@@ -444,6 +445,9 @@ private fun ConversationTimelineViewHost(
     ConversationTimelineView(
         rows = visibleRows,
         hasMoreMessages = state.hasMoreMessages,
+        transcriptUnconfirmed = state.timeline
+            ?.takeIf { it.sessionId == state.selectedSessionId }
+            ?.transcriptUnconfirmed() == true,
         historyLoadState = state.historyLoadState,
         onLoadOlder = { onIntent(RemoteSessionIntent.LoadOlderMessages) },
         enabled = !state.busy,

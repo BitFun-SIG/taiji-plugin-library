@@ -1,5 +1,6 @@
 package com.openbitfun.mobile.core.feature.session
 
+import com.openbitfun.mobile.core.domain.ChatTranscriptOrigin
 import com.openbitfun.mobile.core.domain.RemoteSession
 import com.openbitfun.mobile.core.feature.connection.ConnectionPhase
 import com.openbitfun.mobile.core.persistence.ChatLocalStore
@@ -459,6 +460,55 @@ class RemoteSessionPersistenceTest {
         store.stop()
     }
 
+    /**
+     * A reopened session immediately shows this device's stored copy, but that
+     * copy is not the host's transcript: it stops wherever its last write
+     * stopped, which is inside the turn that was running when the app went away.
+     * Presenting it as the session is what made a reopen show a lone user
+     * message as the whole conversation, so the state has to say where the rows
+     * came from and only stop saying "waiting" once the host has answered.
+     */
+    @Test
+    fun aRestoredTranscriptIsThisDevicesCopyUntilTheHostAnswers() = runTest {
+        val stores = MemoryPersistence()
+        stores.transcripts.rows["device-a::server"] = listOf(
+            PersistedRemoteMessage(messageId = "m-user", sessionId = "server", role = "user", text = "do the thing"),
+        )
+        val transport = PersistenceTransport().apply {
+            subscribeGate = CompletableDeferred()
+            initialRecords = listOf(richRecord("server", "t-1", 0, 1, "completed", "done"))
+        }
+        val store = RemoteSessionStore.create(this, transport, "device-a", stores.stores)
+
+        store.dispatch(RemoteSessionIntent.Open("server")); runCurrent()
+        val restored = assertIs<RemoteSessionUiState.Ready>(store.state.value)
+        assertEquals(listOf("do the thing"), restored.timeline?.persistedMessages?.map { it.text })
+        assertEquals(ChatTranscriptOrigin.CACHE, restored.timeline?.origin)
+
+        transport.subscribeGate!!.complete(Unit); runCurrent()
+        val fromHost = assertIs<RemoteSessionUiState.Ready>(store.state.value)
+        assertEquals(ChatTranscriptOrigin.HOST, fromHost.timeline?.origin)
+        assertEquals("done", fromHost.timeline?.persistedMessages?.last()?.text)
+        store.stop()
+    }
+
+    @Test
+    fun aRestoredTranscriptIsNotWrittenBackBeforeTheHostAnswers() = runTest {
+        val stores = MemoryPersistence()
+        val stored = listOf(
+            PersistedRemoteMessage(messageId = "m-user", sessionId = "server", role = "user", text = "do the thing"),
+        )
+        stores.transcripts.rows["device-a::server"] = stored
+        val transport = PersistenceTransport().apply { subscribeGate = CompletableDeferred() }
+        val store = RemoteSessionStore.create(this, transport, "device-a", stores.stores)
+
+        store.dispatch(RemoteSessionIntent.Open("server")); runCurrent()
+
+        assertEquals(0, stores.transcripts.writes)
+        assertEquals(stored, stores.transcripts.rows["device-a::server"])
+        store.stop()
+    }
+
     @Test
     fun corruptedPayloadIsRetainedAsDegradedMessage() = runTest {
         val stores = MemoryPersistence()
@@ -544,11 +594,14 @@ private class PersistenceTransport : RemoteCommandTransport, RemoteSessionStream
     var streamFailure: ((Throwable) -> Unit)? = null
     var caughtUp: (() -> Unit)? = null
     var subscriptions = 0
+    /** Holds the host's stream open without answering, for the pre-answer window. */
+    var subscribeGate: CompletableDeferred<Unit>? = null
     var loadOlderGate: CompletableDeferred<Unit>? = null
     override suspend fun loadOlder(sessionId: String) { loadOlderGate?.await() }
     override suspend fun subscribe(sessionId: String, onError: (Throwable) -> Unit, onCaughtUp: () -> Unit): Flow<JsonObject> = flow {
         subscriptions++
         streamFailure = onError; caughtUp = onCaughtUp
+        subscribeGate?.await()
         initialRecords.forEach { emit(it) }
         onCaughtUp()
         records.collect { emit(it) }
