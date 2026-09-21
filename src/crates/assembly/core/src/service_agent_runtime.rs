@@ -22,11 +22,11 @@ use openbitfun_agent_runtime::sdk::{
 use openbitfun_events::AgenticEvent;
 #[cfg(feature = "remote-connect")]
 use openbitfun_runtime_ports::{
-    AgentDialogSteerRequest, AgentInputAttachment, AgentSubmissionSource,
-    AgentTurnCancellationRequest, DialogSteerOutcome, PermissionPolicyPreset,
-    RemoteControlStatePort, RemoteControlStateRequest, RemoteControlStateSnapshot,
-    RemoteSessionWorkspaceIdentity, RuntimeServiceCapability, RuntimeServicePort,
-    ToolPermissionConfig,
+    AgentDialogSteerRequest, AgentInputAttachment, AgentSessionComposerUpdate,
+    AgentSubmissionSource, AgentTurnCancellationRequest, DialogSteerOutcome,
+    PermissionPolicyPreset, RemoteControlStatePort, RemoteControlStateRequest,
+    RemoteControlStateSnapshot, RemoteSessionWorkspaceIdentity, RuntimeServiceCapability,
+    RuntimeServicePort, ToolPermissionConfig,
 };
 use openbitfun_runtime_ports::{
     AgentDialogTurnPort, AgentDialogTurnRequest, AgentLifecycleDeliveryPort,
@@ -54,10 +54,11 @@ use openbitfun_services_integrations::remote_connect::{
     RemoteInitialSyncRuntimeHost, RemoteInteractionRuntimeHost, RemoteModelCapabilityFact,
     RemoteModelCatalog, RemoteModelCatalogFacts, RemoteModelFacts, RemotePermissionMode,
     RemotePollRuntimeHost, RemoteRecentWorkspaceFacts, RemoteSessionMetadata,
-    RemoteSessionModelSelection, RemoteSessionRuntimeHost, RemoteSessionStateTracker,
-    RemoteSessionTrackerHost, RemoteTerminalPrewarmRequest, RemoteWorkspaceFacts,
-    RemoteWorkspaceFileRuntimeHost, RemoteWorkspaceKind as RemoteConnectWorkspaceKind,
-    RemoteWorkspaceRuntimeHost, RemoteWorkspaceUpdate,
+    RemoteSessionModelSelection, RemoteSessionRollbackOutcome, RemoteSessionRuntimeHost,
+    RemoteSessionStateTracker, RemoteSessionTrackerHost, RemoteTerminalPrewarmRequest,
+    RemoteWorkspaceFacts, RemoteWorkspaceFileRuntimeHost,
+    RemoteWorkspaceKind as RemoteConnectWorkspaceKind, RemoteWorkspaceRuntimeHost,
+    RemoteWorkspaceUpdate,
 };
 use std::sync::Arc;
 use std::time::Duration;
@@ -880,6 +881,7 @@ fn remote_chat_history_turn_from_core_turn(
 
     RemoteChatHistoryTurn {
         turn_id: turn.turn_id.clone(),
+        turn_index: turn.turn_index,
         user_message_id: turn.user_message.id.clone(),
         user_display_content: user_projection.content,
         user_timestamp_ms: turn.user_message.timestamp,
@@ -1279,7 +1281,12 @@ impl AgentSessionRevertPort for ScheduledSessionManagementPort {
             .map_err(map_session_close_error)?;
         let maintenance = self
             .scheduler
-            .begin_session_maintenance(&request.session_id, &storage_path, Duration::from_secs(30))
+            .begin_session_maintenance_with_policy(
+                &request.session_id,
+                &storage_path,
+                Duration::from_secs(30),
+                request.require_idle,
+            )
             .await
             .map_err(map_session_close_error)?;
         let _mutation = session_manager
@@ -3442,6 +3449,61 @@ impl RemoteSessionRuntimeHost for CoreRemoteSessionRuntimeHost {
         CoreServiceAgentRuntime::load_remote_chat_messages(session_storage_dir, session_id).await
     }
 
+    /// Reuse the desktop targeted-rollback transaction so a remote client
+    /// retires turns and restores files for real instead of hiding messages in
+    /// its own transcript.
+    async fn rollback_session_to_turn(
+        &self,
+        session_id: &str,
+        target_turn_id: &str,
+        expected_storage_turn_index: Option<usize>,
+    ) -> Result<RemoteSessionRollbackOutcome, String> {
+        let binding = CoreServiceAgentRuntime::resolve_session_workspace_binding(session_id)
+            .await
+            .ok_or_else(|| {
+                format!("Session workspace binding not available for session: {session_id}")
+            })?;
+        if binding.is_remote() {
+            return Err("Session rollback is unavailable for remote workspaces".to_string());
+        }
+        ensure_remote_binding_runtime_ownership(self.coordinator.as_ref(), &binding).await?;
+
+        let outcome = self
+            .runtime
+            .rollback_session_to_turn(AgentSessionRollbackToTurnRequest {
+                workspace_path: binding.logical_workspace_path_string(),
+                workspace_id: binding.workspace_id.clone(),
+                workspace_hostname: Some(binding.session_identity.hostname.clone()),
+                session_id: session_id.to_string(),
+                target_turn_id: target_turn_id.to_string(),
+                require_idle: true,
+                expected_storage_turn_index,
+                expected_catalog_revision: None,
+                remote_connection_id: None,
+                remote_ssh_host: None,
+            })
+            .await
+            .map_err(|error| error.into_message())?;
+
+        match outcome {
+            AgentSessionRollbackToTurnOutcome::Completed { result } => {
+                Ok(RemoteSessionRollbackOutcome {
+                    retired_turn_ids: result.retired_turn_ids,
+                    restored_files: result.restored_files,
+                    composer_text: match result.composer {
+                        AgentSessionComposerUpdate::Replace { text } => Some(text),
+                        AgentSessionComposerUpdate::Preserve
+                        | AgentSessionComposerUpdate::Clear => None,
+                    },
+                    changed: result.changed,
+                })
+            }
+            AgentSessionRollbackToTurnOutcome::RecoveryRequired { reason, .. } => Err(format!(
+                "Session rollback requires recovery before it can continue: {reason}"
+            )),
+        }
+    }
+
     async fn delete_session(
         &self,
         session_storage_dir: &std::path::Path,
@@ -4022,6 +4084,14 @@ mod tests {
             .and_then(|source| source.split("fn remove_tracker").next())
             .expect("remote session delete");
         assert!(delete.contains("ensure_remote_binding_runtime_ownership"));
+
+        let rollback = remote_session_host
+            .split("async fn rollback_session_to_turn")
+            .nth(1)
+            .and_then(|source| source.split("async fn delete_session").next())
+            .expect("remote session rollback");
+        assert!(rollback.contains("ensure_remote_binding_runtime_ownership"));
+        assert!(rollback.contains("binding.is_remote()"));
     }
 
     #[test]

@@ -168,7 +168,7 @@ async fn host_queue_steering_retains_payload_until_consumption_and_rejects_cance
 
 #[tokio::test]
 async fn host_queue_unconsumed_steering_and_failed_queue_remain_recoverable() {
-    let (scheduler, _, _root, epoch) = fixture().await;
+    let (scheduler, sessions, _root, epoch) = fixture().await;
     for id in ["queued-a", "queued-b"] {
         scheduler
             .manage_host_queue(request(
@@ -224,6 +224,35 @@ async fn host_queue_unconsumed_steering_and_failed_queue_remain_recoverable() {
     .await
     .unwrap();
     assert_eq!(scheduler.queue_depth("host-queue-session"), 2);
+    sessions
+        .update_session_state("host-queue-session", SessionState::Idle)
+        .await
+        .unwrap();
+    let before = scheduler
+        .manage_host_queue(request(None, Action::List))
+        .await
+        .unwrap();
+    let storage = sessions
+        .storage_path_binding_for_test("host-queue-session")
+        .unwrap();
+    assert!(
+        scheduler
+            .begin_session_maintenance_with_policy(
+                "host-queue-session",
+                &storage,
+                Duration::ZERO,
+                true,
+            )
+            .await
+            .is_err()
+    );
+    let after = scheduler
+        .manage_host_queue(request(Some(&epoch), Action::List))
+        .await
+        .unwrap();
+    assert_eq!(after.queue_epoch, before.queue_epoch);
+    assert_eq!(after.revision, before.revision);
+    assert_eq!(after.items, before.items);
 }
 
 #[tokio::test]

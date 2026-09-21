@@ -1742,6 +1742,10 @@ pub struct AgentSessionRollbackToTurnRequest {
     pub workspace_hostname: Option<String>,
     pub session_id: String,
     pub target_turn_id: String,
+    /// Reject active or queued work under the host scheduling lock before any mutation.
+    /// Older callers retain the existing cancel-and-drain maintenance policy.
+    #[serde(default)]
+    pub require_idle: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub expected_storage_turn_index: Option<usize>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -2231,6 +2235,7 @@ mod tests {
             workspace_hostname: Some("localhost".to_string()),
             session_id: "session-1".to_string(),
             target_turn_id: "turn-7".to_string(),
+            require_idle: true,
             expected_storage_turn_index: Some(7),
             expected_catalog_revision: Some("catalog-3".to_string()),
             remote_connection_id: None,
@@ -2256,6 +2261,7 @@ mod tests {
                 "targetTurnId": "turn-7"
             }))
             .expect("deserialize pre-workspace-identity rollback request");
+        assert!(!legacy_request.require_idle);
         assert_eq!(legacy_request.workspace_id, None);
         assert_eq!(legacy_request.workspace_hostname, None);
         // IDs are opaque. SSH metadata is an old projection, not type authority.
@@ -3408,7 +3414,6 @@ mod tests {
         let snapshot = AgentSessionLineageSnapshot {
             root_session_id: "root_1".to_string(),
             sessions: vec![AgentSessionLineageEntry {
-                workspace_id: None,
                 session_id: "child_1".to_string(),
                 session_name: "Research".to_string(),
                 agent_type: "explore".to_string(),
@@ -3419,6 +3424,7 @@ mod tests {
                 parent_tool_call_id: Some("tool_1".to_string()),
                 subagent_type: Some("explore".to_string()),
                 agent_id: Some("parser-review".to_string()),
+                workspace_id: None,
                 workspace_path: Some("/workspace/project".to_string()),
                 remote_connection_id: Some("conn-1".to_string()),
                 remote_ssh_host: Some("host-1".to_string()),

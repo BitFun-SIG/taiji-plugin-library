@@ -4,7 +4,7 @@ import { PermissionMailbox } from '../components/PermissionMailbox';
 import { QuestionInteractionContext } from "../components/ChatAskQuestionCard";
 import { ChevronDown as LucideChevronDown } from 'lucide-react';
 import React, { useEffect, useLayoutEffect, useRef, useState, useCallback, useMemo } from 'react';
-import { MobileIconButton, MobileStatus } from '@openbitfun/ui/mobile';
+import { MobileConfirmSheet, MobileIconButton, MobileStatus, MobileTextarea } from '@openbitfun/ui/mobile';
 import { useI18n } from '../i18n';
 import { useControlTargetEpoch } from '../hooks/useControlTargetEpoch';
 import {
@@ -203,6 +203,12 @@ const ChatPage: React.FC<ChatPageProps> = ({
   const [menuMessage, setMenuMessage] = useState<ChatMessage | null>(null);
   const [actionToast, setActionToast] = useState<string | null>(null);
   const [deletingMsg, setDeletingMsg] = useState(false);
+  const [rollbackTarget, setRollbackTarget] = useState<{
+    message: ChatMessage;
+    mode: 'rollback' | 'edit';
+  } | null>(null);
+  const [rollbackDraft, setRollbackDraft] = useState('');
+  const [rollbackBusy, setRollbackBusy] = useState(false);
   const msgLongPressTimerRef = useRef<ReturnType<typeof setTimeout>>();
   const msgLongPressPosRef = useRef({ x: 0, y: 0 });
   const msgToastTimerRef = useRef<ReturnType<typeof setTimeout>>();
@@ -238,6 +244,9 @@ const ChatPage: React.FC<ChatPageProps> = ({
       setTranscriptHydrating(true);
       setMenuMessage(null);
       setDeletingMsg(false);
+      setRollbackTarget(null);
+      setRollbackDraft('');
+      setRollbackBusy(false);
       setActionToast(null);
       setInfoToast(null);
       setExpandedMsgIds(new Set());
@@ -630,6 +639,112 @@ const ChatPage: React.FC<ChatPageProps> = ({
       setMenuMessage(null);
     }
   }, [cacheScope, menuMessage, sessionId, showMsgToast, t]);
+
+  const openRollbackSheet = useCallback((mode: 'rollback' | 'edit') => {
+    if (!menuMessage?.turn_id) return;
+    setRollbackDraft(mode === 'edit' ? sanitizeMessageText(menuMessage.content) : '');
+    setRollbackTarget({ message: menuMessage, mode });
+    setMenuMessage(null);
+  }, [menuMessage]);
+
+  const closeRollbackSheet = useCallback(() => {
+    if (rollbackBusy) return;
+    setRollbackTarget(null);
+    setRollbackDraft('');
+  }, [rollbackBusy]);
+
+  // Rollback is the host-side mutation: it retires the later turns and restores
+  // the files they wrote. Editing is that same rollback followed by a normal
+  // send, which is how the desktop reruns an edited user message.
+  const handleConfirmRollback = useCallback(async () => {
+    if (!rollbackTarget || rollbackBusy) return;
+    // The host independently checks idle under its scheduling lock; this
+    // presentation guard only avoids a request while this view is already busy.
+    if (isStreaming) return;
+    const { message, mode } = rollbackTarget;
+    const turnId = message.turn_id;
+    if (!turnId) return;
+    const editedText = mode === 'edit' ? rollbackDraft.trim() : '';
+    if (mode === 'edit' && !editedText) return;
+    const targetEpoch = captureChatTargetEpoch();
+    if (targetEpoch === null) return;
+
+    setRollbackBusy(true);
+    try {
+      const result = await sessionMgr.rollbackSessionToTurn(sessionId, turnId, message.turn_index);
+      if (!isChatTargetCurrent(targetEpoch)) return;
+      setRollbackTarget(null);
+      setRollbackDraft('');
+      // History changed on the host. Pull the authoritative snapshot now, before
+      // the follow-up send can fail, or the transcript keeps showing turns that
+      // no longer exist until the next idle poll.
+      streamRef.current?.nudge();
+
+      if (mode === 'edit') {
+        const imageContexts = message.images?.length
+          ? message.images.map((img, idx) => ({
+              id: `mobile_edit_${Date.now()}_${idx}`,
+              data_url: img.data_url,
+              mime_type: img.data_url.split(';')[0]?.replace('data:', '') || 'image/png',
+              metadata: { name: img.name, source: 'remote' },
+            }))
+          : undefined;
+        try {
+          await sessionMgr.sendMessage(sessionId, editedText, sessionAgentType, imageContexts);
+        } catch (sendError) {
+          // The rollback already retired the turn this text came from, so the
+          // draft has nowhere to fall back to. Hand it to the composer instead
+          // of dropping it when the send is what failed.
+          if (isChatTargetCurrent(targetEpoch)) {
+            setInput(editedText);
+            setPendingImages((message.images ?? []).map(img => ({ name: img.name, dataUrl: img.data_url })));
+            setInputExpanded(true);
+          }
+          throw sendError;
+        }
+        if (!isChatTargetCurrent(targetEpoch)) return;
+      } else if (result.composer_text) {
+        setInput(result.composer_text);
+        setInputExpanded(true);
+      }
+
+      showMsgToast(
+        mode === 'edit'
+          ? t('chat.editDone')
+          : result.restored_files.length > 0
+            ? t('chat.rollbackDoneRestored', { count: result.restored_files.length })
+            : t('chat.rollbackDone'),
+      );
+      streamRef.current?.nudge();
+    } catch (e: any) {
+      // A failed rollback can still have mutated host history (a
+      // recovery-required outcome restores files before it reports the
+      // conflict), so pull the authoritative snapshot instead of leaving the
+      // transcript stale until the next idle poll. The stream ref belongs to
+      // the current chat, so guard against a session switch mid-flight.
+      if (isChatTargetCurrent(targetEpoch)) {
+        streamRef.current?.nudge();
+      }
+      if (isChatTargetCurrent(targetEpoch)) reportRemoteSessionError(e, setError);
+    } finally {
+      if (isChatTargetCurrent(targetEpoch)) {
+        setRollbackBusy(false);
+      }
+    }
+  }, [
+    captureChatTargetEpoch,
+    isChatTargetCurrent,
+    isStreaming,
+    rollbackBusy,
+    rollbackDraft,
+    rollbackTarget,
+    sessionAgentType,
+    sessionId,
+    sessionMgr,
+    setError,
+    showMsgToast,
+    t,
+  ]);
 
   // Cleanup timers on unmount
   useEffect(() => {
@@ -1102,11 +1217,53 @@ const ChatPage: React.FC<ChatPageProps> = ({
       <ChatMessageActions
         deleting={deletingMsg}
         message={menuMessage}
+        streaming={isStreaming}
+        rollbackSupported={sessionMgr.supportsHostCapability('session_rollback_v1')}
         onClose={() => setMenuMessage(null)}
         onCopy={() => void handleCopyMessage()}
         onDelete={() => void handleDeleteMessage()}
         onResend={() => void handleResendMessage()}
+        onEdit={() => openRollbackSheet('edit')}
+        onRollback={() => openRollbackSheet('rollback')}
       />
+
+      {/* Rollback / edit confirmation sheet */}
+      <MobileConfirmSheet
+        cancelLabel={t('common.cancel')}
+        confirmDisabled={rollbackBusy || isStreaming || (rollbackTarget?.mode === 'edit' && !rollbackDraft.trim())}
+        confirmLabel={rollbackTarget?.mode === 'edit' ? t('chat.editAction') : t('chat.rollbackAction')}
+        confirmTone="danger"
+        description={rollbackTarget?.mode === 'edit' ? t('chat.editSheetHint') : t('chat.rollbackSheetHint')}
+        onConfirm={handleConfirmRollback}
+        onOpenChange={(open) => {
+          if (!open) closeRollbackSheet();
+        }}
+        open={rollbackTarget !== null}
+        pending={rollbackBusy}
+        showHandle
+        title={rollbackTarget?.mode === 'edit' ? t('chat.editSheetTitle') : t('chat.rollbackSheetTitle')}
+      >
+        {rollbackTarget && (
+          <div className="chat-msg__rollback">
+            {rollbackTarget.mode === 'edit' ? (
+              <MobileTextarea
+                autoFocus
+                className="chat-msg__rollback-input"
+                disabled={rollbackBusy}
+                onChange={(e) => setRollbackDraft(e.target.value)}
+                placeholder={t('chat.editPlaceholder')}
+                rows={4}
+                value={rollbackDraft}
+              />
+            ) : (
+              <p className="chat-msg__rollback-quote">{sanitizeMessageText(rollbackTarget.message.content)}</p>
+            )}
+            {isStreaming && (
+              <p className="chat-msg__menu-note">{t('chat.rollbackBlockedWhileBusy')}</p>
+            )}
+          </div>
+        )}
+      </MobileConfirmSheet>
 
       {/* Floating composer with compact and expanded touch layouts. */}
       <input
