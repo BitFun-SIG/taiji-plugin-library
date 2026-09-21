@@ -1127,6 +1127,14 @@ Patch schema for "update":
                         session_id
                     ));
                 }
+                if !cron_service.is_scheduling_owner() {
+                    // Two instances can share one user data directory. Saying so
+                    // here stops the agent from presenting a standby list as the
+                    // state that will actually run.
+                    result_for_assistant.push_str(
+                        "\n\nScheduling note: another running OpenBitFun instance owns scheduled job execution right now, so these jobs run there and edits or manual runs are refused in this instance.",
+                    );
+                }
 
                 Ok(vec![ToolResult::Result {
                     data: json!({
