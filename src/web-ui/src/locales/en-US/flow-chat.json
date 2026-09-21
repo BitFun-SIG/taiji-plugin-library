@@ -528,7 +528,6 @@
     "editPlaceholder": "Edit your message...",
     "cannotEdit": "Cannot edit this message",
     "editDisabledBusy": "Wait until the session is idle before editing and rerunning.",
-    "editDisabledImages": "Image messages cannot be edited yet",
     "editDisabledRemote": "Editing and rerunning requires complete rollback, which is unavailable because remote file snapshots are not recorded.",
     "editDisabledDispatch": "Editing and rerunning requires history rollback, which is not yet available for remote tasks.",
     "editDisabledLocalCommand": "Local command messages cannot be edited",
