@@ -67,6 +67,7 @@ describe('mobile chat submission acknowledgement', () => {
       subscribeSessionStream: vi.fn().mockResolvedValue({ close() {}, wake() {}, async loadOlder() {} }),
       getSessionMessages: vi.fn().mockResolvedValue({ messages: [], has_more: false }),
       getModelCatalog: vi.fn().mockResolvedValue({ version: 1, models: [], default_models: {}, session_model_id: 'auto' }),
+      supportsHostCapability: vi.fn().mockReturnValue(false),
       sendMessage,
     } as unknown as RemoteSessionManager;
   });
