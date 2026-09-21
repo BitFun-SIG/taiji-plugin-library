@@ -641,16 +641,16 @@ pub struct AgentCompanionPetSelection {
 
 fn default_agent_companion_pet() -> Option<AgentCompanionPetSelection> {
     Some(AgentCompanionPetSelection {
-        id: "blue-golden".to_string(),
-        display_name: "困困".to_string(),
+        id: "bitblob".to_string(),
+        display_name: "BitBlob".to_string(),
         description: Some(
-            "A sweet, round-faced blue-golden shaded cat with wide bright eyes and soft silver-blue fur warmed by creamy-gold highlights.".to_string(),
+            "Rounded lavender companion with a soft antenna and curious eyes.".to_string(),
         ),
         source: "preset".to_string(),
-        package_path: "/agent-companion-pets/blue-golden".to_string(),
-        spritesheet_path: "/agent-companion-pets/blue-golden/spritesheet.png".to_string(),
-        spritesheet_mime_type: "image/png".to_string(),
-        sprite_version_number: None,
+        package_path: "/agent-companion-pets/bitblob".to_string(),
+        spritesheet_path: "/agent-companion-pets/bitblob/spritesheet.webp".to_string(),
+        spritesheet_mime_type: "image/webp".to_string(),
+        sprite_version_number: Some(2),
     })
 }
 
@@ -2735,7 +2735,7 @@ mod tests {
     }
 
     #[test]
-    fn defaults_agent_companion_pet_to_blue_golden() {
+    fn defaults_agent_companion_pet_to_bitblob() {
         let config: AIExperienceConfig =
             serde_json::from_value(serde_json::json!({})).expect("empty config should default");
 
@@ -2743,14 +2743,15 @@ mod tests {
             .agent_companion_pet
             .as_ref()
             .expect("default companion pet should be present");
-        assert_eq!(pet.id, "blue-golden");
-        assert_eq!(pet.display_name, "困困");
-        assert_eq!(pet.package_path, "/agent-companion-pets/blue-golden");
+        assert_eq!(pet.id, "bitblob");
+        assert_eq!(pet.display_name, "BitBlob");
+        assert_eq!(pet.package_path, "/agent-companion-pets/bitblob");
         assert_eq!(
             pet.spritesheet_path,
-            "/agent-companion-pets/blue-golden/spritesheet.png"
+            "/agent-companion-pets/bitblob/spritesheet.webp"
         );
-        assert_eq!(pet.spritesheet_mime_type, "image/png");
+        assert_eq!(pet.spritesheet_mime_type, "image/webp");
+        assert_eq!(pet.sprite_version_number, Some(2));
     }
 
     #[test]
