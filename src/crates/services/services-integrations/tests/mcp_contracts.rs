@@ -2251,12 +2251,78 @@ fn mcp_config_accepts_camel_case_streamable_http_type() {
         Some(MCPServerTransport::StreamableHttp)
     );
 
-    for alias in ["streamable-http", "streamable_http", "streamablehttp", "HTTP"] {
+    for alias in [
+        "streamable-http",
+        "streamable_http",
+        "streamablehttp",
+        "HTTP",
+    ] {
         validate_mcp_json_config(&serde_json::json!({
             "mcpServers": {
                 "alias": { "type": alias, "url": "https://example.com/mcp" }
             }
         }))
         .unwrap_or_else(|error| panic!("type '{}' must validate: {}", alias, error));
+    }
+}
+
+#[test]
+fn mcp_config_normalizes_token_case_for_type_transport_and_source() {
+    // The visual editor lowercases `type`, `transport`, and `source` before
+    // matching. The core validator and parser must agree, otherwise a config
+    // the form renders happily fails again when the document is saved.
+    let cases = [
+        (
+            serde_json::json!({ "type": "StreamableHTTP", "url": "https://example.com/mcp" }),
+            "streamable-http",
+            MCPServerTransport::StreamableHttp,
+        ),
+        (
+            serde_json::json!({
+                "transport": "STREAMABLE-HTTP",
+                "url": "https://example.com/mcp"
+            }),
+            "streamable-http",
+            MCPServerTransport::StreamableHttp,
+        ),
+        (
+            serde_json::json!({
+                "source": "REMOTE",
+                "transport": "SSE",
+                "url": "https://example.com/sse"
+            }),
+            "sse",
+            MCPServerTransport::Sse,
+        ),
+        (
+            serde_json::json!({ "source": "Local", "command": "npx", "args": ["-y", "server"] }),
+            "stdio",
+            MCPServerTransport::Stdio,
+        ),
+    ];
+
+    for (server, canonical_type, transport) in cases {
+        let config = serde_json::json!({ "mcpServers": { "case": server.clone() } });
+
+        validate_mcp_json_config(&config)
+            .unwrap_or_else(|error| panic!("'{}' must validate: {}", server, error));
+
+        let parsed = parse_cursor_format(&config);
+        assert_eq!(
+            parsed.len(),
+            1,
+            "'{}' must be parsed instead of silently dropped",
+            server
+        );
+        assert_eq!(parsed[0].transport, Some(transport), "for '{}'", server);
+
+        // Accepting a spelling must not change the canonical token we persist.
+        let written = config_to_cursor_format(&parsed[0]);
+        assert_eq!(
+            written["type"].as_str(),
+            Some(canonical_type),
+            "'{}' must persist the canonical token",
+            server
+        );
     }
 }
