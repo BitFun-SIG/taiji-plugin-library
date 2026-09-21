@@ -361,6 +361,27 @@
     }
   }
 
+  &__inline-item-worktree-badge {
+    flex: 0 0 auto;
+    // Icon-only circle sized like the neighbouring background-subagent badge, so
+    // the marker reads at a normal icon size without a label beside the title.
+    display: inline-grid;
+    place-items: center;
+    inline-size: var(--openbitfun-control-icon-size-md);
+    block-size: var(--openbitfun-control-icon-size-md);
+    border: 1px dashed var(--openbitfun-color-border-subtle);
+    border-radius: 999px;
+    background: var(--openbitfun-color-action-quiet-hover);
+    color: var(--openbitfun-color-content-secondary);
+    // Kill the inline strut so the icon stays optically centered in the circle.
+    line-height: 0;
+
+    .openbitfun-nav-panel__inline-item-worktree-icon {
+      inline-size: var(--openbitfun-control-icon-size-xs);
+      block-size: var(--openbitfun-control-icon-size-xs);
+    }
+  }
+
   &__inline-item-background-subagent-badge {
     flex: 0 0 auto;
     position: relative;

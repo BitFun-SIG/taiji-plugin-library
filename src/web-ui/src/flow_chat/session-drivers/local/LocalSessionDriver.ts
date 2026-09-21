@@ -1,4 +1,4 @@
-import { requireSessionWorkspaceId, sessionWorkspaceId } from '../../utils/sessionWorkspace';
+import { requireSessionOwningWorkspaceId, sessionOwningWorkspaceId } from '../../utils/sessionOrdering';
 /**
  * Local session driver: the default flavor backed by this machine's (or the
  * attached peer's) agent runtime via `agentAPI`.
@@ -37,6 +37,7 @@ import { nextStorageTurnIndex } from '../../utils/flowChatTurnIdentity';
 import { markCurrentTurnItemsAsCancelled } from '../../utils/turnCancellation';
 import {
   sessionProjectWorkspacePath,
+  sessionWorkspaceId,
 } from '../../utils/sessionWorkspace';
 import { sessionWorktreeMaterializationPlan } from '../../utils/sessionWorktree';
 import { cleanupSaveState, updateSessionMetadata } from '../../services/flow-chat-manager/PersistenceModule';
@@ -116,7 +117,7 @@ export const localSessionDriver: SessionDriver = {
     };
 
     const createdTitleDescriptor = await initializeSessionTitleMetadata(
-      response.sessionId, titleDescriptor, requireSessionWorkspaceId({ config: resolvedConfig }),
+      response.sessionId, titleDescriptor, requireSessionOwningWorkspaceId({ config: resolvedConfig }),
       surfaceScope,
     );
 
@@ -169,7 +170,7 @@ export const localSessionDriver: SessionDriver = {
 
     await sessionAPI.archiveSession(
       sessionId,
-      requireSessionWorkspaceId(session));
+      requireSessionOwningWorkspaceId(session));
 
     context.flowChatStore.removeSession(
       sessionId,
@@ -197,7 +198,7 @@ export const localSessionDriver: SessionDriver = {
     const updatedTitle = await agentAPI.updateSessionTitle({
       sessionId,
       title,
-      workspaceId: sessionWorkspaceId(session),
+      workspaceId: sessionOwningWorkspaceId(session),
       workspacePath: sessionProjectWorkspacePath(session),
       remoteConnectionId: session.remoteConnectionId,
       remoteSshHost: session.remoteSshHost,
@@ -256,8 +257,8 @@ export const localSessionDriver: SessionDriver = {
     }
     await agentAPI.compactSession({
       sessionId,
-      workspaceId: sessionWorkspaceId(session),
-      workspacePath: session.workspacePath,
+      workspaceId: sessionOwningWorkspaceId(session),
+      workspacePath: sessionProjectWorkspacePath(session),
       remoteConnectionId: session.remoteConnectionId,
       remoteSshHost: session.remoteSshHost,
     });
@@ -408,6 +409,7 @@ export const localSessionDriver: SessionDriver = {
           workspacePath: result.workspacePath,
           projectWorkspacePath: result.projectWorkspacePath,
           workspaceId: result.workspaceId,
+          projectWorkspaceId: result.projectWorkspaceId,
           executionTarget: result.executionTarget,
         });
         if (result.retainedWorktreePath) {

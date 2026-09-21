@@ -118,7 +118,12 @@ import {
   isSessionWorktreeBindingLocked,
 } from '../utils/sessionWorktree';
 import { chatInputSessionSubscriptionKey } from '../utils/chatInputSessionSubscription';
-import { isLocalWorkspaceSession, sessionProjectWorkspacePath } from '../utils/sessionWorkspace';
+import {
+  isLocalWorkspaceSession,
+  sessionProjectWorkspacePath,
+  sessionWorkspaceId,
+} from '../utils/sessionWorkspace';
+import { sessionOwningWorkspaceId } from '../utils/sessionOrdering';
 import { findWorkspaceForSession } from '../utils/workspaceScope';
 import { isTauriRuntime, isWindowsDesktopRuntime } from '@/infrastructure/runtime';
 import { subscribeOverlayInteraction, createOverlayPortal, OverflowText, Tooltip } from '@openbitfun/ui';
@@ -1127,11 +1132,27 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       ? findWorkspaceForSession(effectiveTargetSession, openedWorkspaces.values())
       : workspace ?? undefined
   ), [effectiveTargetSession, openedWorkspaces, workspace]);
-  // Workspace record the input addresses: the targeted session's own record,
-  // or the context workspace while no session exists yet. An empty string means
-  // the targeted session has no record; it must not fall back to the context.
+  // Workspace record the session's own state and configuration are addressed
+  // with. A worktree-isolated session belongs to the project it was started
+  // from: its worktree record exists for execution and is usually not an open
+  // workspace, so a request addressed with that record is rejected outright
+  // while the owning project resolves to the identical session directory.
+  const sessionOwningId = effectiveTargetSession
+    ? sessionOwningWorkspaceId(effectiveTargetSession)
+    : undefined;
+  const sessionOwningPath = effectiveTargetSession
+    ? sessionProjectWorkspacePath(effectiveTargetSession)
+    : undefined;
+  // Workspace record the input addresses, or the context workspace while no
+  // session exists yet. An empty string means the targeted session has no
+  // record; it must not fall back to the context.
   const inputWorkspaceId = effectiveTargetSession
-    ? effectiveTargetSession.workspaceId ?? ''
+    ? sessionOwningId ?? ''
+    : contextWorkspace?.id;
+  // Workspace record of the directory the session actually runs in. Git state
+  // and dispatch baselines describe that checkout, not the owning project.
+  const executionWorkspaceId = effectiveTargetSession
+    ? sessionWorkspaceId(effectiveTargetSession) ?? ''
     : contextWorkspace?.id;
   const sessionBoundRemoteConnectionId = (
     hasRegisteredWorkspace
@@ -1170,15 +1191,15 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     // Workspace identity decides whether the session belongs to the current
     // workspace; a session in a linked worktree still belongs to its owning
     // project. Path comparison only serves sessions that predate workspace IDs.
-    const sessionWorkspaceId = hasRegisteredWorkspace
+    const sessionRecordWorkspaceId = hasRegisteredWorkspace
       ? undefined
       : (effectiveTargetSession?.workspaceId || effectiveTargetSession?.config.workspaceId);
-    const sessionProjectWorkspaceId = hasRegisteredWorkspace
+    const sessionProjectRecordWorkspaceId = hasRegisteredWorkspace
       ? undefined
       : (effectiveTargetSession?.projectWorkspaceId || effectiveTargetSession?.config.projectWorkspaceId);
     const contextWorkspaceId = hasRegisteredWorkspace ? undefined : workspace?.id;
-    const sessionUsesDifferentRoot = sessionWorkspaceId && contextWorkspaceId
-      ? sessionWorkspaceId !== contextWorkspaceId && sessionProjectWorkspaceId !== contextWorkspaceId
+    const sessionUsesDifferentRoot = sessionRecordWorkspaceId && contextWorkspaceId
+      ? sessionRecordWorkspaceId !== contextWorkspaceId && sessionProjectRecordWorkspaceId !== contextWorkspaceId
       : !!sessionPath
         && (!contextPath || !isSamePath(sessionPath, contextPath))
         && !(
@@ -2460,7 +2481,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         const response = await agentAPI.getSessionPermissionMode({
           sessionId: permissionSessionId,
           turnId: activePermissionTurnId ?? undefined,
-          workspacePath: effectiveTargetSession?.workspacePath,
+          workspaceId: sessionOwningId,
+          workspacePath: sessionOwningPath,
           remoteConnectionId: effectiveTargetSession?.remoteConnectionId,
           remoteSshHost: effectiveTargetSession?.remoteSshHost,
         });
@@ -2494,6 +2516,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   }, [
     activePermissionTurnId,
     effectiveTargetSessionId,
+    sessionOwningId,
+    sessionOwningPath,
     effectiveTargetSession?.workspacePath,
     effectiveTargetSession?.remoteConnectionId,
     effectiveTargetSession?.remoteSshHost,
@@ -2524,7 +2548,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         sessionId: targetSessionId,
         mode: nextMode,
         turnId: targetTurnId ?? undefined,
-        workspacePath: effectiveTargetSession?.workspacePath,
+        workspaceId: sessionOwningId,
+        workspacePath: sessionOwningPath,
         remoteConnectionId: effectiveTargetSession?.remoteConnectionId,
         remoteSshHost: effectiveTargetSession?.remoteSshHost,
       });
@@ -2558,7 +2583,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }
   }, [
     effectiveTargetSessionId,
-    effectiveTargetSession?.workspacePath,
+    sessionOwningId,
+    sessionOwningPath,
     effectiveTargetSession?.remoteConnectionId,
     effectiveTargetSession?.remoteSshHost,
     activeTurnPermissionMode,
@@ -2645,7 +2671,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         sessionId: targetSessionId,
         turnId: targetTurnId,
         mode: nextTemporaryMode,
-        workspacePath: effectiveTargetSession?.workspacePath,
+        workspaceId: sessionOwningId,
+        workspacePath: sessionOwningPath,
         remoteConnectionId: effectiveTargetSession?.remoteConnectionId,
         remoteSshHost: effectiveTargetSession?.remoteSshHost,
       });
@@ -2682,9 +2709,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     confirmFullAccessIfNeeded,
     effectiveTargetSession?.remoteConnectionId,
     effectiveTargetSession?.remoteSshHost,
-    effectiveTargetSession?.workspacePath,
     effectiveTargetSessionId,
     isAcpTargetSession,
+    sessionOwningId,
+    sessionOwningPath,
     permissionModeSaving,
     t,
   ]);
@@ -6109,7 +6137,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   );
   const workspaceStrip = workspaceStripVisible ? (
     <ChatInputWorkspaceStrip
-      workspaceId={inputWorkspaceId ?? ''}
+      workspaceId={executionWorkspaceId ?? ''}
       repositoryPath={chatStripRepositoryPath}
       workspaceLabel={chatStripWorkspaceLabel}
       executionTarget={effectiveTargetSession?.config.executionTarget}
