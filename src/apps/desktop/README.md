@@ -252,3 +252,34 @@ local Desktop scene. Peer mode and older hosts show unsupported states. SSH/Dock
 project installation remains unsupported; choose user scope to install on the
 serving host. Mobile/bot controls, CLI peers and Detached Dispatch do not gain a
 marketplace configuration or installation entry point.
+
+## WeChat session result notifications
+
+While the WeChat bot is running, completed turns in its currently selected local
+session can send their text to WeChat without a new incoming message. This includes
+scheduled jobs and turns started in the desktop window. Turns started by that same
+WeChat bot retain their normal reply path and are not pushed a second time. Failed
+turns and empty output are not pushed. Use a dedicated session if desktop activity
+should not appear in WeChat.
+
+Delivery still needs a valid WeChat reply context and available channel quota;
+this feature does not bypass either restriction or impose an additional daily
+three-message limit. Several queued results are combined into one reply of at most
+4,000 UTF-8 bytes, favoring the newest results. Longer output is truncated; the full
+answer remains in the session. These pushes share the channel quota with normal
+replies, including any split replies.
+
+Unavailable reply context and send failures keep output in a bounded, in-memory
+queue for retry. Sending another WeChat message refreshes the reply context and
+wakes the sender. The queue holds at most 20 results per recipient for 24 hours;
+older entries are discarded. Restarting or replacing the bot clears pending output.
+This is best-effort notification, not a durable message inbox. Switching sessions
+or devices discards output from the previous selection before sending.
+
+Proactive notifications currently require the session runtime and WeChat bot to
+run on the same OpenBitFun host. A session on that host may use an SSH workspace;
+this does not make it an account-device session. When switching the bot to another
+account device, the existing reply includes an explicit notice that proactive
+scheduled-job and desktop-result notifications are unavailable there. Ordinary
+WeChat-initiated requests keep their existing cross-device reply path. This feature
+does not add cross-host Peer Device or Detached Dispatch result delivery.
