@@ -8588,17 +8588,48 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         session_id: &str,
         turn_id: Option<&str>,
     ) -> OpenBitFunResult<Vec<DialogTurnData>> {
+        self.load_relay_session_selection(storage, session_id, turn_id, None)
+            .await
+            .map(|page| page.0)
+    }
+
+    pub async fn load_relay_history_turn(
+        &self,
+        storage: &Path,
+        session_id: &str,
+        before: Option<usize>,
+    ) -> OpenBitFunResult<(Vec<DialogTurnData>, Option<usize>)> {
+        self.load_relay_session_selection(storage, session_id, None, Some(before))
+            .await
+    }
+
+    async fn load_relay_session_selection(
+        &self,
+        storage: &Path,
+        session_id: &str,
+        turn_id: Option<&str>,
+        history: Option<Option<usize>>,
+    ) -> OpenBitFunResult<(Vec<DialogTurnData>, Option<usize>)> {
         let _mutation = self
             .session_manager
             .acquire_session_mutation(session_id)
             .await?;
         self.prepare_persisted_session_read_locked(storage, session_id)
             .await?;
-        let mut turns = self
-            .session_manager
-            .persistence_manager()
-            .load_visible_session_turns(storage, session_id)
-            .await?;
+        let (mut turns, next) = if let Some(before) = history {
+            self.session_manager
+                .persistence_manager()
+                .load_visible_history_turn(storage, session_id, before)
+                .await?
+        } else {
+            (
+                self.session_manager
+                    .persistence_manager()
+                    .load_visible_session_turns(storage, session_id)
+                    .await?,
+                None,
+            )
+        };
         if let Some(turn_id) = turn_id {
             turns.retain(|turn| turn.turn_id == turn_id);
             if turns.is_empty() {
@@ -8607,10 +8638,16 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 )));
             }
         }
-        let context = self
-            .session_manager
-            .get_context_messages(session_id)
-            .await?;
+        let context = if turns
+            .iter()
+            .any(|turn| turn.status == TurnStatus::InProgress)
+        {
+            self.session_manager
+                .get_context_messages(session_id)
+                .await?
+        } else {
+            Vec::new()
+        };
         for turn in &mut turns {
             if turn.status == TurnStatus::InProgress {
                 let messages: Vec<_> = context
@@ -8625,7 +8662,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 SessionManager::append_generation_rounds(turn, &id, &messages, timestamp);
             }
         }
-        Ok(turns)
+        Ok((turns, next))
     }
 
     /// Export a transcript while retaining the same Session history boundary
@@ -17192,6 +17229,16 @@ mod tests {
             .expect("single-turn host-stream sync must not require an in-memory session");
         assert_eq!(one.len(), 1);
         assert_eq!(one[0].turn_id, turn_id);
+
+        let (page, next) = coordinator
+            .load_relay_history_turn(&storage, &session.session_id, None)
+            .await
+            .expect("paged history must not require an in-memory writer");
+        assert_eq!(
+            serde_json::to_value(&page).unwrap(),
+            serde_json::to_value(&one).unwrap()
+        );
+        assert_eq!(next, None);
 
         session_manager
             .restore_session(workspace.path(), &session.session_id)

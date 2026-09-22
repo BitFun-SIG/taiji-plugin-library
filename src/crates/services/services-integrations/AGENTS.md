@@ -34,6 +34,14 @@ slices that are outside pure product logic but still platform-neutral.
   hint leases. `remote_connect::host_stream_subscriber` is the Rust controller
   reader. Neither the relay nor any client persists stream content; do not add
   relay-stored history, `get_session_key`, or a durable stream cache here.
+- Session history reads use `HostStreamHub::read_history` with a Core-owned
+  source loader. Backfill allocates decreasing JS-safe sequences below the
+  live sequence range; it never advances the forward cursor. One source gate
+  orders backfill, live publication, and history invalidation. Undo/import and
+  cache misses across evicted pages require an epoch fence, never silent skips.
+  Only the requested page's bodies enter the bounded log; the pending source
+  batch is at most one persisted turn, which can itself be large. No wire or
+  persisted-format migration is required; all controllers retain `read_stream`.
 - The `remote-persistence` feature is the lightweight persisted-shape owner shared
   by Remote Connect, remote SSH, and offline migration. Keep it free of network,
   SSH transport, and runtime orchestration dependencies so owner readers and

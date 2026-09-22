@@ -212,6 +212,15 @@ or test-target layout. Workspace checks and product-wide tests are CI-backed and
 are not the default Core precheck. For documentation-only changes, run
 `git diff --check`.
 
+For disk-backed history paging and legacy sessions without a catalog:
+`cargo test --locked -p openbitfun-core --no-default-features --features remote-connect,git --lib history_page_`.
+Also run the `staged_revert_catalog_projection` and `load_relay_session_turns_`
+filters for the same target when changing visibility. Paging must not parse
+unrelated turn bodies or rewrite history. To compare real-file first-page work
+against full materialization locally, use the same target with
+`history_page_benchmark -- --ignored --nocapture`; it checks content equivalence
+and reports timings without asserting a machine-dependent latency in CI.
+
 For built-in provider overlay, trusted endpoint validation, and reasoning catalog changes:
 
 ```bash
