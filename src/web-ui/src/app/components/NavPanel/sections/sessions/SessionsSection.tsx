@@ -1,5 +1,5 @@
 import { useDeviceDirectory, resolveDeviceName } from '@/infrastructure/account/deviceDirectory';
-import { requireSessionWorkspaceId } from '@/flow_chat/utils/sessionWorkspace';
+import { requireSessionOwningWorkspaceId } from '@/flow_chat/utils/sessionOrdering';
 /**
  * SessionsSection — inline accordion content for the "Sessions" nav item.
  *
@@ -9,7 +9,7 @@ import { requireSessionWorkspaceId } from '@/flow_chat/utils/sessionWorkspace';
 
 import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { subscribeOverlayInteraction, createOverlayPortal, Button, Icon, IconButton, Input, Menu, MenuItem, OverflowText, Tooltip } from '@openbitfun/ui';
-import { Loader2, Archive, ListChecks } from 'lucide-react';
+import { Loader2, Archive, FolderGit2, ListChecks } from 'lucide-react';
 import { RetainedMountBoundary } from '@/shared/presence';
 import { useI18n } from '@/infrastructure/i18n';
 import { flowChatStore } from '../../../../../flow_chat/store/FlowChatStore';
@@ -18,6 +18,8 @@ import type { FlowChatState, Session } from '../../../../../flow_chat/types/flow
 import { useSceneStore } from '../../../../stores/sceneStore';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
 import { createLogger } from '@/shared/utils/logger';
+import { isSamePath } from '@/shared/utils/pathUtils';
+import { isLinkedWorktreeWorkspace } from '@/shared/types/global-state';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { useAgentCanvasStore } from '@/app/components/panels/content-canvas/stores';
 import {
@@ -32,8 +34,10 @@ import {
 import { recordHistorySessionDiagnosticEvent } from '@/flow_chat/services/historySessionDiagnostics';
 import { resolveSessionRelationship } from '@/flow_chat/utils/sessionMetadata';
 import {
+  isWorktreeIsolatedSession,
   sessionBelongsToWorkspaceNavRow,
 } from '@/flow_chat/utils/sessionOrdering';
+import { sessionWorktreeRootPath } from '@/flow_chat/utils/sessionWorktree';
 import {
   compareWorkspaceNavSessions,
   DEFAULT_WORKSPACE_SESSION_FILTERS,
@@ -237,7 +241,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
   const hasActiveSessionFilter = sessionShow !== 'all' || hasWorkspaceSessionFilters(sessionFilters);
   const showAllWithoutLimit = layout === 'flat' && Boolean(workspaceScopes?.length);
   const sessionListClassName = `openbitfun-nav-panel__inline-list${layout === 'flat' ? ' is-flat-workspace-view' : ''}`;
-  const { setActiveWorkspace, currentWorkspace } = useWorkspaceContext();
+  const { setActiveWorkspace, openWorkspace, openedWorkspacesList, currentWorkspace } = useWorkspaceContext();
   const activeTabId = useSceneStore(s => s.activeTabId);
   const activeBtwSessionTab = useAgentCanvasStore(state => selectActiveBtwSessionTab(state as any));
   const activeBtwSessionData = activeBtwSessionTab?.content.data as
@@ -842,16 +846,32 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
     });
   }, [topLevelSessions.length, expandLevel, level2DisplayCount, showAllWithoutLimit]);
 
-  const totalTopLevelSessionCount = !hasActiveSessionFilter && !workspaceScopes?.length
-    ? getEffectiveTopLevelSessionCount(
-        metadataPageState.totalTopLevelCount,
-        metadataPageState.syncedTopLevelCount,
-        allTopLevelSessions.length,
-        metadataPageState.isLoading,
-      )
-    : topLevelSessions.length;
+  // A linked worktree stores its sessions in its main workspace's session root,
+  // so a metadata page loaded for that directory counts the project's sessions
+  // as well. That total cannot describe this row: the extra rows it counts belong
+  // to the project, and a "show more" affordance built on it promises rows this
+  // list can never reveal. Only the rows this workspace owns are counted here.
+  // Resolve the row's own workspace, not the active one, because a nested row
+  // renders while another workspace is active.
+  const sectionWorkspace = workspaceId
+    ? openedWorkspacesList.find(workspace => workspace.id === workspaceId) ?? null
+    : null;
+  const countOnlyOwnedTopLevelSessions = isLinkedWorktreeWorkspace(sectionWorkspace);
+
+  const totalTopLevelSessionCount =
+    !hasActiveSessionFilter && !workspaceScopes?.length && !countOnlyOwnedTopLevelSessions
+      ? getEffectiveTopLevelSessionCount(
+          metadataPageState.totalTopLevelCount,
+          metadataPageState.syncedTopLevelCount,
+          allTopLevelSessions.length,
+          metadataPageState.isLoading,
+        )
+      : topLevelSessions.length;
   const hasMoreUnloadedSessions =
-    !hasActiveSessionFilter && !workspaceScopes?.length && allTopLevelSessions.length < totalTopLevelSessionCount;
+    !hasActiveSessionFilter
+    && !workspaceScopes?.length
+    && !countOnlyOwnedTopLevelSessions
+    && allTopLevelSessions.length < totalTopLevelSessionCount;
   const expandToggleState = getSessionExpandToggleState(totalTopLevelSessionCount, expandLevel);
   // The visible label stays short ("Show more") and the remaining count rides in
   // a trailing `+N` chip; screen readers get the full sentence via aria-label.
@@ -1208,7 +1228,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
           {
             sessionId: session.sessionId,
             title: resolveSessionTitle(session),
-            workspaceId: requireSessionWorkspaceId(session),
+            workspaceId: requireSessionOwningWorkspaceId(session),
           },
           scope
         );
@@ -1266,6 +1286,36 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
       }
     },
     [t]
+  );
+
+  /**
+   * A worktree directory is registered for execution but not opened, so the
+   * session row is the only place it can be reached from. Opening it as a
+   * workspace is an explicit user action; if the worktree happens to be open
+   * already, activating it is the whole effect.
+   */
+  const handleOpenWorktreeWorkspace = useCallback(
+    async (e: React.MouseEvent, worktreePath: string) => {
+      e.stopPropagation();
+      closeSessionMenu();
+      const opened = openedWorkspacesList.find(workspace =>
+        isSamePath(workspace.rootPath ?? '', worktreePath)
+      );
+      try {
+        if (opened) {
+          await setActiveWorkspace(opened.id);
+          return;
+        }
+        await openWorkspace(worktreePath);
+      } catch (err) {
+        log.error('Failed to open the worktree directory as a workspace', {
+          worktreePath,
+          error: err,
+        });
+        notificationService.error(t('nav.sessions.openWorktreeWorkspaceFailed'), { duration: 3000 });
+      }
+    },
+    [closeSessionMenu, openWorkspace, openedWorkspacesList, setActiveWorkspace, t]
   );
 
   const handleStartEdit = useCallback(
@@ -1513,6 +1563,17 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
           const backgroundSubagentActivityCount = backgroundSubagentActivity?.totalCount ?? 0;
           const showBackgroundSubagentActivity = !isChildSession && backgroundSubagentActivityCount > 0;
           const scheduledJobCount = cronJobCountsBySession.get(session.sessionId) ?? 0;
+          // Same mark the session status indicator draws, in the same trailing
+          // cell: one 12px secondary clock on the row's right edge, no count.
+          // Sessions with a status to report keep that status instead.
+          const scheduledJobMark = scheduledJobCount > 0 ? (
+            <Icon
+              name="clock"
+              size="xs"
+              tone="secondary"
+              label={t('nav.scheduledJobs.badgeTooltip', { count: scheduledJobCount })}
+            />
+          ) : undefined;
           const parentSessionId = relationship.parentSessionId;
           const parentSession = parentSessionId ? flowChatState.sessions.get(parentSessionId) : undefined;
           const parentTitle = parentSession ? resolveSessionTitle(parentSession) : '';
@@ -1524,6 +1585,8 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
           const showAssistantInTooltip = trimmedAssistant.length > 0;
           const dispatchTarget = session.config.dispatchTarget;
           const isDispatched = isNonLocalDispatchTarget(dispatchTarget);
+          const worktreeIsolated = isWorktreeIsolatedSession(session);
+          const worktreeRootPath = sessionWorktreeRootPath(session) ?? '';
           const dispatchTargetLabel =
             dispatchTarget?.kind === 'ssh' || dispatchTarget?.kind === 'device'
               ? (dispatchTarget.kind === 'device' ? resolveDeviceName(dispatchTarget.deviceId, dispatchTarget.displayName) : dispatchTarget.displayName)
@@ -1562,6 +1625,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
             showAssistantInTooltip ||
             isChildSession ||
             showBackgroundSubagentActivity ||
+            worktreeIsolated ||
             isDispatched;
           const tooltipContent = showRichTooltip ? (
             <div className="openbitfun-nav-panel__inline-item-tooltip">
@@ -1589,6 +1653,11 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                     : t('nav.sessions.childSourceWithoutTurn', {
                         parentTitle: parentTitle || t('nav.sessions.parentSession'),
                   })}
+                </div>
+              ) : null}
+              {worktreeIsolated ? (
+                <div className="openbitfun-nav-panel__inline-item-tooltip-meta">
+                  {t('nav.sessions.worktreeTooltip', { path: worktreeRootPath })}
                 </div>
               ) : null}
               {isDispatched ? (
@@ -1724,13 +1793,15 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                         {dispatchPresentation?.badgeLabel}
                       </OverflowText></span>
                     ) : null}
-                    {scheduledJobCount > 0 ? (
+                    {worktreeIsolated ? (
+                      // Icon-only marker: the badge sits next to the title, where a
+                      // label competes with it. The tooltip carries the worktree path.
                       <span
-                        className="openbitfun-nav-panel__inline-item-cron-badge"
-                        title={t('nav.scheduledJobs.badgeTooltip', { count: scheduledJobCount })}
+                        className="openbitfun-nav-panel__inline-item-worktree-badge"
+                        title={t('nav.sessions.worktreeTooltip', { path: worktreeRootPath })}
+                        aria-label={t('nav.sessions.worktreeTooltip', { path: worktreeRootPath })}
                       >
-                        <Icon name="clock" size="2xs" aria-hidden />
-                        {scheduledJobCount}
+                        <FolderGit2 className="openbitfun-nav-panel__inline-item-worktree-icon" aria-hidden />
                       </span>
                     ) : null}
                     {reviewActivityKind ? (
@@ -1770,7 +1841,10 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                     </span>
                   </span>
                   <div className="openbitfun-nav-panel__inline-item-trailing">
-                    <SessionStatusIndicator sessionId={session.sessionId} />
+                    <SessionStatusIndicator
+                      sessionId={session.sessionId}
+                      idleFallback={scheduledJobMark}
+                    />
                     <div
                       className={`openbitfun-nav-panel__inline-item-actions${openMenuSessionId === session.sessionId ? ' is-open' : ''}`}
                       data-openbitfun-component="sessions-section"
@@ -1920,6 +1994,17 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                           >
                             <span>{t('nav.sessions.manage')}</span>
                           </MenuItem>
+                          {worktreeIsolated && worktreeRootPath ? (
+                            <MenuItem
+                              type="button"
+                              leading={<Icon glyph={FolderGit2} size="sm" />}
+                              onClick={e => { void handleOpenWorktreeWorkspace(e, worktreeRootPath); }}
+                              data-testid="nav-session-menu-open-worktree-workspace"
+                              data-session-id={session.sessionId}
+                            >
+                              <span>{t('nav.sessions.openWorktreeWorkspace')}</span>
+                            </MenuItem>
+                          ) : null}
                           <MenuItem
                             type="button"
                             tone="danger"
@@ -1972,7 +2057,9 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
           <span className="openbitfun-nav-panel__inline-toggle-count" aria-hidden>
             +{topLevelSessions.length - sessionDisplayLimit}
           </span>
-          <Icon name="chevron-down" size="xs" className="openbitfun-nav-panel__inline-toggle-chevron" aria-hidden />
+          <span className="openbitfun-nav-panel__inline-toggle-trailing">
+            <Icon name="chevron-down" size="xs" className="openbitfun-nav-panel__inline-toggle-chevron" aria-hidden />
+          </span>
         </button>
       )}
 
@@ -1997,13 +2084,15 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
               +{expandToggleLabels.remainingCount}
             </span>
           )}
-          {metadataPageState.isLoading ? (
-            <Loader2 className="openbitfun-nav-panel__inline-toggle-spinner" aria-hidden />
-          ) : expandToggleLabels.remainingCount === null ? (
-            <Icon name="chevron-up" size="xs" className="openbitfun-nav-panel__inline-toggle-chevron" aria-hidden />
-          ) : (
-            <Icon name="chevron-down" size="xs" className="openbitfun-nav-panel__inline-toggle-chevron" aria-hidden />
-          )}
+          <span className="openbitfun-nav-panel__inline-toggle-trailing">
+            {metadataPageState.isLoading ? (
+              <Loader2 className="openbitfun-nav-panel__inline-toggle-spinner" aria-hidden />
+            ) : expandToggleLabels.remainingCount === null ? (
+              <Icon name="chevron-up" size="xs" className="openbitfun-nav-panel__inline-toggle-chevron" aria-hidden />
+            ) : (
+              <Icon name="chevron-down" size="xs" className="openbitfun-nav-panel__inline-toggle-chevron" aria-hidden />
+            )}
+          </span>
         </button>
       )}
 

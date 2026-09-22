@@ -1286,6 +1286,7 @@ pub async fn run() {
             api::agentic_api::interrupt_dialog_turn,
             api::agentic_api::recover_interrupted_dialog_turn,
             api::agentic_api::steer_dialog_turn,
+            api::agentic_api::manage_dialog_queue,
             api::agentic_api::control_deep_review_queue,
             api::agentic_api::cancel_session,
             api::agentic_api::set_subagent_timeout,

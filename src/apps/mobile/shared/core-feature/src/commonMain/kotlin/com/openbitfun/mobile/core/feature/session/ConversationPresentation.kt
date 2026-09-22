@@ -159,8 +159,6 @@ public data class ConversationRow public constructor(
     public val streaming: Boolean,
     /** Streaming, with nothing to show yet; apps draw the waiting indicator. */
     public val typing: Boolean,
-    /** Sent from this device but not yet echoed back by the desktop. */
-    public val pending: Boolean,
     /** The send failed and this is the row a retry would repeat. */
     public val showRetry: Boolean,
     /** A user-visible assistant failure returned by the desktop. */
@@ -210,7 +208,6 @@ public fun ChatTimelineState.conversationRows(): List<ConversationRow> =
             live = item.type == ChatTimelineItemType.ASSISTANT_LIVE_TURN,
             streaming = item.isStreaming,
             typing = message?.let { isTyping(it, item.isStreaming) } == true,
-            pending = item.type == ChatTimelineItemType.OPTIMISTIC_USER_MESSAGE,
             showRetry = item.showRetryAction,
             error = message?.error?.trim()?.takeIf(String::isNotEmpty),
         )

@@ -48,6 +48,49 @@ than its content's.
 
 ## What Belongs to the Virtualizer
 
+On a tail-following open, the virtualizer seeds its initial offset at the last
+item's estimated start. A desktop trace previously mounted rows 0..13 before
+moving to 22..33, with 372.3ms charged to the first head-row measurement. The
+seed selects a tail window without first mounting the head; real heights and
+the existing follow owner still determine the settled position. This is a
+one-time seed, not an ongoing tail lock. Initial empty hydration waits for items
+before consuming it. History-window presentation and saved reading-position
+restoration retain the default initial window. Tests cover window selection
+using the real virtualizer with supplied DOM geometry. A same-session desktop
+retest started at rows 27..33: rowRef total fell from 377.3ms to 4.2ms and the
+post-reveal probe completed at 806.7ms instead of 1540.3ms. This is a single-trace
+comparison, not paint timing or remote validation. The remaining tail-window
+contraction led to the measurement reconciliation described below.
+
+Opening measurement reconciliation now runs after a row size enters TanStack's
+cache and before the queued render chooses its next window. Only an active,
+unsuspended, still-opening transcript whose current owner is `follow-output`
+asks the existing follow scheduler to reconcile. The offset observer then
+publishes the actual scroll position without a synchronous React flush. No
+displacement permission is broadened, and historical reading, user takeover,
+and post-reveal streaming keep their existing rules. A pending debounced native
+scroll-end sample must not overwrite this publication with its older offset.
+The motivating trace measured a 729px shrink of rows 22..26 followed by window
+contraction/remount and 113.8ms of removal-related style work. Tests reproduce
+the contraction with reconciliation disabled and retain the same row nodes
+with it enabled, including a delayed native scroll event and scroll-end timer.
+A same-session desktop retest kept rows 22..33 mounted: row cleanup calls fell
+from five to zero, and the post-reveal probe completed at 596.4ms instead of
+786.8ms. This single-trace comparison does not establish paint timing or remote
+behavior; other main-thread stalls remain.
+
+Opening follow corrections also publish their immediate `scrollTop` readback
+through `syncViewportOffset`, including a target that is already reached. The
+list connects the follow callback to this adapter method; follow never imports
+the virtualizer. Only active, unsuspended opening follow with viewport ownership
+publishes, and refused writes publish nothing. Equal offsets do not notify React.
+This lets range selection proceed before the native scroll event without adding
+a synchronous flush or clearing measured sizes. Measurement reconciliation uses
+the same observer channel, with its pending flag cleared before calling follow
+to avoid recursive correction. Native events remain enabled. Tests withhold them
+and check window expansion, node retention, stale scroll-end delivery and user
+takeover; runtime savings and remote behavior still require separate validation.
+
 FlowChat virtualizes with **TanStack Virtual**, behind `useFlowChatVirtualizer.ts`.
 Nothing else imports it. The rest of FlowChat asks for offsets in scroller
 coordinates and gets them back; there is no index space of the virtualizer's own

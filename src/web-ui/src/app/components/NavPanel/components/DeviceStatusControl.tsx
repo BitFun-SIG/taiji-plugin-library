@@ -1,7 +1,7 @@
 import { useDeviceDirectory, resolveDeviceName, isDeviceControllable, deviceClientVersion } from '@/infrastructure/account/deviceDirectory';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { subscribeOverlayInteraction, createOverlayPortal, OverflowText, Button, Card, CardBody, CardFooter, CardHeader, Icon, IconButton, ScrollArea, type IconSize } from '@openbitfun/ui';
-import { ChevronLeft, ChevronRight, MessageCircle, Monitor, Server, Smartphone, Undo2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, MessageCircle, Monitor, Smartphone, Undo2 } from 'lucide-react';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { useAnchoredPopoverPosition } from '@/shared/utils/useAnchoredPopoverPosition';
@@ -25,6 +25,7 @@ import {
 } from '../deviceInterconnectionOverview';
 import { useDeviceInterconnectionOverview } from './useDeviceInterconnectionOverview';
 import { DeviceArtwork } from './DeviceArtwork';
+import { DeviceSystemGlyph } from './DeviceSystemGlyph';
 
 interface DeviceStatusControlProps {
   open: boolean;
@@ -42,6 +43,24 @@ function chatAppBrandFromIdentity(identity: string | null | undefined): ChatAppB
   return null;
 }
 
+/**
+ * The class of headless hosts the footer names as one group. A group is not a
+ * device, so it carries the facts its mark is resolved from and nothing else:
+ * the kind already decides that mark, and the name, system and host kind a row
+ * would answer with do not exist at this level.
+ */
+const HEADLESS_HOST_CLASS: React.ComponentProps<typeof DeviceSystemGlyph>['device'] = {
+  kind: 'execution-host',
+  name: '',
+  os: null,
+  hostKind: null,
+};
+
+/**
+ * The kinds that are not a system: a phone, a chat app, and the neutral monitor
+ * for a kind this build cannot place. A desktop and a headless host are the
+ * machines the device marks draw, so they never reach this switch.
+ */
 function DeviceIcon({
   identity,
   kind,
@@ -54,8 +73,6 @@ function DeviceIcon({
   switch (kind) {
     case 'mobile':
       return <Icon glyph={Smartphone} size={size} />;
-    case 'execution-host':
-      return <Icon glyph={Server} size={size} />;
     case 'message-app': {
       const chatApp = chatAppBrandFromIdentity(identity);
       if (chatApp) {
@@ -66,6 +83,27 @@ function DeviceIcon({
     default:
       return <Icon glyph={Monitor} size={size} />;
   }
+}
+
+/**
+ * The mark in front of a device's name. A host answers with the system it runs,
+ * the same mark the device list draws. A phone and a chat app are the two kinds
+ * that are not a system — one is drawn as a phone and one as its brand — so they
+ * keep the silhouette that says what they are.
+ */
+function DeviceMark({
+  device,
+  identity,
+  size = 'sm',
+}: {
+  device: DeviceOverviewDevice;
+  identity?: string | null;
+  size?: IconSize;
+}) {
+  if (device.kind === 'mobile' || device.kind === 'message-app') {
+    return <DeviceIcon identity={identity} kind={device.kind} size={size} />;
+  }
+  return <DeviceSystemGlyph device={device} size={size} />;
 }
 
 const DeviceStatusControl: React.FC<DeviceStatusControlProps> = ({
@@ -160,6 +198,17 @@ const DeviceStatusControl: React.FC<DeviceStatusControlProps> = ({
     overview,
     refresh,
   } = useDeviceInterconnectionOverview(localDeviceLabel, t('remoteConnect.mobileBrowserTitle'));
+  /**
+   * This machine as the overview sees it: its own entry while a peer is in use,
+   * the primary device while none is. The attached cluster draws its system
+   * instead of a generic kind icon, so a controller reads as the device it is,
+   * the way the same device reads in the device list.
+   */
+  const thisMachine = useMemo(() => (
+    overview.primaryDevice.local
+      ? overview.primaryDevice
+      : overview.devices.find(device => device.local) ?? overview.primaryDevice
+  ), [overview]);
   /**
    * A device says what it is by the kind it reported to the Relay, so the
    * account directory is enough for any device. A live control link can say
@@ -326,7 +375,10 @@ const DeviceStatusControl: React.FC<DeviceStatusControlProps> = ({
         data-openbitfun-part="deviceStatus"
         data-openbitfun-state={overview.mode}
       >
-        <DeviceIcon kind={overview.primaryDevice.kind} size="sm" />
+        {/* The label names a device, and this mark says which system that device
+            is: the machine the window works on, whichever end of the connection
+            it sits on. */}
+        <DeviceMark device={overview.primaryDevice} size="sm" />
         <OverflowText className="openbitfun-nav-panel__footer-device-status-label">
           {overview.currentWorkDeviceName}
         </OverflowText>
@@ -341,11 +393,27 @@ const DeviceStatusControl: React.FC<DeviceStatusControlProps> = ({
                 data-openbitfun-device-kind={group.kind}
                 key={group.kind}
               >
-                <DeviceIcon
-                  identity={group.kind === 'message-app' ? attachedMessageAppIdentity : null}
-                  kind={group.kind}
-                  size="xs"
-                />
+                {group.kind === 'desktop' ? (
+                  // The only desktop a client can be attached to is itself: the
+                  // overview marks this machine's own entry as the controlling
+                  // one, and a peer is the device being used instead of an
+                  // attached one. It draws the system this machine reported, so
+                  // the group names the same device the list does, rather than a
+                  // second generic monitor.
+                  <DeviceMark device={thisMachine} size="xs" />
+                ) : group.kind === 'execution-host' ? (
+                  // A group of headless hosts is a class, not one device, so there
+                  // is no row to read a system from: it draws the mark the list
+                  // draws for each of them, the way the desktop group does, rather
+                  // than a second server glyph of its own.
+                  <DeviceSystemGlyph device={HEADLESS_HOST_CLASS} size="xs" />
+                ) : (
+                  <DeviceIcon
+                    identity={group.kind === 'message-app' ? attachedMessageAppIdentity : null}
+                    kind={group.kind}
+                    size="xs"
+                  />
+                )}
                 {group.count > 1 && (
                   <span className="openbitfun-nav-panel__footer-device-status-attached-count">
                     {group.count}
@@ -406,9 +474,9 @@ const DeviceStatusControl: React.FC<DeviceStatusControlProps> = ({
                           data-openbitfun-activities={device.activities.join(' ')}
                         >
                           <span className="openbitfun-device-overview__device-icon" aria-hidden="true">
-                            <DeviceIcon
+                            <DeviceMark
+                              device={device}
                               identity={`${device.id} ${device.name}`}
-                              kind={device.kind}
                               size="md"
                             />
                           </span>

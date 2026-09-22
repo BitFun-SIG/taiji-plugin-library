@@ -614,6 +614,27 @@ struct RemoteAuthorityGateTests {
                 draftIsEmpty: emptyDraft, attachmentsAreEmpty: emptyImages
             ), "send settlement preserves newer typing, attachments and another session")
         }
+        for reason in ["NETWORK", "TIMEOUT", "TRANSPORT"] {
+            expect(RemoteSessionFailureProjectionPolicy.keepsVisibleConversation(reasonName: reason),
+                   "a retryable transport failure keeps the rendered conversation")
+        }
+        // The store maps exactly these reasons to `ConnectionPhase.RECONNECTING`;
+        // everything else is a deterministic end the projection must follow.
+        for reason in [
+            "SESSION_NOT_FOUND", "PROTOCOL_MISMATCH", "NO_WORKSPACE", "REMOTE_REJECTED",
+            "RATE_LIMITED", "WORKSPACE_ID_UNSUPPORTED", "WORKSPACE_ID_UNKNOWN",
+            "HOST_STREAM_UNSUPPORTED",
+        ] {
+            expect(!RemoteSessionFailureProjectionPolicy.keepsVisibleConversation(reasonName: reason),
+                   "a deterministic \(reason) failure ends the projection")
+        }
+        expectCallBeforeMutation(
+            in: remoteSessionSource,
+            function: "func apply(remoteState state: RemoteSessionUiState",
+            call: "RemoteSessionFailureProjectionPolicy.keepsVisibleConversation(",
+            mutation: "timelineRows = []",
+            message: "a retryable remote failure is classified before any projection is cleared"
+        )
         expectCallBeforeMutation(
             in: remoteSessionSource,
             function: "func sendRemote()",

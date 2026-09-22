@@ -8,6 +8,12 @@
     --_tool-card-action-size: var(--openbitfun-space-6);
     --_flow-chat-tool-card-icon-size: var(--openbitfun-font-size-xl);
     --_tool-card-transition: var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
+    /* One inset owns both ends of a summary row, so trailing metadata (+N -N
+       counts, status summaries) keeps the same distance to the card edge as the
+       leading icon or action label. Only the revealed action region serves
+       itself; a separate row end inset for that gutter pulls metadata to the
+       edge as soon as the region is hidden. */
+    --_tool-card-summary-inset: var(--openbitfun-space-3);
 
     box-sizing: border-box;
     display: flex;
@@ -86,7 +92,7 @@
     min-block-size: var(--openbitfun-control-height-sm);
     gap: var(--openbitfun-space-2);
     padding-block: var(--openbitfun-space-1);
-    padding-inline: var(--openbitfun-space-3) var(--openbitfun-space-1);
+    padding-inline: var(--_tool-card-summary-inset);
     line-height: var(--openbitfun-type-heading-page-line-height);
   }
 
@@ -168,6 +174,18 @@
     font-weight: var(--_tool-card-content-font-weight);
   }
 
+  /* A fragment whose conditions are all false still mounts the slot, so an empty
+     extra must stay inert: no row gap, and no divider for the status icon. */
+  .extra:empty {
+    display: none;
+  }
+
+  .extra:empty + .statusIcon[data-divider="true"] {
+    margin-inline-start: 0;
+    padding-inline-start: 0;
+    border-inline-start-width: 0;
+  }
+
   .changeSummary {
     display: inline-flex;
     flex: 0 0 auto;
@@ -193,8 +211,11 @@
     min-inline-size: 0;
     max-inline-size: 0;
     gap: var(--openbitfun-space-1);
-    /* Cancel the summary gap while hidden so text can use the released space. */
+    /* The hidden slot owns no row space: cancel the summary gap it would add, so
+       the released space goes to the text. Mirrors the summary gap, and never
+       claims the row's end inset, which belongs to trailing metadata. */
     margin-inline-start: calc(-1 * var(--openbitfun-space-2));
+    margin-inline-end: 0;
     padding-inline-start: 0;
     border-inline-start: 0 solid transparent;
     opacity: 0;
@@ -203,6 +224,7 @@
     transition:
       max-inline-size var(--_tool-card-transition),
       margin-inline-start var(--_tool-card-transition),
+      margin-inline-end var(--_tool-card-transition),
       padding-inline-start var(--_tool-card-transition),
       border-color var(--_tool-card-transition),
       opacity var(--_tool-card-transition),
@@ -215,6 +237,9 @@
   .prominentRoot[data-actions-visible="true"] .actionRegion {
     max-inline-size: 24rem;
     margin-inline-start: var(--openbitfun-space-1);
+    /* Revealed actions keep their tight corner gutter, owned by the region
+       itself instead of by a smaller row inset. */
+    margin-inline-end: calc(-1 * var(--openbitfun-space-2));
     padding-inline-start: var(--openbitfun-space-2);
     border-inline-start-width: var(--openbitfun-border-width-default);
     border-inline-start-color: var(--openbitfun-color-border-subtle);
@@ -536,7 +561,7 @@
     min-block-size: var(--openbitfun-control-height-sm);
     gap: var(--openbitfun-space-2);
     padding-block: var(--openbitfun-space-1);
-    padding-inline: var(--openbitfun-space-3) var(--openbitfun-space-1);
+    padding-inline: var(--_tool-card-summary-inset);
     line-height: var(--openbitfun-type-heading-page-line-height);
     color: var(--openbitfun-color-content-primary);
   }

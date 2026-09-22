@@ -76,6 +76,7 @@ import {
   type HistoryBoundaryProximity,
 } from './flowChatHistoryBoundary';
 import { VirtualItemRenderer } from './VirtualItemRenderer';
+import { FlowChatOpeningBoundary } from './FlowChatOpeningBoundary';
 import { useFlowChatVolatileContext } from './FlowChatContext';
 import {
   estimateVirtualMessageItemHeightWithContext,
@@ -332,10 +333,15 @@ function normalizeBoundaryResult(
  * Whether a pointer press landed on the scroller's scrollbar rather than on the
  * transcript.
  *
- * `clientWidth` stops at the scrollbar, so anything past the content box's
- * trailing edge is the bar or its track. Measured on WebView2: a 10px gutter,
- * a press on the transcript at `clientX` 1497 against a content box ending at
- * 1641, and presses on the bar at 1643-1647.
+ * `clientWidth` stops at the reserved scrollbar gutter, so the content box's
+ * trailing edge falls one gutter width short of the bar. Everything past that
+ * edge — the reserved track and the bar — is a scrollbar press, never a press
+ * on the transcript column, which is inset well inside the content box.
+ *
+ * Measured on WebView2 with a one-sided 10px gutter: a press on the transcript
+ * at `clientX` 1497, the content box ending at 1641, and presses on the bar at
+ * 1643-1647. Reserving the gutter on both edges moves the boundary one gutter
+ * width earlier, which only widens the band that counts as a bar press.
  *
  * Chromium does dispatch `pointerdown` for a scrollbar press. WebKit-backed
  * builds draw overlay scrollbars that take no layout width, leaving no gutter
@@ -521,8 +527,11 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     searchNavigationRequestIdRef.current += 1;
   }, [activeSessionId]);
 
+  const reconcileOpeningMeasurementRef = useRef<() => boolean>(() => false);
   const virtualizer = useFlowChatVirtualizer({
     items: virtualItems,
+    startAtTailOnMount: presentationMode !== 'history-window' && !shouldRestoreInitialSnapshot,
+    reconcileOpeningMeasurement: () => reconcileOpeningMeasurementRef.current(),
     scrollerRef: scrollerElementRef,
     headerRef: headerElementRef,
     getItemKey: getVirtualItemStableKey,
@@ -702,9 +711,18 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     scrollToContentEnd,
     revealNewTurnTail,
     isOpeningViewport,
+    onOpeningOffset: virtualizer.syncViewportOffset,
     viewportOwner,
     viewportId,
   });
+
+  reconcileOpeningMeasurementRef.current = () => {
+    if (isOpenViewportSettledRef.current || isViewportSuspendedRef.current
+      || !isViewportActive || !isFollowingOutputNow()
+      || viewportOwner.currentOwner() !== 'follow-output') return false;
+    scheduleFollowToLatest();
+    return true;
+  };
 
   /**
    * The anchor stands down for anyone aiming at a target of their own — and for
@@ -2598,7 +2616,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
   }
 
   return (
-    <div
+    <FlowChatOpeningBoundary
       data-openbitfun-component="virtual-message-list"
       data-openbitfun-part="root"
       className="virtual-message-list"
@@ -2607,6 +2625,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       data-viewport-mode={viewportMode}
       data-streaming-output={isStreamingOutput ? 'true' : 'false'}
       data-open-viewport-settled={isOpenViewportSettled ? 'true' : 'false'}
+      opening={!isOpenViewportSettled}
     >
       <div
         ref={handleScrollerRef}
@@ -2672,7 +2691,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
         focusReturnRef={scrollerElementRef}
         inputHeight={inputHeight}
       />
-    </div>
+    </FlowChatOpeningBoundary>
   );
 });
 

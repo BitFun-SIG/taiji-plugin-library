@@ -53,6 +53,7 @@ import { announcementAppearanceDescriptor } from '@/shared/announcement-system/a
 import { contextMenuAppearanceDescriptor } from '@/shared/context-menu-system/appearance';
 import { contextListAppearanceDescriptor } from '@/shared/context-system/appearance';
 import { notificationAppearanceDescriptor } from '@/shared/notification-system/appearance';
+import { imageLightboxAppearanceDescriptor } from '@/shared/ui/ImageLightbox.appearance';
 import { canvasToolAppearanceDescriptor } from '@/tools/openbitfun-canvas/appearance';
 import { generativeWidgetAppearanceDescriptor } from '@/tools/generative-widget/appearance';
 import { editorToolAppearanceDescriptor } from '@/tools/editor/appearance';
@@ -312,6 +313,7 @@ export function createDefaultAppearanceRegistry(): AppearanceRegistry {
     .registerComponent(contextMenuAppearanceDescriptor)
     .registerComponent(contextListAppearanceDescriptor)
     .registerComponent(notificationAppearanceDescriptor)
+    .registerComponent(imageLightboxAppearanceDescriptor)
     .registerComponent(canvasToolAppearanceDescriptor)
     .registerComponent(generativeWidgetAppearanceDescriptor)
     .registerComponent(editorToolAppearanceDescriptor)

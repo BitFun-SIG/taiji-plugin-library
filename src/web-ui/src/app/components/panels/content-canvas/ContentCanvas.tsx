@@ -71,6 +71,7 @@ export const ContentCanvas: React.FC<ContentCanvasProps> = ({
   const openMissionControl = useCanvasStore(state => state.openMissionControl);
   const activeBtwSessionTab = useCanvasStore(state => selectActiveBtwSessionTab(state as any));
   const activeBtwSessionData = activeBtwSessionTab?.content.data as BtwSessionPanelData | undefined;
+  const canvasScopeKey = useCanvasStore(state => state.scopeKey);
   const { workspace: currentWorkspace } = useCurrentWorkspace();
   const activeSessionId = useSyncExternalStore(
     flowChatStore.subscribe.bind(flowChatStore),
@@ -79,6 +80,7 @@ export const ContentCanvas: React.FC<ContentCanvasProps> = ({
   );
   const currentWorkspaceId = currentWorkspace?.id;
   const lastSyncedBtwTabIdRef = useRef<string | null>(null);
+  const lastCanvasScopeKeyRef = useRef(canvasScopeKey);
   // Initialize hooks
   const { handleCloseWithDirtyCheck, handleCloseAllWithDirtyCheck } = useTabLifecycle({
     mode,
@@ -93,12 +95,23 @@ export const ContentCanvas: React.FC<ContentCanvasProps> = ({
   });
 
   useEffect(() => {
+    const canvasScopeChanged = lastCanvasScopeKeyRef.current !== canvasScopeKey;
+    lastCanvasScopeKeyRef.current = canvasScopeKey;
+
     if (mode !== 'agent' || !activeBtwSessionTab?.id || !activeBtwSessionData?.parentSessionId) {
       lastSyncedBtwTabIdRef.current = null;
       return;
     }
 
     if (lastSyncedBtwTabIdRef.current === activeBtwSessionTab.id) {
+      return;
+    }
+
+    // Restoring another session's canvas is not a request to reopen the tabs it
+    // had. Navigating there would pull the user away from the session they just
+    // switched to, so the restored tab only loses its "unsynced" state.
+    if (canvasScopeChanged) {
+      lastSyncedBtwTabIdRef.current = activeBtwSessionTab.id;
       return;
     }
 
@@ -127,6 +140,7 @@ export const ContentCanvas: React.FC<ContentCanvasProps> = ({
     activeBtwSessionData?.workspaceId,
     activeBtwSessionData?.workspacePath,
     activeBtwSessionTab?.id,
+    canvasScopeKey,
     currentWorkspaceId,
     mode,
     workspacePath,

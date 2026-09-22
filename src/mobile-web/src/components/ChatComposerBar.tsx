@@ -78,7 +78,8 @@ export default function ChatComposerBar({
                 )}
                 size="sm"
               />
-            ) : streaming ? (
+            ) : null}
+            {streaming && (
               <MobileIconButton
                 appearance="plain"
                 aria-label={t('common.stop')}
@@ -90,7 +91,8 @@ export default function ChatComposerBar({
                 onClick={onCancel}
                 size="sm"
               />
-            ) : expanded ? (
+            )}
+            {!imageAnalyzing && (expanded || input.trim() || pendingImages.length > 0) ? (
               <MobileIconButton
                 appearance="plain"
                 aria-label={t('common.submit')}

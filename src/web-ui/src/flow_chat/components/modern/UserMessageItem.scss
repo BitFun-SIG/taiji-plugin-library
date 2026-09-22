@@ -16,8 +16,11 @@
 .user-message-item {
   box-sizing: border-box;
   /*
-   * The shell owns the same reading column as replies. Extend the bubble by
-   * its radius so the rounded surface and message text meet that column.
+   * The shell owns the same reading column as replies. Keep the bubble surface
+   * on that column's content edge — the edge the tool cards and the composer
+   * card end on. Extending the bubble by its radius instead (so the rounded
+   * surface overhung the column while its text met the column) left the sent
+   * message one radius past the trailing edge of both.
    */
   width: fit-content;
   max-width: min(72%, 48rem);
@@ -26,7 +29,7 @@
   border: none;
   border-radius: var(--_user-message-radius);
   margin-block: 0;
-  margin-inline: auto calc(-1 * var(--_user-message-radius));
+  margin-inline: auto 0;
   box-shadow: none;
   transition: opacity 140ms ease;
   /*
@@ -323,14 +326,14 @@
   }
 }
 
-// Image thumbnails (WeChat-style).
+// Image thumbnails (WeChat-style). The gallery is a sibling of the bubble, so it
+// ends on the same reading-column content edge the bubble surface ends on.
 .user-message-item__images {
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 6px;
   margin-block: 0 6px;
-  margin-inline-end: calc(-1 * var(--_user-message-radius));
 }
 
 .user-message-item__image-thumb {

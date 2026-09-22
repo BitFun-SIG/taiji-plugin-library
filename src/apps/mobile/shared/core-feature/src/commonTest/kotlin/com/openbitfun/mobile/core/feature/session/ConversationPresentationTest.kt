@@ -39,11 +39,14 @@ class ConversationPresentationTest {
     }
 
     @Test
-    fun aMessageStillInFlightIsShownAsPendingUntilItsTwinArrives() {
+    fun aMessageStillInFlightIsShownOnceUntilItsTwinArrives() {
         val optimistic = timeline(optimistic = listOf(message("local-1", "user", "ship it")))
-        assertEquals(listOf(true), optimistic.conversationRows().map { it.pending })
+        assertEquals(
+            listOf("pending-local-1"),
+            optimistic.conversationRows().map { it.id },
+        )
 
-        // The same message identity persisted: one row, no longer pending. Reading
+        // The same message identity persisted: one row, not two. Reading
         // persistedMessages directly would have shown it twice.
         val persisted = timeline(
             persisted = listOf(message("local-1", "user", "ship it")),
@@ -51,7 +54,7 @@ class ConversationPresentationTest {
         )
         val rows = persisted.conversationRows()
         assertEquals(1, rows.size)
-        assertEquals(false, rows.single().pending)
+        assertEquals("message-local-1", rows.single().id)
     }
 
     @Test

@@ -663,14 +663,23 @@ $_section-header-height: 22px;
 
   &__miniapp-item {
     display: flex;
+    // Anchors the trailing app bubbles, which trail as an overlay.
+    position: relative;
     width: 100%;
     min-height: var(--openbitfun-layout-navigation-panel-item-height);
     padding: 0;
     background: transparent;
   }
 
+  // Every nav row paints its hover/selected pill on the ActionItem trigger. This
+  // row's root also lays the trailing actions region out in flow, so the root gap
+  // plus that region's own inset pushed the trigger 12px off the row's right edge
+  // and the pill stopped short with it. Trailing the region as an overlay keeps
+  // the bubbles on their existing gutter and lets the pill span the full row.
   &__miniapp-item > [data-openbitfun-part='actions'] {
-    margin-inline-end: var(--openbitfun-space-2);
+    position: absolute;
+    inset-block: 0;
+    inset-inline-end: var(--openbitfun-space-2);
   }
 
   &__miniapp-entry {
@@ -936,9 +945,15 @@ $_section-header-height: 22px;
   }
 
   &__section-action {
-    flex: 0 0 var(--_nav-icon-slot-size);
-    inline-size: var(--_nav-icon-slot-size);
-    block-size: var(--_nav-icon-slot-size);
+    // The header's three actions sit directly above the workspace row's three hover
+    // actions and read as one set of icon columns, so the cluster uses the row's
+    // compact 20px box instead of the 22px `--_nav-icon-slot-size` slot. The row
+    // pitch is 20px + the 4px `__section-actions` gap below, and only that pair
+    // puts every icon centre on the row's column centres. The `size="sm"` glyph
+    // stays 14px and remains centred inside the smaller box.
+    flex: 0 0 20px;
+    inline-size: 20px;
+    block-size: 20px;
     color: var(--_nav-icon-color);
 
     &:hover {
@@ -955,8 +970,8 @@ $_section-header-height: 22px;
     position: relative;
     display: inline-flex;
     align-items: center;
-    inline-size: var(--_nav-icon-slot-size);
-    block-size: var(--_nav-icon-slot-size);
+    inline-size: 20px;
+    block-size: 20px;
   }
 
   /* Positioning-only overrides; the design-system Menu owns the surface look. */
@@ -1375,6 +1390,11 @@ $_section-header-height: 22px;
 
   > svg {
     flex-shrink: 0;
+    // A line box is split by the font's ascent and descent, not by the glyphs
+    // drawn in it, so centring the mark on that box leaves its ink about a pixel
+    // above the text's own ink centre. One pixel, measured in the browser, puts
+    // the two on one optical centre.
+    transform: translateY(1px);
   }
 
   &:hover,
@@ -1402,15 +1422,17 @@ $_section-header-height: 22px;
 }
 
 // Attached remote parties are shown once per device kind with unframed icons.
-// Message-app marks inherit the theme foreground; connection state is already
-// communicated by the device overview rather than by recoloring the brand.
+// One row of peers is one set of marks, so they all take the theme foreground: a
+// brand, system or kind silhouette drawn a step quieter reads as a disabled or
+// offline party instead of as another drawing. Connection state is communicated
+// by the device overview, never by recoloring a mark.
 .openbitfun-nav-panel__footer-device-status-attached {
   display: flex;
   flex-shrink: 0;
   align-items: center;
   gap: 4px;
   margin-left: 1px;
-  color: var(--openbitfun-color-content-secondary);
+  color: var(--openbitfun-color-content-primary);
 }
 
 .openbitfun-nav-panel__footer-device-status-attached-group {
@@ -1426,7 +1448,6 @@ $_section-header-height: 22px;
   &[data-openbitfun-device-kind='message-app'] {
     border: 0;
     background: transparent;
-    color: var(--openbitfun-color-content-primary);
   }
 }
 
@@ -1880,9 +1901,13 @@ $_section-header-height: 22px;
   mask: url('./assets/device.svg') center / contain no-repeat;
 }
 
+// A headless host is drawn, not a system: the row mark's three rack units, which
+// are a tall stack where every other artwork here is a landscape laptop. It takes
+// less of the width and more of the height instead, so it carries the same weight
+// in the 2:1 artwork as the silhouettes beside it.
 .openbitfun-device-overview__artwork[data-artwork='server'] .openbitfun-device-overview__artwork-glyph {
-  width: 38.11849%;
-  aspect-ratio: 91.484375 / 70.7421875;
+  width: 30%;
+  aspect-ratio: 24 / 29.4629;
   mask-image: url('./assets/server.svg');
 }
 
@@ -2562,6 +2587,13 @@ $_section-header-height: 22px;
     height: 22px;
     margin: 0 6px;
     padding: 0 var(--openbitfun-space-2);
+    // Trailing edge of the shared action column, not the header's own padding
+    // gutter. The sessions list below starts at the 6px list inset and every row
+    // ends its last action 4px inside its own 1px row border, so the header has to
+    // reach one border-width further in than its 8px gutter to land on that
+    // column. Without it the header icons sit 3px inside the workspace row
+    // actions and read as a second, accidental axis.
+    padding-right: calc(var(--openbitfun-space-1) + var(--openbitfun-border-width-default));
     border-radius: var(--openbitfun-radius-sm);
     opacity: 1;
     transition:

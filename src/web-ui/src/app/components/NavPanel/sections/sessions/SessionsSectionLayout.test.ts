@@ -170,8 +170,6 @@ describe('SessionsSection layout styles', () => {
     const btwBadgeBlock = extractInlineItemBlock(stylesheet, 'btw-badge');
     const reviewBadgeBlock = extractInlineItemBlock(stylesheet, 'review-badge');
     const backgroundSubagentBadgeBlock = extractInlineItemBlock(stylesheet, 'background-subagent-badge');
-    // Shared by session rows and workspace rows, so it must hold its slot width.
-    const cronBadgeBlock = extractInlineItemBlock(stylesheet, 'cron-badge');
 
     expect(labelBlock).toContain('flex: 1 1 0;');
     expect(labelBlock).toContain('overflow: hidden;');
@@ -191,10 +189,13 @@ describe('SessionsSection layout styles', () => {
     expect(backgroundSubagentBadgeBlock).toContain('line-height: 0;');
     expect(backgroundSubagentBadgeBlock).toContain('width: var(--openbitfun-control-icon-size-md);');
     expect(backgroundSubagentBadgeBlock).toContain('height: var(--openbitfun-control-icon-size-md);');
-    expect(cronBadgeBlock).toContain('flex: 0 0 auto;');
-    expect(cronBadgeBlock).toContain('display: inline-flex;');
-    expect(cronBadgeBlock).toContain('align-items: center;');
-    expect(cronBadgeBlock).toContain('white-space: nowrap;');
+    // The scheduled-job mark is not a chip beside the title: it is one 12px
+    // secondary clock in the trailing cell, the same drawing and slot the session
+    // status indicator uses, so no `cron` rule may come back to the stylesheet.
+    expect(stylesheet).not.toContain('cron');
+    expect(readSessionsSectionSource()).toContain('idleFallback={scheduledJobMark}');
+    expect(readSessionsSectionSource()).toMatch(/<Icon\s+name="clock"\s+size="xs"\s+tone="secondary"/);
+    expect(readSessionsSectionSource()).not.toMatch(/inline-item-cron/);
 
     const backgroundSubagentIconBlock = extractInlineItemBlock(stylesheet, 'background-subagent-icon');
     expect(backgroundSubagentIconBlock).toContain('place-self: center;');
@@ -202,5 +203,31 @@ describe('SessionsSection layout styles', () => {
     expect(backgroundSubagentIconBlock).toContain('transform-origin: center center;');
     expect(stylesheet).not.toContain('--openbitfun-subagent-bot-optical-y');
     expect(stylesheet).not.toContain('translateY(var(--openbitfun-subagent-bot-optical-y))');
+  });
+
+  it('ends session rows and the group toggle on the workspace trailing column', () => {
+    const stylesheet = readSessionsSectionStylesheet();
+    const source = readSessionsSectionSource();
+
+    // Workspace card rows end their trailing actions 4px inside the row box
+    // (`__workspace-item` inline padding plus the actions' own right offset).
+    // Session rows must end on that same column instead of the 8px reading
+    // gutter, or their three-dot buttons sit left of the workspace ones.
+    const rowBlock = stylesheet.slice(stylesheet.lastIndexOf('&__inline-item {'));
+    expect(rowBlock).toContain('padding-right: var(--openbitfun-space-1);');
+    expect(rowBlock).not.toContain('padding-right: var(--openbitfun-space-2);');
+
+    // The toggle's state icon needs the row's trailing cell: flushed to the
+    // padding edge its centre sat half a cell right of the dots' column.
+    const toggleTrailingBlock = extractBlock(stylesheet, '&__inline-toggle-trailing');
+    expect(toggleTrailingBlock).toContain('display: grid;');
+    expect(toggleTrailingBlock).toContain('flex: 0 0 var(--openbitfun-space-5);');
+    expect(toggleTrailingBlock).toContain('place-items: center;');
+    expect(extractInlineItemBlock(stylesheet, 'trailing')).toContain(
+      'flex: 0 0 var(--openbitfun-space-5);',
+    );
+    expect(source).toMatch(
+      /className="openbitfun-nav-panel__inline-toggle-trailing"[\s\S]{0,400}?inline-toggle-chevron/,
+    );
   });
 });

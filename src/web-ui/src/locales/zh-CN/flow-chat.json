@@ -528,7 +528,6 @@
     "editPlaceholder": "编辑你的消息...",
     "cannotEdit": "无法编辑该消息",
     "editDisabledBusy": "请等待会话空闲后再编辑并重跑。",
-    "editDisabledImages": "暂不支持编辑图片消息",
     "editDisabledRemote": "编辑并重跑需要完整回滚；远程工作区未记录文件快照，因此暂不支持。",
     "editDisabledDispatch": "编辑并重跑需要先回滚历史，远程任务暂不支持此操作。",
     "editDisabledLocalCommand": "无法编辑本地命令消息",
@@ -831,6 +830,7 @@
       "globalScope": "全局",
       "current": "权限：{{mode}}",
       "changeFailed": "切换权限模式失败。",
+      "changeFailedSessionInUse": "此会话正在另一个 OpenBitFun 实例中被写入。请关闭其他实例后重试。",
       "ask": {
         "label": "需要确认",
         "description": "外部访问，修改文件和执行命令需要确认。"
@@ -859,6 +859,10 @@
       "currentSessionOverride": "权限：{{mode}}（仅当前会话）",
       "resetToDefault": "跟随默认模式",
       "noSession": "请先打开或新建会话，再修改其权限模式。",
+      "unread": "无法读取此会话的权限模式，当前显示的是默认模式。",
+      "unreadSessionInUse": "此会话正在另一个 OpenBitFun 实例中被写入，无法读取其权限模式，当前显示的是默认模式。请关闭其他实例后重新打开此会话。",
+      "unreadTooltip": "无法读取权限模式，当前显示默认模式：{{mode}}",
+      "unreadMenuNotice": "无法读取此会话自身的模式，因此未标记任何模式。",
       "turnScope": "仅下一条消息",
       "turnSettings": "下一条消息设置",
       "followSessionMode": "跟随当前会话",
@@ -2875,5 +2879,23 @@
     "loadFailed": "暂时无法打开助手",
     "retry": "重试",
     "loading": "正在打开助手…"
+  },
+  "hostQueue": {
+    "title": "宿主消息队列",
+    "memoryNotice": "消息接受后，关闭此页面仍会执行。执行设备重启会清空待执行消息。",
+    "queued": "排队中",
+    "blocked": "等待恢复",
+    "steeringPending": "等待注入",
+    "sendNow": "立即发送",
+    "cancel": "移出队列",
+    "refresh": "刷新",
+    "unknown": "尚未确认是否送达，请先检查再重发。",
+    "checkRetry": "检查 / 重试",
+    "copyDraft": "复制文字到输入框",
+    "dismiss": "关闭本地提醒",
+    "attachments": "{{count}} 个附件",
+    "edit": "恢复草稿",
+    "noDraft": "完整草稿仅在提交消息的设备上可用。",
+    "legacy": "旧队列中的草稿，请逐条发送或恢复。"
   }
 }

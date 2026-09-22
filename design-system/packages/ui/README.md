@@ -555,6 +555,14 @@ dynamic metadata, and `actions` contains controls revealed on hover or keyboard
 focus. Use `ToolCardChangeSummary` for added/removed counts; domain icons and
 interaction affordances belong in `actions`, not in the summary.
 
+The summary row insets both ends with one value (`--_tool-card-summary-inset`),
+so trailing metadata keeps the same distance to the card edge as the leading
+icon or label. The reveal gutter of `actions` belongs to the action region
+itself: while hidden it occupies no row space, and while revealed it compensates
+for its own corner gutter instead of shrinking the row inset. A consumer slot
+that renders empty (a fragment whose conditions are all false) stays inert: it
+adds no row gap and no divider for the trailing status icon.
+
 Concrete tool-card views compose those frameworks without importing product
 state. The published families cover file and command execution, search and web
 results, agent and session activity, Git and review summaries, page lifecycle,

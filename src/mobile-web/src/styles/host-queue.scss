@@ -1,0 +1,12 @@
+.host-message-queue {
+  padding: 8px 12px;
+  max-height: 28vh;
+  overflow: auto;
+  flex-shrink: 0;
+  font-size: 12px;
+  ul { list-style: none; margin: 0; padding: 0; }
+  li { padding-block: 8px; }
+  p { margin-block: 4px; }
+  &__preview { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 5em; overflow: auto; }
+  &__actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+}

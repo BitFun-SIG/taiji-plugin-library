@@ -99,7 +99,7 @@ enum MobileLaunchConfiguration {
             model.timelineRows = [MobileConversationRow(
                 id: "preview-plan-row", kind: "ASSISTANT", text: "", thinking: nil, images: [], tools: [plan],
                 blocks: [.tools(id: "preview-plan-tools", tools: [plan])], streaming: false, typing: false,
-                pending: false, showRetry: false, error: nil
+                showRetry: false, error: nil
             )]
         }
         if arguments.contains("--file-preview") {
@@ -349,7 +349,7 @@ private extension MobileAppModel {
         timelineRows = [
             MobileConversationRow(
                 id: userID, kind: "USER", text: "介绍本项目", thinking: nil,
-                images: [], tools: [], blocks: [], streaming: false, typing: false, pending: false,
+                images: [], tools: [], blocks: [], streaming: false, typing: false,
                 showRetry: false, error: nil
             ),
             MobileConversationRow(
@@ -363,7 +363,7 @@ private extension MobileAppModel {
                     ),
                     .tools(id: "preview-tools", tools: [readOne, readTwo, approval, question]),
                 ],
-                streaming: false, typing: false, pending: false, showRetry: true,
+                streaming: false, typing: false, showRetry: true,
                 error: "桌面端进程意外退出。"
             ),
         ]
