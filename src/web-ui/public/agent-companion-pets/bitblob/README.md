@@ -19,6 +19,22 @@ Each state was generated as its own grounded strip: quiet breathing/blinking; ri
 
 Deterministic extraction, registration, composition and edge cleanup use the skill's scripts. Jumping uses the supported shared-viewport extraction to preserve the generated vertical arc; other standard rows use connected-component extraction.
 
+## Consistent state transitions
+
+The packaged atlas re-registers the existing artwork across all states, including
+the neutral slot and look directions. Each cell is uniformly scaled against a
+15,000-pixel alpha-weighted silhouette area, retaining 15% of its original
+within-row area variation for breathing and squash. This avoids using the full
+antenna height or a raised hand as a proxy for body size. The lower-body center
+is aligned to x=95.5 and the baseline to y=194 in each 192×208 cell. Jump frames
+use offsets of 0, 4, 16, 6, 0 pixels from that baseline.
+
+This corrects the former half-sized jump, oversized working/waiting frames and
+per-frame size drift during review. The original poses, frame order, v2 layout
+and transparency remain intact. BitBlob plays only the atlas animation in the
+shared renderer; additional CSS breathing, hover squash and work/drag transforms
+are disabled for this built-in pet so they do not compound its authored motion.
+
 ## Verification
 
 Validation covers the v2 geometry, populated and unused cells, alpha/chroma cleanup, frame clipping and component extraction. Independent visual review covers all nine animations, every look direction and continuity around the row boundaries. Three isolated reviewers classify the randomized horizontal/vertical direction sheet; cardinal ambiguity blocks packaging. Runtime/transport integration checks belong to the companion feature tests rather than the image pipeline.
