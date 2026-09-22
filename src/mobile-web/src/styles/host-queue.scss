@@ -3,7 +3,7 @@
   max-height: 28vh;
   overflow: auto;
   flex-shrink: 0;
-  font-size: 12px;
+  font-size: var(--openbitfun-type-body-xs-font-size);
   ul { list-style: none; margin: 0; padding: 0; }
   li { padding-block: 8px; }
   p { margin-block: 4px; }
