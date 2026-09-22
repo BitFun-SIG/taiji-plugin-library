@@ -74,14 +74,15 @@ const WorkspaceSessionFilterMenu: React.FC = () => {
     const anchor = buttonRef.current?.getBoundingClientRect();
     if (!anchor) return;
     const measuredHeight = menuRef.current?.offsetHeight ?? 422;
+    const menuWidth = menuRef.current?.offsetWidth || MAIN_MENU_WIDTH;
     const preferredRight = anchor.right + MENU_GAP;
-    const canOpenRight = preferredRight + MAIN_MENU_WIDTH <= window.innerWidth - VIEWPORT_PADDING;
+    const canOpenRight = preferredRight + menuWidth <= window.innerWidth - VIEWPORT_PADDING;
     setMenuPosition({
       top: clamp(anchor.top - 6, VIEWPORT_PADDING, window.innerHeight - measuredHeight - VIEWPORT_PADDING),
       left: clamp(
-        canOpenRight ? preferredRight : anchor.left - MENU_GAP - MAIN_MENU_WIDTH,
+        canOpenRight ? preferredRight : anchor.left - MENU_GAP - menuWidth,
         VIEWPORT_PADDING,
-        window.innerWidth - MAIN_MENU_WIDTH - VIEWPORT_PADDING,
+        window.innerWidth - menuWidth - VIEWPORT_PADDING,
       ),
     });
   }, []);
@@ -235,6 +236,7 @@ const WorkspaceSessionFilterMenu: React.FC = () => {
       <Menu
         ref={menuRef}
         className="openbitfun-nav-panel__session-filter-menu"
+        inlineSize="content"
         style={menuPosition}
         autoFocusFirstItem
         aria-label={t('nav.sessions.viewMenu.title')}
@@ -283,6 +285,7 @@ const WorkspaceSessionFilterMenu: React.FC = () => {
         <Menu
           ref={submenuRef}
           className="openbitfun-nav-panel__session-filter-submenu"
+          inlineSize="content"
           style={{
             top: submenuPosition.top,
             left: submenuPosition.left,

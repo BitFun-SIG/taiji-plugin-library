@@ -909,6 +909,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
               <Menu
                 ref={menuPopoverRef}
                 className="openbitfun-nav-panel__workspace-item-menu-popover"
+                inlineSize="content"
                 style={{
                   top: menuPosition?.top ?? 0,
                   left: menuPosition?.left ?? 0,
@@ -1393,6 +1394,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
               <Menu
                 ref={menuPopoverRef}
                 className="openbitfun-nav-panel__workspace-item-menu-popover"
+                inlineSize="content"
                 style={{
                   top: menuPosition?.top ?? 0,
                   left: menuPosition?.left ?? 0,

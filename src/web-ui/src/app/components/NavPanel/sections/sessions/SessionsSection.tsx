@@ -1870,6 +1870,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                     <Menu
                       ref={sessionMenuPopoverRef}
                       className="openbitfun-nav-panel__inline-item-menu-popover"
+                      inlineSize="content"
                       data-openbitfun-component="sessions-section"
                       data-openbitfun-part="menu"
                       data-openbitfun-state="menuOpen"
