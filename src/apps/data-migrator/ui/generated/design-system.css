@@ -163,7 +163,7 @@
     --openbitfun-focus-offset: 2px;
     --openbitfun-focus-width: 2px;
     --openbitfun-font-family-control: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI Variable Text', 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei UI', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;
-    --openbitfun-font-family-mono: 'JetBrains Mono', 'Fira Code', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Monaco, 'Cascadia Mono', 'Cascadia Code', Consolas, 'Liberation Mono', 'Courier New', monospace;
+    --openbitfun-font-family-mono: 'JetBrains Mono', 'Fira Code', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Monaco, 'Cascadia Mono', 'Cascadia Code', Consolas, 'Liberation Mono', 'Courier New', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei UI', 'Microsoft YaHei', monospace;
     --openbitfun-font-family-sans: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei UI', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;
     --openbitfun-font-size-2xl: 18px;
     --openbitfun-font-size-2xl-plus: 20px;
@@ -388,6 +388,7 @@
     --openbitfun-overlay-menu-item-padding-inline: var(--openbitfun-space-2);
     --openbitfun-overlay-menu-item-radius: var(--openbitfun-radius-base);
     --openbitfun-overlay-menu-max-block-size: 480px;
+    --openbitfun-overlay-menu-min-inline-size: 160px;
     --openbitfun-overlay-menu-row-gap: 2px;
     --openbitfun-overlay-menu-scrollbar-gap: 2px;
     --openbitfun-overlay-menu-section-gap: var(--openbitfun-space-2);

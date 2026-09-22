@@ -1570,7 +1570,6 @@ $_section-header-height: 22px;
 /* Positioning-only overrides; the design-system Menu owns the surface look. */
 .openbitfun-nav-panel__footer-menu {
   position: fixed;
-  min-width: 148px;
   max-width: calc(100vw - 16px);
   max-height: calc(100vh - 16px);
   z-index: var(--openbitfun-layer-popover);

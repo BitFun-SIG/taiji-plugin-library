@@ -123,6 +123,7 @@ const AssistantSessionCreateMenu: React.FC<AssistantSessionCreateMenuProps> = ({
         <Menu
           ref={menuRef}
           className="openbitfun-nav-panel__assistant-session-menu"
+          inlineSize="content"
           aria-label={chooseAssistantLabel}
           data-testid="nav-assistant-session-menu"
           style={{
