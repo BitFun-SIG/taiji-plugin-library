@@ -2881,7 +2881,8 @@
     "loading": "正在打开助手…"
   },
   "hostQueue": {
-    "title": "宿主消息队列",
+    "title": "待发送",
+    "about": "排队消息说明",
     "memoryNotice": "消息接受后，关闭此页面仍会执行。执行设备重启会清空待执行消息。",
     "queued": "排队中",
     "blocked": "等待恢复",

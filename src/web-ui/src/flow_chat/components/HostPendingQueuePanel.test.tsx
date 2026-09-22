@@ -56,3 +56,40 @@ it.each([false, true])('keeps a normal send hidden and shows recovery only on fa
     container.remove();
   }
 });
+
+it('keeps four queued messages compact, exposes actions, and toggles help independently', async () => {
+  const requests: string[] = [];
+  let items = Array.from({ length: 4 }, (_, index) => ({ turnId: String(index), displayContent: String(index + 1),
+    status: 'queued' as const, previewTruncated: false, attachmentCount: 0, agentType: 'Standard',
+    createdAtMs: 1, reason: null, targetTurnId: null, steeringId: null }));
+  const queue = new HostDialogQueue('scope', 'session', async request => {
+    requests.push(request.action);
+    if (request.action === 'cancel' || request.action === 'promote') items = items.filter(item => item.turnId !== request.turnId);
+    return { sessionId: 'session', queueEpoch: 'epoch', revision: requests.length, activeTurnId: 'active',
+      items, capacity: 20, used: items.length, receipt: null };
+  }, { list: async () => [], put: async () => {}, remove: async () => {} });
+  const container = document.createElement('div');
+  document.body.append(container);
+  const root = createRoot(container);
+  try {
+    await act(async () => root.render(<HostPendingQueuePanel queue={queue} onRestore={() => true} />));
+    expect(container.querySelectorAll('li')).toHaveLength(4);
+    expect(container.textContent).not.toContain('hostQueue.memoryNotice');
+    expect(container.textContent).not.toContain('hostQueue.queued');
+    expect(container.querySelectorAll('[aria-label="hostQueue.sendNow"]')).toHaveLength(4);
+    const toggle = container.querySelector<HTMLButtonElement>('.host-pending-queue__toggle')!;
+    await act(async () => toggle.click());
+    expect(container.querySelector('ul')?.hidden).toBe(true);
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="hostQueue.about"]')!.click());
+    expect(container.textContent).toContain('hostQueue.memoryNotice');
+    await act(async () => toggle.click());
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="hostQueue.sendNow"]')!.click());
+    expect(requests).toContain('promote');
+    expect(container.querySelectorAll('li')).toHaveLength(3);
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="hostQueue.cancel"]')!.click());
+    expect(container.querySelectorAll('li')).toHaveLength(2);
+  } finally {
+    await act(async () => root.unmount());
+    container.remove();
+  }
+});
