@@ -75,6 +75,15 @@ pub use openbitfun_runtime_ports::{
     DialogSubmitOutcome,
 };
 
+/// Rejection prefix for a submission that reuses a dialog turn ID the session
+/// already owns.
+///
+/// The scheduled-job service classifies enqueue failures from the port message
+/// text, so producers and classifiers share this constant instead of repeating
+/// the wording.
+pub(crate) const DIALOG_TURN_ID_ALREADY_SETTLED_MESSAGE: &str =
+    "Dialog turn ID is already active or completed";
+
 /// A message waiting to be dispatched to the coordinator
 #[derive(Debug, Clone)]
 pub struct QueuedTurn {
@@ -2955,7 +2964,7 @@ impl DialogScheduler {
                 PortError::new(
                     PortErrorKind::InvalidRequest,
                     format!(
-                        "Dialog turn ID is already active or completed: session_id={}, turn_id={resolved_turn_id}",
+                        "{DIALOG_TURN_ID_ALREADY_SETTLED_MESSAGE}: session_id={}, turn_id={resolved_turn_id}",
                         request.session_id
                     ),
                 )
