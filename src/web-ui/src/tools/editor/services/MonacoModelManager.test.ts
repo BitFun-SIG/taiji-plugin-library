@@ -106,6 +106,61 @@ afterEach(() => {
 });
 
 describe('MonacoModelManager external sync dirty state (issue #3165)', () => {
+  it('notifies content subscribers during disk sync and tracks edits to other models', () => {
+    const filePath = '/repo/content-subscriber.ts';
+    monacoModelManager.getOrCreateModel(filePath, 'typescript', 'before');
+    const otherPath = '/repo/content-subscriber-other.ts';
+    const other = monacoModelManager.getOrCreateModel(otherPath, 'typescript', 'saved');
+    const contents: string[] = [];
+    const unsubscribe = monacoModelManager.onModelContentChanged(event => {
+      if (event.filePath !== filePath) return;
+      contents.push(event.content);
+      other.setValue('unsaved edit from a content listener');
+    });
+    try {
+      monacoModelManager.updateModelContent(filePath, 'disk update', true);
+      expect(contents).toEqual(['disk update']);
+      expect(monacoModelManager.getModelMetadata(filePath)?.isDirty).toBe(false);
+      expect(monacoModelManager.getModelMetadata(otherPath)?.isDirty).toBe(true);
+      expect(dirtyListener.events.filter(event => event.filePath === filePath)).toEqual([
+        { filePath, isDirty: false },
+      ]);
+    } finally {
+      unsubscribe();
+    }
+  });
+
+  it('initializes a reused empty model without a transient dirty event', () => {
+    const filePath = '/repo/reused-empty.ts';
+    const model = monacoModelManager.getOrCreateModel(filePath, 'typescript', '');
+    const reused = monacoModelManager.getOrCreateModel(filePath, 'typescript', 'disk content');
+    expect(reused).toBe(model);
+    expect(monacoModelManager.getModelMetadata(filePath)).toMatchObject({
+      originalContent: 'disk content', isDirty: false,
+    });
+    expect(dirtyListener.events.filter(event => event.filePath === filePath)).toEqual([
+      { filePath, isDirty: false },
+    ]);
+  });
+
+  it('keeps nested sync suppression until the outer bracket closes and restores it after failure', () => {
+    const filePath = '/repo/nested-sync.ts';
+    const model = monacoModelManager.getOrCreateModel(filePath, 'typescript', 'saved');
+    expect(() => {
+      monacoModelManager.beginExternalSync(model);
+      try {
+        monacoModelManager.updateModelContent(filePath, 'first sync', true);
+        model.setValue('outer sync');
+        expect(monacoModelManager.getModelMetadata(filePath)?.isDirty).toBe(false);
+        throw new Error('sync failed');
+      } finally {
+        monacoModelManager.endExternalSync(model);
+      }
+    }).toThrow('sync failed');
+    model.setValue('user edit');
+    expect(monacoModelManager.getModelMetadata(filePath)?.isDirty).toBe(true);
+  });
+
   it('updateModelContent with markAsSaved=true leaves the model clean', () => {
     const filePath = '/repo/external-sync-saved.ts';
     const model = monacoModelManager.getOrCreateModel(filePath, 'typescript', 'const a = 1;');
@@ -140,11 +195,11 @@ describe('MonacoModelManager external sync dirty state (issue #3165)', () => {
     const model = monacoModelManager.getOrCreateModel(filePath, 'typescript', 'const c = 1;');
     dirtyListener.events.length = 0;
 
-    monacoModelManager.beginExternalSync();
+    monacoModelManager.beginExternalSync(model);
     try {
       model.setValue('const c = 2;');
     } finally {
-      monacoModelManager.endExternalSync();
+      monacoModelManager.endExternalSync(model);
     }
     monacoModelManager.markAsSaved(filePath);
 
@@ -171,7 +226,7 @@ describe('MonacoModelManager external sync dirty state (issue #3165)', () => {
     const filePath = '/repo/unbalanced-bracket.ts';
     const model = monacoModelManager.getOrCreateModel(filePath, 'typescript', 'const e = 1;');
 
-    monacoModelManager.endExternalSync(); // no matching begin: must be a no-op
+    monacoModelManager.endExternalSync(model); // no matching begin: must be a no-op
     dirtyListener.events.length = 0;
     model.setValue('const e = 2; // user typed');
 
