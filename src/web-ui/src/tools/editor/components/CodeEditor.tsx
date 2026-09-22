@@ -371,7 +371,14 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
 
     const previousLoadingState = isLoadingContentRef.current;
     isLoadingContentRef.current = true;
-    model.setValue(nextContent);
+    // Programmatic disk sync: bracket the write so the model manager does not
+    // flag the model dirty for content nobody typed (issue #3165).
+    monacoModelManager.beginExternalSync();
+    try {
+      model.setValue(nextContent);
+    } finally {
+      monacoModelManager.endExternalSync();
+    }
     setIndentation(applyModelIndentation(model, latestEditorConfigRef.current ?? {}, true));
 
     queueMicrotask(() => {
@@ -404,14 +411,17 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
       if (pos && editorRef.current) {
         editorRef.current.setPosition(pos);
       }
+      // Settle the saved state synchronously: deferring it to a microtask let
+      // an unmount race skip markAsSaved and strand stale saved metadata after
+      // the disk sync (issue #3165).
+      if (modelRef.current && filePath) {
+        savedVersionIdRef.current = modelRef.current.getAlternativeVersionId();
+        monacoModelManager.markAsSaved(modelKey);
+      }
       onContentChange?.(fileContent, false);
       reportFileMissingFromDisk(false);
       queueMicrotask(() => {
         isLoadingContentRef.current = false;
-        if (modelRef.current && !isUnmountedRef.current && filePath) {
-          savedVersionIdRef.current = modelRef.current.getAlternativeVersionId();
-          monacoModelManager.markAsSaved(modelKey);
-        }
       });
     },
     [applyExternalContentToModel, filePath, modelKey, onContentChange, reportFileMissingFromDisk, updateLargeFileMode]
@@ -1424,12 +1434,12 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
         }
         log.warn('Failed to sync disk version after encoding change', err);
       }
-      queueMicrotask(() => {
-        if (modelRef.current && !isUnmountedRef.current) {
-          savedVersionIdRef.current = modelRef.current.getAlternativeVersionId();
-          monacoModelManager.markAsSaved(modelKey);
-        }
-      });
+      // Same unmount race as the disk-sync path: settle the saved state
+      // synchronously right after the bracketed content write (issue #3165).
+      if (modelRef.current) {
+        savedVersionIdRef.current = modelRef.current.getAlternativeVersionId();
+        monacoModelManager.markAsSaved(modelKey);
+      }
     } catch (err) {
       if (isLikelyFileNotFoundError(err)) {
         reportFileMissingFromDisk(true);

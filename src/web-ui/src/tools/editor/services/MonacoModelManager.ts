@@ -83,6 +83,14 @@ class MonacoModelManager {
   
   private globalListenersInstalled = false;
 
+  /**
+   * Depth counter for programmatic external-sync brackets. While non-zero,
+   * content changes are disk-sync writes (issue #3165), so the dirty state is
+   * owned by the sync caller (markAsSaved / updateModelContent) instead of the
+   * change listener. A counter keeps nested brackets balanced.
+   */
+  private externalSyncDepth = 0;
+
   private constructor() {}
 
   public static getInstance(): MonacoModelManager {
@@ -213,6 +221,13 @@ class MonacoModelManager {
     model: monaco.editor.ITextModel
   ): void {
     const listener = model.onDidChangeContent(() => {
+      // Inside an external-sync bracket the write is the disk truth, not a user
+      // edit: skip the dirty recompute and the transient dirty broadcast so the
+      // tab never flashes "modified" for a programmatic sync (issue #3165).
+      // The bracket caller settles the final state (markAsSaved / saved flag).
+      if (this.externalSyncDepth > 0) {
+        return;
+      }
       const metadata = this.modelMetadata.get(uriString);
       if (metadata) {
         const currentVersionId = model.getAlternativeVersionId();
@@ -345,15 +360,37 @@ class MonacoModelManager {
     const wasEmpty = !metadata || metadata.originalContent === '';
     const isFirstContentSet = wasEmpty && content.length > 0;
     
-    model.setValue(content);
+    // markAsSaved callers push the disk truth into an open model (issue
+    // #3165): bracket the write so the change listener does not recompute the
+    // dirty flag or broadcast a transient "modified" state in between.
+    if (markAsSaved) {
+      this.beginExternalSync();
+    }
+    try {
+      model.setValue(content);
+    } finally {
+      if (markAsSaved) {
+        this.endExternalSync();
+      }
+    }
     
     if (metadata) {
       if (markAsSaved) {
         metadata.savedVersionId = model.getAlternativeVersionId();
         metadata.originalContent = content;
         metadata.isDirty = false;
+        metadata.lastAccessedAt = Date.now();
+        
+        window.dispatchEvent(new CustomEvent('monaco-model-dirty-changed', {
+          detail: {
+            uri: uriString,
+            filePath: metadata.filePath,
+            isDirty: false
+          }
+        }));
+      } else {
+        metadata.lastAccessedAt = Date.now();
       }
-      metadata.lastAccessedAt = Date.now();
     }
     
     this.markLoadingComplete(uriString);
@@ -368,6 +405,25 @@ class MonacoModelManager {
     }
   }
   
+  /**
+   * Open a programmatic external-sync bracket. While it is open, model content
+   * changes skip the dirty recompute and the transient dirty broadcast
+   * (issue #3165). Pair every begin with an end in a finally block.
+   */
+  public beginExternalSync(): void {
+    this.externalSyncDepth += 1;
+  }
+
+  /**
+   * Close an external-sync bracket. Unbalanced calls (more ends than begins)
+   * are no-ops so suppression can never get stuck on and swallow real edits.
+   */
+  public endExternalSync(): void {
+    if (this.externalSyncDepth > 0) {
+      this.externalSyncDepth -= 1;
+    }
+  }
+
   public markAsSaved(filePath: string, savedContent?: string, savedVersionId?: number): void {
     const uri = this.normalizeUri(filePath);
     const uriString = uri.toString();
@@ -389,7 +445,7 @@ class MonacoModelManager {
       }));
     }
   }
-  
+
   public getModelMetadata(filePath: string): ModelMetadata | undefined {
     if (!getMonacoRuntime()) {
       return undefined;
