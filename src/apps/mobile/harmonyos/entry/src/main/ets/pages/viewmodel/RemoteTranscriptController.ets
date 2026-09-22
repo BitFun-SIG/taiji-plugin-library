@@ -109,7 +109,7 @@ export class RemoteTranscriptController {
     const text = rawText.length > 0 ? rawText :
       (images.length > 0 ? RemoteI18n.t('chat.analyzeImageDefault') : '');
     const sessionId = this.remote.activeSession.sessionId || '';
-    if ((!text && images.length === 0) || !sessionId || this.remote.isBusy ||
+    if ((!text && images.length === 0) || !sessionId || this.remote.isBusy || this.remote.connectionState !== 'connected' ||
       !runtime.connection.ensureAvailable()) {
       return;
     }
@@ -176,7 +176,7 @@ export class RemoteTranscriptController {
       this.notify(RemoteI18n.t('chat.planBuildWaitForTurn'));
       return;
     }
-    if (planFilePath.trim().length === 0 || sessionId.length === 0 || this.remote.isBusy ||
+    if (planFilePath.trim().length === 0 || sessionId.length === 0 || this.remote.isBusy || this.remote.connectionState !== 'connected' ||
       !runtime.connection.ensureAvailable()) {
       return;
     }
@@ -209,7 +209,7 @@ export class RemoteTranscriptController {
       sessionId,
       this.remote.activeTurnMessage.id,
       this.remoteActiveTurnId(),
-      runtime.connection.ensureAvailable()
+      this.remote.connectionState === 'connected' && runtime.connection.ensureAvailable()
     );
   }
 

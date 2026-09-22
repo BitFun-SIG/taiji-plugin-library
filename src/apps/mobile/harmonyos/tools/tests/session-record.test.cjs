@@ -266,3 +266,163 @@ test('history publishes user and assistant together after reduction, including a
   assert.equal(snapshots.length, count + 2, 'realtime must still publish immediately');
   controller.stop();
 });
+
+const { ChatTimelineStore } = load('ChatTimelineStore', { './RemoteUiState': load('RemoteUiState') });
+async function durableTimelineHarness() {
+  const timeline = new ChatTimelineStore();
+  timeline.reset('session');
+  let stream;
+  const { ChatSessionController } = load('ChatSessionController', {
+    './DurableSessionReducer': reducerModule, './InteractionMailboxStore': mailboxModule
+  });
+  const controller = new ChatSessionController({
+    getModelCatalog: async () => ({ version: 1, models: [], default_models: {} }),
+    subscribeSession: (_id, callbacks) => { stream = callbacks; return { wake() {}, close() {} }; }
+  }, { onSnapshot: snapshot => timeline.applySnapshot(snapshot), canPoll: () => true,
+    onError: error => { throw error; } });
+  controller.start('session', { pollVersion: 0, knownMessageCount: 0, knownModelCatalogVersion: 0 });
+  await stream.onCaughtUp();
+  return { timeline, stream, controller };
+}
+function orderedRecord(revision, id, type, order, content) {
+  const event = record(revision, content, 'inprogress', id);
+  event.payload.item.type = type;
+  event.payload.item.data.orderIndex = order;
+  if (type === 'tool') Object.assign(event.payload.item.data, {
+    toolName: 'Read', toolCall: { id, input: {} }, status: 'running'
+  });
+  return event;
+}
+test('durable controller to timeline: late insertion and repeated publications are idempotent', async () => {
+  const { timeline, stream } = await durableTimelineHarness();
+  await stream.onEvent(orderedRecord(1, 'think', 'thinking', 0, 'reason'));
+  await stream.onEvent(orderedRecord(2, 'answer', 'text', 2, 'answer'));
+  await stream.onEvent(orderedRecord(3, 'tool', 'tool', 1, ''));
+  for (let i = 0; i < 30; i++) {
+    await stream.onCaughtUp();
+    const active = timeline.snapshot().activeTurn;
+    assert.deepEqual(active.items.map(item => item.type), ['thinking', 'tool', 'text']);
+    assert.equal(active.items[2].content, 'answer');
+  }
+});
+test('durable controller to timeline: authoritative corrections replace text and thinking', async () => {
+  const { timeline, stream } = await durableTimelineHarness();
+  await stream.onEvent(orderedRecord(1, 'think', 'thinking', 0, 'old long reasoning'));
+  await stream.onEvent(orderedRecord(2, 'answer', 'text', 1, 'old long answer'));
+  await stream.onEvent(orderedRecord(3, 'think', 'thinking', 0, 'new'));
+  await stream.onEvent(orderedRecord(4, 'answer', 'text', 1, 'fixed'));
+  const active = timeline.snapshot().activeTurn;
+  assert.equal(active.text, 'fixed'); assert.equal(active.thinking, 'new');
+  assert.deepEqual(active.items.map(item => item.content), ['new', 'fixed']);
+});
+test('durable controller to timeline: tombstones and superseded records remove visible content', async () => {
+  for (const removal of ['deleted', 'superseded', 'retry_superseded']) {
+    const { timeline, stream } = await durableTimelineHarness();
+    const first = orderedRecord(1, 'answer', 'text', 0, 'obsolete');
+    await stream.onEvent(first);
+    const removed = orderedRecord(2, 'answer', 'text', 0, 'obsolete');
+    if (removal === 'deleted') { removed.payload.deleted = true; delete removed.payload.item; }
+    else removed.payload.item.data.status = removal;
+    await stream.onEvent(removed);
+    await stream.onEvent(first);
+    assert.deepEqual(timeline.snapshot().activeTurn.items, [], removal);
+    assert.equal(timeline.snapshot().activeTurn.text, '', removal);
+  }
+});
+test('durable controller to timeline: gap replay discards old active content', async () => {
+  const { timeline, stream } = await durableTimelineHarness();
+  await stream.onEvent(record(5, 'old epoch'));
+  await stream.onGap();
+  await stream.onEvent(record(1, 'new epoch'));
+  await stream.onCaughtUp();
+  assert.equal(timeline.snapshot().activeTurn.text, 'new epoch');
+  await stream.onGap(); await stream.onCaughtUp();
+  assert.equal(timeline.snapshot().activeTurn, undefined);
+  assert.deepEqual(timeline.snapshot().persistedMessages, []);
+});
+test('durable controller to timeline: completion replaces active row without carrying obsolete blocks', async () => {
+  const { timeline, stream } = await durableTimelineHarness();
+  await stream.onEvent(record(1, 'draft'));
+  await stream.onEvent(record(2, 'final', 'completed'));
+  await stream.onCaughtUp();
+  assert.equal(timeline.snapshot().activeTurn, undefined);
+  const assistants = timeline.snapshot().persistedMessages.filter(row => row.role === 'assistant');
+  assert.equal(assistants.length, 1);
+  assert.equal(assistants[0].text, 'final'); assert.equal(assistants[0].items.length, 1);
+});
+test('durable snapshot retains pending local messages until their host record arrives', async () => {
+  const { timeline, stream } = await durableTimelineHarness();
+  timeline.appendOptimisticMessage({ id: 'local', turnId: 'turn', role: 'user', text: 'question' });
+  await stream.onCaughtUp();
+  assert.equal(timeline.snapshot().optimisticMessages.length, 1);
+  await stream.onEvent(record(1, 'answer'));
+  assert.equal(timeline.snapshot().optimisticMessages.length, 0);
+  assert.equal(timeline.snapshot().persistedMessages.filter(row => row.role === 'user').length, 1);
+});
+test('legacy partial snapshots still preserve omitted active content', () => {
+  const timeline = new ChatTimelineStore();
+  timeline.reset('session');
+  const active = { id: 'active-turn', turnId: 'turn', role: 'assistant', status: 'active',
+    text: 'answer', items: [{ type: 'text', content: 'answer' }] };
+  timeline.setActiveTurn(active);
+  timeline.applySnapshot({ sessionId: 'session', cursor: {
+    pollVersion: 1, knownMessageCount: 0, knownModelCatalogVersion: 0
+  }, newMessages: [], activeTurn: { ...active, text: '', items: [] } });
+  assert.equal(timeline.snapshot().activeTurn.text, 'answer');
+  assert.deepEqual(timeline.snapshot().activeTurn.items, active.items);
+});
+test('host restart terminal record settles active turn without reporting successful completion', async () => {
+  const { ChatSessionController } = load('ChatSessionController', { './DurableSessionReducer': reducerModule, './InteractionMailboxStore': mailboxModule });
+  let stream, snapshot;
+  const timeline = new ChatTimelineStore(); timeline.reset('session');
+  const controller = new ChatSessionController({ getModelCatalog: async () => ({version:1,models:[],default_models:{}}),
+    subscribeSession: (_id, callbacks) => { stream=callbacks; return {wake(){},close(){}}; }
+  }, { onSnapshot: value => { snapshot=value; timeline.applySnapshot(value); }, canPoll:()=>true, onError:error=>{throw error;} });
+  controller.start('session',{pollVersion:0,knownMessageCount:0,knownModelCatalogVersion:0});
+  await stream.onEvent(record(1,'partial')); await stream.onCaughtUp();
+  assert.ok(timeline.snapshot().activeTurn);
+  await stream.onGap();
+  await stream.onEvent(record(1,'partial','cancelled')); await stream.onCaughtUp();
+  assert.equal(timeline.snapshot().activeTurn,undefined);
+  assert.equal(timeline.snapshot().persistedMessages.at(-1).text,'partial');
+  assert.equal(timeline.snapshot().persistedMessages.at(-1).status,'cancelled');
+  assert.equal(snapshot.completedTurnId,'');
+  assert.equal(snapshot.sessionState,'idle');
+});
+test('after host restart the same conversation sends a new turn instead of steering the dead turn', async () => {
+  const { timeline, stream } = await durableTimelineHarness();
+  await stream.onEvent(record(1, 'partial'));
+  await stream.onGap(); await stream.onEvent(record(1, 'partial', 'cancelled')); await stream.onCaughtUp();
+  const ui = load('RemoteUiState');
+  const i18n = { RemoteI18n: { t: key => key } };
+  const logger = { RemoteLogger: { info() {} } };
+  const { RemoteChatCommandController } = load('RemoteChatCommandController', { '../i18n/RemoteI18n': i18n, './RemoteLogger': logger });
+  const requests = [];
+  const command = new RemoteChatCommandController({
+    sendMessage: async (sessionId, text) => { requests.push([sessionId, text]); return 'new-turn'; },
+    steerTurn: async () => { throw Error('Must not steer the interrupted turn'); }
+  }, { onBusy(){}, onStatusText(){}, onSendSucceeded(){}, onSendFailed(error){throw Error(error);}, onPollRequested(){} }, {});
+  const { RemoteTranscriptController } = load('../pages/viewmodel/RemoteTranscriptController', {
+    '../../services/ChatTimelineStore': { ChatTimelineStore }, '../../services/RemoteUiState': ui,
+    '../../services/RemoteLogger': logger, '../../i18n/RemoteI18n': i18n,
+    '../../services/Encoding': { Encoding: { randomId: () => 'new-turn' } },
+    './ConversationRuntime': { requireRemoteRuntime: value => value, shortSessionId: value => value }
+  });
+  const remote = { chatInput:'continue after restart', selectedImages:[], isBusy:false, isVoiceListening:false,
+    connectionState:'connected', activeSession:{sessionId:'session',agentType:'code'}, activeTurnMessage:timeline.activeTurnOrEmpty(),
+    supportsHostCapability:()=>true };
+  const controller = new RemoteTranscriptController(remote, {
+    timeline, chat:command, connection:{ensureAvailable:()=>true}, polling:{nudge(){}}, hooks:{}
+  }, ()=>{});
+  controller.syncRemoteTimeline = () => { remote.activeTurnMessage=timeline.activeTurnOrEmpty(); };
+  controller.startRemotePolling = () => {};
+  remote.connectionState = 'reconnecting';
+  await controller.sendRemoteMessage();
+  assert.deepEqual(requests, []);
+  assert.equal(remote.chatInput, 'continue after restart');
+  assert.equal(timeline.snapshot().optimisticMessages.length, 0);
+  remote.connectionState = 'connected';
+  await controller.sendRemoteMessage();
+  assert.deepEqual(requests,[['session','continue after restart']]);
+  assert.equal(timeline.snapshot().persistedMessages.at(-1).text,'partial');
+});
