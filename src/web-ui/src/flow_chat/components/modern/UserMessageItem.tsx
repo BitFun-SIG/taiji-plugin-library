@@ -47,6 +47,7 @@ import { resolveSessionDriverId } from '../../session-drivers/resolve';
 import { absoluteSessionTurnIndexForId } from '../../utils/flowChatTurnOrdinal';
 import {
   composerPresentationToAccessibleText,
+  composerPresentationToClipboardText,
   composerPresentationContexts,
   composerPresentationSessionReferences,
   composerPresentationToEditorText,
@@ -56,6 +57,7 @@ import {
   type ComposerPresentation,
 } from '../../utils/composerPresentation';
 import { restoreImageContextsFromPayload } from '../../utils/imageContextRestoration';
+import { writeComposerClipboardPayload } from '../../utils/composerClipboard';
 import { buildImagePayload } from '../../utils/imagePayload';
 import { UserMessagePresentationContent, UserMessageTextContent } from './UserMessagePresentationContent';
 import { UserMessageImage } from './UserMessageImage';
@@ -284,6 +286,12 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
     const copyText = composerPresentation
       ? composerPresentationToAccessibleText(composerPresentation)
       : messageContent;
+    // The readable value stays in text/plain while the canonical token text
+    // rides along in the HTML flavor, so pasting a copied message back into the
+    // composer rebuilds its capsules instead of leaving their source text.
+    const copyTokens = composerPresentation
+      ? composerPresentationToClipboardText(composerPresentation)
+      : messageContent;
     
     // Check whether content overflows. Uses the shared ResizeObserver instead
     // of a per-message window resize listener: observer callbacks run after
@@ -316,13 +324,13 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
     const handleCopy = useCallback(async (e: React.MouseEvent) => {
       e.stopPropagation(); // Prevent toggle via bubbling.
       try {
-        await navigator.clipboard.writeText(copyText);
+        await writeComposerClipboardPayload({ text: copyText, tokens: copyTokens });
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
       } catch (error) {
         log.error('Failed to copy', error);
       }
-    }, [copyText]);
+    }, [copyText, copyTokens]);
 
     const handleRollback = useCallback(async (e: React.MouseEvent) => {
       e.stopPropagation();
