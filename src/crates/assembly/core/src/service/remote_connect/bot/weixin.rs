@@ -134,12 +134,28 @@ fn push_tracked_turn(turns: &mut VecDeque<String>, turn_id: &str) {
     turns.push_back(turn_id.to_string());
 }
 
-/// A completed turn is worth pushing when this bot did not start it (the
-/// inbound path already answered it) and it did not end in failure. Whether
-/// there is anything to send is decided by the turn's own text, which keeps a
-/// degraded turn that still carries an explanation from being dropped.
-fn proactive_push_eligible(own_turn: bool, success: Option<bool>) -> bool {
-    !own_turn && success != Some(false)
+/// Only the persistence fence identifies a completed answer that is safe to
+/// read. The earlier DialogTurnCompleted event may precede the final write.
+fn settled_session_turn(event: &AgenticEvent) -> Option<(&str, &str)> {
+    match event {
+        AgenticEvent::SessionHistoryChanged {
+            session_id,
+            settled_turn_id: Some(turn_id),
+        } => Some((session_id, turn_id)),
+        _ => None,
+    }
+}
+
+fn settled_turn_text(mut poll: Value, turn_id: &str) -> Option<String> {
+    // A newly created tracker can seed an empty active turn, or still contain
+    // a partial overlay until its own subscriber sees the persistence fence.
+    // Prefer the persisted record regardless of subscriber execution order.
+    poll["active_turn"] = Value::Null;
+    let turn = openbitfun_services_integrations::remote_connect::bot::remote_turn::observe_turn(
+        &poll, turn_id,
+    )?;
+    (matches!(turn.status.as_str(), "done" | "completed") && turn.error.is_none())
+        .then_some(turn.text)
 }
 
 fn bounded_proactive_text(text: &str) -> String {
@@ -421,16 +437,11 @@ impl WeixinBot {
         }
     }
 
-    async fn handle_session_turn_completed(
-        &self,
-        session_id: String,
-        turn_id: String,
-        success: Option<bool>,
-    ) {
+    async fn handle_session_turn_settled(&self, session_id: String, turn_id: String) {
         if !self.runtime_fence.is_lifecycle_current() {
             return;
         }
-        if !proactive_push_eligible(self.is_own_turn(&turn_id).await, success) {
+        if self.is_own_turn(&turn_id).await {
             return;
         }
         let peers = self.peers_for_session(&session_id).await;
@@ -480,7 +491,6 @@ impl WeixinBot {
     /// Reads the assistant text of `turn_id` through the replay-safe turn
     /// projection the inbound reply path already relies on.
     async fn read_turn_text(&self, session_id: &str, turn_id: &str) -> String {
-        use openbitfun_services_integrations::remote_connect::bot::remote_turn::observe_turn;
         use openbitfun_services_integrations::remote_connect::{
             handle_remote_poll_command, RemoteCommand,
         };
@@ -501,8 +511,7 @@ impl WeixinBot {
         .await;
         serde_json::to_value(poll)
             .ok()
-            .and_then(|poll| observe_turn(&poll, turn_id))
-            .map(|turn| turn.text)
+            .and_then(|poll| settled_turn_text(poll, turn_id))
             .unwrap_or_default()
     }
 
@@ -1272,26 +1281,18 @@ struct WeixinSessionOutputSubscriber {
 #[async_trait::async_trait]
 impl EventSubscriber for WeixinSessionOutputSubscriber {
     async fn on_event(&self, event: &AgenticEvent) -> EventSubscriberResult {
-        let AgenticEvent::DialogTurnCompleted {
-            session_id,
-            turn_id,
-            success,
-            ..
-        } = event
-        else {
+        let Some((session_id, turn_id)) = settled_session_turn(event) else {
             return Ok(());
         };
         let Some(bot) = self.bot.upgrade() else {
             return Ok(());
         };
-        let session_id = session_id.clone();
-        let turn_id = turn_id.clone();
-        let success = *success;
+        let session_id = session_id.to_string();
+        let turn_id = turn_id.to_string();
         // The router awaits every subscriber inline while this path reads the
         // session and sends over the network, so the work must not run here.
         tokio::spawn(async move {
-            bot.handle_session_turn_completed(session_id, turn_id, success)
-                .await;
+            bot.handle_session_turn_settled(session_id, turn_id).await;
         });
         Ok(())
     }
@@ -1353,16 +1354,72 @@ mod tests {
     }
 
     #[test]
-    fn proactive_push_skips_bot_owned_and_failed_turns() {
-        // A turn this bot started already got its reply on the inbound path, so
-        // pushing it again would deliver every inbound message twice.
-        assert!(!proactive_push_eligible(true, Some(true)));
-        assert!(proactive_push_eligible(false, Some(true)));
-        // A turn that ended in failure must not be pushed.
-        assert!(!proactive_push_eligible(false, Some(false)));
-        // Older runtimes omit `success`; the turn stays eligible and the
-        // turn's own text decides whether there is anything to send.
-        assert!(proactive_push_eligible(false, None));
+    fn proactive_push_waits_for_durable_completion_and_ignores_history_edits() {
+        let early = AgenticEvent::DialogTurnCompleted {
+            session_id: "session".into(),
+            turn_id: "turn".into(),
+            total_rounds: 1,
+            total_tools: 0,
+            duration_ms: 10,
+            partial_recovery_reason: None,
+            success: Some(true),
+            finish_reason: Some("complete".into()),
+            has_final_response: Some(true),
+        };
+        assert!(settled_session_turn(&early).is_none());
+        assert!(settled_session_turn(&AgenticEvent::SessionHistoryChanged {
+            session_id: "session".into(),
+            settled_turn_id: None,
+        })
+        .is_none());
+        assert_eq!(
+            settled_session_turn(&AgenticEvent::SessionHistoryChanged {
+                session_id: "session".into(),
+                settled_turn_id: Some("turn".into()),
+            }),
+            Some(("session", "turn"))
+        );
+    }
+
+    #[test]
+    fn settled_projection_ignores_empty_or_partial_active_overlay() {
+        for text in ["", "partial answer"] {
+            let poll = json!({
+                "active_turn": {"turn_id":"turn", "status":"active", "text":text},
+                "new_messages": [{"turn_id":"turn", "role":"assistant", "status":"done", "content":"final scheduled result"}]
+            });
+            assert_eq!(
+                settled_turn_text(poll, "turn").as_deref(),
+                Some("final scheduled result")
+            );
+        }
+        let poll = json!({
+            "active_turn": {"turn_id":"next", "status":"active", "text":"another turn"},
+            "message_snapshot": [{"id":"turn_assistant", "role":"assistant", "status":"done", "content":"legacy final result"}]
+        });
+        assert_eq!(
+            settled_turn_text(poll, "turn").as_deref(),
+            Some("legacy final result")
+        );
+    }
+
+    #[test]
+    fn settled_projection_skips_failed_cancelled_and_unrelated_turns() {
+        for status in ["active", "failed", "cancelled"] {
+            let poll = json!({"new_messages": [{"turn_id":"turn", "role":"assistant", "status":status, "content":"partial"}]});
+            assert!(settled_turn_text(poll, "turn").is_none());
+        }
+        let poll = json!({"new_messages": [{"turn_id":"other", "role":"assistant", "status":"done", "content":"another answer"}]});
+        assert!(settled_turn_text(poll, "turn").is_none());
+    }
+
+    #[tokio::test]
+    async fn bot_owned_settled_turn_keeps_the_original_reply_path() {
+        let bot = test_bot("http://127.0.0.1:1/".into()).await;
+        bot.mark_own_turn("inbound-turn").await;
+        bot.handle_session_turn_settled("session".into(), "inbound-turn".into())
+            .await;
+        assert!(bot.pending_outbound.lock().await.is_empty());
     }
 
     #[test]
