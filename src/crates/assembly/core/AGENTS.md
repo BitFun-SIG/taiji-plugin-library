@@ -212,6 +212,12 @@ or test-target layout. Workspace checks and product-wide tests are CI-backed and
 are not the default Core precheck. For documentation-only changes, run
 `git diff --check`.
 
+For built-in provider overlay, trusted endpoint validation, and reasoning catalog changes:
+
+```bash
+cargo test -p openbitfun-core --no-default-features --features ai-adapter-runtime --lib infrastructure::ai::
+```
+
 Configuration persistence, account settings import, backup restore, legacy
 field/deletion compatibility, local-change notifications, and save/reload/model
 concurrency regressions have feature-free fixtures:
