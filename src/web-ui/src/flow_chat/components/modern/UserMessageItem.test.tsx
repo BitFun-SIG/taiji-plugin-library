@@ -570,6 +570,50 @@ describe('UserMessageItem steering tag', () => {
     expect(content?.querySelectorAll('.user-message-item__reference')).toHaveLength(2);
   });
 
+  it('copies a message with the readable text and a restorable token payload', async () => {
+    const writeText = vi.fn(async () => {});
+    const write = vi.fn(async (_items: unknown[]) => {});
+    vi.stubGlobal('navigator', { clipboard: { writeText, write } });
+    vi.stubGlobal('ClipboardItem', class {
+      constructor(readonly items: Record<string, Blob>) {}
+    });
+
+    act(() => {
+      root.render(
+        <FlowChatContext.Provider value={{ allowUserMessageRollback: false }}>
+          <UserMessageItem
+            message={{
+              id: 'user-copy-1',
+              content: '[$pdf] summarize it',
+              timestamp: 1000,
+              metadata: {
+                composerPresentation: {
+                  version: 1,
+                  segments: [
+                    { kind: 'inline-token', token: '[$pdf]', tokenType: 'skill', label: 'pdf' },
+                    { kind: 'text', text: ' summarize it' },
+                  ],
+                },
+              },
+            }}
+            turnId="turn-copy-1"
+          />
+        </FlowChatContext.Provider>,
+      );
+    });
+
+    const copyButton = container.querySelector<HTMLButtonElement>('.user-message-item__copy-btn')!;
+    await act(async () => {
+      copyButton.click();
+    });
+
+    expect(write).toHaveBeenCalledTimes(1);
+    const item = write.mock.calls[0][0][0] as { items: Record<string, Blob> };
+    expect(await item.items['text/plain'].text()).toBe('[Skill: pdf] summarize it');
+    const html = await item.items['text/html'].text();
+    expect(html).toContain('data-openbitfun-composer-clipboard-tokens="[$pdf] summarize it"');
+  });
+
   it('restores persisted references and images from a failed message to the input', () => {
     const composerPresentation = {
       version: 1,

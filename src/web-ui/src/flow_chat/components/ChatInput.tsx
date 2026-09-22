@@ -217,6 +217,7 @@ import {
   replaceLeadingSlashCommandWithSkillToken,
 } from '../utils/skillPromptReference';
 import { resolveChatInputQuickSkillShortcuts } from '../utils/chatInputQuickSkills';
+import { contextPickerOwnsKey } from '../utils/chatInputKeyOwnership';
 import { useDeepReviewConsent } from './DeepReviewConsentDialog';
 import { useSessionReviewActivity } from '../hooks/useSessionReviewActivity';
 import { shouldBlockReviewCommand } from '../utils/deepReviewCommandGuard';
@@ -5619,6 +5620,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       return;
     }
 
+    // The '@' reference picker owns its navigation and acceptance keys through
+    // its overlay layer, which the coordinator routes after React handlers.
+    if (contextPickerOwnsKey({ contextPickerActive: contextTriggerState.isActive, key: e.key })) {
+      return;
+    }
+
     if (slashCommandState.isActive) {
         const items = getActiveSlashPickerItems();
         const maxIndex = Math.max(0, items.length - 1);
@@ -5813,7 +5820,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       handleSendOrCancel();
     }
     
-  }, [canUseThreadGoal, handleSendOrCancel, submitBtwFromInput, submitGoalFromInput, derivedState, dispatchInput, slashCommandState, getActiveSlashPickerItems, selectSlashCommandAction, selectSlashExternalPromptCommand, selectSlashPromptCommand, selectSlashAcpCommand, selectSlashSkill, getRichTextTriggerController, historyIndex, inputHistory, savedDraft, inputState.value, hasSendableInput, currentSessionId, isBtwSession, showTargetSwitcher, setInputTarget, removeContext, t]);
+  }, [canUseThreadGoal, handleSendOrCancel, submitBtwFromInput, submitGoalFromInput, derivedState, dispatchInput, slashCommandState, contextTriggerState.isActive, getActiveSlashPickerItems, selectSlashCommandAction, selectSlashExternalPromptCommand, selectSlashPromptCommand, selectSlashAcpCommand, selectSlashSkill, getRichTextTriggerController, historyIndex, inputHistory, savedDraft, inputState.value, hasSendableInput, currentSessionId, isBtwSession, showTargetSwitcher, setInputTarget, removeContext, t]);
 
   const handleImeCompositionStart = useCallback(() => {
     isImeComposingRef.current = true;
