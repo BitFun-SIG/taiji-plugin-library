@@ -333,10 +333,15 @@ function normalizeBoundaryResult(
  * Whether a pointer press landed on the scroller's scrollbar rather than on the
  * transcript.
  *
- * `clientWidth` stops at the scrollbar, so anything past the content box's
- * trailing edge is the bar or its track. Measured on WebView2: a 10px gutter,
- * a press on the transcript at `clientX` 1497 against a content box ending at
- * 1641, and presses on the bar at 1643-1647.
+ * `clientWidth` stops at the reserved scrollbar gutter, so the content box's
+ * trailing edge falls one gutter width short of the bar. Everything past that
+ * edge — the reserved track and the bar — is a scrollbar press, never a press
+ * on the transcript column, which is inset well inside the content box.
+ *
+ * Measured on WebView2 with a one-sided 10px gutter: a press on the transcript
+ * at `clientX` 1497, the content box ending at 1641, and presses on the bar at
+ * 1643-1647. Reserving the gutter on both edges moves the boundary one gutter
+ * width earlier, which only widens the band that counts as a bar press.
  *
  * Chromium does dispatch `pointerdown` for a scrollbar press. WebKit-backed
  * builds draw overlay scrollbars that take no layout width, leaving no gutter

@@ -204,4 +204,30 @@ describe('SessionsSection layout styles', () => {
     expect(stylesheet).not.toContain('--openbitfun-subagent-bot-optical-y');
     expect(stylesheet).not.toContain('translateY(var(--openbitfun-subagent-bot-optical-y))');
   });
+
+  it('ends session rows and the group toggle on the workspace trailing column', () => {
+    const stylesheet = readSessionsSectionStylesheet();
+    const source = readSessionsSectionSource();
+
+    // Workspace card rows end their trailing actions 4px inside the row box
+    // (`__workspace-item` inline padding plus the actions' own right offset).
+    // Session rows must end on that same column instead of the 8px reading
+    // gutter, or their three-dot buttons sit left of the workspace ones.
+    const rowBlock = stylesheet.slice(stylesheet.lastIndexOf('&__inline-item {'));
+    expect(rowBlock).toContain('padding-right: var(--openbitfun-space-1);');
+    expect(rowBlock).not.toContain('padding-right: var(--openbitfun-space-2);');
+
+    // The toggle's state icon needs the row's trailing cell: flushed to the
+    // padding edge its centre sat half a cell right of the dots' column.
+    const toggleTrailingBlock = extractBlock(stylesheet, '&__inline-toggle-trailing');
+    expect(toggleTrailingBlock).toContain('display: grid;');
+    expect(toggleTrailingBlock).toContain('flex: 0 0 var(--openbitfun-space-5);');
+    expect(toggleTrailingBlock).toContain('place-items: center;');
+    expect(extractInlineItemBlock(stylesheet, 'trailing')).toContain(
+      'flex: 0 0 var(--openbitfun-space-5);',
+    );
+    expect(source).toMatch(
+      /className="openbitfun-nav-panel__inline-toggle-trailing"[\s\S]{0,400}?inline-toggle-chevron/,
+    );
+  });
 });
