@@ -859,6 +859,10 @@
     "menu": {
       "$type": "dimension",
       "inlineSize": { "$value": "220px" },
+      "minInlineSize": {
+        "$description": "Lower bound for content-sized menus; overlay.menu.inlineSize stays their upper bound.",
+        "$value": "160px"
+      },
       "maxBlockSize": { "$value": "480px" },
       "surfacePadding": { "$value": "{space.2}" },
       "surfaceRadius": { "$value": "{radius.xl}" },

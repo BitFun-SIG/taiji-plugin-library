@@ -598,6 +598,12 @@ Product code owns positioning and viewport limits, and must not patch private
 list/section-items/group-options gaps. A deliberate density variation belongs
 on the owning surface via `--openbitfun-overlay-menu-row-gap`.
 
+Menus use `overlay.menu.inlineSize` by default. `Menu` / `MenuPopover` accept
+`inlineSize="content"` for short, product-owned surfaces such as a context menu:
+the surface then hugs its widest row, stays at or above
+`overlay.menu.minInlineSize`, and never exceeds the fixed token. Long menus that
+share a column with the same triggering control keep the fixed width.
+
 ActionItem hover and pressed surfaces use the semantic neutral hover fill;
 pressed text remains semibold. Menu and navigation captions consume the final
 caption color directly, avoiding a second opacity multiplier. The nested-menu

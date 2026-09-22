@@ -242,6 +242,11 @@ test("Menu tokens preserve the compact grouped surface contract", async () => {
   const systemDocument = await readSource("system.tokens.json");
 
   assert.equal(tokens["overlay.menu.inlineSize"], "220px");
+  assert.equal(tokens["overlay.menu.minInlineSize"], "160px");
+  assert.ok(
+    Number.parseFloat(tokens["overlay.menu.minInlineSize"]) < Number.parseFloat(tokens["overlay.menu.inlineSize"]),
+    "content-sized menus need a minimum strictly below the fixed width",
+  );
   assert.equal(tokens["overlay.menu.maxBlockSize"], "480px");
   assert.equal(tokens["overlay.menu.headingHeight"], "24px");
   assert.equal(tokens["overlay.menu.itemHeight"], "30px");
