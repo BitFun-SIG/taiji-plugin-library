@@ -1274,9 +1274,9 @@ const ChatPage: React.FC<ChatPageProps> = ({
         style={{ display: 'none' }}
         onChange={handleFileChange}
       />
-      {hostQueue && <MobileHostQueue key={`${sessionId}:${controlTargetEpoch}`} queue={hostQueue}
-        onRestore={content => { setInput(current => current ? `${current}\n\n${content}` : content); setInputExpanded(true); }} />}
       <ChatComposerBar
+        queueContent={hostQueue && <MobileHostQueue key={`${sessionId}:${controlTargetEpoch}`} queue={hostQueue}
+          onRestore={content => { setInput(current => current ? `${current}\n\n${content}` : content); setInputExpanded(true); }} />}
         cancelling={isCancelling}
         containerRef={inputBarRef}
         expanded={inputExpanded}
