@@ -1,6 +1,15 @@
 @use '../styles/nav-panel-font-scope.scss' as nav-font;
 @use '../styles/workspace-shell-surfaces' as shell-surfaces;
 
+/*
+ * A lucide chevron inks only the middle of its square box -- the path spans
+ * x 9..15 in a 24 viewBox, so roughly 34% of the box stays empty on each side
+ * (about 5px at the 14-15px chevrons this surface renders). A pill whose
+ * chevron meets its inline padding has to cancel that slack, otherwise the
+ * chevron end reads wider than the text end even though the padding is even.
+ */
+$chevron-box-slack: 5px;
+
 .global-search-dialog {
   // The results viewport absorbs short windows and longer result sets.
   inline-size: var(--openbitfun-layout-search-dialog-width);
@@ -136,10 +145,14 @@
      * viewport no inline-start padding above 980px, so a leading negative
      * margin crosses the clip line and chops the pill's leading radius.
      */
-    padding: 3px 6px 3px 4px;
+    padding: 3px 6px;
     border-radius: 7px;
     font-size: var(--openbitfun-type-label-sm-font-size);
     font-weight: var(--openbitfun-type-label-sm-font-weight);
+
+    > [data-openbitfun-component='icon'] {
+      margin-inline-start: -$chevron-box-slack;
+    }
   }
 
   &__detail-heading {
@@ -592,14 +605,23 @@
     font-weight: var(--openbitfun-type-body-sm-font-weight);
   }
 
+  /*
+   * The hover pill paints its own background, and the results viewport has no
+   * inline-start padding to bleed a negative optical offset into, so the pill
+   * keeps real inline padding and its count sits inside the group title.
+   */
   .global-search__group-drilldown {
     min-height: 0;
     margin: 0;
-    padding: 0;
+    padding: 0 var(--openbitfun-space-1);
     gap: var(--openbitfun-space-1);
     color: inherit;
     font-size: inherit;
     font-weight: inherit;
+
+    > [data-openbitfun-component='icon'] {
+      margin-inline-end: -$chevron-box-slack;
+    }
   }
 
   .global-search__group-items {
