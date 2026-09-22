@@ -9,7 +9,8 @@ type MessageTree = { readonly [key: string]: MessageLeaf | MessageTree };
 export const messages: Record<MobileLanguage, MessageTree> = {
   'en-US': {
     queue: {
-      "title": "Host message queue",
+      "title": "Queued messages",
+      "about": "About queued messages",
       "memoryNotice": "Accepted messages run while this page is closed. Restarting the execution device clears pending messages.",
       "queued": "Queued",
       "blocked": "Waiting for recovery",
@@ -373,7 +374,8 @@ export const messages: Record<MobileLanguage, MessageTree> = {
   },
   'zh-CN': {
     queue: {
-      "title": "宿主消息队列",
+      "title": "待发送",
+      "about": "排队消息说明",
       "memoryNotice": "消息接受后，关闭此页面仍会执行。执行设备重启会清空待执行消息。",
       "queued": "排队中",
       "blocked": "等待恢复",
@@ -737,7 +739,8 @@ export const messages: Record<MobileLanguage, MessageTree> = {
   },
   'zh-TW': {
     queue: {
-      "title": "主機訊息佇列",
+      "title": "待傳送",
+      "about": "排隊訊息說明",
       "memoryNotice": "訊息接受後，關閉此頁面仍會執行。執行裝置重新啟動會清空待執行訊息。",
       "queued": "排隊中",
       "blocked": "等待恢復",

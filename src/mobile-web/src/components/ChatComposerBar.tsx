@@ -21,6 +21,7 @@ interface ChatComposerBarProps {
   input: string;
   inputRef: React.Ref<HTMLTextAreaElement>;
   modelControls: React.ReactNode;
+  queueContent?: React.ReactNode;
   onActivate: () => void;
   onAttach: () => void;
   onCancel: () => void;
@@ -44,6 +45,7 @@ export default function ChatComposerBar({
   input,
   inputRef,
   modelControls,
+  queueContent,
   onActivate,
   onAttach,
   onCancel,
@@ -62,6 +64,7 @@ export default function ChatComposerBar({
 
   return (
     <div className={`chat-page__input-wrap ${expanded ? 'is-expanded' : ''}`} ref={containerRef}>
+      {queueContent}
       <MobileComposer
         aria-label={t('chat.collapsedInputPlaceholder')}
         className="chat-page__composer"
