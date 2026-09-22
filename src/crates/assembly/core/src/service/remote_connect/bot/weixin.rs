@@ -39,10 +39,9 @@ const LONG_POLL_TIMEOUT_SECS: u64 = 36;
 /// cannot grow the backlog without bound.
 const MAX_PENDING_OUTBOUND_PER_PEER: usize = 20;
 
-/// Maximum age of a queued proactive message. Anything older is dropped
-/// instead of replayed: the answer it carries is stale by then, and a restart
-/// must not push a batch of expired turns.
-const PENDING_OUTBOUND_TTL_SECS: i64 = 3600;
+/// Bound retries to one channel activation window. This is a best-effort,
+/// in-memory backlog, not a durable delivery receipt.
+const PENDING_OUTBOUND_TTL_SECS: i64 = 24 * 60 * 60;
 
 /// Separator between merged turn outputs, so one reply built from several
 /// answers still reads as several answers.
@@ -57,39 +56,16 @@ const OUTBOUND_RETRY_INTERVAL_SECS: u64 = 5;
 /// turns that can still complete, so a small window is enough.
 const MAX_TRACKED_OWN_TURNS: usize = 256;
 
-/// Reply quota of the WeChat ClawBot channel over one activation window, as
-/// the OpenBitFun product copy for this channel records it (`botWeixinRestriction`):
-/// after the user sends a message the bot may send at most 10 replies in the
-/// following 24 hours, a split long reply spends one reply per part, and the
-/// window restarts when the user sends another message.
-///
-/// This is a product-level channel restriction, not a field the wire protocol
-/// documents — `Tencent/openclaw-weixin` only specifies passing the inbound
-/// `context_token` back on a reply.
-const REPLY_QUOTA_WINDOW_SECS: i64 = 24 * 60 * 60;
-const REPLY_QUOTA_PER_WINDOW: usize = 10;
-
-/// Replies this path may spend inside one quota window.
-///
-/// The quota is shared with the replies the user's own messages receive, and
-/// this path cannot observe what the inbound reply path already spent, so it
-/// keeps a small share and leaves the rest alone. A proactive answer is never
-/// urgent, and three unprompted replies in one window already exceeds what a
-/// user expects from a channel they did not just talk to.
-const MAX_PROACTIVE_REPLIES_PER_WINDOW: usize = 3;
-
 /// Largest payload one proactive push may merge into. One channel reply is the
-/// unit the quota counts, so capping the merge at a single part keeps one push
-/// from spending the whole share at once.
+/// unit the quota counts, so capping the merge at a single part avoids spending
+/// several replies on one scheduled result. The provider enforces its quota.
 const MAX_PROACTIVE_PUSH_BYTES: usize = weixin_provider::MAX_TEXT_CHUNK;
-
-/// The proactive share must stay well clear of the channel quota, so the
-/// inbound reply path always keeps room to answer the user.
-const _: () = assert!(MAX_PROACTIVE_REPLIES_PER_WINDOW < REPLY_QUOTA_PER_WINDOW);
 
 /// One piece of assistant output waiting for a deliverable context_token.
 #[derive(Debug, Clone)]
 struct PendingOutbound {
+    id: String,
+    session_id: String,
     text: String,
     queued_at: i64,
 }
@@ -101,6 +77,25 @@ struct PendingPeer {
     /// Reason the last delivery attempt held the backlog back, so a peer that
     /// stays blocked logs once per distinct reason instead of on every retry.
     deferred_reason: Option<&'static str>,
+}
+
+fn pending_matches_binding(state: &BotChatState, item: &PendingOutbound) -> bool {
+    state.paired
+        && !state.account_remote_context
+        && state.active_remote_device.is_none()
+        && state.current_session_id.as_deref() == Some(item.session_id.as_str())
+}
+
+fn append_remote_push_notice(result: &mut HandleResult, language: super::BotLanguage) {
+    let notice = openbitfun_services_integrations::remote_connect::bot::strings_for(language)
+        .weixin_remote_push_unsupported;
+    result.reply.push_str("\n\n");
+    result.reply.push_str(notice);
+    let footer = result.menu.footer_hint.get_or_insert_with(String::new);
+    if !footer.is_empty() {
+        footer.push_str("\n\n");
+    }
+    footer.push_str(notice);
 }
 
 /// Drops entries older than [`PENDING_OUTBOUND_TTL_SECS`].
@@ -147,39 +142,16 @@ fn proactive_push_eligible(own_turn: bool, success: Option<bool>) -> bool {
     !own_turn && success != Some(false)
 }
 
-/// Whether `planned_replies` more replies still fit the proactive share.
-///
-/// The unit is one channel reply, so a message the channel splits into two
-/// parts asks for two. The share is never allowed to overspend, which is what
-/// keeps the rest of the channel quota available for inbound replies.
-fn proactive_reply_budget_allows(used_replies: usize, planned_replies: usize) -> bool {
-    used_replies + planned_replies <= MAX_PROACTIVE_REPLIES_PER_WINDOW
-}
-
-/// Drops reply spend that has left the quota window.
-///
-/// The window rolls with each reply instead of resetting on a fixed boundary,
-/// so this path can never spend the whole share in one burst at the end of a
-/// window. Spend is recorded in order, so expired entries are always at the
-/// front.
-fn drop_expired_replies(spent: &mut VecDeque<i64>, now: i64) -> usize {
-    let mut dropped = 0;
-    while let Some(front) = spent.front() {
-        if now.saturating_sub(*front) < REPLY_QUOTA_WINDOW_SECS {
-            break;
-        }
-        spent.pop_front();
-        dropped += 1;
+fn bounded_proactive_text(text: &str) -> String {
+    let text = text.trim();
+    if text.len() <= MAX_PROACTIVE_PUSH_BYTES {
+        return text.to_string();
     }
-    dropped
-}
-
-/// Records `replies` replies spent at `now`. The unit is one channel reply, so
-/// a message the channel splits into two parts records two.
-fn record_replies_spent(spent: &mut VecDeque<i64>, replies: usize, now: i64) {
-    for _ in 0..replies {
-        spent.push_back(now);
-    }
+    const TRUNCATED: &str = "\n…";
+    format!(
+        "{}{TRUNCATED}",
+        crate::util::truncate_at_char_boundary(text, MAX_PROACTIVE_PUSH_BYTES - TRUNCATED.len())
+    )
 }
 
 /// Joins a peer's backlog into the single reply that carries all of it.
@@ -215,9 +187,7 @@ fn merge_pending(pending: &[PendingOutbound]) -> String {
             .rev()
             .map(|item| item.text.trim())
             .find(|text| !text.is_empty())
-            .map(|text| {
-                crate::util::truncate_at_char_boundary(text, MAX_PROACTIVE_PUSH_BYTES).to_string()
-            })
+            .map(bounded_proactive_text)
             .unwrap_or_default();
     }
     kept.reverse();
@@ -242,9 +212,6 @@ pub struct WeixinBot {
     /// Proactive output per peer that has no deliverable context_token yet,
     /// oldest first.
     pending_outbound: Arc<Mutex<HashMap<String, PendingPeer>>>,
-    /// Timestamps of the channel replies this path already spent, one entry
-    /// per reply including the parts the channel split it into.
-    proactive_replies: Arc<Mutex<VecDeque<i64>>>,
     outbound_wakeup: Arc<Notify>,
     /// Identity of this instance's proactive session-output subscription, so a
     /// replaced bot retires its own hook instead of the replacement's.
@@ -292,7 +259,6 @@ impl WeixinBot {
             runtime_fence,
             own_turns: Arc::new(Mutex::new(VecDeque::new())),
             pending_outbound: Arc::new(Mutex::new(HashMap::new())),
-            proactive_replies: Arc::new(Mutex::new(VecDeque::new())),
             outbound_wakeup: Arc::new(Notify::new()),
             session_output_hook_id: format!("weixin_session_output_{}", uuid::Uuid::new_v4()),
         }
@@ -449,11 +415,10 @@ impl WeixinBot {
         if !self.runtime_fence.is_lifecycle_current() {
             return;
         }
-        let Some(peer_id) = self.peer_for_session(session_id).await else {
-            return;
-        };
-        self.queue_proactive(&peer_id, text, &format!("session {session_id}"))
-            .await;
+        for peer_id in self.peers_for_session(session_id).await {
+            self.queue_proactive(&peer_id, session_id, text, &format!("session {session_id}"))
+                .await;
+        }
     }
 
     async fn handle_session_turn_completed(
@@ -468,44 +433,48 @@ impl WeixinBot {
         if !proactive_push_eligible(self.is_own_turn(&turn_id).await, success) {
             return;
         }
-        let Some(peer_id) = self.peer_for_session(&session_id).await else {
+        let peers = self.peers_for_session(&session_id).await;
+        if peers.is_empty() {
             return;
-        };
+        }
         let text = self.read_turn_text(&session_id, &turn_id).await;
         // The session read is an await point: a bot replaced meanwhile must not
         // push, even though the turn itself is worth delivering.
         if !self.runtime_fence.is_lifecycle_current() {
             return;
         }
-        self.queue_proactive(&peer_id, &text, &format!("turn {turn_id}"))
-            .await;
+        for peer_id in peers {
+            self.queue_proactive(&peer_id, &session_id, &text, &format!("turn {turn_id}"))
+                .await;
+        }
     }
 
-    async fn queue_proactive(&self, peer_id: &str, text: &str, source: &str) {
+    async fn queue_proactive(&self, peer_id: &str, session_id: &str, text: &str, source: &str) {
         if text.trim().is_empty() {
             debug!("weixin: proactive push skipped for peer {peer_id}: {source} has no text");
             return;
         }
         info!("weixin: queueing proactive push for peer {peer_id} from {source}");
-        self.enqueue_outbound(peer_id, text).await;
+        self.enqueue_outbound(peer_id, session_id, text).await;
         self.outbound_wakeup.notify_one();
     }
 
-    /// The peer whose bot chat is bound to `session_id`, if this bot owns it.
+    /// The peers whose bot chats are bound to `session_id`, if this bot owns it.
     ///
     /// A chat routed to another device executes the turn elsewhere, so its text
     /// is unreadable here and must not be pushed from this host.
-    async fn peer_for_session(&self, session_id: &str) -> Option<String> {
+    async fn peers_for_session(&self, session_id: &str) -> Vec<String> {
         let states = self.chat_states.read().await;
         states
             .iter()
-            .find(|(_, state)| {
+            .filter(|(_, state)| {
                 state.paired
                     && !state.account_remote_context
                     && state.active_remote_device.is_none()
                     && state.current_session_id.as_deref() == Some(session_id)
             })
             .map(|(peer_id, _)| peer_id.clone())
+            .collect()
     }
 
     /// Reads the assistant text of `turn_id` through the replay-safe turn
@@ -547,7 +516,7 @@ impl WeixinBot {
         turns.iter().any(|tracked| tracked == turn_id)
     }
 
-    async fn enqueue_outbound(&self, peer_id: &str, text: &str) {
+    async fn enqueue_outbound(&self, peer_id: &str, session_id: &str, text: &str) {
         let now = chrono::Utc::now().timestamp();
         let dropped = {
             let mut pending = self.pending_outbound.lock().await;
@@ -555,7 +524,9 @@ impl WeixinBot {
             push_pending(
                 &mut peer.queue,
                 PendingOutbound {
-                    text: text.to_string(),
+                    id: uuid::Uuid::new_v4().to_string(),
+                    session_id: session_id.to_string(),
+                    text: bounded_proactive_text(text),
                     queued_at: now,
                 },
                 now,
@@ -581,8 +552,7 @@ impl WeixinBot {
     /// Delivers one peer's backlog as a single reply.
     ///
     /// The channel counts every reply against a 24 hour quota that also answers
-    /// the user's own messages, so the backlog is merged and the reply count the
-    /// merge will spend is checked before anything is sent.
+    /// the user's own messages, so the merged backlog is capped at a single part. No additional daily quota is imposed.
     async fn flush_pending_for_peer(&self, peer_id: &str) {
         if !self.runtime_fence.is_lifecycle_current() {
             return;
@@ -600,40 +570,33 @@ impl WeixinBot {
         let merged = merge_pending(&pending);
         if merged.trim().is_empty() {
             // Nothing deliverable in the backlog, so it is not worth a reply.
-            self.confirm_pending_sent(peer_id, pending.len()).await;
+            self.confirm_pending_sent(peer_id, &pending).await;
             return;
         }
-        let planned_replies = weixin_provider::weixin_reply_count(&merged);
-        let now = chrono::Utc::now().timestamp();
-        if !self.proactive_budget_allows(now, planned_replies).await {
-            if self
-                .mark_deferred(peer_id, "proactive_reply_share_spent")
-                .await
-            {
-                warn!(
-                    "weixin: proactive push to peer {peer_id} waiting; the proactive share of {MAX_PROACTIVE_REPLIES_PER_WINDOW} of the channel's {REPLY_QUOTA_PER_WINDOW} replies per {}h window is spent and this push needs {planned_replies}",
-                    REPLY_QUOTA_WINDOW_SECS / 3600
-                );
-            }
+        // A command can switch sessions or devices while output is queued.
+        // Never deliver an old selection's backlog into the new context.
+        if !self.runtime_fence.is_lifecycle_current()
+            || !self.pending_binding_is_current(peer_id, &pending).await
+        {
+            self.confirm_pending_sent(peer_id, &pending).await;
             return;
         }
         if let Err(err) = self.send_text(peer_id, &merged).await {
             // Keep the backlog. A stale token is replaced by the next inbound
             // message and `send_text` has already dropped it, so the retry has a
             // chance to succeed; the retention window bounds it.
-            if self.mark_deferred(peer_id, "no_context_token").await {
+            if self.mark_deferred(peer_id, "send_failed").await {
                 warn!(
-                    "weixin: proactive push to peer {peer_id} deferred until a fresh context_token arrives: {err}"
+                    "weixin: proactive push to peer {peer_id} deferred; waiting for a retry or fresh context_token: {err}"
                 );
             }
             return;
         }
-        self.record_spent_replies(now, planned_replies).await;
         info!(
-            "weixin: proactive push delivered to peer {peer_id} ({planned_replies} reply(ies) for {} queued message(s))",
+            "weixin: proactive push delivered to peer {peer_id} (one reply for {} queued message(s))",
             pending.len()
         );
-        self.confirm_pending_sent(peer_id, pending.len()).await;
+        self.confirm_pending_sent(peer_id, &pending).await;
     }
 
     /// Drops queued entries past the retention window and returns how many.
@@ -655,22 +618,25 @@ impl WeixinBot {
 
     /// Clones a peer's backlog so the send below runs without holding the lock.
     async fn pending_snapshot(&self, peer_id: &str) -> Vec<PendingOutbound> {
-        let pending = self.pending_outbound.lock().await;
-        pending
-            .get(peer_id)
-            .map(|peer| peer.queue.iter().cloned().collect())
-            .unwrap_or_default()
+        let states = self.chat_states.read().await;
+        let state = states.get(peer_id);
+        let mut pending = self.pending_outbound.lock().await;
+        let Some(peer) = pending.get_mut(peer_id) else {
+            return Vec::new();
+        };
+        peer.queue
+            .retain(|item| state.is_some_and(|state| pending_matches_binding(state, item)));
+        peer.queue.iter().cloned().collect()
     }
 
     /// Removes the entries a successful send covered and clears the blocker
     /// flag. Anything enqueued while the send was in flight stays queued.
-    async fn confirm_pending_sent(&self, peer_id: &str, sent: usize) {
+    async fn confirm_pending_sent(&self, peer_id: &str, sent: &[PendingOutbound]) {
         let mut pending = self.pending_outbound.lock().await;
         let now_empty = match pending.get_mut(peer_id) {
             Some(peer) => {
-                for _ in 0..sent {
-                    peer.queue.pop_front();
-                }
+                peer.queue
+                    .retain(|item| !sent.iter().any(|sent| sent.id == item.id));
                 peer.deferred_reason = None;
                 peer.queue.is_empty()
             }
@@ -695,17 +661,13 @@ impl WeixinBot {
         }
     }
 
-    /// Whether `planned_replies` more replies fit the proactive share, after
-    /// retiring spend that has left the quota window.
-    async fn proactive_budget_allows(&self, now: i64, planned_replies: usize) -> bool {
-        let mut spent = self.proactive_replies.lock().await;
-        drop_expired_replies(&mut spent, now);
-        proactive_reply_budget_allows(spent.len(), planned_replies)
-    }
-
-    async fn record_spent_replies(&self, now: i64, replies: usize) {
-        let mut spent = self.proactive_replies.lock().await;
-        record_replies_spent(&mut spent, replies, now);
+    async fn pending_binding_is_current(&self, peer_id: &str, pending: &[PendingOutbound]) -> bool {
+        let states = self.chat_states.read().await;
+        states.get(peer_id).is_some_and(|state| {
+            pending
+                .iter()
+                .all(|item| pending_matches_binding(state, item))
+        })
     }
 
     pub async fn notify_start(&self) -> Result<()> {
@@ -1156,8 +1118,12 @@ impl WeixinBot {
         if self.runtime_fence.identity_epoch() != command_identity_epoch {
             return;
         }
+        let was_remote = state.account_remote_context || state.active_remote_device.is_some();
         let command = parse_command(text);
-        let result = handle_command(state, command, images).await;
+        let mut result = handle_command(state, command, images).await;
+        if !was_remote && (state.account_remote_context || state.active_remote_device.is_some()) {
+            append_remote_push_notice(&mut result, language);
+        }
         self.runtime_fence.reconcile_states(&mut states);
         if let Some(state) = states.get(&peer_id) {
             self.persist_chat_state(&peer_id, state).await;
@@ -1371,6 +1337,8 @@ mod tests {
 
     fn pending(text: &str, queued_at: i64) -> PendingOutbound {
         PendingOutbound {
+            id: uuid::Uuid::new_v4().to_string(),
+            session_id: "session".to_string(),
             text: text.to_string(),
             queued_at,
         }
@@ -1474,6 +1442,7 @@ mod tests {
         let huge = "a".repeat(MAX_PROACTIVE_PUSH_BYTES + 100);
         let merged = merge_pending(&backlog(&[huge.as_str()]));
         assert_eq!(merged.len(), MAX_PROACTIVE_PUSH_BYTES);
+        assert!(merged.ends_with("\n…"));
         assert_eq!(weixin_provider::weixin_reply_count(&merged), 1);
     }
 
@@ -1487,60 +1456,264 @@ mod tests {
         assert_eq!(weixin_provider::weixin_reply_count(&merged), 1);
     }
 
-    #[test]
-    fn proactive_reply_budget_keeps_room_for_inbound_replies() {
-        // The share is a minority slice of the channel quota, so the replies
-        // the user's own messages receive still work.
-        assert!(MAX_PROACTIVE_REPLIES_PER_WINDOW * 2 < REPLY_QUOTA_PER_WINDOW);
-        // A push fits while the share has room for it.
-        assert!(proactive_reply_budget_allows(0, 1));
-        assert!(proactive_reply_budget_allows(
-            MAX_PROACTIVE_REPLIES_PER_WINDOW - 1,
-            1
-        ));
-        // Once the share is spent, nothing more is sent.
-        assert!(!proactive_reply_budget_allows(
-            MAX_PROACTIVE_REPLIES_PER_WINDOW,
-            1
-        ));
-        // A push that needs more replies than the whole share is refused, which
-        // is what keeps one push from draining it.
-        assert!(!proactive_reply_budget_allows(
-            0,
-            MAX_PROACTIVE_REPLIES_PER_WINDOW + 1
-        ));
+    async fn test_bot(base_url: String) -> Arc<WeixinBot> {
+        let bot = Arc::new(WeixinBot::new(WeixinConfig {
+            ilink_token: "fixture-token".into(),
+            base_url,
+            bot_account_id: format!("proactive-test-{}", uuid::Uuid::new_v4()),
+        }));
+        let mut state = BotChatState::new("peer".into());
+        state.paired = true;
+        state.current_session_id = Some("session".into());
+        bot.chat_states.write().await.insert("peer".into(), state);
+        bot.context_tokens
+            .write()
+            .await
+            .insert("peer".into(), "context".into());
+        bot
     }
 
-    #[test]
-    fn reply_budget_allows_a_push_that_exactly_spends_the_share() {
-        assert!(proactive_reply_budget_allows(
-            MAX_PROACTIVE_REPLIES_PER_WINDOW - 2,
-            2
-        ));
+    // A loopback provider with an explicit response gate exercises enqueueing
+    // while the real async HTTP send is in flight, without timing assumptions.
+    async fn mock_outbound(
+        responses: Vec<&'static str>,
+        first_response: Option<tokio::sync::oneshot::Receiver<()>>,
+    ) -> (
+        String,
+        tokio::sync::mpsc::UnboundedReceiver<Value>,
+        tokio::task::JoinHandle<()>,
+    ) {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let base = format!("http://{}/", listener.local_addr().unwrap());
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+        let task = tokio::spawn(async move {
+            let mut first_response = first_response;
+            for response in responses {
+                let (mut stream, _) = listener.accept().await.unwrap();
+                let mut request = Vec::new();
+                let mut chunk = [0; 4096];
+                loop {
+                    let count = stream.read(&mut chunk).await.unwrap();
+                    assert!(count > 0, "request ended before the body");
+                    request.extend_from_slice(&chunk[..count]);
+                    if let Some(end) = request.windows(4).position(|w| w == b"\r\n\r\n") {
+                        let headers = String::from_utf8_lossy(&request[..end]);
+                        let length: usize = headers
+                            .lines()
+                            .find_map(|line| {
+                                let (name, value) = line.split_once(':')?;
+                                name.eq_ignore_ascii_case("content-length")
+                                    .then(|| value.trim().parse().unwrap())
+                            })
+                            .unwrap();
+                        if request.len() >= end + 4 + length {
+                            tx.send(
+                                serde_json::from_slice(&request[end + 4..end + 4 + length])
+                                    .unwrap(),
+                            )
+                            .unwrap();
+                            break;
+                        }
+                    }
+                }
+                if let Some(gate) = first_response.take() {
+                    gate.await.unwrap();
+                }
+                stream.write_all(format!(
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                    response.len(), response
+                ).as_bytes()).await.unwrap();
+            }
+        });
+        (base, rx, task)
     }
 
-    #[test]
-    fn reply_spend_leaves_the_window_on_a_rolling_basis() {
-        let mut spent = VecDeque::new();
-        let now = 1_000_000;
-        record_replies_spent(&mut spent, 2, now);
-        assert_eq!(spent.len(), 2);
-        assert!(!proactive_reply_budget_allows(
-            spent.len(),
-            MAX_PROACTIVE_REPLIES_PER_WINDOW - 1
-        ));
-
-        // Still inside the window: the spend stands, so no burst is possible
-        // at the end of a window.
-        drop_expired_replies(&mut spent, now + REPLY_QUOTA_WINDOW_SECS - 1);
-        assert_eq!(spent.len(), 2);
-
-        // Past the window the spend is retired and the share is free again.
+    #[tokio::test]
+    async fn proactive_send_ack_preserves_new_output_when_queue_overflows() {
+        let (release, gate) = tokio::sync::oneshot::channel();
+        let (base, mut requests, server) = mock_outbound(vec!["{}", "{}"], Some(gate)).await;
+        let bot = test_bot(base).await;
+        for i in 0..MAX_PENDING_OUTBOUND_PER_PEER {
+            bot.notify_session_output("session", &format!("old-{i}"))
+                .await;
+        }
+        let sender = bot.clone();
+        let sending = tokio::spawn(async move { sender.flush_pending_outbound().await });
+        let first = tokio::time::timeout(Duration::from_secs(5), requests.recv())
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(first["msg"]["item_list"][0]["text_item"]["text"]
+            .as_str()
+            .unwrap()
+            .contains("old-19"));
+        bot.notify_session_output("session", "new-unsent").await;
+        release.send(()).unwrap();
+        sending.await.unwrap();
+        let remaining = bot.pending_snapshot("peer").await;
+        assert_eq!(remaining.len(), 1);
+        assert_eq!(remaining[0].text, "new-unsent");
+        bot.flush_pending_outbound().await;
+        let second = requests.recv().await.unwrap();
         assert_eq!(
-            drop_expired_replies(&mut spent, now + REPLY_QUOTA_WINDOW_SECS),
-            2
+            second["msg"]["item_list"][0]["text_item"]["text"],
+            "new-unsent"
         );
-        assert!(spent.is_empty());
-        assert!(proactive_reply_budget_allows(spent.len(), 1));
+        assert!(bot.pending_snapshot("peer").await.is_empty());
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn proactive_send_waits_for_context_and_retries_provider_failure() {
+        let (base, mut requests, server) = mock_outbound(
+            vec![r#"{"ret":-1,"errmsg":"temporary failure"}"#, "{}"],
+            None,
+        )
+        .await;
+        let bot = test_bot(base).await;
+        bot.context_tokens.write().await.clear();
+        bot.notify_session_output("session", "scheduled result")
+            .await;
+        bot.flush_pending_outbound().await;
+        assert!(requests.try_recv().is_err());
+        assert_eq!(bot.pending_snapshot("peer").await.len(), 1);
+        bot.context_tokens
+            .write()
+            .await
+            .insert("peer".into(), "fresh-context".into());
+        bot.flush_pending_outbound().await;
+        assert_eq!(bot.pending_snapshot("peer").await.len(), 1);
+        bot.flush_pending_outbound().await;
+        assert!(bot.pending_snapshot("peer").await.is_empty());
+        for _ in 0..2 {
+            let request = requests.recv().await.unwrap();
+            assert_eq!(request["msg"]["context_token"], "fresh-context");
+            assert_eq!(
+                request["msg"]["item_list"][0]["text_item"]["text"],
+                "scheduled result"
+            );
+        }
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn fourth_scheduled_result_is_not_blocked_by_an_artificial_daily_quota() {
+        let (base, mut requests, server) = mock_outbound(vec!["{}"; 4], None).await;
+        let bot = test_bot(base).await;
+        for i in 0..4 {
+            bot.notify_session_output("session", &format!("result-{i}"))
+                .await;
+            bot.flush_pending_outbound().await;
+            let request = requests.recv().await.unwrap();
+            assert_eq!(
+                request["msg"]["item_list"][0]["text_item"]["text"],
+                format!("result-{i}")
+            );
+        }
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn switching_session_discards_old_backlog_without_discarding_new_output() {
+        let bot = test_bot("http://127.0.0.1:1/".into()).await;
+        bot.notify_session_output("session", "old-session-output")
+            .await;
+        bot.chat_states
+            .write()
+            .await
+            .get_mut("peer")
+            .unwrap()
+            .current_session_id = Some("next".into());
+        bot.notify_session_output("next", "new-session-output")
+            .await;
+        let pending = bot.pending_snapshot("peer").await;
+        assert_eq!(pending.len(), 1);
+        assert_eq!(pending[0].text, "new-session-output");
+        bot.chat_states
+            .write()
+            .await
+            .get_mut("peer")
+            .unwrap()
+            .account_remote_context = true;
+        assert!(bot.pending_snapshot("peer").await.is_empty());
+        bot.notify_session_output("next", "must-not-fall-back-to-local")
+            .await;
+        assert!(bot.pending_snapshot("peer").await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn pending_output_is_byte_bounded_and_survives_more_than_one_hour() {
+        let bot = test_bot("http://127.0.0.1:1/".into()).await;
+        bot.notify_session_output("session", &"\u{5b57}".repeat(10000))
+            .await;
+        let pending = bot.pending_snapshot("peer").await;
+        assert!(pending[0].text.len() <= MAX_PROACTIVE_PUSH_BYTES);
+        let mut queue = VecDeque::from(pending);
+        let queued_at = queue[0].queued_at;
+        assert_eq!(drop_expired_pending(&mut queue, queued_at + 3601), 0);
+        assert_eq!(
+            drop_expired_pending(&mut queue, queued_at + PENDING_OUTBOUND_TTL_SECS + 1),
+            1
+        );
+    }
+
+    #[test]
+    fn remote_push_limitation_is_visible_in_both_reply_renderers() {
+        for language in [
+            super::super::BotLanguage::EnUS,
+            super::super::BotLanguage::ZhCN,
+            super::super::BotLanguage::ZhTW,
+        ] {
+            let mut result = HandleResult {
+                reply: "Device selected".into(),
+                actions: Vec::new(),
+                forward_to_session: None,
+                menu: super::super::MenuView::plain("Device selected"),
+            };
+            append_remote_push_notice(&mut result, language);
+            let notice =
+                openbitfun_services_integrations::remote_connect::bot::strings_for(language)
+                    .weixin_remote_push_unsupported;
+            assert!(result.reply.contains(notice));
+            assert!(result.menu.render_plain_text(language).contains(notice));
+        }
+    }
+    #[tokio::test]
+    async fn retired_bot_does_not_enqueue_or_send_pending_output() {
+        let bot = test_bot("http://127.0.0.1:1/".into()).await;
+        bot.notify_session_output("session", "pending-before-retirement")
+            .await;
+        bot.runtime_fence.slot.advance();
+        bot.notify_session_output("session", "must-not-enqueue")
+            .await;
+        bot.flush_pending_outbound().await;
+        let pending = bot.pending_outbound.lock().await;
+        let peer = pending.get("peer").unwrap();
+        assert_eq!(peer.queue.len(), 1);
+        // A send attempt to the closed endpoint would have deferred this queue.
+        assert!(peer.deferred_reason.is_none());
+    }
+
+    #[tokio::test]
+    async fn every_peer_bound_to_the_completed_session_gets_queued_output() {
+        let bot = test_bot("http://127.0.0.1:1/".into()).await;
+        let mut state = BotChatState::new("second-peer".into());
+        state.paired = true;
+        state.current_session_id = Some("session".into());
+        bot.chat_states
+            .write()
+            .await
+            .insert("second-peer".into(), state);
+        bot.notify_session_output("session", "scheduled result")
+            .await;
+        assert_eq!(
+            bot.pending_snapshot("peer").await[0].text,
+            "scheduled result"
+        );
+        assert_eq!(
+            bot.pending_snapshot("second-peer").await[0].text,
+            "scheduled result"
+        );
     }
 }

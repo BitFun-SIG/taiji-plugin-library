@@ -279,6 +279,7 @@ IM bot reply routing, account-device observation, and interaction delivery:
 
 ```bash
 cargo test --locked -p openbitfun-core --no-default-features --features remote-connect --lib service::remote_connect::bot::
+cargo test --locked -p openbitfun-core --no-default-features --features remote-connect --lib service::remote_connect::bot::weixin::tests
 ```
 
 Pages account publication and tool gates (including remote directory rejection):
