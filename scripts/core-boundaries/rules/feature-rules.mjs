@@ -586,7 +586,8 @@ export const capabilityContractDependencyRules = [
         ],
       )],
       ['openbitfun-desktop', capabilityConsumer([
-        capabilityEdge(['element-token']),
+        // Desktop owns native control resources and consumes portable control DTOs.
+        capabilityEdge(['computer-use-contract', 'element-token']),
       ])],
       ['openbitfun-services-integrations', capabilityConsumer(
         [capabilityEdge([], { optional: true })],

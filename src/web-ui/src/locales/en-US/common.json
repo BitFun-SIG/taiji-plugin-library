@@ -2040,5 +2040,19 @@
     "nextMonth": "Next month",
     "now": "Now",
     "close": "Close"
+  },
+  "computerControl": {
+    "title": "Computer control",
+    "observe": "Observing",
+    "background": "Controlling in the background",
+    "foreground": "Controlling with desktop input",
+    "stopped": "Control stopped",
+    "unavailable": "Control status unavailable. You can still try to stop.",
+    "previewAlt": "Captured application window with agent pointer",
+    "previewUnavailable": "Window preview is unavailable.",
+    "showPreview": "Show preview",
+    "hidePreview": "Hide preview",
+    "stop": "Stop control",
+    "stopping": "Stopping…"
   }
 }

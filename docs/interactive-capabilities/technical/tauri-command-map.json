@@ -1,11 +1,11 @@
 {
   "schemaVersion": 2,
   "generatedFrom": "src/shared/interactive-capabilities/catalog.json",
-  "catalogDigest": "6587344a6b5e75a80457ea4ba2670bf37cf3038bdb436089ae402eb7b5a5a025",
-  "commandCount": 665,
+  "catalogDigest": "d2710a9488e6f021e11ece435e8d067a9285903c26f20f5bc0b586ac46d67e6d",
+  "commandCount": 668,
   "coverage": {
-    "commandCount": 665,
-    "documentedCommandCount": 617,
+    "commandCount": 668,
+    "documentedCommandCount": 620,
     "implementationCommandCount": 48,
     "implementationDigest": "f6d38a24a70708988cb47ada81d07eccf0668684e8734c9ee5155b9ffa7e3db8"
   },
@@ -1345,6 +1345,54 @@
       "sourceFile": "src/apps/desktop/src/api/diff_api.rs",
       "signature": "fn compute_diff(request: ComputeDiffRequest) -> Result<DiffResult, String>",
       "remoteWorkspacePolicy": "WorkspaceAgnostic"
+    },
+    {
+      "id": "computer_use_control_preview",
+      "moduleId": "computer_use",
+      "capabilityId": "feature.computer-use",
+      "capabilityIds": [
+        "feature.computer-use"
+      ],
+      "documentedItemIds": [
+        "feature.computer-use:control-session-preview"
+      ],
+      "visibility": "documented",
+      "rustPath": "computer_use_control_preview",
+      "sourceFile": "src/apps/desktop/src/api/computer_use_api.rs",
+      "signature": "fn computer_use_control_preview( request: ComputerUseControlRequest, ) -> Result<Option<crate::computer_use::control_session::ControlPreview>, String>",
+      "remoteWorkspacePolicy": "LocalOnly"
+    },
+    {
+      "id": "computer_use_control_status",
+      "moduleId": "computer_use",
+      "capabilityId": "feature.computer-use",
+      "capabilityIds": [
+        "feature.computer-use"
+      ],
+      "documentedItemIds": [
+        "feature.computer-use:control-session-preview"
+      ],
+      "visibility": "documented",
+      "rustPath": "computer_use_control_status",
+      "sourceFile": "src/apps/desktop/src/api/computer_use_api.rs",
+      "signature": "fn computer_use_control_status( ) -> Result<openbitfun_agent_tools::computer_use_control::ControlSnapshot, String>",
+      "remoteWorkspacePolicy": "LocalOnly"
+    },
+    {
+      "id": "computer_use_control_stop",
+      "moduleId": "computer_use",
+      "capabilityId": "feature.computer-use",
+      "capabilityIds": [
+        "feature.computer-use"
+      ],
+      "documentedItemIds": [
+        "feature.computer-use:stop-control-session"
+      ],
+      "visibility": "documented",
+      "rustPath": "computer_use_control_stop",
+      "sourceFile": "src/apps/desktop/src/api/computer_use_api.rs",
+      "signature": "fn computer_use_control_stop( request: ComputerUseControlRequest, ) -> Result<openbitfun_agent_tools::computer_use_control::ControlSnapshot, String>",
+      "remoteWorkspacePolicy": "LocalOnly"
     },
     {
       "id": "computer_use_get_status",

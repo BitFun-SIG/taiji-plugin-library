@@ -2040,5 +2040,19 @@
     "nextMonth": "下个月",
     "now": "此刻",
     "close": "关闭"
+  },
+  "computerControl": {
+    "title": "应用控制",
+    "observe": "正在观察",
+    "background": "正在后台控制",
+    "foreground": "正在使用桌面输入控制",
+    "stopped": "控制已停止",
+    "unavailable": "暂时无法获取控制状态，仍可尝试停止。",
+    "previewAlt": "带有 Agent 指针的应用窗口画面",
+    "previewUnavailable": "暂时无法显示窗口预览。",
+    "showPreview": "显示预览",
+    "hidePreview": "收起预览",
+    "stop": "停止控制",
+    "stopping": "正在停止…"
   }
 }

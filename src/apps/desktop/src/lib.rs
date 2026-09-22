@@ -1439,6 +1439,9 @@ pub async fn run() {
             get_config,
             get_configs,
             computer_use_get_status,
+            computer_use_control_status,
+            computer_use_control_stop,
+            computer_use_control_preview,
             computer_use_request_permissions,
             computer_use_open_system_settings,
             set_config,
@@ -2995,4 +2998,11 @@ mod event_loop_driver_tests {
         driver.abort();
         producer.abort();
     }
+}
+
+/// Opt-in native regression entry; requires a disposable fixture launched by
+/// scripts/test-macos-control-roundtrip.mjs and a pumping macOS main run loop.
+#[cfg(all(feature = "devtools", target_os = "macos"))]
+pub async fn run_native_computer_use_roundtrip_fixture() {
+    computer_use::native_control_roundtrip::run().await;
 }
