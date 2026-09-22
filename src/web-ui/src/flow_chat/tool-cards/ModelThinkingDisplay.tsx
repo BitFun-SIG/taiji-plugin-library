@@ -59,11 +59,6 @@ export const ModelThinkingDisplay: React.FC<ModelThinkingDisplayProps> = ({
   } | null>(null);
 
   const isActive = isStreaming || status === 'streaming';
-  const { displayText: displayContent, isRevealing } = useTypewriter(
-    isSummary ? '' : content,
-    isActive && !isSummary,
-  );
-  useReportTypewriterReveal(thinkingItem.id, isRevealing);
   const shouldDefaultExpanded = forceExpanded || (!isSummary && (
     displayContext === 'subagent-projection'
       ? isActive || isLastItem
@@ -71,6 +66,40 @@ export const ModelThinkingDisplay: React.FC<ModelThinkingDisplayProps> = ({
   ));
 
   const [isExpanded, setIsExpanded] = useState(shouldDefaultExpanded);
+  const [retainClosingContent, setRetainClosingContent] = useState(shouldDefaultExpanded);
+  const expandContainerRef = useRef<HTMLDivElement>(null);
+  const shouldMountContent = isExpanded || retainClosingContent;
+  const { displayText: displayContent, isRevealing } = useTypewriter(
+    isSummary ? '' : content,
+    isActive && !isSummary,
+    // Keep playback through the closing transition, then release the reveal
+    // gate and track current content without animating an invisible backlog.
+    { revealImmediately: !shouldMountContent },
+  );
+  useReportTypewriterReveal(thinkingItem.id, isRevealing);
+
+  // Keep the existing collapse transition, but never build a hidden Markdown
+  // tree on an initially collapsed virtual-row mount. Observe actual CSS
+  // transitions so reduced motion and cancelled transitions also release it.
+  useLayoutEffect(() => {
+    if (isExpanded) {
+      setRetainClosingContent(true);
+      return;
+    }
+    if (!retainClosingContent) return;
+    const transitions = expandContainerRef.current?.getAnimations?.().filter(animation => (
+      'transitionProperty' in animation && animation.transitionProperty === 'grid-template-rows'
+    )) ?? [];
+    if (transitions.length === 0) {
+      setRetainClosingContent(false);
+      return;
+    }
+    let cancelled = false;
+    void Promise.allSettled(transitions.map(animation => animation.finished)).then(() => {
+      if (!cancelled) setRetainClosingContent(false);
+    });
+    return () => { cancelled = true; };
+  }, [isExpanded, retainClosingContent]);
   const userToggledRef = useRef(false);
   const { cardRootRef, applyExpandedState } = useToolCardHeightContract({
     toolId: thinkingItem.id,
@@ -299,8 +328,10 @@ export const ModelThinkingDisplay: React.FC<ModelThinkingDisplayProps> = ({
   }, [content, t]);
 
   const summaryPreview = useMemo(
-    () => latestReasoningSummaryPreview(content),
-    [content],
+    // Ordinary reasoning never displays this preview. Avoid splitting and
+    // stripping its potentially large body on every streaming update.
+    () => isSummary ? latestReasoningSummaryPreview(content) : '',
+    [content, isSummary],
   );
 
   const handleToggleClick = () => {
@@ -400,6 +431,7 @@ export const ModelThinkingDisplay: React.FC<ModelThinkingDisplayProps> = ({
       </div>
 
       <div
+        ref={expandContainerRef}
         className={[
           'thinking-expand-container',
           isExpanded ? 'thinking-expand-container--open' : '',
@@ -407,7 +439,7 @@ export const ModelThinkingDisplay: React.FC<ModelThinkingDisplayProps> = ({
         data-openbitfun-component="model-thinking-display"
         data-openbitfun-part="expandContainer"
       >
-        <div className={`thinking-content-wrapper ${scrollState.hasScroll ? 'has-scroll' : ''} ${scrollState.atTop ? 'at-top' : ''} ${scrollState.atBottom ? 'at-bottom' : ''}`} data-openbitfun-component="model-thinking-display" data-openbitfun-part="contentWrapper">
+        {shouldMountContent && <div className={`thinking-content-wrapper ${scrollState.hasScroll ? 'has-scroll' : ''} ${scrollState.atTop ? 'at-top' : ''} ${scrollState.atBottom ? 'at-bottom' : ''}`} data-openbitfun-component="model-thinking-display" data-openbitfun-part="contentWrapper">
           <div
             ref={contentRef}
             data-openbitfun-component="model-thinking-display"
@@ -429,7 +461,7 @@ export const ModelThinkingDisplay: React.FC<ModelThinkingDisplayProps> = ({
               className="thinking-markdown"
             />
           </div>
-        </div>
+        </div>}
       </div>
     </div>
   );

@@ -207,6 +207,7 @@ const PersistentFooterActions: React.FC = () => {
                 <Menu
                   ref={menuPopoverRef}
                   className={`openbitfun-nav-panel__footer-menu${menuClosing ? ' is-closing' : ''}`}
+                  inlineSize="content"
                   aria-label={t('actions.more')}
                   data-testid="nav-settings-menu"
                   onKeyDown={(event) => {

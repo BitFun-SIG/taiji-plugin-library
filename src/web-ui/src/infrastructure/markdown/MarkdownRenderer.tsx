@@ -37,6 +37,7 @@ import { getActiveSurfaceScope, onSurfaceActivated, type SurfaceScope } from '@/
 import './Markdown.scss';
 import { useStreamingTextReveal } from './useStreamingTextReveal';
 import { SessionMarkdownImage, type SessionImageReader } from './SessionMarkdownImage';
+import { ImageLightbox, type ImageLightboxState } from '@/shared/ui/ImageLightbox';
 import { rehypeSourceRange, type MarkdownSourceRange } from './rehypeSourceRange';
 
 const log = createLogger('Markdown');
@@ -527,12 +528,19 @@ async function getLocalImageDataUrl(
   return request;
 }
 
+/** Only sources the browser can display may open the full-size preview. */
+function isPreviewableImageSource(source: string): boolean {
+  return /^(?:data:image\/|https?:)/i.test(source);
+}
+
 interface MarkdownImageProps extends React.ImgHTMLAttributes<HTMLImageElement> {
   basePath?: string;
   /** Owning workspace ID; authoritative for the read when present. */
   workspaceId?: string;
   /** Legacy owner selector for renderers without a workspace ID. */
   remoteConnectionId?: string;
+  /** Opens the full-size preview for the source this renderer resolved. */
+  onPreview?: (source: string, alt?: string) => void;
 }
 
 const ScopedMarkdownImage: React.FC<MarkdownImageProps & { scope: SurfaceScope }> = ({
@@ -543,6 +551,8 @@ const ScopedMarkdownImage: React.FC<MarkdownImageProps & { scope: SurfaceScope }
   basePath,
   workspaceId,
   remoteConnectionId,
+  onPreview,
+  onClick,
   onLoad,
   onError,
   ...imgProps
@@ -639,6 +649,12 @@ const ScopedMarkdownImage: React.FC<MarkdownImageProps & { scope: SurfaceScope }
     };
   }, [cacheKey, localPath, rawSrc, owner, fileAccess, scope]);
 
+  // The placeholder is not content, and a failed read renders the fallback span
+  // instead of an image, so anything reachable here can be previewed.
+  const previewable = Boolean(onPreview)
+    && resolvedSrc !== LOCAL_IMAGE_PLACEHOLDER
+    && isPreviewableImageSource(resolvedSrc);
+
   if (loadState === 'error') {
     return (
       <span
@@ -659,9 +675,20 @@ const ScopedMarkdownImage: React.FC<MarkdownImageProps & { scope: SurfaceScope }
       className={[
         className,
         loadState === 'loading' ? 'markdown-image markdown-image--loading' : '',
+        previewable ? 'markdown-image--previewable' : '',
       ].filter(Boolean).join(' ')}
       loading="lazy"
       src={resolvedSrc}
+      onClick={(event) => {
+        // An image owned by a link or a file link keeps that owner's behavior.
+        if (!previewable || event.currentTarget.closest('a, button')) {
+          onClick?.(event);
+          return;
+        }
+        event.preventDefault();
+        event.stopPropagation();
+        onPreview?.(resolvedSrc, typeof alt === 'string' && alt ? alt : undefined);
+      }}
       onLoad={(event) => {
         if (resolvedSrc !== LOCAL_IMAGE_PLACEHOLDER) {
           setLoadState('loaded');
@@ -933,6 +960,19 @@ export const MarkdownRenderer = React.memo<MarkdownRendererProps>(({
   const onHttpLinkClickRef = useLiveValueRef(onHttpLinkClick);
   const traceContextRef = useLiveValueRef(traceContext);
   const sourceRangeRef = useLiveValueRef(sourceRange);
+
+  // The overlay belongs to the renderer that resolved the image bytes: a
+  // Markdown image is inline content, not an independently mounted viewer.
+  const [imagePreview, setImagePreview] = useState<ImageLightboxState | null>(null);
+  const openImagePreview = useCallback((source: string, alt?: string) => {
+    setImagePreview({ source, alt });
+  }, []);
+  const onImagePreviewRef = useLiveValueRef(openImagePreview);
+
+  useEffect(() => {
+    // A surface switch invalidates the bytes behind an open preview.
+    setImagePreview(null);
+  }, [surfaceScope.epoch]);
   
   const syntaxTheme = useMemo(() => buildMarkdownPrismStyle(isLight), [isLight]);
   const syntaxThemeRef = useLiveValueRef(syntaxTheme);
@@ -1626,7 +1666,7 @@ export const MarkdownRenderer = React.memo<MarkdownRendererProps>(({
     img({ node: _node, ...props }: any) {
       if (onImageReadRef.current && isLocalAssetPath(props.src || '')) {
         return <SessionMarkdownImage path={normalizeFileLikeHref(props.src)} alt={props.alt} title={props.title}
-          read={onImageReadRef.current} download={onFileDownloadRef.current} />;
+          read={onImageReadRef.current} download={onFileDownloadRef.current} onPreview={onImagePreviewRef.current} />;
       }
       // Dispatch observers have no local filesystem ownership. Do not mount
       // MarkdownImage here: even its initial state can reuse controller bytes
@@ -1650,6 +1690,7 @@ export const MarkdownRenderer = React.memo<MarkdownRendererProps>(({
           basePath={basePathRef.current || currentWorkspacePathRef.current}
           workspaceId={workspaceIdRef.current}
           remoteConnectionId={remoteConnectionIdRef.current}
+          onPreview={onImagePreviewRef.current}
         />
       );
     },
@@ -1666,14 +1707,23 @@ export const MarkdownRenderer = React.memo<MarkdownRendererProps>(({
       return <ol {...props}>{children}</ol>;
     },
     
-    li({ children, ...props }: any) {
-      return <li {...props}>{children}</li>;
+    li({ node: _node, children, className, ...props }: any) {
+      return <li {...props} className={['markdown-list-item', className].filter(Boolean).join(' ')}>{children}</li>;
+    },
+
+    th({ node: _node, children, className, ...props }: any) {
+      return <th {...props} className={['markdown-header-cell', className].filter(Boolean).join(' ')}>{children}</th>;
+    },
+
+    td({ node: _node, children, className, ...props }: any) {
+      return <td {...props} className={['markdown-data-cell', className].filter(Boolean).join(' ')}>{children}</td>;
     },
     
-    p({ children, align, style, ...props }: any) {
+    p({ node: _node, children, align, style, className, ...props }: any) {
       return (
         <p
           {...props}
+          className={['markdown-paragraph', className].filter(Boolean).join(' ')}
           style={align ? { ...style, textAlign: align } : style}
         >
           {children}
@@ -1683,6 +1733,7 @@ export const MarkdownRenderer = React.memo<MarkdownRendererProps>(({
   }), [
     onFileDownloadRef,
     onImageReadRef,
+    onImagePreviewRef,
     handleFileViewRequest,
     handleRevealInExplorer,
     handleLocalFileContextMenu,
@@ -1747,6 +1798,7 @@ export const MarkdownRenderer = React.memo<MarkdownRendererProps>(({
           </React.Suspense>
         ) : basicMarkdownRenderer}
       </MarkdownErrorBoundary>
+      <ImageLightbox image={imagePreview} onClose={() => setImagePreview(null)} />
       
     </div>
   );

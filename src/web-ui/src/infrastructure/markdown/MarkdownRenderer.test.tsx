@@ -185,6 +185,37 @@ describe('Markdown file links', () => {
     vi.clearAllMocks();
   });
 
+  it('preserves same-tag sibling matches for generated and raw HTML content', async () => {
+    const content = `First paragraph.
+
+Second paragraph.
+
+- First item
+  - Nested item
+  - Next nested item
+- Second item
+
+| A | B |
+| - | - |
+| C | D |
+
+<div align="center"><p>One</p><!-- comment -->text<p>Two</p><hr><p>Three</p></div>
+<table><tbody><tr><th>A</th><td>B</td><td>C</td><th>D</th><th>E</th></tr></tbody></table>`;
+    await act(async () => root.render(<MarkdownRenderer content={content} />));
+    for (const [tag, className] of [
+      ['p', 'markdown-paragraph'], ['li', 'markdown-list-item'],
+      ['th', 'markdown-header-cell'], ['td', 'markdown-data-cell'],
+    ]) {
+      const oldMatches = [...container.querySelectorAll(`${tag} + ${tag}`)];
+      expect(oldMatches.length).toBeGreaterThan(0);
+      expect([...container.querySelectorAll(`${tag}:where(.${className}) + ${tag}:where(.${className})`)])
+        .toEqual(oldMatches);
+      expect([...container.querySelectorAll(tag)].every(node => node.classList.contains(className))).toBe(true);
+    }
+    expect([...container.querySelectorAll('div[align="center"] > p:where(.markdown-paragraph) + p:where(.markdown-paragraph)')]
+      .map(node => node.textContent)).toEqual(['Two']);
+  });
+
   it.each([false, true])('keeps fullwidth parentheses outside bare web links (escaped=%s)', async escaped => {
     const url = 'http://127.0.0.1:8000';
     const bare = escaped ? url.replace(':', '\\:') : url;
@@ -900,5 +931,100 @@ describe('Markdown file links', () => {
       'base64',
       'remote-connection-1',
     );
+  });
+
+  it('previews the resolved bytes of a markdown image and closes on the scrim or the close button', async () => {
+    await act(async () => {
+      root.render(
+        <MarkdownRenderer
+          content={'![ReLU 图像](relu.png)'}
+          basePath={EXAMPLE_WORKSPACE}
+          onFileViewRequest={onFileViewRequest}
+        />,
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const image = container.querySelector<HTMLImageElement>('img[alt="ReLU 图像"]');
+    expect(image?.classList.contains('markdown-image--previewable')).toBe(true);
+
+    act(() => image?.click());
+
+    const overlay = document.querySelector<HTMLElement>('.image-lightbox');
+    expect(overlay).not.toBeNull();
+    expect(overlay?.getAttribute('data-openbitfun-native-webview-occlusion')).toBe('true');
+    // The preview shows the bytes the inline image resolved, not the raw path.
+    const preview = overlay?.querySelector<HTMLImageElement>('img');
+    expect(preview?.getAttribute('src')).toBe('data:image/png;base64,cmVsdS1wbmc=');
+    expect(preview?.getAttribute('data-openbitfun-part')).toBe('image');
+    const surface = overlay?.querySelector<HTMLElement>('.image-lightbox-surface');
+    expect(surface?.getAttribute('aria-label')).toBe('ReLU 图像');
+
+    // Clicking the previewed image itself must not dismiss the overlay.
+    act(() => preview?.click());
+    expect(document.querySelector('.image-lightbox')).not.toBeNull();
+
+    act(() => surface?.click());
+    expect(document.querySelector('.image-lightbox')).toBeNull();
+
+    act(() => image?.click());
+    act(() => document.querySelector<HTMLButtonElement>('.image-lightbox-close')?.click());
+    expect(document.querySelector('.image-lightbox')).toBeNull();
+  });
+
+  it('leaves images owned by a markdown link to that link', async () => {
+    await act(async () => {
+      root.render(
+        <MarkdownRenderer
+          content={'[![Badge](data:image/png;base64,YQ==)](README.md)'}
+          basePath={EXAMPLE_WORKSPACE}
+          onFileViewRequest={onFileViewRequest}
+        />,
+      );
+      await Promise.resolve();
+    });
+
+    const image = container.querySelector<HTMLImageElement>('img[alt="Badge"]');
+    expect(image?.classList.contains('markdown-image--previewable')).toBe(true);
+
+    act(() => image?.click());
+
+    expect(document.querySelector('.image-lightbox')).toBeNull();
+    // The file link still owns the click.
+    expect(onFileViewRequest).toHaveBeenCalled();
+  });
+
+  it('does not offer a preview before an inline image resolves', async () => {
+    mocks.readFileContent.mockImplementationOnce(() => new Promise<string>(() => {}));
+    await act(async () => {
+      root.render(
+        <MarkdownRenderer
+          content={'![Pending](pending.png)'}
+          basePath={EXAMPLE_WORKSPACE}
+          onFileViewRequest={onFileViewRequest}
+        />,
+      );
+      await Promise.resolve();
+    });
+
+    const image = container.querySelector<HTMLImageElement>('img[alt="Pending"]');
+    expect(image?.classList.contains('markdown-image--previewable')).toBe(false);
+    act(() => image?.click());
+    expect(document.querySelector('.image-lightbox')).toBeNull();
+  });
+
+  it('closes an open image preview when the surface switches hosts', async () => {
+    await act(async () => {
+      root.render(<MarkdownRenderer content={'![Preview](data:image/png;base64,YQ==)'} />);
+    });
+
+    act(() => container.querySelector<HTMLImageElement>('img')?.click());
+    expect(document.querySelector('.image-lightbox')).not.toBeNull();
+
+    await act(async () => activateSurface('peer:output-second'));
+
+    // The previewed bytes belonged to the previous host.
+    expect(document.querySelector('.image-lightbox')).toBeNull();
   });
 });

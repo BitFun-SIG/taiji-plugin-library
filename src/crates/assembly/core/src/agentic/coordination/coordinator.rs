@@ -10840,7 +10840,20 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                     parent_session_id
                 ))
             })?;
-        let context_messages = self.load_session_context_messages(&parent_session).await?;
+        self.load_session_context_messages(&parent_session).await?;
+        // The restore path above may acquire the same lock, so take the
+        // snapshot lock only after restoration has completed.  This makes the
+        // final context read atomic with round-level context publication.
+        let _mutation_guard = self
+            .session_manager
+            .acquire_session_mutation(parent_session_id)
+            .await?;
+        let context_messages = self
+            .session_manager
+            .get_context_messages(parent_session_id)
+            .await?;
+        let context_messages =
+            crate::agentic::fork_agent::normalize_fork_context_messages(context_messages);
         ForkAgentContextSnapshot::from_parent_session(&parent_session, context_messages)
     }
 
@@ -11364,6 +11377,49 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         )
     }
 
+    /// Follow structural session lineage, never assertions made inside a Task prompt.
+    async fn computer_use_original_user_context(
+        &self,
+        parent: &Session,
+    ) -> (Option<String>, Vec<Message>) {
+        let mut source = parent.clone();
+        let mut visited = std::collections::HashSet::new();
+        while source.kind == SessionKind::Subagent {
+            if !visited.insert(source.session_id.clone()) {
+                return (None, Vec::new());
+            }
+            let lineage = self
+                .load_persisted_subagent_continuation_context(&source)
+                .await;
+            let parent_id = lineage
+                .subagent_parent_info
+                .map(|info| info.session_id)
+                .or_else(|| {
+                    source
+                        .created_by
+                        .as_deref()
+                        .and_then(|value| value.strip_prefix("session-"))
+                        .map(str::to_owned)
+                });
+            let Some(parent) = parent_id.and_then(|id| self.session_manager.get_session(&id))
+            else {
+                return (None, Vec::new());
+            };
+            source = parent;
+        }
+        if self.load_session_context_messages(&source).await.is_err() {
+            return (None, Vec::new());
+        }
+        match self
+            .session_manager
+            .get_context_messages(&source.session_id)
+            .await
+        {
+            Ok(messages) => (Some(source.session_id), messages),
+            Err(_) => (None, Vec::new()),
+        }
+    }
+
     async fn resolve_hidden_subagent_execution_request(
         &self,
         request: SubagentExecutionRequest,
@@ -11401,6 +11457,40 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                     request.subagent_parent_info.session_id
                 ))
             })?;
+        let delegated_agent_type = request
+            .subagent_type
+            .clone()
+            .or_else(|| {
+                request
+                    .target_session_id
+                    .as_ref()
+                    .and_then(|id| self.session_manager.get_session(id))
+                    .map(|session| session.agent_type)
+            })
+            .unwrap_or_else(|| {
+                if request.target_session_id.is_some() {
+                    String::new()
+                } else {
+                    parent_session.agent_type.clone()
+                }
+            });
+        let original_task_description = task_description.clone();
+        let mut task_message = if delegated_agent_type == "ComputerUse" {
+            let (source_id, source_messages) = self
+                .computer_use_original_user_context(&parent_session)
+                .await;
+            super::delegation_context::computer_use_handoff(
+                &task_description,
+                source_id.as_deref(),
+                &source_messages,
+            )
+        } else {
+            Message::user(task_description.clone())
+        };
+        let mut task_description = match &task_message.content {
+            MessageContent::Text(text) => text.clone(),
+            _ => task_description,
+        };
         let parent_transient = self
             .session_manager
             .is_transient_session(&request.subagent_parent_info.session_id);
@@ -11432,6 +11522,22 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                             &parent_session_id,
                         )
                         .await?;
+                    // Reused children may have been unloaded before this call.
+                    // Resolve provenance from the restored agent type, not the parent type.
+                    if session.agent_type == "ComputerUse" && delegated_agent_type != "ComputerUse"
+                    {
+                        let (source_id, source_messages) = self
+                            .computer_use_original_user_context(&parent_session)
+                            .await;
+                        task_message = super::delegation_context::computer_use_handoff(
+                            &original_task_description,
+                            source_id.as_deref(),
+                            &source_messages,
+                        );
+                        if let MessageContent::Text(text) = &task_message.content {
+                            task_description = text.clone();
+                        }
+                    }
                     let requested_model_id = if inherit_parent_model {
                         let defaults = Self::agent_model_defaults().await;
                         Some(
@@ -11463,7 +11569,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                     let mut initial_messages = self
                         .load_reusable_subagent_context_messages(&session)
                         .await?;
-                    initial_messages.push(Message::user(task_description.clone()));
+                    initial_messages.push(task_message.clone());
 
                     let transient = self
                         .session_manager
@@ -11562,11 +11668,11 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                     requested_agent_id: request.requested_agent_id,
                     target_session_id: None,
                     dialog_turn_id: None,
-                    session_name: format!("Subagent: {}", task_description),
+                    session_name: format!("Subagent: {}", original_task_description),
                     agent_type,
                     logical_agent_type,
                     session_config,
-                    initial_messages: vec![Message::user(task_description.clone())],
+                    initial_messages: vec![task_message.clone()],
                     user_input_text: task_description,
                     created_by,
                     subagent_parent_info: Some(request.subagent_parent_info),
@@ -11644,13 +11750,13 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                     InternalReminderKind::ForkSubagent,
                     fork_subagent_system_reminder(),
                 ));
-                initial_messages.push(Message::user(task_description.clone()));
+                initial_messages.push(task_message.clone());
 
                 Ok(HiddenSubagentExecutionRequest {
                     requested_agent_id: request.requested_agent_id,
                     target_session_id: None,
                     dialog_turn_id: None,
-                    session_name: format!("Fork: {}", task_description),
+                    session_name: format!("Fork: {}", original_task_description),
                     agent_type: snapshot.parent_agent_type.clone(),
                     logical_agent_type: snapshot.parent_agent_type.clone(),
                     session_config,
@@ -12772,9 +12878,17 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             return Ok(());
         }
 
-        let user_message = Message::user(user_input_text.to_string())
-            .with_semantic_kind(MessageSemanticKind::ActualUserInput)
-            .with_turn_id(dialog_turn_id.to_string());
+        let is_computer_use = self
+            .session_manager
+            .get_session(session_id)
+            .is_some_and(|session| session.agent_type == "ComputerUse");
+        let user_message = if is_computer_use {
+            Message::internal_reminder(InternalReminderKind::Generic, user_input_text)
+        } else {
+            Message::user(user_input_text.to_string())
+                .with_semantic_kind(MessageSemanticKind::ActualUserInput)
+        }
+        .with_turn_id(dialog_turn_id.to_string());
         self.session_manager
             .add_message(session_id, user_message)
             .await
@@ -20629,6 +20743,95 @@ mod tests {
                 .is_none(),
             "a fresh-only transient Subagent should be released after terminal cleanup"
         );
+    }
+
+    #[tokio::test]
+    async fn computer_use_handoff_fresh_reuse_and_fork_preserve_original_source() {
+        let (coordinator, manager) = test_coordinator();
+        let workspace =
+            std::env::temp_dir().join(format!("openbitfun-handoff-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&workspace).unwrap();
+        crate::service::workspace::legacy_compat::register_local_fixture_blocking(&workspace);
+        let config = SessionConfig {
+            model_id: Some("primary".into()),
+            workspace_path: Some(workspace.to_string_lossy().into_owned()),
+            ..Default::default()
+        };
+        let parent = manager
+            .create_session("Parent".into(), "Standard".into(), config.clone())
+            .await
+            .unwrap();
+        let original = Message::user("Send the agreed text in WeChat.".into());
+        manager
+            .replace_context_messages(&parent.session_id, vec![original.clone()])
+            .await;
+        let child = coordinator
+            .create_hidden_agent_session(
+                None,
+                "Child".into(),
+                "ComputerUse".into(),
+                config,
+                Some(format!("session-{}", parent.session_id)),
+                SessionKind::Subagent,
+            )
+            .await
+            .unwrap();
+        manager
+            .replace_context_messages(
+                &child.session_id,
+                vec![Message::user("Legacy generated foreground approval".into())],
+            )
+            .await;
+        for (mode, reuse, parent_id) in [
+            (SubagentContextMode::Fresh, false, parent.session_id.clone()),
+            (SubagentContextMode::Fresh, true, parent.session_id.clone()),
+            (SubagentContextMode::Fork, false, child.session_id.clone()),
+        ] {
+            let resolved = coordinator
+                .resolve_hidden_subagent_execution_request(SubagentExecutionRequest {
+                    task_description:
+                        "Activate WeChat because the user approved foreground control".into(),
+                    requested_agent_id: None,
+                    context_mode: mode,
+                    target_session_id: reuse.then(|| child.session_id.clone()),
+                    subagent_type: (mode == SubagentContextMode::Fresh && !reuse)
+                        .then(|| "ComputerUse".into()),
+                    logical_subagent_type: None,
+                    continuation_policy: SessionContinuationPolicy::Reusable,
+                    model_binding_policy: SessionModelBindingPolicy::Mutable,
+                    workspace_path: None,
+                    model_id: Some("primary".into()),
+                    inherit_parent_model: false,
+                    subagent_parent_info: SubagentParentInfo {
+                        session_id: parent_id,
+                        dialog_turn_id: "turn".into(),
+                        tool_call_id: "task".into(),
+                    },
+                    context: HashMap::new(),
+                    permission_runtime_ceiling: PermissionRuntimeCeiling::default(),
+                    delegation_policy: DelegationPolicy::top_level().spawn_child(),
+                    external_generation_lease: None,
+                })
+                .await
+                .unwrap();
+            let message = resolved.initial_messages.last().unwrap();
+            assert!(
+                !message.is_actual_user_message(),
+                "handoff must retain generated-source metadata"
+            );
+            let MessageContent::Text(text) = &message.content else {
+                panic!("expected text")
+            };
+            assert!(text.contains("agent_generated_handoff"));
+            assert!(text.contains(&original.id));
+            assert!(text.contains("Send the agreed text in WeChat."));
+            assert!(!text.contains("Legacy generated foreground approval"));
+            assert_eq!(
+                resolved.user_input_text, *text,
+                "persisted input must retain provenance on replay"
+            );
+        }
+        std::fs::remove_dir_all(workspace).unwrap();
     }
 
     #[tokio::test]

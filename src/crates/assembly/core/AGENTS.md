@@ -217,6 +217,12 @@ For host-stream history reads and abandoned execution after a runtime restart:
 The observer must preserve terminal history and another process's writer lease;
 absence from one coordinator's memory alone never proves execution stopped.
 
+For built-in provider overlay, trusted endpoint validation, and reasoning catalog changes:
+
+```bash
+cargo test -p openbitfun-core --no-default-features --features ai-adapter-runtime --lib infrastructure::ai::
+```
+
 Configuration persistence, account settings import, backup restore, legacy
 field/deletion compatibility, local-change notifications, and save/reload/model
 concurrency regressions have feature-free fixtures:
@@ -284,6 +290,7 @@ IM bot reply routing, account-device observation, and interaction delivery:
 
 ```bash
 cargo test --locked -p openbitfun-core --no-default-features --features remote-connect --lib service::remote_connect::bot::
+cargo test --locked -p openbitfun-core --no-default-features --features remote-connect --lib service::remote_connect::bot::weixin::tests
 ```
 
 Pages account publication and tool gates (including remote directory rejection):
@@ -314,3 +321,19 @@ For remote search ID binding without a live SSH connection:
 ```bash
 cargo test --locked -p openbitfun-core --no-default-features --features agent-runtime,git,ssh-remote --lib service::search::remote::identity_tests
 ```
+
+For host-owned user queue admission, cancellation, steering receipts and client disconnects:
+
+```bash
+cargo test --locked -p openbitfun-core --no-default-features --features remote-connect,git --lib host_queue_
+```
+
+For Computer Use control host admission, cancellation leases, control entrypoints,
+permission projection and provider-neutral tool contracts:
+
+```bash
+cargo test -p openbitfun-core --no-default-features --features agent-runtime,git,tools-computer-use --lib computer_use_tool::tests
+```
+
+These mock-host tests do not validate native capture, background input or remote
+GUI behavior; native fixtures remain owned by the Desktop Computer Use guide.

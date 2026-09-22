@@ -159,6 +159,21 @@ describe('WorkspaceListSection layout styles', () => {
     expect(source.match(/data-testid="nav-workspace-new-session-btn"/g)).toHaveLength(2);
   });
 
+  it('keeps the scheduled-job mark off workspace rows', () => {
+    const source = readWorkspaceItemSource();
+
+    // A workspace row owns no session, so the scheduled-job count it used to
+    // borrow from its sessions belongs on the session rows only. The workspace
+    // row must not subscribe to the counts store or claim the name row's
+    // trailing metadata slot for it.
+    expect(source).not.toContain('cronJobCountsStore');
+    expect(source).not.toContain('scheduledJobCount');
+    expect(source).not.toContain('scheduledJobBadge');
+    expect(source).not.toContain('inline-item-cron');
+    expect(source).not.toContain('nav.scheduledJobs.badgeTooltip');
+    expect(source).not.toContain('metadata={scheduledJobBadge}');
+  });
+
   it('keeps workspace and assistant rows flat on hover', () => {
     const stylesheet = readWorkspaceListStylesheet();
 

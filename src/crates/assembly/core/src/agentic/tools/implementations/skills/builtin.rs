@@ -120,7 +120,9 @@ async fn write_installed_manifest(root: &Path) -> OpenBitFunResult<()> {
     Ok(())
 }
 
-async fn acquire_install_lock(user_skills_root: &Path) -> OpenBitFunResult<BuiltinSkillsInstallLock> {
+async fn acquire_install_lock(
+    user_skills_root: &Path,
+) -> OpenBitFunResult<BuiltinSkillsInstallLock> {
     let lock_path = builtin_skills_install_lock_path(user_skills_root);
 
     // Use an OS-backed advisory file lock so parallel test processes and app
@@ -621,6 +623,23 @@ mod tests {
         let workflow =
             embedded_skill_text("create-openbitfun-skin/references/authoring-workflow.md");
         assert!(workflow.contains("Bump it whenever the manifest"));
+    }
+
+    #[test]
+    fn commit_push_pr_is_bundled_with_attribution_and_owns_lightweight_pr_requests() {
+        let skill = embedded_skill_text("commit-push-pr/SKILL.md");
+        assert!(skill.contains("name: commit-push-pr"));
+        assert!(skill
+            .contains("Co-authored-by: OpenBitFun <318544290+bitfun-ai@users.noreply.github.com>"));
+        assert!(skill.contains("Generated with [OpenBitFun](https://github.com/bitfun-ai)"));
+
+        let ship = embedded_skill_text("gstack-ship/SKILL.md");
+        let ship_frontmatter = ship
+            .split("---")
+            .nth(1)
+            .expect("gstack-ship should have YAML frontmatter");
+        assert!(ship_frontmatter.contains("explicit `/ship`"));
+        assert!(ship_frontmatter.contains("built-in `commit-push-pr` skill instead"));
     }
 
     #[test]

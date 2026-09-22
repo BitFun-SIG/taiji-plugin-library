@@ -775,7 +775,8 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
     const surfaceId = getActiveSurfaceId();
     window.dispatchEvent(new CustomEvent('terminal-create-requested', {
       detail: {
-        workingDirectory: workspace.rootPath,
+        // No explicit cwd: the resolver picks the active session's execution
+        // root (a worktree session's worktree) and falls back to this root.
         surfaceId,
         resourceScope: {
           surfaceId,
@@ -908,6 +909,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
               <Menu
                 ref={menuPopoverRef}
                 className="openbitfun-nav-panel__workspace-item-menu-popover"
+                inlineSize="content"
                 style={{
                   top: menuPosition?.top ?? 0,
                   left: menuPosition?.left ?? 0,
@@ -1392,6 +1394,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
               <Menu
                 ref={menuPopoverRef}
                 className="openbitfun-nav-panel__workspace-item-menu-popover"
+                inlineSize="content"
                 style={{
                   top: menuPosition?.top ?? 0,
                   left: menuPosition?.left ?? 0,

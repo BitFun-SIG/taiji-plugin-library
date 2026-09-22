@@ -21,6 +21,7 @@ interface ChatComposerBarProps {
   input: string;
   inputRef: React.Ref<HTMLTextAreaElement>;
   modelControls: React.ReactNode;
+  queueContent?: React.ReactNode;
   onActivate: () => void;
   onAttach: () => void;
   onCancel: () => void;
@@ -44,6 +45,7 @@ export default function ChatComposerBar({
   input,
   inputRef,
   modelControls,
+  queueContent,
   onActivate,
   onAttach,
   onCancel,
@@ -62,6 +64,7 @@ export default function ChatComposerBar({
 
   return (
     <div className={`chat-page__input-wrap ${expanded ? 'is-expanded' : ''}`} ref={containerRef}>
+      {queueContent}
       <MobileComposer
         aria-label={t('chat.collapsedInputPlaceholder')}
         className="chat-page__composer"
@@ -78,7 +81,8 @@ export default function ChatComposerBar({
                 )}
                 size="sm"
               />
-            ) : streaming ? (
+            ) : null}
+            {streaming && (
               <MobileIconButton
                 appearance="plain"
                 aria-label={t('common.stop')}
@@ -90,7 +94,8 @@ export default function ChatComposerBar({
                 onClick={onCancel}
                 size="sm"
               />
-            ) : expanded ? (
+            )}
+            {!imageAnalyzing && (expanded || input.trim() || pendingImages.length > 0) ? (
               <MobileIconButton
                 appearance="plain"
                 aria-label={t('common.submit')}

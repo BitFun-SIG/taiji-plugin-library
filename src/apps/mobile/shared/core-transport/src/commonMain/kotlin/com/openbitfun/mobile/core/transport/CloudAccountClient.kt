@@ -63,6 +63,11 @@ internal const val SLOW_STREAM_PAGE_MS: Long = 300L
 private const val DEVICE_KIND_DESKTOP = "desktop"
 
 /**
+ * A headless host: the CLI and TUI delivery profiles belong to this kind.
+ */
+private const val DEVICE_KIND_CLI = "cli"
+
+/**
  * What this client registers itself as. Constant rather than a parameter: the
  * shared transport only ships inside the Android and iOS apps, and a desktop
  * never reaches the relay through it.
@@ -82,21 +87,23 @@ private val KNOWN_NON_DESKTOP_DEVICE_NAMES = setOf(
 )
 
 /**
- * Whether a relay device row is a desktop, and so controllable from a phone.
+ * Whether a relay device row is a host, and so controllable from a phone.
  *
- * A row that reports its kind is taken at its word. A row without one predates
- * the relay learning about kinds, and is judged by two weaker signals: this
- * phone's own row is never a desktop, and neither is one carrying a name our
- * own builds register under. Anything else stays visible — hiding a real
- * desktop would strand the user, while a stale phone row disappears the next
- * time that phone logs in against a relay that stores kinds.
+ * A row that reports its kind is taken at its word: a desktop and a CLI host run
+ * the same control plane, so both are targets, while a phone or a watch is only
+ * ever a controller. A row without one predates the relay learning about kinds,
+ * and is judged by two weaker signals: this phone's own row is never a host, and
+ * neither is one carrying a name our own builds register under. Anything else
+ * stays visible — hiding a real host would strand the user, while a stale phone
+ * row disappears the next time that phone logs in against a relay that stores
+ * kinds.
  */
-private fun AccountDeviceWire.isDesktop(
+private fun AccountDeviceWire.isHost(
     selfDeviceId: String,
     isLegacyMobileDeviceName: (String) -> Boolean,
 ): Boolean {
     val kind = deviceKind?.trim().orEmpty()
-    if (kind.isNotEmpty()) return kind == DEVICE_KIND_DESKTOP
+    if (kind.isNotEmpty()) return kind == DEVICE_KIND_DESKTOP || kind == DEVICE_KIND_CLI
     if (selfDeviceId.isNotEmpty() && deviceId == selfDeviceId) return false
     return !isLegacyMobileDeviceName(deviceName)
 }
@@ -280,7 +287,7 @@ public class CloudAccountClient internal constructor(
             session.token,
             RELAY_DEFAULT_TIMEOUT_MS,
         ).filter { device ->
-            device.isDesktop(selfDeviceId) { name ->
+            device.isHost(selfDeviceId) { name ->
                 name.trim().lowercase() in normalizedLegacyMobileDeviceNames
             }
         }.map { device ->

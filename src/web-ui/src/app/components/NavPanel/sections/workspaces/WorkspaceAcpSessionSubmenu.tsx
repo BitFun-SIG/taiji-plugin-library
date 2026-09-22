@@ -186,6 +186,7 @@ const WorkspaceAcpSessionSubmenu = forwardRef<HTMLDivElement, WorkspaceAcpSessio
           <Menu
             ref={setSubmenuRef}
             className="openbitfun-nav-panel__workspace-item-menu-popover openbitfun-nav-panel__workspace-acp-submenu"
+            inlineSize="content"
             aria-label={label}
             data-placement={layout?.placement}
             data-testid="nav-workspace-menu-acp-submenu"
