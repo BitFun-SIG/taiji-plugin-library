@@ -4,6 +4,11 @@ import OpenBitFunMobileCore
 import SwiftUI
 import UIKit
 
+private let timelinePerfLog = Logger(
+    subsystem: "com.openbitfun.mobile.ios",
+    category: "performance"
+)
+
 struct ChatTimelineView: View {
     @ObservedObject var model: MobileAppModel
     var onLoadOlderMessages: (() -> Void)? = nil
@@ -14,8 +19,22 @@ struct ChatTimelineView: View {
     var bottomOverlayInset: CGFloat = 0
     @StateObject private var scrollController = TimelineScrollController()
 
-    var body: some View {
-        ScrollViewReader { _ in
+    var body: some View { timelineContent() }
+
+    /// Temporary perf scaffolding: the transcript's view graph is built eagerly, so
+    /// one state update costs one full pass over the loaded rows.
+    private func timelineContent() -> some View {
+        #if DEBUG
+        let renderStartedAt = ProcessInfo.processInfo.systemUptime
+        defer {
+            let milliseconds = Int((ProcessInfo.processInfo.systemUptime - renderStartedAt) * 1_000)
+            let blocks = model.timelineRows.reduce(0) { $0 + $1.blocks.count }
+            timelinePerfLog.info(
+                "Timeline body render rows=\(model.timelineRows.count, privacy: .public) blocks=\(blocks, privacy: .public) ms=\(milliseconds, privacy: .public)"
+            )
+        }
+        #endif
+        return ScrollViewReader { _ in
             ScrollView(showsIndicators: false) {
                 VStack(spacing: MobileDesignGeometry.messageSpacing) {
                     // History is already paged by the session store. Measure the

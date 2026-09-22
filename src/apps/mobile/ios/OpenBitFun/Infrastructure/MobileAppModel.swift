@@ -37,7 +37,9 @@ final class MobileAppModel: ObservableObject {
     @Published var remoteCreateSubmitting = false
     @Published var remoteCreateError: String?
     @Published var remoteCreateDeviceError: String?
-    @Published var selectedSessionID: String
+    @Published var selectedSessionID: String {
+        didSet { if selectedSessionID != oldValue { composerDraftRevision &+= 1 } }
+    }
     @Published var messages: [ChatMessage]
     @Published private var renderedTimelineRows: [MobileConversationRow] = []
     var timelineRows: [MobileConversationRow] {
@@ -47,7 +49,11 @@ final class MobileAppModel: ObservableObject {
             if next != renderedTimelineRows { renderedTimelineRows = next }
         }
     }
-    @Published var draft = ""
+    @Published var draft = "" {
+        didSet { if draft != oldValue { composerDraftRevision &+= 1 } }
+    }
+    // Includes edits later erased and session round trips, not just current contents.
+    var composerDraftRevision: UInt64 = 0
     var lastAppliedRemoteSendID: String?
     var pendingComposerSend: PendingComposerSend?
     @Published var composerSendGeneration: UInt64 = 0
@@ -59,7 +65,9 @@ final class MobileAppModel: ObservableObject {
     @Published var connectionPhase: ConnectionPhase = .connected
     @Published var isSending = false
     @Published var busy = false
-    @Published var composerImages: [ComposerAttachment] = []
+    @Published var composerImages: [ComposerAttachment] = [] {
+        didSet { if composerImages != oldValue { composerDraftRevision &+= 1 } }
+    }
     @Published var modelOptions: [ComposerModelOption] = []
     @Published var toastMessage: String?
     @Published var remoteConnected = false
@@ -409,7 +417,7 @@ final class MobileAppModel: ObservableObject {
     }
 
     func stopSending() {
-        guard remoteSessionSelected else { return }
+        guard remoteSessionSelected, remoteConnected, connectionPhase == .connected else { return }
         coreAdapter?.cancelRemoteTurn(sessionID: selectedSessionID, turnID: activeTurnID)
     }
 
