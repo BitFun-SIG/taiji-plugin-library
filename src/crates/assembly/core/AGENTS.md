@@ -322,3 +322,13 @@ For host-owned user queue admission, cancellation, steering receipts and client 
 ```bash
 cargo test --locked -p openbitfun-core --no-default-features --features remote-connect,git --lib host_queue_
 ```
+
+For Computer Use control host admission, cancellation leases, control entrypoints,
+permission projection and provider-neutral tool contracts:
+
+```bash
+cargo test -p openbitfun-core --no-default-features --features agent-runtime,git,tools-computer-use --lib computer_use_tool::tests
+```
+
+These mock-host tests do not validate native capture, background input or remote
+GUI behavior; native fixtures remain owned by the Desktop Computer Use guide.

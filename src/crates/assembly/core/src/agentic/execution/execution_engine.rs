@@ -2224,7 +2224,15 @@ impl ExecutionEngine {
                 }
                 MessageContent::ToolResult { .. } => {
                     if !attach_images {
-                        result.push(AIMessage::from(msg));
+                        let mut ai = AIMessage::from(msg);
+                        if ai
+                            .tool_image_attachments
+                            .take()
+                            .is_some_and(|images| !images.is_empty())
+                        {
+                            ai.content = Some(format!("{}\n\n[Tool image pixels were not sent: the resolved model does not support image inputs.]", ai.content.as_deref().unwrap_or("")));
+                        }
+                        result.push(ai);
                         continue;
                     }
                     let mut ai = AIMessage::from(msg.clone());
@@ -2897,6 +2905,7 @@ impl ExecutionEngine {
     ) -> OpenBitFunResult<ExecutionResult> {
         let start_time = std::time::Instant::now();
         let dialog_turn_id = context.dialog_turn_id.clone();
+        let control_owner = context.session_id.clone();
         self.generation_messages
             .remove(&(context.session_id.clone(), dialog_turn_id.clone()));
 
@@ -2906,6 +2915,21 @@ impl ExecutionEngine {
         let result = self
             .execute_dialog_turn_impl(agent_type, initial_messages, context, start_time)
             .await;
+
+        // GUI capture/input is a turn-owned host resource. Release it on normal
+        // completion and errors as well as cancellation; never stop another task.
+        if let Some(host) = self.round_executor.computer_use_host() {
+            let control = host.control_snapshot();
+            if control.owner.as_deref() == Some(control_owner.as_str()) && control.state == "active"
+            {
+                if let Err(error) = host
+                    .stop_control_generation(&control_owner, control.generation)
+                    .await
+                {
+                    debug!("Computer use resource cleanup: {}", error);
+                }
+            }
+        }
 
         // Cleanup cancellation token
         self.round_executor
@@ -4847,6 +4871,140 @@ mod tests {
     use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
     use std::sync::Arc;
     use std::time::Duration;
+
+    #[tokio::test]
+    async fn computer_use_pixels_and_geometry_reach_real_provider_wire() {
+        use base64::Engine;
+        use openbitfun_ai_adapters::providers::{
+            anthropic::AnthropicMessageConverter, gemini::GeminiMessageConverter,
+            openai::OpenAIMessageConverter,
+        };
+        let mut png = std::io::Cursor::new(Vec::new());
+        image::DynamicImage::new_rgb8(6, 4)
+            .write_to(&mut png, image::ImageFormat::Png)
+            .unwrap();
+        let pixels = base64::engine::general_purpose::STANDARD.encode(png.into_inner());
+        let observation = json!({ "screenshot_id": "frame-visual", "image_width": 6, "image_height": 4,
+            "image_global_bounds": { "left": 200, "top": 100, "width": 60, "height": 40 }, "has_screenshot": true });
+        let source = Message::tool_result(ToolResult {
+            tool_id: "observe-visual".into(),
+            tool_name: "ComputerUse".into(),
+            effective_tool_name: None,
+            result: observation.clone(),
+            result_for_assistant: Some(observation.to_string()),
+            is_error: false,
+            duration_ms: Some(1),
+            image_attachments: Some(vec![crate::util::types::ToolImageAttachment {
+                mime_type: "image/png".into(),
+                data_base64: pixels.clone(),
+            }]),
+        })
+        .with_turn_id("visual-turn".into());
+        fn image_values(value: &serde_json::Value, output: &mut Vec<String>) {
+            match value {
+                serde_json::Value::Object(map) => {
+                    for (key, value) in map {
+                        if key == "data" {
+                            if let Some(text) = value.as_str() {
+                                output.push(text.into());
+                            }
+                        } else {
+                            image_values(value, output);
+                        }
+                    }
+                }
+                serde_json::Value::Array(values) => {
+                    for value in values {
+                        image_values(value, output);
+                    }
+                }
+                serde_json::Value::String(text) => {
+                    if let Some(bytes) = text.strip_prefix("data:image/png;base64,") {
+                        output.push(bytes.into());
+                    }
+                }
+                _ => {}
+            }
+        }
+        fn find_geometry(value: &serde_json::Value) -> Option<serde_json::Value> {
+            if value
+                .get("screenshot_id")
+                .and_then(serde_json::Value::as_str)
+                == Some("frame-visual")
+            {
+                return Some(value.clone());
+            }
+            match value {
+                serde_json::Value::Object(map) => map.values().find_map(find_geometry),
+                serde_json::Value::Array(values) => values.iter().find_map(find_geometry),
+                serde_json::Value::String(text) => serde_json::from_str::<serde_json::Value>(text)
+                    .ok()
+                    .as_ref()
+                    .and_then(find_geometry),
+                _ => None,
+            }
+        }
+        for provider in ["openai", "responses", "anthropic", "gemini"] {
+            let messages = ExecutionEngine::build_ai_messages_for_send(
+                &[source.clone()],
+                provider,
+                None,
+                None,
+                "visual-turn",
+                true,
+                &[],
+            )
+            .await
+            .unwrap();
+            assert_eq!(
+                messages[0].content.as_deref(),
+                Some(observation.to_string().as_str())
+            );
+            let wire = match provider {
+                "openai" => json!(OpenAIMessageConverter::convert_messages(messages)),
+                "responses" => {
+                    json!(OpenAIMessageConverter::convert_messages_to_responses_input(messages).1)
+                }
+                "anthropic" => json!(AnthropicMessageConverter::convert_messages(messages).1),
+                _ => json!(GeminiMessageConverter::convert_messages(messages, "gemini-3-pro").1),
+            };
+            let mut encoded_images = Vec::new();
+            image_values(&wire, &mut encoded_images);
+            assert_eq!(
+                encoded_images,
+                vec![pixels.clone()],
+                "{provider}: exact image bytes must reach the wire"
+            );
+            let decoded = image::load_from_memory(
+                &base64::engine::general_purpose::STANDARD
+                    .decode(&encoded_images[0])
+                    .unwrap(),
+            )
+            .unwrap();
+            assert_eq!((decoded.width(), decoded.height()), (6, 4));
+            assert_eq!(find_geometry(&wire), Some(observation.clone()), "{provider}: screenshot ref and projection geometry must remain attached to these pixels");
+        }
+        let text_only = ExecutionEngine::build_ai_messages_for_send(
+            &[source.clone()],
+            "openai",
+            None,
+            None,
+            "visual-turn",
+            false,
+            &[],
+        )
+        .await
+        .unwrap();
+        assert!(text_only[0].tool_image_attachments.is_none());
+        // Provider projection must not strip pixels from immutable stored history.
+        let crate::agentic::core::MessageContent::ToolResult {
+            image_attachments, ..
+        } = source.content
+        else {
+            panic!("tool result")
+        };
+        assert_eq!(image_attachments.unwrap()[0].data_base64, pixels);
+    }
 
     #[tokio::test]
     async fn image_inputs_keep_pixels_for_native_models_and_tool_paths_for_text_models() {

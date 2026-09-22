@@ -1,3 +1,4 @@
+import { computerUseControlAppearanceDescriptor } from '@/app/components/ComputerUseControlCard.appearance';
 import { confirmDialogAppearanceDescriptor } from '@/infrastructure/confirm-dialog';
 import { inputDialogAppearanceDescriptor } from '@/app/components/InputDialog/appearance';
 import { windowControlsAppearanceDescriptor } from '@/app/components/WindowControls/appearance';
@@ -289,6 +290,7 @@ export function createDefaultAppearanceRegistry(): AppearanceRegistry {
     .registerComponent(mcpToolDisplayAppearanceDescriptor)
     .registerComponent(skillsConfigAppearanceDescriptor)
     .registerComponent(diffEditorAppearanceDescriptor)
+    .registerComponent(computerUseControlAppearanceDescriptor)
     .registerComponent(agentCompanionDesktopPetAppearanceDescriptor)
     .registerComponent(toolGroupPickerAppearanceDescriptor)
     .registerComponent(inlineDiffPreviewAppearanceDescriptor)

@@ -215,3 +215,11 @@ For alternate dev-server ports and preview startup URL changes, run
 to the previous port. Desktop and Vite must use the same values. Development
 launchers reuse the locked Sherpa library/archive cache across Git worktrees,
 or download the archive through curl when absent; explicit SHERPA_ONNX overrides win.
+
+For the real macOS ComputerUse tool observation/input roundtrip, run
+`node scripts/test-macos-control-roundtrip.mjs`. This launches a disposable
+AppKit target and the `computer_use_native_roundtrip` test with `devtools`.
+The harness has its own main-thread CFRunLoop and exercises the production
+main-queue dispatcher; do not run this test through libtest or bypass that
+dispatcher. It requires local Accessibility and Screen Recording permission.
+To reuse the compiled harness, set `OPENBITFUN_TEST_BINARY` to its absolute path.
