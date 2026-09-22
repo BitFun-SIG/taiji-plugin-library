@@ -101,3 +101,45 @@ test('a serialized promote keeps the turn observed at click time',async()=>{
  await Promise.all([first,second]);
  assert.equal(f.calls.find(call=>call.action==='promote').expectedActiveTurnId,'running');
 });
+
+function deferred() {
+ let resolve, reject;
+ const promise=new Promise((ok,fail)=>{resolve=ok;reject=fail;});
+ return {promise,resolve,reject};
+}
+
+test('a live send never becomes unknown delivery, including observer refreshes before acknowledgement',async()=>{
+ const f=fixture();const entered=deferred();const reply=deferred();const views=[];
+ const q=new HostDialogQueue('account/host/session-a','session-a',async request=>{
+  if(request.action==='submit'){entered.resolve();await reply.promise;}
+  return f.invoke(request);
+ },f.storage);
+ q.subscribe(()=>views.push(q.getSnapshot()));
+ const sending=q.submit(message);await entered.promise;
+ assert.equal(f.records.size,1,'persist before waiting for the host');
+ await q.refresh();await q.refresh();
+ assert.ok(views.every(view=>view.pending.length===0 && view.error===null));
+ // Another page has no live request and must still recover the committed outbox.
+ const reopened=f.create();await reopened.refresh();
+ assert.equal(reopened.getSnapshot().pending.length,1);
+ reply.resolve();await sending;
+ assert.ok(views.every(view=>view.pending.length===0 && view.error===null));
+ assert.equal(q.getSnapshot().snapshot.items.length,1,'real host queue remains visible');
+});
+
+test('a live send becomes recoverable only when its acknowledgement fails',async()=>{
+ const f=fixture();const entered=deferred();const reply=deferred();
+ const q=new HostDialogQueue('account/host/session-a','session-a',async request=>{
+  if(request.action==='submit'){entered.resolve();await reply.promise;}
+  return f.invoke(request);
+ },f.storage);
+ const sending=q.submit(message);const rejected=assert.rejects(sending,/Connection lost/);
+ await entered.promise;await q.refresh();assert.equal(q.getSnapshot().pending.length,0);
+ reply.reject(new Error('Connection lost'));await rejected;
+ assert.equal(q.getSnapshot().pending.length,1);
+ assert.match(q.getSnapshot().error,/Connection lost/);
+ const id=q.getSnapshot().pending[0].request.message.turnId;
+ const reopened=f.create();await reopened.refresh();await reopened.retry(reopened.getSnapshot().pending[0]);
+ assert.equal(f.calls.find(call=>call.action==='submit').message.turnId,id);
+ assert.equal(f.executions,1);
+});

@@ -397,7 +397,7 @@
   background: var(--openbitfun-color-surface-subtle);
   color: var(--openbitfun-color-content-secondary);
   font-size: var(--openbitfun-type-body-sm-font-size);
-  line-height: 1.5;
+  line-height: var(--openbitfun-type-body-sm-line-height);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
@@ -405,7 +405,7 @@
 .chat-msg__rollback-input {
   min-height: 96px;
   font-size: var(--openbitfun-type-body-md-font-size);
-  line-height: 1.5;
+  line-height: var(--openbitfun-type-body-md-line-height);
 }
 
 .chat-msg__menu-note {

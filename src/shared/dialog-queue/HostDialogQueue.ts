@@ -73,6 +73,10 @@ export class HostDialogQueue {
   private listeners = new Set<() => void>();
   private refreshing: Promise<QueueSnapshot> | null = null;
   private mutation: Promise<unknown> = Promise.resolve();
+  // Durable outbox entries also exist during healthy RPCs. Only unresolved
+  // delivery needs recovery UI; a new page has no live RPCs and shows all of it.
+  private inFlight = new Set<string>();
+  private pendingRead = 0;
   constructor(readonly scope: string, readonly sessionId: string,
     private invoke: (request: QueueRequest) => Promise<QueueSnapshot>, private storage: QueueStorage = queueStorage) {}
   getSnapshot = (): QueueView => this.view;
@@ -81,6 +85,13 @@ export class HostDialogQueue {
   };
   private publish(patch: Partial<QueueView>): void {
     this.view = { ...this.view, ...patch }; for (const listener of this.listeners) listener();
+  }
+  private async publishPending(): Promise<void> {
+    const read = ++this.pendingRead;
+    const records = await this.storage.list(this.scope);
+    if (read !== this.pendingRead) return;
+    this.publish({ pending: records.filter(record => !this.inFlight.has(record.key)
+      && (!record.accepted || record.restoreIntent)) });
   }
   private accept(snapshot: QueueSnapshot, authoritative: boolean): void {
     if (snapshot.sessionId !== this.sessionId || !snapshot.queueEpoch || !Number.isSafeInteger(snapshot.revision)) {
@@ -100,7 +111,7 @@ export class HostDialogQueue {
         const records = await this.storage.list(this.scope);
         const current = this.view.snapshot!;
         for (const record of records) {
-          if (!record.accepted || record.restoreIntent || record.request.action !== 'submit') continue;
+          if (this.inFlight.has(record.key) || !record.accepted || record.restoreIntent || record.request.action !== 'submit') continue;
           if (record.request.queueEpoch !== current.queueEpoch) {
             // A restarted owner cannot vouch for an accepted in-memory message.
             // Preserve the original draft and require an explicit user decision.
@@ -109,7 +120,7 @@ export class HostDialogQueue {
             await this.storage.remove(record.key);
           }
         }
-        this.publish({ pending: (await this.storage.list(this.scope)).filter(record => !record.accepted || record.restoreIntent) });
+        await this.publishPending();
         return current;
       } catch (error) { this.publish({ error: String(error) }); throw error; }
       finally { this.refreshing = null; }
@@ -122,10 +133,11 @@ export class HostDialogQueue {
     return result;
   }
   private async transmit(record: QueueOutboxRecord): Promise<QueueSnapshot> {
-    // The transaction commits before an RPC is permitted to leave this client.
-    await this.storage.put(record);
-    this.publish({ pending: (await this.storage.list(this.scope)).filter(record => !record.accepted || record.restoreIntent) });
+    this.inFlight.add(record.key);
     try {
+      // The transaction commits before an RPC is permitted to leave this client.
+      await this.storage.put(record);
+      await this.publishPending();
       const snapshot = await this.invoke(record.request);
       if (snapshot.queueEpoch !== record.request.queueEpoch) throw new Error('queue_scope_expired: host queue owner changed');
       if (record.request.action === 'submit' && snapshot.receipt?.turnId !== record.request.message.turnId) {
@@ -134,15 +146,16 @@ export class HostDialogQueue {
       this.accept(snapshot, false);
       if (record.request.action === 'submit') await this.storage.put({ ...record, accepted: true });
       else await this.storage.remove(record.key);
-      this.publish({ pending: (await this.storage.list(this.scope)).filter(record => !record.accepted || record.restoreIntent) });
       return snapshot;
     } catch (error) {
       const text = String(error);
       if (/queue_conflict:|too_late:|idempotency_conflict:|Message queue is full|Queue is blocked by interrupted/.test(text)) {
         await this.storage.remove(record.key);
-        this.publish({ pending: (await this.storage.list(this.scope)).filter(record => !record.accepted || record.restoreIntent) });
       }
       this.publish({ error: text }); throw error;
+    } finally {
+      this.inFlight.delete(record.key);
+      await this.publishPending();
     }
   }
   submit(message: Omit<QueueMessage, 'turnId'>, draft?: unknown, requestedTurnId?: string): Promise<QueueSnapshot> {
@@ -190,7 +203,7 @@ export class HostDialogQueue {
       if (result.receipt) {
         this.accept(result, false);
         await this.storage.put({ ...record, accepted: true });
-        this.publish({ pending: (await this.storage.list(this.scope)).filter(record => !record.accepted || record.restoreIntent) });
+        await this.publishPending();
         return result;
       }
     }
@@ -201,7 +214,7 @@ export class HostDialogQueue {
   async prepareRestore(record: QueueOutboxRecord): Promise<void> {
     if (record.scope !== this.scope) throw new Error('Queue target changed');
     await this.storage.put({ ...record, restoreIntent: true });
-    this.publish({ pending: (await this.storage.list(this.scope)).filter(record => !record.accepted || record.restoreIntent) });
+    await this.publishPending();
   }
   async receipt(turnId: string, expectedEpoch?: string): Promise<QueueItem | null> {
     const snapshot = await this.refresh();
@@ -218,7 +231,7 @@ export class HostDialogQueue {
   async dismiss(record: QueueOutboxRecord): Promise<void> {
     if (record.scope !== this.scope) throw new Error('Queue target changed');
     await this.storage.remove(record.key);
-    this.publish({ pending: (await this.storage.list(this.scope)).filter(record => !record.accepted || record.restoreIntent) });
+    await this.publishPending();
   }
 }
 
