@@ -271,3 +271,34 @@ test('wire parsers reject foreign pages, invalid shapes, and non-hint device eve
   assert.throws(() => checkHostStreamPage('s', { resp: 'error', message: 'invalid RPC command' }), HostStreamUnsupportedError);
   assert.throws(() => checkHostStreamPage('s', { resp: 'ok' }), /Unexpected stream response/);
 });
+
+
+test('lazy disk history keeps JS-safe backward cursors separate from live updates', async () => {
+  const ceiling = 2 ** 52;
+  const c = callbacks(); const reads = []; let hint;
+  const record = (seq, id, turn) => ({ seq, event: 'session-record', payload: { id, revision: seq, turn: { turnId: turn } } });
+  const source = {
+    target: 'desktop', unsubscribe: async () => {},
+    onHint: listener => { hint = listener; return () => {}; }, onReconnect: () => () => {},
+    read: async request => {
+      reads.push({ ...request });
+      const events = request.before !== undefined ? [record(ceiling - 3, 'old', 'old-turn')]
+        : request.after !== undefined ? [record(ceiling, 'new', 'new-turn')]
+        : [record(ceiling - 2, 'a', 'turn'), record(ceiling - 1, 'b', 'turn')];
+      return { resp: 'stream_page', stream_id: 'session', epoch: 8, events,
+        cursor: request.after !== undefined ? ceiling : ceiling - 1,
+        oldest_seq: events[0].seq, has_more: request.before === undefined && request.after === undefined, truncated: false };
+    }
+  };
+  const stream = new HostSessionStream('session', source, c.hooks);
+  try {
+    await settle(() => c.caught === 1);
+    stream.loadOlder(); await settle(() => c.applied.length === 3);
+    assert.deepEqual(reads[1], { before: ceiling - 2, epoch: 8 });
+    hint({ sourceDeviceId: 'desktop', streamId: 'session', epoch: 8, cursor: ceiling });
+    await settle(() => c.applied.length === 4);
+    assert.deepEqual(reads[2], { after: ceiling - 1, epoch: 8 });
+    assert.deepEqual(c.applied.map(e => e.payload.id), ['a', 'b', 'old', 'new']);
+    assert.equal(c.errors.length, 0);
+  } finally { stream.close(); }
+});

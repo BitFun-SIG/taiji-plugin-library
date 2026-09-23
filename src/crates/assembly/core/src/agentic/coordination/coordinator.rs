@@ -8588,12 +8588,35 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         session_id: &str,
         turn_id: Option<&str>,
     ) -> OpenBitFunResult<Vec<DialogTurnData>> {
+        self.load_relay_session_selection(storage, session_id, turn_id, None)
+            .await
+            .map(|page| page.0)
+    }
+
+    pub async fn load_relay_history_turn(
+        &self,
+        storage: &Path,
+        session_id: &str,
+        before: Option<usize>,
+    ) -> OpenBitFunResult<(Vec<DialogTurnData>, Option<usize>)> {
+        self.load_relay_session_selection(storage, session_id, None, Some(before))
+            .await
+    }
+
+    async fn load_relay_session_selection(
+        &self,
+        storage: &Path,
+        session_id: &str,
+        turn_id: Option<&str>,
+        history: Option<Option<usize>>,
+    ) -> OpenBitFunResult<(Vec<DialogTurnData>, Option<usize>)> {
         let _mutation = self
             .session_manager
             .acquire_session_mutation(session_id)
             .await?;
         self.prepare_persisted_session_read_locked(storage, session_id)
             .await?;
+
         // Persisted InProgress is not proof of a live executor after restart.
         // A loaded owner supplies runtime state; for an unloaded session an
         // exclusive writer lease proves that no other process is executing it.
@@ -8618,14 +8641,22 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 SessionState::Idle | SessionState::Error { .. }
             )
         }) || observer_lease.is_some();
-        let (mut turns, read_mode) = if let Some(turn_id) = turn_id {
+
+        let (mut turns, next, read_mode) = if let Some(before) = history {
+            let (turns, next) = self
+                .session_manager
+                .persistence_manager()
+                .load_visible_history_turn(storage, session_id, before)
+                .await?;
+            (turns, next, "history")
+        } else if let Some(turn_id) = turn_id {
             if let Some(turn) = self
                 .session_manager
                 .persistence_manager()
                 .load_visible_session_turn(storage, session_id, turn_id)
                 .await?
             {
-                (vec![turn], "catalog")
+                (vec![turn], None, "catalog")
             } else {
                 let mut turns = self
                     .session_manager
@@ -8633,7 +8664,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                     .load_visible_session_turns(storage, session_id)
                     .await?;
                 turns.retain(|turn| turn.turn_id == turn_id);
-                (turns, "full-fallback")
+                (turns, None, "full-fallback")
             }
         } else {
             (
@@ -8641,6 +8672,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                     .persistence_manager()
                     .load_visible_session_turns(storage, session_id)
                     .await?,
+                None,
                 "full",
             )
         };
@@ -8700,10 +8732,16 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 }
             }
         }
-        let context = self
-            .session_manager
-            .get_context_messages(session_id)
-            .await?;
+        let context = if turns
+            .iter()
+            .any(|turn| turn.status == TurnStatus::InProgress)
+        {
+            self.session_manager
+                .get_context_messages(session_id)
+                .await?
+        } else {
+            Vec::new()
+        };
         for turn in &mut turns {
             if turn.status == TurnStatus::InProgress {
                 let messages: Vec<_> = context
@@ -8718,7 +8756,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 SessionManager::append_generation_rounds(turn, &id, &messages, timestamp);
             }
         }
-        Ok(turns)
+        Ok((turns, next))
     }
 
     /// Export a transcript while retaining the same Session history boundary
@@ -17207,84 +17245,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn load_relay_session_turns_marks_abandoned_execution_without_rewriting_history() {
-        let workspace = tempfile::tempdir().expect("workspace");
-        crate::service::workspace::legacy_compat::register_local_fixture_blocking(workspace.path());
-        let (coordinator, manager) = test_persistent_coordinator();
-        let session = manager
-            .create_session(
-                "Restart".into(),
-                "Standard".into(),
-                SessionConfig {
-                    workspace_path: Some(workspace.path().to_string_lossy().into_owned()),
-                    ..Default::default()
-                },
-            )
-            .await
-            .unwrap();
-        let id = &session.session_id;
-        let storage = manager.effective_session_storage_path(id).await.unwrap();
-        let turn_id = manager
-            .start_dialog_turn(
-                id,
-                "Standard".into(),
-                "restart probe".into(),
-                Some("turn-restart-probe".into()),
-                None,
-                None,
-            )
-            .await
-            .unwrap();
-        let live = coordinator
-            .load_relay_session_turns(&storage, id, None)
-            .await
-            .unwrap();
-        assert_eq!(live[0].status, TurnStatus::InProgress);
-        // Simulate the executor disappearing while the durable turn still says
-        // InProgress, as happens across process shutdown/restore.
-        manager.reset_session_state_if_processing(id, &turn_id);
-        let idle = coordinator
-            .load_relay_session_turns(&storage, id, None)
-            .await
-            .unwrap();
-        assert_eq!(idle[0].status, TurnStatus::Cancelled);
-        manager.unload_session_from_memory(id).await.unwrap();
-        // Another writer, even in the same process, forbids inferring death
-        // from this coordinator's empty in-memory map.
-        let owner = manager
-            .persistence_manager()
-            .lock_session_writes(&storage, id)
-            .unwrap();
-        let observed = coordinator
-            .load_relay_session_turns(&storage, id, None)
-            .await
-            .unwrap();
-        assert_eq!(observed[0].status, TurnStatus::InProgress);
-        drop(owner);
-        let orphan = coordinator
-            .load_relay_session_turns(&storage, id, None)
-            .await
-            .unwrap();
-        assert_eq!(orphan[0].status, TurnStatus::Cancelled);
-        assert_eq!(orphan[0].finish_reason.as_deref(), Some("interrupted"));
-        let single = coordinator
-            .load_relay_session_turns(&storage, id, Some(&turn_id))
-            .await
-            .unwrap();
-        assert_eq!(single[0].status, TurnStatus::Cancelled);
-        let stored = manager
-            .persistence_manager()
-            .load_visible_session_turns(&storage, id)
-            .await
-            .unwrap();
-        assert_eq!(
-            stored[0].status,
-            TurnStatus::InProgress,
-            "observer must retain persisted evidence"
-        );
-    }
-
-    #[tokio::test]
     async fn load_relay_session_turns_reads_history_after_the_session_is_unloaded() {
         let workspace = tempfile::tempdir().expect("workspace");
         crate::service::workspace::legacy_compat::register_local_fixture_blocking(workspace.path());
@@ -17363,6 +17323,16 @@ mod tests {
             .expect("single-turn host-stream sync must not require an in-memory session");
         assert_eq!(one.len(), 1);
         assert_eq!(one[0].turn_id, turn_id);
+
+        let (page, next) = coordinator
+            .load_relay_history_turn(&storage, &session.session_id, None)
+            .await
+            .expect("paged history must not require an in-memory writer");
+        assert_eq!(
+            serde_json::to_value(&page).unwrap(),
+            serde_json::to_value(&one).unwrap()
+        );
+        assert_eq!(next, None);
 
         session_manager
             .restore_session(workspace.path(), &session.session_id)

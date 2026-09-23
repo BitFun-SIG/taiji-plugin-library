@@ -77,6 +77,24 @@ class HostStreamTest {
         return received to job
     }
 
+    @Test fun jsSafeHistoryCursorsDoNotMoveTheForwardCursor() = runTest {
+        val ceiling = 1L shl 52
+        val host = FakeHost("s1", pageSize = 2)
+        host.nextSeq = ceiling - 3
+        repeat(3) { host.append("session-record", turnRecord("t$it", it)) }
+        val hints = MutableSharedFlow<StreamHint>()
+        val older = Channel<CompletableDeferred<Unit>>()
+        val (received, _) = open(host, hints = hints, older = older)
+        runCurrent()
+        val page = CompletableDeferred<Unit>(); older.send(page); runCurrent()
+        assertTrue(page.isCompleted)
+        assertEquals(Triple<Long?,Long?,Long?>(null, ceiling - 2, 1L), host.reads.last())
+        host.append("session-record", turnRecord("live", 3))
+        hints.emit(StreamHint("desktop-1", "s1",host.epoch,host.cursor)); runCurrent()
+        assertEquals(Triple<Long?,Long?,Long?>(ceiling - 1, null, 1L),host.reads.last())
+        assertEquals(listOf("t1","t2","t0","live"), emittedTurnIds(received))
+    }
+
     @Test fun completionWaitsUntilTheCollectorConsumesTheWholePage() = runTest {
         val host = FakeHost("s1", pageSize = 2)
         repeat(4) { host.append("session-record", turnRecord("turn-$it", it)) }
