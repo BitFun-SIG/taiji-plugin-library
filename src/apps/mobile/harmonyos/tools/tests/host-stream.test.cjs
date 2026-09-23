@@ -6,7 +6,9 @@ const ts = require('typescript');
 const source = fs.readFileSync(path.join(__dirname, '../../entry/src/main/ets/services/HostSessionStream.ets'), 'utf8');
 const compiled = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS } }).outputText;
 const exportsObject = {};
-new Function('require', 'exports', compiled)(() => ({}), exportsObject);
+new Function('require', 'exports', compiled)(name =>
+  name.endsWith('RemoteLogger') ? { RemoteLogger: { info() {}, warn() {}, error() {} } } : {},
+  exportsObject);
 const { HostSessionStream, parseHostStreamHint, checkHostStreamPage, HostStreamUnsupportedError, HOST_STREAM_CHANGED_EVENT } = exportsObject;
 
 async function settle(predicate, label = 'stream did not settle') {
