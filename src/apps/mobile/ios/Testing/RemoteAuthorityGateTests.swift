@@ -603,7 +603,7 @@ struct RemoteAuthorityGateTests {
 
         expect(ComposerSendSettlementPolicy.shouldRestore(
             sentSession: "a", currentSession: "a", acknowledged: false,
-            draftIsEmpty: true, attachmentsAreEmpty: true
+            draftIsEmpty: true, attachmentsAreEmpty: true, draftUnchanged: true
         ), "failed send restores the cleared composer")
         for (session, ack, emptyDraft, emptyImages) in [
             ("a", true, true, true), ("b", false, true, true),
@@ -611,9 +611,13 @@ struct RemoteAuthorityGateTests {
         ] {
             expect(!ComposerSendSettlementPolicy.shouldRestore(
                 sentSession: "a", currentSession: session, acknowledged: ack,
-                draftIsEmpty: emptyDraft, attachmentsAreEmpty: emptyImages
+                draftIsEmpty: emptyDraft, attachmentsAreEmpty: emptyImages, draftUnchanged: true
             ), "send settlement preserves newer typing, attachments and another session")
         }
+        expect(!ComposerSendSettlementPolicy.shouldRestore(
+            sentSession: "a", currentSession: "a", acknowledged: false,
+            draftIsEmpty: true, attachmentsAreEmpty: true, draftUnchanged: false
+        ), "edits later erased, removed attachments and session round trips invalidate restoration")
         for reason in ["NETWORK", "TIMEOUT", "TRANSPORT"] {
             expect(RemoteSessionFailureProjectionPolicy.keepsVisibleConversation(reasonName: reason),
                    "a retryable transport failure keeps the rendered conversation")

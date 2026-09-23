@@ -545,4 +545,5 @@ struct PendingComposerSend {
     let text: String
     let images: [ComposerAttachment]
     let previousAckID: String?
+    let clearedDraftRevision: UInt64
 }

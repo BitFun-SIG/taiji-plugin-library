@@ -80,6 +80,7 @@
     <string name="general_chat_invalid_response">The model service returned an unrecognized response.</string>
     <string name="general_chat_network">Could not reach the provider.</string>
     <string name="chat_load_older_messages">Load earlier messages</string>
+    <string name="chat_transcript_syncing">Syncing</string>
 
     <string name="model_service_title">Model</string>
     <string name="model_service_local_title">Local custom model</string>

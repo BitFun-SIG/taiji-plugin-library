@@ -120,7 +120,9 @@ export struct RemoteSurfaceHost {
           showStatusMetadata: this.presentationState.showStatusMetadata,
           supportsHarnessProfiles: this.supportsHarnessProfiles(),
           hasMoreSessions: this.remotePageState.hasMoreSessions,
-          isBusy: this.remotePageState.conversation.isBusy || this.remotePageState.isLoadingSessions,
+          // Opening a transcript is supersedable; keep rows tappable while that
+          // request hydrates so a second choice is not silently swallowed.
+          isBusy: this.remotePageState.isLoadingSessions,
           // A pending id means a row was tapped, whether or not the open is slow
           // enough to have raised a skeleton. Keying the highlight off the
           // loading flag instead used to tie selection to how long the load took.

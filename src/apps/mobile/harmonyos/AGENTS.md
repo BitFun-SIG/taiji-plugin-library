@@ -76,6 +76,34 @@ source scripts/ohos-env.sh
 "$HVIGORW" --mode module -p module=entry@default -p ohos.test.type=LocalTest test --no-daemon
 ```
 
+For workspace/session catalog rendering, install the debug HAP and run
+`python3 tools/check-catalog-refresh.py --hdc "$HDC"` (add `--dark` for dark
+mode). Run in compact and wide postures. The isolated fixture replaces objects
+while preserving IDs and checks titles and click payloads in the sidebar,
+recent sessions, time/project lists, and workspace picker. The script restores
+the normal App even on assertion failure; it does not modify remote data.
+
+For composer submission timing and draft ownership, run
+`node --test tools/tests/composer-submit.test.cjs`. The native preview scenario
+`composer-submit` uses the real composer and command controller with a pending
+fake RPC: send must clear the input before pressing **Acknowledge**, and a
+**Next draft** entered while pending must survive acknowledgment. Exercise both
+compact and wide layouts and return to normal `EntryAbility` afterward.
+
+For durable transcript projection, run
+`node --test tools/tests/session-record.test.cjs tools/tests/host-stream.test.cjs tools/tests/streaming-markdown.test.cjs`.
+The `durable-timeline` native preview uses the
+production reducer, timeline store and rows. **Next replay** exercises late tool
+insertion, 30 identical publications, text correction, deletion and completion;
+block counts must be 2, 3, 3, 3, 2, 2, with one visible answer. Verify compact,
+wide and live fold transitions, then return to normal `EntryAbility`.
+
+For host shutdown/restart handling, run
+`node --test tools/tests/connection-health.test.cjs tools/tests/session-record.test.cjs tools/tests/host-stream.test.cjs`.
+In `durable-timeline`, **Host offline** must retain content and disable Stop;
+**Host returned** publishes an interrupted turn, preserving its output and
+removing the running action. Test both postures and restore normal App afterward.
+
 ## Visual reference fidelity
 
 - Before drawing a system glyph, text approximation, or new bitmap, search the existing HarmonyOS media resources and the approved desktop reference images. Reuse the established asset when one exists.

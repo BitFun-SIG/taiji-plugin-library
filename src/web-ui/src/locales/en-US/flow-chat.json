@@ -2881,7 +2881,8 @@
     "loading": "Opening assistant…"
   },
   "hostQueue": {
-    "title": "Host message queue",
+    "title": "Queued messages",
+    "about": "About queued messages",
     "memoryNotice": "Accepted messages run while this page is closed. Restarting the execution device clears pending messages.",
     "queued": "Queued",
     "blocked": "Waiting for recovery",
