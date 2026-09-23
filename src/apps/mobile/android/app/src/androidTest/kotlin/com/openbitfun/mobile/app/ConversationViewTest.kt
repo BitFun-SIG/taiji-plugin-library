@@ -355,6 +355,17 @@ class ConversationViewTest {
     }
 
     @Test
+    fun composerRemainsEditableWhileNewSessionHydrates() {
+        val intents = mutableListOf<RemoteSessionIntent>()
+        val state = mutableStateOf(readyState(sessionId = "pending", draft = "").copy(busy = true, timeline = null))
+
+        setConversationContent(state = { state.value }, onIntent = { intents += it })
+
+        composeRule.onNodeWithTag(COMPOSER_INPUT_TEST_TAG).performTextReplacement("draft during load")
+        assertEquals(listOf(RemoteSessionIntent.UpdateDraft("draft during load")), intents)
+    }
+
+    @Test
     fun composerFollowsStoreDraftUpdatesWithinTheSameSession() {
         val state = mutableStateOf(readyState(sessionId = "s-code", draft = "first"))
 
@@ -401,6 +412,37 @@ class ConversationViewTest {
         )
         composeRule.runOnIdle { state.value = state.value.copy(busy = false) }
         composeRule.onNodeWithTag(COMPOSER_INPUT_TEST_TAG).assertTextEquals("send me")
+    }
+
+    @Test
+    fun submittedDraftStaysClearedAcrossRecreationWhileAwaitingAck() {
+        val restoration = androidx.compose.ui.test.junit4.StateRestorationTester(composeRule)
+        val state = mutableStateOf(readyState(sessionId = "s-code", draft = "send me"))
+        restoration.setContent {
+            OpenBitFunTheme(dark = false) {
+                ConversationView(
+                    state = state.value, phase = ConnectionPhase.CONNECTED,
+                    settingsPlacement = SettingsPlacement(SettingsPlacementMode.BOTTOM, 0, 0, 0),
+                    onBack = {}, onIntent = { intent ->
+                        state.value = when (intent) {
+                            is RemoteSessionIntent.UpdateDraft -> state.value.copy(draft = intent.text)
+                            else -> state.value.copy(busy = true)
+                        }
+                    }, contextTitle = "Test desktop", onOpenFile = { _, _ -> },
+                    previewingRemotePath = "", previewLoading = false,
+                    download = RemoteFileDownloadUiState.None, onDownloadFile = { _, _ -> },
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+        }
+        composeRule.onNodeWithTag(COMPOSER_SEND_TEST_TAG).performClick()
+        restoration.emulateSavedInstanceStateRestore()
+        composeRule.onNodeWithTag(COMPOSER_INPUT_TEST_TAG).assert(
+            SemanticsMatcher.expectValue(SemanticsProperties.EditableText, AnnotatedString("")),
+        )
+        composeRule.onNodeWithTag(COMPOSER_INPUT_TEST_TAG).performTextReplacement("next draft")
+        composeRule.runOnIdle { state.value = state.value.copy(busy = false) }
+        composeRule.onNodeWithTag(COMPOSER_INPUT_TEST_TAG).assertTextEquals("next draft")
     }
 
     @Test

@@ -546,9 +546,9 @@ class RemoteSessionStoreTest {
         val gate = CompletableDeferred<Unit>()
         transport.commandGates["get_model_catalog"] = gate
         transport.commands.clear()
-        notices.emit(com.openbitfun.mobile.core.feature.relay.HostCatalogNotice.Changed)
+        notices.emit(com.openbitfun.mobile.core.feature.relay.HostCatalogNotice.Changed())
         runCurrent()
-        notices.emit(com.openbitfun.mobile.core.feature.relay.HostCatalogNotice.Changed)
+        notices.emit(com.openbitfun.mobile.core.feature.relay.HostCatalogNotice.Changed())
         runCurrent()
         gate.complete(Unit)
         runCurrent()
@@ -557,6 +557,30 @@ class RemoteSessionStoreTest {
         assertEquals("model-from-another-controller", ready.timeline?.selectedModelId)
         assertEquals("keep this draft", ready.draft)
         assertTrue(transport.commands.any { it.cmd == "get_model_catalog" && it.sessionId == "s-code" })
+        store.stop()
+    }
+
+    @Test
+    fun hostCatalogInvalidationWaitsForActiveTurnToSettle() = runTest {
+        val transport = FakeSessionTransport().apply {
+            initialEvents = listOf(richRecord("s-code", "active", 1, 1, "inprogress", "partial"), historyReady(false))
+        }
+        val store = RemoteSessionStore(this, transport)
+        store.dispatch(RemoteSessionIntent.Open("s-code")); runCurrent()
+        assertNotNull(assertIs<RemoteSessionUiState.Ready>(store.state.value).timeline?.activeTurn)
+        val notices = MutableSharedFlow<com.openbitfun.mobile.core.feature.relay.HostCatalogNotice>()
+        store.bindCatalog(notices); runCurrent()
+        transport.commands.clear()
+        notices.emit(com.openbitfun.mobile.core.feature.relay.HostCatalogNotice.Changed(7, null)); runCurrent()
+        assertTrue(transport.commands.none { it.cmd == "list_sessions" || it.cmd == "get_model_catalog" })
+
+        transport.streamEvents.emit(buildJsonObject {
+            put("session_id", "s-code"); put("event", "session-state")
+            put("payload", buildJsonObject { put("status", "completed") })
+        })
+        runCurrent()
+        assertTrue(transport.commands.any { it.cmd == "list_sessions" })
+        assertTrue(transport.commands.any { it.cmd == "get_model_catalog" })
         store.stop()
     }
 
@@ -1889,6 +1913,79 @@ class RemoteSessionStoreTest {
         store.stop()
     }
 
+
+    @Test
+    fun hostTerminalRecordSettlesRetainedRunningTurnWithoutLosingPartialOutput() = runTest {
+        for (status in listOf("cancelled", "error", "completed")) {
+            val transport = FakeSessionTransport()
+            val store = RemoteSessionStore(this, transport)
+            store.dispatch(RemoteSessionIntent.Open("s-code")); runCurrent()
+            transport.streamEvents.emit(richRecord("s-code", "t-1", 0, 1, "inprogress", "partial")); runCurrent()
+            assertNotNull(assertIs<RemoteSessionUiState.Ready>(store.state.value).timeline?.activeTurn)
+            store.dispatch(RemoteSessionIntent.UpdateDraft("continue after restart"))
+            transport.pingFailure = RelayFailure.NetworkUnreachable
+            store.dispatch(RemoteSessionIntent.SetForeground(true)); runCurrent()
+            assertEquals(ConnectionPhase.RECONNECTING, store.connectionPhase.value)
+            transport.commands.clear()
+            store.dispatch(RemoteSessionIntent.SendMessage("s-code", "continue after restart")); runCurrent()
+            assertTrue(transport.commands.none { it.cmd == "send_message" || it.cmd == "steer_turn" })
+            assertEquals("continue after restart", assertIs<RemoteSessionUiState.Ready>(store.state.value).draft)
+            transport.pingFailure = null
+            transport.streamEvents.emit(richRecord("s-code", "t-1", 0, 2, status, "partial")); runCurrent()
+            val ready = assertIs<RemoteSessionUiState.Ready>(store.state.value)
+            assertNull(ready.timeline?.activeTurn)
+            assertEquals("partial", ready.timeline?.persistedMessages?.last()?.text)
+            assertFalse(ready.busy)
+            transport.commands.clear()
+            store.dispatch(RemoteSessionIntent.SendMessage("s-code", "continue after restart")); runCurrent()
+            assertEquals(1, transport.commands.count { it.cmd == "send_message" && it.content == "continue after restart" })
+            assertTrue(transport.commands.none { it.cmd == "steer_turn" })
+            store.stop()
+        }
+    }
+
+    @Test
+    fun durableProjectionReplacesReorderedCorrectedAndDeletedItems() = runTest {
+        val transport = FakeSessionTransport()
+        val store = RemoteSessionStore(this, transport)
+        store.dispatch(RemoteSessionIntent.Open("s-code")); runCurrent()
+        fun event(revision: Long, id: String, type: String, order: Int, text: String): JsonObject {
+            val base = richRecord("s-code", "t-1", 0, revision, "inprogress", text)
+            val payload = base.getValue("payload").jsonObject.toMutableMap()
+            payload["id"] = JsonPrimitive("item/$id")
+            payload["item"] = buildJsonObject {
+                put("type", type)
+                put("data", buildJsonObject {
+                    put("id", id); put("content", text); put("orderIndex", order)
+                    if (type == "tool") {
+                        put("toolName", "Read"); put("status", "completed")
+                        put("toolCall", buildJsonObject { put("id", id); put("input", buildJsonObject {}) })
+                    }
+                })
+            }
+            return JsonObject(base + ("payload" to JsonObject(payload)))
+        }
+        suspend fun emit(event: JsonObject) { transport.streamEvents.emit(event); runCurrent() }
+        fun active() = assertIs<RemoteSessionUiState.Ready>(store.state.value).timeline!!.activeTurn!!
+        emit(event(1, "reason", "thinking", 0, "old reasoning"))
+        emit(event(2, "answer", "text", 2, "old answer"))
+        emit(event(3, "tool", "tool", 1, ""))
+        repeat(30) {
+            emit(event(4L + it, "tool", "tool", 1, ""))
+            assertEquals(listOf("thinking", "tool", "text"), active().items!!.map { it.type })
+        }
+        emit(event(40, "answer", "text", 2, "fixed"))
+        assertEquals("fixed", active().text)
+        emit(buildJsonObject {
+            put("session_id", "s-code"); put("event", "session-record")
+            put("payload", buildJsonObject {
+                put("sessionId", "s-code"); put("id", "item/reason"); put("revision", 41); put("deleted", true)
+            })
+        })
+        assertEquals(listOf("tool", "text"), active().items!!.map { it.type })
+        assertTrue(active().thinking.isNullOrEmpty())
+        store.stop()
+    }
 
     @Test
     fun durableCompletionPreservesLoadedOlderRecords() = runTest {

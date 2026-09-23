@@ -348,7 +348,9 @@ struct ComposerBar: View {
             .clipShape(Circle())
         }
         .buttonStyle(.plain)
-        .disabled(action == .sendBlocked || action == .voiceBlocked)
+        .disabled(action == .sendBlocked || action == .voiceBlocked ||
+                  (action == .stopTurn && model.surface == .remote &&
+                   (!model.remoteConnected || model.connectionPhase != .connected)))
         .accessibilityIdentifier("composer.primaryAction")
         .accessibilityLabel(primaryActionLabel)
     }

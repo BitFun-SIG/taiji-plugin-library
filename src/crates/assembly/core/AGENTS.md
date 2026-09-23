@@ -221,6 +221,11 @@ against full materialization locally, use the same target with
 `history_page_benchmark -- --ignored --nocapture`; it checks content equivalence
 and reports timings without asserting a machine-dependent latency in CI.
 
+For host-stream history reads and abandoned execution after a runtime restart:
+`cargo test --locked -p openbitfun-core --no-default-features --features agent-runtime,git --lib load_relay_session_turns_`.
+The observer must preserve terminal history and another process's writer lease;
+absence from one coordinator's memory alone never proves execution stopped.
+
 For built-in provider overlay, trusted endpoint validation, and reasoning catalog changes:
 
 ```bash

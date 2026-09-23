@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.onCompletion
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.mapNotNull
@@ -51,8 +52,12 @@ import kotlinx.coroutines.CancellationException
 import kotlin.io.encoding.Base64
 import kotlin.uuid.Uuid
 import kotlin.uuid.ExperimentalUuidApi
+import kotlin.time.TimeSource
 
 public const val DEFAULT_CLOUD_RELAY_URL: String = "https://remote.openbitfun.com/v/1.0.2"
+
+/** A relayed stream page slower than this is worth a breadcrumb; faster ones are not. */
+internal const val SLOW_STREAM_PAGE_MS: Long = 300L
 
 /** Device kinds the relay accepts; mirrors `relay-service/src/db.rs::DEVICE_KINDS`. */
 private const val DEVICE_KIND_DESKTOP = "desktop"
@@ -314,9 +319,18 @@ public class CloudAccountClient internal constructor(
         val reads = object : HostStreamReads {
             override suspend fun read(after: Long?, before: Long?, epoch: Long?): StreamPageWire {
                 check(realtime.value?.socket === socket) { "Account changed" }
-                return deviceRpc(relayUrl, session, target,
+                val startedAt = TimeSource.Monotonic.markNow()
+                val page = deviceRpc(relayUrl, session, target,
                     RemoteCommand(cmd = "read_stream", streamId = sessionId, after = after, before = before, epoch = epoch, subscribe = true),
                     StreamPageWire.serializer(), RELAY_DEFAULT_TIMEOUT_MS)
+                val elapsedMs = startedAt.elapsedNow().inWholeMilliseconds
+                // The opening page (`after == null`) is the one the user waits for,
+                // and a slow page is worth naming wherever it happens; a page per
+                // hint during a streaming turn is not, so it stays quiet.
+                if (after == null || elapsedMs >= SLOW_STREAM_PAGE_MS) {
+                    log.info("stream page stream=${sessionId.take(24)} after=${after ?: -1} before=${before ?: -1} events=${page.events.size} has_more=${page.hasMore} ms=$elapsedMs")
+                }
+                return page
             }
             override suspend fun unsubscribe() {
                 if (realtime.value?.socket !== socket) return
@@ -324,12 +338,21 @@ public class CloudAccountClient internal constructor(
                     CommandStatusResponse.serializer(), RELAY_DEFAULT_TIMEOUT_MS)
             }
         }
+        // Time from "the user opened this session" to "the host's rows are on
+        // screen, ready to render": every page read plus the reading side's own
+        // reduction of those pages. The store renders only after `onCaughtUp`, so
+        // the gap between the two counts is what the receiving device spends.
+        val openedAt = TimeSource.Monotonic.markNow()
+        var recordsSeen = 0
         return hostStream(sessionId, target, hints, merge(socket.connections.drop(1), foregroundResumes), reads,
             olderRequests = historyRequests, onError = { error ->
                 log.warn("host stream read failed stream=${sessionId.take(24)} type=${error::class.simpleName} failure=${(error as? CloudAccountException)?.failure} message=${error.message}")
                 onError(error)
-            }, onCaughtUp = onCaughtUp).onCompletion { cause ->
-                log.info("host stream ended stream=${sessionId.take(24)} cause=${cause?.let { it::class.simpleName } ?: "none"}")
+            }, onCaughtUp = {
+                log.info("host stream caught up stream=${sessionId.take(24)} events=$recordsSeen elapsed_ms=${openedAt.elapsedNow().inWholeMilliseconds}")
+                onCaughtUp()
+            }).onEach { recordsSeen++ }.onCompletion { cause ->
+                log.info("host stream ended stream=${sessionId.take(24)} events=$recordsSeen cause=${cause?.let { it::class.simpleName } ?: "none"}")
                 if (historyReaders[historyKey] === historyRequests) historyReaders.remove(historyKey)
                 historyRequests.close()
             }

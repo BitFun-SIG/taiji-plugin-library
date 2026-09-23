@@ -438,6 +438,7 @@
     <string name="remote_settings_openbitfun_user">OpenBitFun 用户</string>
     <string name="remote_settings_account_signed_in">已认证</string>
     <string name="chat_load_older_messages">加载更早消息</string>
+    <string name="chat_transcript_syncing">正在同步</string>
     <string name="account_open_github">打开 OpenBitFun 授权</string>
     <string name="account_device_link_invalid">请使用当前版本的 OpenBitFun 设备二维码。</string>
     <string name="account_device_link_unavailable">该设备已离线，或不属于当前 OpenBitFun 账户。</string>

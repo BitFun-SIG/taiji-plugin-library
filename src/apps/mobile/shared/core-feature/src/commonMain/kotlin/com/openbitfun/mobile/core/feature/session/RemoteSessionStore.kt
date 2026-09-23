@@ -13,6 +13,7 @@ import com.openbitfun.mobile.core.persistence.PersistedWorkspaceIdentity
 import com.openbitfun.mobile.core.feature.relay.HostCatalogNotice
 
 import com.openbitfun.mobile.core.domain.ChatSyncPhase
+import com.openbitfun.mobile.core.domain.ChatTranscriptOrigin
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
@@ -92,10 +93,24 @@ public class RemoteSessionStore internal constructor(
     private var catalogSubscription: Job? = null
     private var catalogRefresh: Job? = null
     private var catalogDirty = false
+    private var pendingSessionsRevision: Long? = null
+    private var appliedSessionsRevision: Long? = null
     internal fun bindCatalog(changes: kotlinx.coroutines.flow.Flow<HostCatalogNotice>) {
         catalogSubscription?.cancel()
         catalogSubscription = scope.launch { changes.collect { notice ->
-            if (notice == HostCatalogNotice.Changed) refreshCatalog() else _connectionPhase.value = ConnectionPhase.RECONNECTING
+            when (notice) {
+                is HostCatalogNotice.Changed -> {
+                    // A workspace-only invalidation must not make the session
+                    // list and model catalog compete with the active turn.
+                    val changed = (notice.sessionsRevision == null && notice.workspacesRevision == null) ||
+                        (notice.sessionsRevision != null && notice.sessionsRevision != appliedSessionsRevision)
+                    if (changed) {
+                        pendingSessionsRevision = notice.sessionsRevision
+                        refreshCatalog()
+                    }
+                }
+                HostCatalogNotice.Failed -> _connectionPhase.value = ConnectionPhase.RECONNECTING
+            }
         } }
     }
     private fun refreshCatalog() {
@@ -105,6 +120,14 @@ public class RemoteSessionStore internal constructor(
             while (catalogDirty) {
                 catalogDirty = false
                 val before = _state.value as? RemoteSessionUiState.Ready ?: run { catalogDirty = true; return@launch }
+                // A running turn and the directory share the same relay. Keep the
+                // revision pending until the turn settles so catalog maintenance
+                // cannot delay transcript chunks or compete with history replay.
+                if (before.selectedSessionId != null && before.timeline?.activeTurn != null) {
+                    catalogDirty = true
+                    return@launch
+                }
+                val refreshingRevision = pendingSessionsRevision
                 try {
                     val page = listSessions(0, before.query, before.agentFilter, maxOf(PAGE_SIZE, before.sessions.size))
                     val latest = _state.value as? RemoteSessionUiState.Ready ?: return@launch
@@ -113,6 +136,8 @@ public class RemoteSessionStore internal constructor(
                         if (persistenceEnabled && before.query.isEmpty() && before.agentFilter == SessionAgentFilter.ALL) savePersistedSessions(page.sessions, page.hasMore)
                         publishAuthorityReady(latest.copy(sessions = page.sessions, hasMore = page.hasMore))
                         refreshModelCatalog(invalidated = true)
+                        appliedSessionsRevision = refreshingRevision ?: appliedSessionsRevision
+                        if (pendingSessionsRevision == refreshingRevision) pendingSessionsRevision = null
                         markConnected()
                     }
                 } catch (cancelled: CancellationException) { throw cancelled }
@@ -944,6 +969,12 @@ public class RemoteSessionStore internal constructor(
             }
         }
         if (current == null) _connectionPhase.value = ConnectionPhase.CONNECTING
+        // Opening is not the host answering: the rows above are this device's
+        // stored copy, which stops wherever its last write stopped — inside the
+        // turn that was running when the app went away. Publishing them says
+        // "here is what this device has", and every consumer of the state has to
+        // be able to tell that apart from the host's own transcript.
+        timelineStore.setTranscriptOrigin(ChatTranscriptOrigin.CACHE)
         val operationToken = beginWork()
         _state.value = (_state.value as? RemoteSessionUiState.Ready)?.copy(busy = true) ?: current?.copy(busy = true)
             ?: RemoteSessionUiState.Loading
@@ -1079,6 +1110,10 @@ public class RemoteSessionStore internal constructor(
                     val active = messages.lastOrNull()?.takeIf { it.role == "assistant" && it.status == "streaming" }
                     timelineStore.setPersistedMessages(if (active == null) messages else messages.dropLast(1))
                     timelineStore.setActiveTurn(active)
+                    // These rows are the host's. A stream that restarted (`gap`)
+                    // cleared the store, so this is also where a re-replayed
+                    // session stops reading as this device's own copy.
+                    timelineStore.setTranscriptOrigin(ChatTranscriptOrigin.HOST)
                     val phase = when (messages.lastOrNull()?.status) {
                         "streaming" -> ChatSyncPhase.STREAMING
                         "failed" -> ChatSyncPhase.ERROR
@@ -1091,6 +1126,10 @@ public class RemoteSessionStore internal constructor(
                     { handleFailure(it, _state.value as? RemoteSessionUiState.Ready) },
                     {
                         caughtUp = true
+                        // The host has answered for this session, so a wait for its
+                        // transcript can end. A session with no records has nothing
+                        // to render and is still an answer.
+                        timelineStore.setTranscriptOrigin(ChatTranscriptOrigin.HOST)
                         if (!records.isEmpty) render()
                         publishDurableTimeline()
                         persistTranscript(sessionId, preserveOlder = sessionHistoryHasMore)
@@ -1149,6 +1188,7 @@ public class RemoteSessionStore internal constructor(
                                 else -> ChatSyncPhase.IDLE
                             })
                             if (caughtUp && !replayingHistory) publishDurableTimeline()
+                            if (status != "running" && status != "streaming" && catalogDirty) refreshCatalog()
                         }
                     }
                 }
@@ -1581,7 +1621,7 @@ public class RemoteSessionStore internal constructor(
         val content = intent.content
         if (sessionId.isEmpty() || (content.trim().isEmpty() && intent.images.isNullOrEmpty())) return
         val current = _state.value as? RemoteSessionUiState.Ready ?: return
-        if (current.busy || current.selectedSessionId != sessionId) return
+        if (current.busy || current.selectedSessionId != sessionId || _connectionPhase.value != ConnectionPhase.CONNECTED) return
         val submittedDraftRevision = draftRevision
         val activeTurnId = current.timeline?.activeTurn?.turnId?.takeIf { it.isNotBlank() }
         val steering = plan == null && activeTurnId != null && "dialog_steer_v1" in hostCapabilities
@@ -1753,7 +1793,7 @@ public class RemoteSessionStore internal constructor(
 
     private fun cancelTurn(intent: RemoteSessionIntent.CancelTurn) {
         val sessionId = intent.sessionId.trim()
-        if (sessionId.isEmpty()) return
+        if (sessionId.isEmpty() || _connectionPhase.value != ConnectionPhase.CONNECTED) return
         runAction(sessionId, RemoteCommand(cmd = "cancel_task", sessionId = sessionId, turnId = intent.turnId))
     }
 
@@ -1985,6 +2025,11 @@ public class RemoteSessionStore internal constructor(
         if (!persistenceEnabled || sessionId.isEmpty()) return
         val snapshot = timelineStore.snapshot()
         if (snapshot.sessionId != sessionId) return
+        // Only a transcript the host has confirmed is written back. A restored
+        // copy is this device's own text, and storing it again would let the
+        // next open read an artifact that claims to be the host's view of the
+        // session — including the unfinished turn that made the copy stale.
+        if (snapshot.origin != ChatTranscriptOrigin.HOST) return
         try {
             val p = persistence!!
             val persistedDeviceKey = deviceKey!!
