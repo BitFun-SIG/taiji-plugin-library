@@ -75,6 +75,7 @@ mod tests {
 
     #[test]
     fn goal_prompts_use_normal_runtime_submission_and_pending_guards() {
+        use crate::actions::ActionContext;
         for input in [
             "/goal finish tests",
             " /GOAL\nship feature ",
