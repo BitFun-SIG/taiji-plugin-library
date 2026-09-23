@@ -253,7 +253,7 @@ impl DialogScheduler {
             .await
             .map_err(|e| PortError::new(PortErrorKind::Backend, e.to_string()))?
     }
-    async fn execute_queue_request(
+    pub(super) async fn execute_queue_request(
         &self,
         request: DialogQueueRequest,
     ) -> PortResult<DialogQueueSnapshot> {

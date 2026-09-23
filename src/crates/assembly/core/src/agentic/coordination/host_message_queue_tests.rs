@@ -600,3 +600,174 @@ async fn host_queue_interrupted_target_cannot_consume_a_blocked_injection_on_res
         .is_empty());
     assert_eq!(scheduler.queue_depth("host-queue-session"), 2);
 }
+
+#[test]
+fn host_queue_new_prompt_after_stop_supersedes_interruption() {
+    // This fixture polls coordinator admission inline to retain the task-local
+    // model configuration. Give its large debug future a dedicated test stack.
+    std::thread::Builder::new()
+        .stack_size(16 * 1024 * 1024)
+        .spawn(|| {
+            tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .unwrap()
+                .block_on(async {
+                    for has_held_message in [false, true] {
+                        let (scheduler, sessions, _, root) = test_scheduler_with_persistence(true);
+                        let id = "host-queue-session";
+                        let workspace =
+                            fixture_workspace_dir(root.path().join("stopped-workspace"));
+                        sessions
+                            .create_session_with_id(
+                                Some(id.into()),
+                                "Stopped".into(),
+                                "Standard".into(),
+                                SessionConfig {
+                                    workspace_path: Some(workspace.to_string_lossy().into_owned()),
+                                    ..Default::default()
+                                },
+                            )
+                            .await
+                            .unwrap();
+                        sessions
+                            .start_dialog_turn(
+                                id,
+                                "Standard".into(),
+                                "original work".into(),
+                                Some("stopped-turn".into()),
+                                None,
+                                None,
+                            )
+                            .await
+                            .unwrap();
+                        let epoch = scheduler
+                            .manage_host_queue(request(None, Action::List))
+                            .await
+                            .unwrap()
+                            .queue_epoch;
+                        if has_held_message {
+                            scheduler
+                                .manage_host_queue(request(
+                                    Some(&epoch),
+                                    Action::Submit {
+                                        message: message("previously-queued"),
+                                    },
+                                ))
+                                .await
+                                .unwrap();
+                            scheduler.hold_managed_queue(id, "Turn interrupted");
+                        }
+                        sessions
+                            .mark_dialog_turn_interrupted(id, "stopped-turn")
+                            .await
+                            .unwrap();
+                        sessions
+                            .update_session_state_for_turn_if_processing(
+                                id,
+                                "stopped-turn",
+                                SessionState::Idle,
+                            )
+                            .await
+                            .unwrap();
+                        assert!(sessions
+                            .latest_dialog_turn_holds_dispatch(id)
+                            .await
+                            .unwrap());
+                        assert!(scheduler.try_start_next_queued(id).await.unwrap().is_none());
+
+                        let failed = TEST_MODEL_RESOLUTION_AI_CONFIG
+                            .scope(
+                                AIConfig::default(),
+                                Box::pin(scheduler.execute_queue_request(request(
+                                    Some(&epoch),
+                                    Action::Submit {
+                                        message: message("new-prompt"),
+                                    },
+                                ))),
+                            )
+                            .await;
+                        assert!(failed.is_err(), "missing model must reject admission");
+                        assert!(
+                            sessions
+                                .latest_dialog_turn_holds_dispatch(id)
+                                .await
+                                .unwrap(),
+                            "failed submission must preserve the stopped turn for recovery"
+                        );
+                        assert_eq!(sessions.get_turn_count(id), 1);
+
+                        let ai_config = AIConfig {
+                            models: vec![AIModelConfig {
+                                id: "queue-stop-test-model".into(),
+                                name: "Queue stop test".into(),
+                                provider: "openai".into(),
+                                model_name: "test-model".into(),
+                                base_url: "http://127.0.0.1:1".into(),
+                                enabled: true,
+                                ..Default::default()
+                            }],
+                            ..Default::default()
+                        };
+                        TEST_MODEL_RESOLUTION_AI_CONFIG
+                            .scope(
+                                ai_config.clone(),
+                                sessions.update_session_model_id(id, "queue-stop-test-model"),
+                            )
+                            .await
+                            .unwrap();
+                        // Execute the same host-side request body inline so the model fixture's
+                        // task-local scope covers admission; no model response is needed.
+                        let submit = request(
+                            Some(&epoch),
+                            Action::Submit {
+                                message: message("new-prompt"),
+                            },
+                        );
+                        let snapshot = TEST_MODEL_RESOLUTION_AI_CONFIG
+                            .scope(
+                                ai_config,
+                                Box::pin(scheduler.execute_queue_request(submit.clone())),
+                            )
+                            .await
+                            .expect("a fresh user prompt must supersede the stopped turn");
+                        assert_eq!(snapshot.receipt.unwrap().status, Status::Started);
+                        assert!(!sessions
+                            .latest_dialog_turn_holds_dispatch(id)
+                            .await
+                            .unwrap());
+                        assert_eq!(sessions.get_turn_count(id), 2);
+                        let storage = sessions.effective_session_storage_path(id).await.unwrap();
+                        let stopped = sessions
+                            .persistence_manager()
+                            .load_dialog_turn(&storage, id, 0)
+                            .await
+                            .unwrap()
+                            .unwrap();
+                        assert_eq!(stopped.turn_id, "stopped-turn");
+                        assert!(
+                            stopped.recovery.is_none(),
+                            "accepted prompt must retire old recovery"
+                        );
+
+                        if has_held_message {
+                            assert!(snapshot
+                                .items
+                                .iter()
+                                .any(|item| item.turn_id == "previously-queued"
+                                    && item.status == Status::Blocked));
+                        }
+                        // Reconnect/retry must return the existing receipt, not start again.
+                        scheduler.manage_host_queue(submit).await.unwrap();
+                        assert_eq!(sessions.get_turn_count(id), 2);
+                        let _ = scheduler
+                            .coordinator
+                            .cancel_dialog_turn(id, "new-prompt")
+                            .await;
+                    }
+                });
+        })
+        .unwrap()
+        .join()
+        .unwrap();
+}

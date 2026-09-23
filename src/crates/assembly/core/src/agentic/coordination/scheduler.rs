@@ -1292,18 +1292,9 @@ impl DialogScheduler {
                 .latest_dialog_turn_holds_dispatch(&session_id)
                 .await
                 .map_err(SchedulerSubmitError::Core)?;
-        if interrupted_hold
-            && queued_turn.turn_id.as_ref().is_some_and(|id| {
-                self.host_queue
-                    .lock()
-                    .unwrap_or_else(|e| e.into_inner())
-                    .contains(&session_id, id)
-            })
-        {
-            return Err(SchedulerSubmitError::Message(
-                "Queue is blocked by interrupted turn recovery".into(),
-            ));
-        }
+        // A newly submitted user prompt supersedes recoverable interruption even
+        // when it arrives through the host queue. Existing queued work still
+        // stays parked in try_start_next_queued_locked until that user decision.
         let interrupted_turn_to_abandon = if interrupted_hold
             && !matches!(
                 queued_turn.policy.trigger_source,
@@ -1322,12 +1313,14 @@ impl DialogScheduler {
             .unwrap_or_else(|e| e.into_inner())
             .pending_held(&session_id)
             > 0;
-        let state_fact =
-            if self.active_turns.contains(&session_id) || interrupted_hold || held_user_messages {
-                DialogSessionStateFact::Processing
-            } else {
-                Self::session_state_fact(state.as_ref())
-            };
+        let state_fact = if self.active_turns.contains(&session_id)
+            || interrupted_hold
+            || (held_user_messages && interrupted_turn_to_abandon.is_none())
+        {
+            DialogSessionStateFact::Processing
+        } else {
+            Self::session_state_fact(state.as_ref())
+        };
 
         let queue_has_items = self.queues.has_items(&session_id);
         if matches!(
