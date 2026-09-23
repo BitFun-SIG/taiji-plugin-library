@@ -339,10 +339,9 @@ export struct ChatTimeline {
       // contentPadding and SwiftUI's safeAreaInset.
       .contentStartOffset(this.topInset)
       .contentEndOffset(this.bottomInset)
-      // A streaming reply grows in place rather than arriving as a new item, so
-      // the bottom of the list has to be the anchor — otherwise the text the
-      // agent is writing right now renders below the fold and never comes back.
-      .stackFromEnd(true)
+      // Keep short transcripts at the content start. Active turns and explicit
+      // follow-to-bottom calls still place streaming content at the tail.
+      .stackFromEnd(false)
       // Keeps the read position when older messages are prepended above.
       .maintainVisibleContentPosition(true)
       .edgeEffect(EdgeEffect.Spring, { alwaysEnabled: true })
