@@ -121,6 +121,9 @@ export struct ChatTimeline {
   private followedActiveTurnKey: string = '';
   private userScrollActive: boolean = false;
   private historyTouchActive: boolean = false;
+  private firstVisibleIndex: number = 0;
+  private historyRestoreIndex: number = -1;
+  private historyRestoreCount: number = 0;
   // Whether new content should pull the viewport down with it. True until the
   // user scrolls up to read back through the transcript: at that point taking
   // the viewport away from them would be worse than letting the reply grow off
@@ -179,6 +182,7 @@ export struct ChatTimeline {
   // revisions keep following only until the user deliberately scrolls away.
   @Monitor('timelineRevision')
   onTimelineChanged(): void {
+    this.restoreHistoryAnchorIfNeeded();
     this.logTimelineProjection('revision');
     const activeTurnKey = this.activeTurnKey();
     if (activeTurnKey.length > 0 && activeTurnKey !== this.followedActiveTurnKey) {
@@ -207,6 +211,7 @@ export struct ChatTimeline {
                 if (!this.historyLoading) {
                   this.historyArrival.cancelArrival();
                   this.stickToBottom = false;
+                  this.captureHistoryAnchor();
                   this.onLoadOlder();
                 }
               })
@@ -360,6 +365,9 @@ export struct ChatTimeline {
           this.userScrollActive = true;
         }
       })
+      .onScrollIndex((start: number, _end: number, _center: number) => {
+        this.firstVisibleIndex = start;
+      })
       .onDidScroll((_scrollOffset: number, scrollState: ScrollState) => {
         if (this.listScroller.isAtEnd()) {
           this.stickToBottom = true;
@@ -469,10 +477,37 @@ export struct ChatTimeline {
     }
     if (this.hasMoreMessages && !this.historyLoading && !this.historyFailed) {
       this.stickToBottom = false;
+      this.captureHistoryAnchor();
       this.onLoadOlder();
       return;
     }
     // A drag made while busy is consumed, not queued for after completion.
+  }
+
+  private captureHistoryAnchor(): void {
+    if (this.historyRestoreIndex >= 0) {
+      return;
+    }
+    this.historyRestoreIndex = this.firstVisibleIndex;
+    this.historyRestoreCount = this.historyTimelineItems().length;
+    RemoteLogger.info(
+      `chat timeline history anchor capture index=${this.historyRestoreIndex} ` +
+      `count=${this.historyRestoreCount}`
+    );
+  }
+
+  private restoreHistoryAnchorIfNeeded(): void {
+    if (this.historyRestoreIndex < 0 || this.historyLoading) {
+      return;
+    }
+    const inserted = this.historyTimelineItems().length - this.historyRestoreCount;
+    const targetIndex = this.historyRestoreIndex + Math.max(inserted, 0);
+    this.historyRestoreIndex = -1;
+    this.historyRestoreCount = 0;
+    setTimeout(() => {
+      this.listScroller.scrollToIndex(targetIndex, false, ScrollAlign.START);
+      RemoteLogger.info(`chat timeline history anchor restore index=${targetIndex}`);
+    }, 0);
   }
 
   private requestFollowToBottom(reason: string): void {
