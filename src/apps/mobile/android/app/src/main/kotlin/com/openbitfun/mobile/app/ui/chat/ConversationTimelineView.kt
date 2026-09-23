@@ -4,17 +4,23 @@ import com.openbitfun.mobile.core.feature.session.HistoryLoadState
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.interaction.DragInteraction
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -59,12 +65,13 @@ internal object ConversationScrollPolicy {
         stickToBottom && hasRows
 
     /**
-     * The LazyColumn puts the "load older messages" header at index zero when
-     * [hasMoreMessages] is true, so the real tail is one past [rowCount] instead
-     * of `rowCount - 1`.
+     * The LazyColumn puts one leading header in front of the messages when the
+     * transcript has an older page to load or has not been confirmed by the
+     * host yet, so the real tail is one past [rowCount] instead of
+     * `rowCount - 1`.
      */
-    fun lastItemIndex(rowCount: Int, hasMoreMessages: Boolean): Int =
-        if (hasMoreMessages) rowCount else (rowCount - 1).coerceAtLeast(0)
+    fun lastItemIndex(rowCount: Int, hasLeadingItem: Boolean): Int =
+        if (hasLeadingItem) rowCount else (rowCount - 1).coerceAtLeast(0)
 }
 
 /** One automatic page per deliberate drag; layout and bounce cannot re-arm it. */
@@ -84,6 +91,12 @@ internal class HistoryPageArrivalTracker {
 internal fun ConversationTimelineView(
     rows: List<ConversationRow>,
     hasMoreMessages: Boolean,
+    /**
+     * The rows on screen are this device's stored copy rather than the host's
+     * transcript: a reopened session shows them at once, and the host has not
+     * answered for it yet. See `ChatTranscriptOrigin`.
+     */
+    transcriptUnconfirmed: Boolean = false,
     onLoadOlder: () -> Unit,
     enabled: Boolean,
     onApproveTool: (String, String?) -> Unit,
@@ -111,6 +124,9 @@ internal fun ConversationTimelineView(
     val listState = rememberLazyListState()
     var stickToBottom by rememberSaveable { mutableStateOf(true) }
     val atBottom by remember(listState) { derivedStateOf { !listState.canScrollForward } }
+    // One header slot holds both leading rows, so the scroll policy counts an
+    // item, not a row.
+    val hasLeadingItem = hasMoreMessages || transcriptUnconfirmed
 
     val historyArrival = remember { HistoryPageArrivalTracker() }
     var userDragging by remember { mutableStateOf(false) }
@@ -132,12 +148,12 @@ internal fun ConversationTimelineView(
                 )
             }
     }
-    LaunchedEffect(rows, stickToBottom, hasMoreMessages) {
+    LaunchedEffect(rows, stickToBottom, hasLeadingItem) {
         if (ConversationScrollPolicy.shouldScrollToBottom(stickToBottom, rows.isNotEmpty())) {
             // A large offset positions the item's bottom at the viewport tail directly;
             // unlike scrollToItem(index), it does not briefly expose the item's top.
             listState.scrollToItem(
-                ConversationScrollPolicy.lastItemIndex(rows.size, hasMoreMessages),
+                ConversationScrollPolicy.lastItemIndex(rows.size, hasLeadingItem),
                 scrollOffset = Int.MAX_VALUE,
             )
         }
@@ -180,19 +196,46 @@ internal fun ConversationTimelineView(
             ),
             verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.Bottom),
         ) {
-            if (hasMoreMessages) {
+            if (hasLeadingItem) {
                 item(key = "load-older-messages") {
-                    Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                        TextButton(
-                            onClick = { historyArrival.cancelArrival(); stickToBottom = false; onLoadOlder() },
-                            enabled = enabled && historyLoadState != HistoryLoadState.LOADING,
-                            colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurfaceVariant),
-                        ) {
-                            Text(stringResource(when (historyLoadState) {
-                                HistoryLoadState.LOADING -> R.string.chat_loading_older_messages
-                                HistoryLoadState.FAILED -> R.string.chat_load_older_failed
-                                else -> R.string.chat_load_older_messages
-                            }))
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        if (transcriptUnconfirmed) {
+                            // These rows stop where this device's last write stopped,
+                            // inside the turn that was running when the app went away.
+                            // Say the rest is on its way instead of letting a
+                            // half-finished turn read as the session.
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    strokeWidth = 2.dp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                Spacer(modifier = Modifier.width(7.dp))
+                                Text(
+                                    text = stringResource(R.string.chat_transcript_syncing),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                        if (hasMoreMessages) {
+                            Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                                TextButton(
+                                    onClick = { historyArrival.cancelArrival(); stickToBottom = false; onLoadOlder() },
+                                    enabled = enabled && historyLoadState != HistoryLoadState.LOADING,
+                                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurfaceVariant),
+                                ) {
+                                    Text(stringResource(when (historyLoadState) {
+                                        HistoryLoadState.LOADING -> R.string.chat_loading_older_messages
+                                        HistoryLoadState.FAILED -> R.string.chat_load_older_failed
+                                        else -> R.string.chat_load_older_messages
+                                    }))
+                                }
+                            }
                         }
                     }
                 }

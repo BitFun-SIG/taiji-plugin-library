@@ -3785,6 +3785,62 @@ impl PersistenceManager {
             .await
     }
 
+    /// Load one visible turn through the derived catalog when its entry is available.
+    ///
+    /// A missing or stale catalog deliberately returns `None` so callers can
+    /// preserve the full transcript fallback. Persisted turn files and the
+    /// revert boundary remain authoritative.
+    pub async fn load_visible_session_turn(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+        turn_id: &str,
+    ) -> OpenBitFunResult<Option<DialogTurnData>> {
+        Self::validate_session_id(session_id)?;
+        let _session_write = match self.lock_session_write_operation(workspace_path, session_id) {
+            Ok(lock) => Some(lock),
+            Err(OpenBitFunError::SessionInUse { .. }) => None,
+            Err(error) => return Err(error),
+        };
+        let boundary_turn = self
+            .load_session_revert_state(workspace_path, session_id)
+            .await?
+            .map(|state| state.boundary_turn);
+        let Some(catalog) = self
+            .read_session_turn_catalog_cache(workspace_path, session_id)
+            .await
+        else {
+            return Ok(None);
+        };
+        let Some(entry) = catalog
+            .entries
+            .iter()
+            .find(|entry| entry.turn_id.as_deref() == Some(turn_id))
+        else {
+            return Ok(None);
+        };
+        if boundary_turn.is_some_and(|boundary| entry.storage_turn_index >= boundary) {
+            return Ok(None);
+        }
+        let Some(file) = self
+            .read_json_optional::<StoredDialogTurnFile>(&self.turn_path(
+                workspace_path,
+                session_id,
+                entry.storage_turn_index,
+            ))
+            .await?
+        else {
+            return Ok(None);
+        };
+        if file.turn.session_id != session_id
+            || file.turn.turn_id != turn_id
+            || file.turn.turn_index != entry.storage_turn_index
+        {
+            return Ok(None);
+        }
+        Ok(Some(file.turn))
+    }
+
     async fn project_visible_session_turns(
         &self,
         workspace_path: &Path,
@@ -6295,6 +6351,32 @@ mod tests {
             )
             .await
             .expect("staged revert should save");
+
+        assert!(manager
+            .load_visible_session_turn(workspace.path(), &session_id, "turn-1")
+            .await
+            .expect("hidden lookup")
+            .is_none());
+        // A corrupt unrelated file proves the indexed read never materializes it.
+        std::fs::write(
+            manager.turn_path(workspace.path(), &session_id, 1),
+            "invalid json",
+        )
+        .expect("corrupt hidden fixture");
+        assert_eq!(
+            manager
+                .load_visible_session_turn(workspace.path(), &session_id, "turn-0")
+                .await
+                .expect("indexed lookup")
+                .expect("visible turn")
+                .turn_id,
+            "turn-0"
+        );
+        assert!(manager
+            .load_visible_session_turn(workspace.path(), &session_id, "unknown")
+            .await
+            .expect("missing lookup")
+            .is_none());
 
         let projected = manager
             .load_session_turn_catalog(

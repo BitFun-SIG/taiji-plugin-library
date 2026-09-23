@@ -212,6 +212,11 @@ or test-target layout. Workspace checks and product-wide tests are CI-backed and
 are not the default Core precheck. For documentation-only changes, run
 `git diff --check`.
 
+For host-stream history reads and abandoned execution after a runtime restart:
+`cargo test --locked -p openbitfun-core --no-default-features --features agent-runtime,git --lib load_relay_session_turns_`.
+The observer must preserve terminal history and another process's writer lease;
+absence from one coordinator's memory alone never proves execution stopped.
+
 For built-in provider overlay, trusted endpoint validation, and reasoning catalog changes:
 
 ```bash

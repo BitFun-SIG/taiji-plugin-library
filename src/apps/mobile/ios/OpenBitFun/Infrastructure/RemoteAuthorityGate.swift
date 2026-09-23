@@ -287,9 +287,9 @@ enum RemoteAuthorityGate {
 enum ComposerSendSettlementPolicy {
     static func shouldRestore(
         sentSession: String, currentSession: String,
-        acknowledged: Bool, draftIsEmpty: Bool, attachmentsAreEmpty: Bool
+        acknowledged: Bool, draftIsEmpty: Bool, attachmentsAreEmpty: Bool, draftUnchanged: Bool
     ) -> Bool {
-        !acknowledged && sentSession == currentSession && draftIsEmpty && attachmentsAreEmpty
+        !acknowledged && sentSession == currentSession && draftUnchanged && draftIsEmpty && attachmentsAreEmpty
     }
 }
 

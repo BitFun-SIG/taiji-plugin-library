@@ -266,7 +266,7 @@ internal fun RemoteCompactHome(
                 ) { Text(stringResource(R.string.home_recent_all), fontSize = 12.sp) }
             }
             recent.forEach { session ->
-                Column(Modifier.fillMaxWidth().clickable(enabled = !ready!!.busy) { onOpen(session.id) }
+                Column(Modifier.fillMaxWidth().clickable { onOpen(session.id) }
                     .padding(vertical = MobileDesignGeometry.RecentHomeRowPadding)) {
                     Text(session.title, fontSize = 15.sp, maxLines = 2)
                     val workspace = session.workspaceName?.takeIf { it.isNotBlank() }

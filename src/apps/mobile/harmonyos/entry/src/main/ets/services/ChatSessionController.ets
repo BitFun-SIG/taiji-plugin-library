@@ -21,6 +21,7 @@ export interface ChatSessionSnapshot {
   title: string;
   sessionState: string;
   newMessages: ChatMessage[];
+  /** When present, this and activeTurn form a complete authoritative reducer projection. */
   messageSnapshot?: ChatMessage[];
   activeTurn?: ChatMessage;
   modelCatalog?: RemoteModelCatalog;
@@ -159,11 +160,14 @@ export class ChatSessionController {
     if (this.stopped || !this.callbacks.canPoll(this.sessionId)) return;
     const persisted: ChatMessage[] = [];
     let active: ChatMessage | undefined = undefined;
+    this.completedTurnId = '';
     this.reducer.messages().forEach((message: ChatMessage) => {
       if (message.role === 'assistant' && (message.status === 'active' || message.status === 'running')) active = message;
       else {
         persisted.push(message);
-        if (message.role === 'assistant') this.completedTurnId = message.turnId || '';
+        if (message.role === 'assistant') {
+          this.completedTurnId = message.status === 'completed' ? (message.turnId || '') : '';
+        }
       }
     });
     this.cursor.knownMessageCount = persisted.length;

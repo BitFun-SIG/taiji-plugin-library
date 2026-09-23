@@ -8594,17 +8594,110 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .await?;
         self.prepare_persisted_session_read_locked(storage, session_id)
             .await?;
-        let mut turns = self
-            .session_manager
-            .persistence_manager()
-            .load_visible_session_turns(storage, session_id)
-            .await?;
-        if let Some(turn_id) = turn_id {
-            turns.retain(|turn| turn.turn_id == turn_id);
-            if turns.is_empty() {
-                return Err(OpenBitFunError::NotFound(format!(
-                    "Session turn unavailable: {turn_id}"
-                )));
+        // Persisted InProgress is not proof of a live executor after restart.
+        // A loaded owner supplies runtime state; for an unloaded session an
+        // exclusive writer lease proves that no other process is executing it.
+        // Never infer interruption merely from absence in this process.
+        let loaded = self.session_manager.get_session(session_id);
+        let observer_lease = if loaded.is_none() {
+            match self
+                .session_manager
+                .persistence_manager()
+                .lock_session_writes(storage, session_id)
+            {
+                Ok(lease) => Some(lease),
+                Err(OpenBitFunError::SessionInUse { .. }) => None,
+                Err(error) => return Err(error),
+            }
+        } else {
+            None
+        };
+        let execution_absent = loaded.as_ref().is_some_and(|session| {
+            matches!(
+                session.state,
+                SessionState::Idle | SessionState::Error { .. }
+            )
+        }) || observer_lease.is_some();
+        let (mut turns, read_mode) = if let Some(turn_id) = turn_id {
+            if let Some(turn) = self
+                .session_manager
+                .persistence_manager()
+                .load_visible_session_turn(storage, session_id, turn_id)
+                .await?
+            {
+                (vec![turn], "catalog")
+            } else {
+                let mut turns = self
+                    .session_manager
+                    .persistence_manager()
+                    .load_visible_session_turns(storage, session_id)
+                    .await?;
+                turns.retain(|turn| turn.turn_id == turn_id);
+                (turns, "full-fallback")
+            }
+        } else {
+            (
+                self.session_manager
+                    .persistence_manager()
+                    .load_visible_session_turns(storage, session_id)
+                    .await?,
+                "full",
+            )
+        };
+        debug!(
+            "Loaded relay session turns: session_id={} requested_turn_id={} read_mode={} turn_count={}",
+            session_id,
+            turn_id.unwrap_or("<all>"),
+            read_mode,
+            turns.len()
+        );
+        if turn_id.is_some() && turns.is_empty() {
+            return Err(OpenBitFunError::NotFound(format!(
+                "Session turn unavailable: {}",
+                turn_id.unwrap_or_default()
+            )));
+        }
+        if execution_absent {
+            for turn in &mut turns {
+                if turn.status != TurnStatus::InProgress {
+                    continue;
+                }
+                // Observer projection only: retain the original history and
+                // recovery checkpoints on disk. Terminal records stay intact.
+                turn.status = TurnStatus::Cancelled;
+                turn.finish_reason = Some("interrupted".to_string());
+                turn.error = Some(
+                    "Execution interrupted: the owning runtime is no longer running".to_string(),
+                );
+                for round in &mut turn.model_rounds {
+                    if matches!(round.status.as_str(), "inprogress" | "running" | "active") {
+                        round.status = "cancelled".to_string();
+                    }
+                    for item in &mut round.tool_items {
+                        if item.tool_result.is_none()
+                            && !matches!(
+                                item.status.as_deref(),
+                                Some(
+                                    "completed"
+                                        | "failed"
+                                        | "error"
+                                        | "cancelled"
+                                        | "rejected"
+                                        | "superseded"
+                                        | "retry_superseded"
+                                )
+                            )
+                        {
+                            item.status = Some("cancelled".to_string());
+                        }
+                    }
+                    for item in &mut round.text_items {
+                        item.is_streaming = false;
+                    }
+                    for item in &mut round.thinking_items {
+                        item.is_streaming = false;
+                    }
+                }
             }
         }
         let context = self
@@ -17111,6 +17204,84 @@ mod tests {
             .delete_session_by_id(&session.session_id)
             .await
             .expect("clean up persisted test session");
+    }
+
+    #[tokio::test]
+    async fn load_relay_session_turns_marks_abandoned_execution_without_rewriting_history() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        crate::service::workspace::legacy_compat::register_local_fixture_blocking(workspace.path());
+        let (coordinator, manager) = test_persistent_coordinator();
+        let session = manager
+            .create_session(
+                "Restart".into(),
+                "Standard".into(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().into_owned()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .unwrap();
+        let id = &session.session_id;
+        let storage = manager.effective_session_storage_path(id).await.unwrap();
+        let turn_id = manager
+            .start_dialog_turn(
+                id,
+                "Standard".into(),
+                "restart probe".into(),
+                Some("turn-restart-probe".into()),
+                None,
+                None,
+            )
+            .await
+            .unwrap();
+        let live = coordinator
+            .load_relay_session_turns(&storage, id, None)
+            .await
+            .unwrap();
+        assert_eq!(live[0].status, TurnStatus::InProgress);
+        // Simulate the executor disappearing while the durable turn still says
+        // InProgress, as happens across process shutdown/restore.
+        manager.reset_session_state_if_processing(id, &turn_id);
+        let idle = coordinator
+            .load_relay_session_turns(&storage, id, None)
+            .await
+            .unwrap();
+        assert_eq!(idle[0].status, TurnStatus::Cancelled);
+        manager.unload_session_from_memory(id).await.unwrap();
+        // Another writer, even in the same process, forbids inferring death
+        // from this coordinator's empty in-memory map.
+        let owner = manager
+            .persistence_manager()
+            .lock_session_writes(&storage, id)
+            .unwrap();
+        let observed = coordinator
+            .load_relay_session_turns(&storage, id, None)
+            .await
+            .unwrap();
+        assert_eq!(observed[0].status, TurnStatus::InProgress);
+        drop(owner);
+        let orphan = coordinator
+            .load_relay_session_turns(&storage, id, None)
+            .await
+            .unwrap();
+        assert_eq!(orphan[0].status, TurnStatus::Cancelled);
+        assert_eq!(orphan[0].finish_reason.as_deref(), Some("interrupted"));
+        let single = coordinator
+            .load_relay_session_turns(&storage, id, Some(&turn_id))
+            .await
+            .unwrap();
+        assert_eq!(single[0].status, TurnStatus::Cancelled);
+        let stored = manager
+            .persistence_manager()
+            .load_visible_session_turns(&storage, id)
+            .await
+            .unwrap();
+        assert_eq!(
+            stored[0].status,
+            TurnStatus::InProgress,
+            "observer must retain persisted evidence"
+        );
     }
 
     #[tokio::test]
