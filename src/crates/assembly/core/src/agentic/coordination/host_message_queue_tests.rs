@@ -771,3 +771,353 @@ fn host_queue_new_prompt_after_stop_supersedes_interruption() {
         .join()
         .unwrap();
 }
+
+fn run_host_queue_lifecycle_test<F: std::future::Future<Output = ()>>(
+    test: impl FnOnce() -> F + Send + 'static,
+) {
+    std::thread::Builder::new()
+        .stack_size(16 * 1024 * 1024)
+        .spawn(move || {
+            tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .unwrap()
+                .block_on(test());
+        })
+        .unwrap()
+        .join()
+        .unwrap();
+}
+
+fn host_queue_lifecycle_model() -> AIConfig {
+    AIConfig {
+        models: vec![AIModelConfig {
+            id: "queue-lifecycle-model".into(),
+            name: "Queue lifecycle".into(),
+            provider: "openai".into(),
+            model_name: "test-model".into(),
+            base_url: "http://127.0.0.1:1".into(),
+            enabled: true,
+            ..Default::default()
+        }],
+        ..Default::default()
+    }
+}
+
+async fn stopped_host_queue_fixture(
+    retiring: bool,
+) -> (
+    Arc<DialogScheduler>,
+    Arc<SessionManager>,
+    tempfile::TempDir,
+    String,
+) {
+    let (scheduler, sessions, _, root) = test_scheduler_with_persistence(true);
+    let id = "host-queue-session";
+    let workspace = fixture_workspace_dir(root.path().join("stopped-lifecycle"));
+    sessions
+        .create_session_with_id(
+            Some(id.into()),
+            "Stopped".into(),
+            "Standard".into(),
+            SessionConfig {
+                workspace_path: Some(workspace.to_string_lossy().into_owned()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    sessions
+        .start_dialog_turn(
+            id,
+            "Standard".into(),
+            "original".into(),
+            Some("stopped-turn".into()),
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+    let epoch = scheduler
+        .manage_host_queue(request(None, Action::List))
+        .await
+        .unwrap()
+        .queue_epoch;
+    for turn_id in ["old-a", "old-b"] {
+        scheduler
+            .manage_host_queue(request(
+                Some(&epoch),
+                Action::Submit {
+                    message: message(turn_id),
+                },
+            ))
+            .await
+            .unwrap();
+    }
+    sessions
+        .mark_dialog_turn_interrupted(id, "stopped-turn")
+        .await
+        .unwrap();
+    sessions
+        .update_session_state_for_turn_if_processing(id, "stopped-turn", SessionState::Idle)
+        .await
+        .unwrap();
+    if retiring {
+        scheduler
+            .active_turns
+            .insert(id.into(), desktop_active_turn("stopped-turn"));
+    } else {
+        scheduler.hold_managed_queue(id, "Turn interrupted");
+    }
+    TEST_MODEL_RESOLUTION_AI_CONFIG
+        .scope(
+            host_queue_lifecycle_model(),
+            sessions.update_session_model_id(id, "queue-lifecycle-model"),
+        )
+        .await
+        .unwrap();
+    (scheduler, sessions, root, epoch)
+}
+
+async fn process_host_queue_outcome(scheduler: &DialogScheduler, outcome: TurnOutcome) {
+    let (tx, rx) = mpsc::unbounded_channel();
+    tx.send(("host-queue-session".into(), outcome)).unwrap();
+    drop(tx);
+    TEST_MODEL_RESOLUTION_AI_CONFIG
+        .scope(
+            host_queue_lifecycle_model(),
+            scheduler.run_outcome_handler(rx),
+        )
+        .await;
+}
+
+#[test]
+fn host_queue_prompt_during_stop_retirement_is_not_parked_by_old_outcome() {
+    run_host_queue_lifecycle_test(|| async {
+        let (scheduler, sessions, _root, epoch) = stopped_host_queue_fixture(true).await;
+        let id = "host-queue-session";
+        let mut background = standard_queued_turn("background-result");
+        background.policy = DialogSubmissionPolicy::for_source(DialogTriggerSource::AgentSession);
+        scheduler
+            .queues
+            .enqueue(id, background, DialogQueuePriority::Low)
+            .unwrap();
+        let submitted = scheduler
+            .manage_host_queue(request(
+                Some(&epoch),
+                Action::Submit {
+                    message: message("after-stop"),
+                },
+            ))
+            .await
+            .unwrap();
+        assert_eq!(submitted.receipt.unwrap().status, Status::Queued);
+        assert!(!sessions
+            .latest_dialog_turn_holds_dispatch(id)
+            .await
+            .unwrap());
+        process_host_queue_outcome(
+            &scheduler,
+            TurnOutcome::Interrupted {
+                turn_id: "stopped-turn".into(),
+                execution_generation: 0,
+            },
+        )
+        .await;
+        assert_eq!(
+            sessions.get_turn_count(id),
+            2,
+            "new prompt must start without another client request"
+        );
+        let snapshot = scheduler
+            .manage_host_queue(request(None, Action::List))
+            .await
+            .unwrap();
+        assert!(snapshot
+            .items
+            .iter()
+            .all(|item| item.turn_id != "after-stop"));
+        assert_eq!(
+            snapshot
+                .items
+                .iter()
+                .filter(|item| item.status == Status::Blocked)
+                .count(),
+            2
+        );
+        // A second explicit prompt must also run while the older held messages
+        // remain intact, including when submitted before the current turn ends.
+        scheduler
+            .manage_host_queue(request(
+                Some(&epoch),
+                Action::Submit {
+                    message: message("another-prompt"),
+                },
+            ))
+            .await
+            .unwrap();
+        sessions
+            .update_session_state(id, SessionState::Idle)
+            .await
+            .unwrap();
+        process_host_queue_outcome(
+            &scheduler,
+            TurnOutcome::Completed {
+                turn_id: "after-stop".into(),
+                final_response: "done".into(),
+            },
+        )
+        .await;
+        assert_eq!(sessions.get_turn_count(id), 3);
+        assert_eq!(
+            scheduler.queues.depth(id),
+            1,
+            "background work must remain parked behind held messages"
+        );
+        let _ = scheduler
+            .coordinator
+            .cancel_dialog_turn(id, "another-prompt")
+            .await;
+    });
+}
+
+#[test]
+fn host_queue_promote_after_stop_preserves_recovery_on_failure_and_starts_once() {
+    run_host_queue_lifecycle_test(|| async {
+        let (scheduler, sessions, _root, epoch) = stopped_host_queue_fixture(false).await;
+        let id = "host-queue-session";
+        let promote = |op: &str| {
+            request(
+                Some(&epoch),
+                Action::Promote {
+                    turn_id: "old-a".into(),
+                    operation_id: op.into(),
+                    expected_active_turn_id: None,
+                },
+            )
+        };
+        let failed = TEST_MODEL_RESOLUTION_AI_CONFIG
+            .scope(
+                AIConfig::default(),
+                scheduler.execute_queue_request(promote("failed-promotion")),
+            )
+            .await
+            .unwrap();
+        assert_eq!(failed.receipt.unwrap().status, Status::Blocked);
+        assert!(sessions
+            .latest_dialog_turn_holds_dispatch(id)
+            .await
+            .unwrap());
+        assert_eq!(sessions.get_turn_count(id), 1);
+        let accepted = TEST_MODEL_RESOLUTION_AI_CONFIG
+            .scope(
+                host_queue_lifecycle_model(),
+                scheduler.execute_queue_request(promote("retry-promotion")),
+            )
+            .await
+            .unwrap();
+        assert_eq!(accepted.receipt.unwrap().status, Status::Started);
+        assert!(!sessions
+            .latest_dialog_turn_holds_dispatch(id)
+            .await
+            .unwrap());
+        scheduler
+            .manage_host_queue(promote("retry-promotion"))
+            .await
+            .unwrap();
+        assert_eq!(sessions.get_turn_count(id), 2);
+        assert!(accepted
+            .items
+            .iter()
+            .any(|item| item.turn_id == "old-b" && item.status == Status::Blocked));
+        let _ = scheduler.coordinator.cancel_dialog_turn(id, "old-a").await;
+    });
+}
+
+#[test]
+fn host_queue_cancel_after_stop_does_not_resume_interrupted_or_background_work() {
+    run_host_queue_lifecycle_test(|| async {
+        let (scheduler, sessions, _root, epoch) = stopped_host_queue_fixture(false).await;
+        let id = "host-queue-session";
+        let mut background = standard_queued_turn("background-result");
+        background.policy = DialogSubmissionPolicy::for_source(DialogTriggerSource::AgentSession);
+        scheduler
+            .queues
+            .enqueue(id, background, DialogQueuePriority::Low)
+            .unwrap();
+        for turn in ["old-a", "old-b"] {
+            let cancel = request(
+                Some(&epoch),
+                Action::Cancel {
+                    turn_id: turn.into(),
+                    operation_id: format!("cancel-{turn}"),
+                },
+            );
+            for _ in 0..2 {
+                let result = scheduler.manage_host_queue(cancel.clone()).await.unwrap();
+                assert_eq!(result.receipt.unwrap().status, Status::Cancelled);
+            }
+        }
+        assert!(sessions
+            .latest_dialog_turn_holds_dispatch(id)
+            .await
+            .unwrap());
+        assert!(scheduler.try_start_next_queued(id).await.unwrap().is_none());
+        assert_eq!(scheduler.queues.depth(id), 1);
+        assert_eq!(sessions.get_turn_count(id), 1);
+    });
+}
+
+#[test]
+fn host_queue_new_prompt_after_error_survives_delayed_failure_cleanup() {
+    run_host_queue_lifecycle_test(|| async {
+        let (scheduler, sessions, _root, epoch) = stopped_host_queue_fixture(true).await;
+        let id = "host-queue-session";
+        sessions
+            .abandon_interrupted_dialog_turn(id, Some("stopped-turn"))
+            .await
+            .unwrap();
+        sessions
+            .update_session_state(
+                id,
+                SessionState::Error {
+                    error: "provider failed".into(),
+                    recoverable: true,
+                },
+            )
+            .await
+            .unwrap();
+        let submitted = scheduler
+            .manage_host_queue(request(
+                Some(&epoch),
+                Action::Submit {
+                    message: message("after-error"),
+                },
+            ))
+            .await
+            .unwrap();
+        assert_eq!(submitted.receipt.unwrap().status, Status::Queued);
+        process_host_queue_outcome(
+            &scheduler,
+            TurnOutcome::Failed {
+                turn_id: "stopped-turn".into(),
+                error: "provider failed".into(),
+            },
+        )
+        .await;
+        assert_eq!(sessions.get_turn_count(id), 2);
+        let snapshot = scheduler
+            .manage_host_queue(request(None, Action::List))
+            .await
+            .unwrap();
+        assert_eq!(snapshot.items.len(), 2);
+        assert!(snapshot
+            .items
+            .iter()
+            .all(|item| item.status == Status::Blocked && item.turn_id != "after-error"));
+        let _ = scheduler
+            .coordinator
+            .cancel_dialog_turn(id, "after-error")
+            .await;
+    });
+}

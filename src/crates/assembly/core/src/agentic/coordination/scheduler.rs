@@ -109,6 +109,13 @@ pub struct QueuedTurn {
 }
 
 impl QueuedTurn {
+    fn is_user_submission(&self) -> bool {
+        !matches!(
+            self.policy.trigger_source,
+            DialogTriggerSource::AgentSession | DialogTriggerSource::ScheduledJob
+        )
+    }
+
     fn accept_settlement(&self) {
         if let Some(registration) = self._settlement_registration.as_ref() {
             registration.accept();
@@ -1286,6 +1293,21 @@ impl DialogScheduler {
             .session_manager
             .get_session(&session_id)
             .map(|s| s.state.clone());
+        if queued_turn.is_user_submission()
+            && matches!(state, Some(SessionState::Idle | SessionState::Error { .. }))
+        {
+            if let Some(previous) = self
+                .session_manager
+                .get_session(&session_id)
+                .and_then(|s| s.dialog_turn_ids.last().cloned())
+                .filter(|id| self.active_turns.matches_turn(&session_id, id))
+            {
+                self.host_queue
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .mark_after_terminal_turn(&session_id, &resolved_turn_id, previous);
+            }
+        }
         let mut interrupted_hold = matches!(state, Some(SessionState::Idle))
             && self
                 .session_manager
@@ -1295,11 +1317,13 @@ impl DialogScheduler {
         // A newly submitted user prompt supersedes recoverable interruption even
         // when it arrives through the host queue. Existing queued work still
         // stays parked in try_start_next_queued_locked until that user decision.
-        let interrupted_turn_to_abandon = if interrupted_hold
-            && !matches!(
-                queued_turn.policy.trigger_source,
-                DialogTriggerSource::AgentSession | DialogTriggerSource::ScheduledJob
-            ) {
+        let interrupted_turn_to_abandon = if interrupted_hold && queued_turn.is_user_submission() {
+            // Park work accepted before this explicit user decision while the
+            // same session lock still excludes the retiring outcome handler.
+            self.hold_managed_queue(
+                &session_id,
+                "Turn interrupted; retry this message explicitly",
+            );
             interrupted_hold = false;
             self.session_manager
                 .get_session(&session_id)
@@ -1315,7 +1339,7 @@ impl DialogScheduler {
             > 0;
         let state_fact = if self.active_turns.contains(&session_id)
             || interrupted_hold
-            || (held_user_messages && interrupted_turn_to_abandon.is_none())
+            || (held_user_messages && !queued_turn.is_user_submission())
         {
             DialogSessionStateFact::Processing
         } else {
@@ -2057,16 +2081,21 @@ impl DialogScheduler {
             return Ok(None);
         }
 
-        if self
+        let held_user_messages = self
             .host_queue
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .pending_held(session_id)
-            > 0
-        {
-            return Ok(None);
-        }
-        let Some(next_turn) = self.dequeue_next(session_id) else {
+            > 0;
+        // Blocked entries are stored outside the runnable queue. They must not
+        // deadlock newly accepted user work; background work still waits.
+        let next = if held_user_messages {
+            self.queues
+                .remove_first_matching(session_id, QueuedTurn::is_user_submission)
+        } else {
+            self.dequeue_next(session_id)
+        };
+        let Some(next_turn) = next else {
             return Ok(None);
         };
 
@@ -2519,9 +2548,10 @@ impl DialogScheduler {
                         .remove_by_id(&session_id, &injection_id);
                 }
                 if lifecycle_plan.status == TurnOutcomeStatus::Interrupted {
-                    self.hold_managed_queue(
+                    self.hold_managed_queue_for_outcome(
                         &session_id,
                         "Turn interrupted; recover it before retrying queued messages",
+                        Some(outcome.turn_id()),
                     );
                 }
                 if lifecycle_plan.queue_action == TurnOutcomeQueueAction::ClearQueue {
@@ -2529,7 +2559,25 @@ impl DialogScheduler {
                         "Turn {}, clearing queue: session_id={}",
                         lifecycle_plan.status, session_id
                     );
+                    // Snapshot receipt IDs before taking the physical queue
+                    // lock; admission takes these locks in the opposite order.
+                    let newer_ids = self
+                        .host_queue
+                        .lock()
+                        .unwrap_or_else(|e| e.into_inner())
+                        .admitted_after(&session_id, outcome.turn_id());
+                    let mut newer_user_work = Vec::new();
+                    while let Some(turn) = self.queues.remove_first_matching(&session_id, |turn| {
+                        turn.turn_id
+                            .as_ref()
+                            .is_some_and(|id| newer_ids.contains(id))
+                    }) {
+                        newer_user_work.push(turn);
+                    }
                     let _ = self.clear_queue(&session_id).await;
+                    for turn in newer_user_work.into_iter().rev() {
+                        self.requeue_front(&session_id, turn);
+                    }
                 }
                 (active_turn, active_internal_turn, lifecycle_plan)
             };
@@ -2750,7 +2798,13 @@ impl DialogScheduler {
                         ),
                     }
                 }
-                TurnOutcomeQueueAction::ClearQueue => {}
+                TurnOutcomeQueueAction::ClearQueue => {
+                    // Only user work admitted after the failed turn settled was
+                    // retained above. Previously queued work remains blocked.
+                    if let Err(error) = self.dispatch_next_if_idle(&session_id).await {
+                        warn!("Failed to dispatch newly admitted work after failed turn cleanup: session_id={}, error={}", session_id, error);
+                    }
+                }
             }
         }
     }

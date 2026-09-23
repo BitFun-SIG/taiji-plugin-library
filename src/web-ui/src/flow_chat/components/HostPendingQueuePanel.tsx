@@ -3,7 +3,7 @@ import type { QueuedMessage } from '../types/flow-chat';
 import { useEffect, useId, useState, useSyncExternalStore } from 'react';
 import { useI18n } from '@/infrastructure/i18n';
 import { Button, IconButton, OverflowText, Tooltip } from '@openbitfun/ui';
-import { ArrowUp, ChevronDown, ChevronUp, Info, Pencil, RotateCw, X } from 'lucide-react';
+import { ArrowUp, ChevronDown, ChevronUp, Copy, Info, Pencil, RotateCw, X } from 'lucide-react';
 import './HostPendingQueuePanel.scss';
 import { HostDialogQueue, observeHostQueue, type QueueOutboxRecord, type QueueItem } from '../../../../shared/dialog-queue/HostDialogQueue';
 import {
@@ -89,6 +89,18 @@ export function HostPendingQueuePanel({ queue, onRestore }: { queue: HostDialogQ
           {record.restoreIntent && record.request.action === 'submit'
             ? <IconButton size="xs" aria-label={t('hostQueue.edit')} title={t('hostQueue.edit')} icon={<Pencil size={14} />} disabled={busy} onClick={() => void run(() => restoreDraft(record))} />
             : <IconButton size="xs" aria-label={t('hostQueue.checkRetry')} title={t('hostQueue.checkRetry')} icon={<RotateCw size={14} />} disabled={busy} onClick={() => void run(() => queue.retry(record))} />}
+          {record.request.action === 'submit' && <IconButton size="xs" aria-label={t('hostQueue.copyDraft')} title={t('hostQueue.copyDraft')} icon={<Copy size={14} />} disabled={busy} onClick={() => {
+            if (record.request.action !== 'submit') return;
+            const message = record.request.message;
+            const cache = record.draft as Partial<QueuedMessage> | undefined;
+            // Copy locally even after an owner restart. Keep the unresolved
+            // receipt: copying is neither a cancellation nor a resend.
+            onRestore({ ...cache, id: message.turnId, sessionId: queue.sessionId,
+              content: message.content, displayMessage: message.displayContent,
+              agentType: message.agentType, timestamp: cache?.timestamp ?? Date.now(),
+              status: 'queued', retryCount: cache?.retryCount ?? 0,
+              userMessageMetadata: message.metadata });
+          }} />}
           <IconButton size="xs" aria-label={t('hostQueue.dismiss')} title={t('hostQueue.dismiss')} icon={<X size={14} />} disabled={busy} onClick={() => void run(() => queue.dismiss(record))} />
         </ChatComposerQueueItemActions>
       </ChatComposerQueueItem>)}
