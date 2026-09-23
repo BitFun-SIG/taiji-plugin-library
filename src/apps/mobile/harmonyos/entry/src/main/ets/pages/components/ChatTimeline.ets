@@ -488,7 +488,9 @@ export struct ChatTimeline {
     if (this.historyRestoreIndex >= 0) {
       return;
     }
-    this.historyRestoreIndex = this.firstVisibleIndex;
+    // The load-older row occupies index zero while history is available.
+    // Capture the first transcript row so it remains the viewport anchor.
+    this.historyRestoreIndex = this.firstVisibleIndex + (this.hasMoreMessages ? 1 : 0);
     this.historyRestoreCount = this.historyTimelineItems().length;
     RemoteLogger.info(
       `chat timeline history anchor capture index=${this.historyRestoreIndex} ` +
@@ -505,7 +507,7 @@ export struct ChatTimeline {
     this.historyRestoreIndex = -1;
     this.historyRestoreCount = 0;
     setTimeout(() => {
-      this.listScroller.scrollToIndex(targetIndex, false, ScrollAlign.AUTO);
+      this.listScroller.scrollToIndex(targetIndex, false, ScrollAlign.START);
       RemoteLogger.info(`chat timeline history anchor restore index=${targetIndex}`);
     }, 0);
   }
