@@ -194,7 +194,7 @@ internal fun ConversationTimelineView(
                 top = topInset,
                 bottom = if (bottomInset > 0.dp) bottomInset else 12.dp,
             ),
-            verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.Bottom),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             if (hasLeadingItem) {
                 item(key = "load-older-messages") {

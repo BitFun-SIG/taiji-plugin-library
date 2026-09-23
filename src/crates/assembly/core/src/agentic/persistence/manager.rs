@@ -6570,11 +6570,30 @@ mod tests {
             .await
             .expect("staged revert should save");
 
+        assert!(manager
+            .load_visible_session_turn(workspace.path(), &session_id, "turn-1")
+            .await
+            .expect("hidden lookup")
+            .is_none());
         std::fs::write(
             manager.turn_path(workspace.path(), &session_id, 1),
             "invalid json",
         )
         .unwrap();
+        assert_eq!(
+            manager
+                .load_visible_session_turn(workspace.path(), &session_id, "turn-0")
+                .await
+                .expect("indexed lookup")
+                .expect("visible turn")
+                .turn_id,
+            "turn-0"
+        );
+        assert!(manager
+            .load_visible_session_turn(workspace.path(), &session_id, "unknown")
+            .await
+            .expect("missing lookup")
+            .is_none());
         let (page, next) = manager
             .load_visible_history_turn(workspace.path(), &session_id, None)
             .await

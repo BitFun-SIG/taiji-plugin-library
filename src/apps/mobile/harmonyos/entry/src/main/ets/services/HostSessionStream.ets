@@ -1,3 +1,4 @@
+import { RemoteLogger } from './RemoteLogger';
 import { CommandStatusResponse } from '../model/RemoteModels';
 
 /** Stream id of the host's workspace/session catalog. */
@@ -257,7 +258,10 @@ export class HostSessionStream {
     let pages = 0;
     try {
       while (this.hasOlder && pages < MAX_HISTORY_PAGES_PER_REQUEST && !this.stopped) {
-        const page = await this.read({ before: this.oldest, epoch: this.epoch });
+        const before = this.oldest;
+        RemoteLogger.info(`history page request stream=${this.streamId} before=${before} epoch=${this.epoch}`);
+        const page = await this.read({ before: before, epoch: this.epoch });
+        RemoteLogger.info(`history page received stream=${this.streamId} before=${before} events=${page.events.length} first=${page.events[0]?.seq} hasMore=${page.has_more} epoch=${page.epoch}`);
         if (this.stopped) return;
         if (page.epoch !== this.epoch) {
           await this.gap();
