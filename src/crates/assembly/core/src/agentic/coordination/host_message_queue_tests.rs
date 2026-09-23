@@ -879,7 +879,7 @@ async fn stopped_host_queue_fixture(
     (scheduler, sessions, root, epoch)
 }
 
-async fn process_host_queue_outcome(scheduler: &DialogScheduler, outcome: TurnOutcome) {
+async fn process_host_queue_outcome(scheduler: &Arc<DialogScheduler>, outcome: TurnOutcome) {
     let (tx, rx) = mpsc::unbounded_channel();
     tx.send(("host-queue-session".into(), outcome)).unwrap();
     drop(tx);
@@ -1120,4 +1120,59 @@ fn host_queue_new_prompt_after_error_survives_delayed_failure_cleanup() {
             .cancel_dialog_turn(id, "after-error")
             .await;
     });
+}
+
+#[tokio::test]
+async fn thread_goal_host_queue_promote_activates_once() {
+    let (scheduler, sessions, _, root) = test_scheduler_with_persistence(true);
+    mark_session_processing(&sessions, &root, "host-queue-session", "active-turn").await;
+    scheduler
+        .active_turns
+        .insert("host-queue-session", desktop_active_turn("active-turn"));
+    let epoch = scheduler
+        .manage_host_queue(request(None, Action::List))
+        .await
+        .unwrap()
+        .queue_epoch;
+    let mut goal_message = message("queued-goal");
+    goal_message.content = "/goal finish queued work".into();
+    scheduler
+        .manage_host_queue(request(
+            Some(&epoch),
+            Action::Submit {
+                message: goal_message,
+            },
+        ))
+        .await
+        .unwrap();
+    let promote = request(
+        Some(&epoch),
+        Action::Promote {
+            turn_id: "queued-goal".into(),
+            operation_id: "promote-goal".into(),
+            expected_active_turn_id: Some("active-turn".into()),
+        },
+    );
+    scheduler.manage_host_queue(promote.clone()).await.unwrap();
+    scheduler.manage_host_queue(promote).await.unwrap();
+    let storage = sessions
+        .effective_session_storage_path("host-queue-session")
+        .await
+        .unwrap();
+    let goal = scheduler
+        .coordinator
+        .get_thread_goal("host-queue-session", &storage)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(goal.is_active());
+    assert_eq!(goal.objective, "finish queued work");
+    let injections = scheduler
+        .round_injection_source
+        .take_pending("host-queue-session", "active-turn");
+    assert_eq!(injections.len(), 1);
+    assert_eq!(injections[0].display_content, "/goal finish queued work");
+    assert!(injections[0]
+        .content
+        .contains("<untrusted_objective>\nfinish queued work"));
 }

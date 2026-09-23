@@ -2079,10 +2079,6 @@ async fn init_agentic_system() -> anyhow::Result<(
             ),
         ),
     );
-    event_router.subscribe_internal(
-        "thread_goal_tokens".to_string(),
-        Arc::new(openbitfun_core::agentic::goal_mode::ThreadGoalTokenSubscriber),
-    );
 
     log::info!("Token usage service initialized and subscriber registered");
 
