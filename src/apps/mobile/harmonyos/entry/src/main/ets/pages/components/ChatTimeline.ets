@@ -122,8 +122,9 @@ export struct ChatTimeline {
   private userScrollActive: boolean = false;
   private historyTouchActive: boolean = false;
   private firstVisibleIndex: number = 0;
-  private historyRestoreIndex: number = -1;
-  private historyRestoreCount: number = 0;
+  private historyRestoreKey: string = '';
+  private historyRestoreTop: number = 0;
+  private readonly itemTopByKey: Map<string, number> = new Map<string, number>();
   // Whether new content should pull the viewport down with it. True until the
   // user scrolls up to read back through the transcript: at that point taking
   // the viewport away from them would be worse than letting the reply grow off
@@ -285,6 +286,9 @@ export struct ChatTimeline {
               }
               .onAppear(() => {
                 this.logRenderedItem(repeatItem.item);
+              })
+              .onAreaChange((_oldArea: Area, newArea: Area) => {
+                this.itemTopByKey.set(ChatTimelineRevisionTracker.itemKey(repeatItem.item), this.areaPosition(newArea.position));
               })
             }
           })
@@ -485,30 +489,33 @@ export struct ChatTimeline {
   }
 
   private captureHistoryAnchor(): void {
-    if (this.historyRestoreIndex >= 0) {
-      return;
-    }
-    // The load-older row occupies index zero while history is available.
-    // Capture the first transcript row so it remains the viewport anchor.
-    this.historyRestoreIndex = this.firstVisibleIndex + (this.hasMoreMessages ? 1 : 0);
-    this.historyRestoreCount = this.historyTimelineItems().length;
-    RemoteLogger.info(
-      `chat timeline history anchor capture index=${this.historyRestoreIndex} ` +
-      `count=${this.historyRestoreCount}`
-    );
+    if (this.historyRestoreKey.length > 0) return;
+    const history = this.historyTimelineItems();
+    const index = Math.max(0, this.firstVisibleIndex - (this.hasMoreMessages ? 1 : 0));
+    const item = history[index];
+    if (!item) return;
+    const key = ChatTimelineRevisionTracker.itemKey(item);
+    const top = this.itemTopByKey.get(key);
+    if (top === undefined) return;
+    this.historyRestoreKey = key;
+    this.historyRestoreTop = top;
+    RemoteLogger.info(`chat timeline history anchor capture key=${key} top=${top}`);
   }
 
   private restoreHistoryAnchorIfNeeded(): void {
-    if (this.historyRestoreIndex < 0 || this.historyLoading) {
-      return;
-    }
-    const inserted = this.historyTimelineItems().length - this.historyRestoreCount;
-    const targetIndex = this.historyRestoreIndex + Math.max(inserted, 0);
-    this.historyRestoreIndex = -1;
-    this.historyRestoreCount = 0;
+    if (this.historyRestoreKey.length === 0 || this.historyLoading) return;
+    const key = this.historyRestoreKey;
+    const expectedTop = this.historyRestoreTop;
     setTimeout(() => {
-      this.listScroller.scrollToIndex(targetIndex, false, ScrollAlign.START);
-      RemoteLogger.info(`chat timeline history anchor restore index=${targetIndex}`);
+      const actualTop = this.itemTopByKey.get(key);
+      if (actualTop === undefined) return;
+      const delta = actualTop - expectedTop;
+      this.historyRestoreKey = '';
+      this.historyRestoreTop = 0;
+      if (Math.abs(delta) > 0.5) {
+        this.listScroller.scrollBy(0, delta);
+        RemoteLogger.info(`chat timeline history anchor restore key=${key} delta=${delta}`);
+      }
     }, 0);
   }
 
@@ -542,6 +549,11 @@ export struct ChatTimeline {
   private isUserScrollSource(source: ScrollSource): boolean {
     return source === ScrollSource.DRAG || source === ScrollSource.FLING ||
       source === ScrollSource.EDGE_EFFECT || source === ScrollSource.OTHER_USER_INPUT;
+  }
+
+  private areaPosition(position: Object): number {
+    const value = (position as Record<string, Object>)?.y;
+    return this.areaLength(value === undefined ? 0 : value);
   }
 
   private areaLength(value: Object): number {
