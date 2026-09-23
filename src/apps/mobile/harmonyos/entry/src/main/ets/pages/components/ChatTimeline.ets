@@ -352,6 +352,7 @@ export struct ChatTimeline {
       // Keep short transcripts at the content start. Active turns and explicit
       // follow-to-bottom calls still place streaming content at the tail.
       .stackFromEnd(false)
+      .id('chat-timeline-list')
       // Keeps the read position when older messages are prepended above.
       .maintainVisibleContentPosition(false)
       .edgeEffect(EdgeEffect.Spring, { alwaysEnabled: true })
@@ -394,6 +395,7 @@ export struct ChatTimeline {
             .fontSize(18)
             .fontColor([INK])
         }
+        .id('chat-timeline-jump')
         .width(42)
         .height(42)
         .backgroundColor(CARD)
@@ -574,7 +576,14 @@ export struct ChatTimeline {
   }
 
   private requestFollowToBottom(reason: string): void {
-    if (this.historyRestoreKey || this.historyLoading || !this.stickToBottom || this.followTimerId !== 0) {
+    // Explicit navigation supersedes a pending history-position restoration.
+    // Jump now even if the host response is still pending; ordinary revisions
+    // resume tail following when historyLoading clears, including on failure.
+    if (reason === 'jump-button') {
+      this.cancelHistoryAnchor();
+    }
+    if (this.historyRestoreKey || (this.historyLoading && reason !== 'jump-button') ||
+      !this.stickToBottom || this.followTimerId !== 0) {
       return;
     }
     this.followTimerId = setTimeout(() => {

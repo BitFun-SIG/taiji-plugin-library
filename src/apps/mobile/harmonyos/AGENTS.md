@@ -90,6 +90,14 @@ fake RPC: send must clear the input before pressing **Acknowledge**, and a
 **Next draft** entered while pending must survive acknowledgment. Exercise both
 compact and wide layouts and return to normal `EntryAbility` afterward.
 
+For history loading and explicit jump-to-bottom navigation, install the debug
+HAP and run `python3 tools/check-history-scroll.py --hdc "$HDC"`. The
+`history-scroll` preview holds a mock history response while the production
+ChatTimeline handles the jump. It covers success/failure at wide and compact
+content widths with a live resize and restores the normal App afterward.
+This is native controller UI coverage, not remote transport or physical fold
+coverage; exercise those separately when their behavior changes.
+
 For durable transcript projection, run
 `node --test tools/tests/session-record.test.cjs tools/tests/host-stream.test.cjs tools/tests/streaming-markdown.test.cjs`.
 The `durable-timeline` native preview uses the
