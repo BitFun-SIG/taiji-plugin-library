@@ -4,9 +4,9 @@
 //! `create_goal`, `update_goal`, and `get_goal` tools. Runtime auto-continues active
 //! goals after idle turns using internal continuation prompts.
 
-mod token_subscriber;
+mod token_accounting;
 
-pub use token_subscriber::ThreadGoalTokenSubscriber;
+pub(crate) use token_accounting::record_thread_goal_token_usage;
 
 use crate::agentic::core::{InternalReminderKind, Message};
 use crate::agentic::session::SessionManager;
