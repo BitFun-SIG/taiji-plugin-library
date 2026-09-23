@@ -412,3 +412,74 @@ fn repeated_goal_steering_preserves_unaccounted_tokens_and_budget() {
     assert_eq!(active.tokens_used, 100);
     assert_eq!(active.status, ThreadGoalStatus::BudgetLimited);
 }
+
+#[test]
+fn budget_limit_schedules_one_wrap_up_and_then_stops() {
+    let runtime = ThreadGoalRuntime::new();
+    let mut limited = goal(ThreadGoalStatus::BudgetLimited);
+    limited.token_budget = Some(10);
+    limited.tokens_used = 12;
+    let first = runtime.continuation_after_turn(
+        limited,
+        ThreadGoalContinuationFacts {
+            turn_id: "work",
+            turn_tokens: 0,
+            turn_completed: true,
+            now_epoch_seconds: 5,
+        },
+    );
+    assert!(first.plan.is_some());
+    let limited = first.goal_to_persist.unwrap();
+    runtime.mark_turn_started("wrap-up", Some(&limited));
+    runtime.record_round_billable_tokens("wrap-up", 2);
+    let second = runtime.continuation_after_turn(
+        limited,
+        ThreadGoalContinuationFacts {
+            turn_id: "wrap-up",
+            turn_tokens: 2,
+            turn_completed: true,
+            now_epoch_seconds: 6,
+        },
+    );
+    assert!(second.plan.is_none());
+    assert!(!second.scheduled_auto_continuation);
+    assert_eq!(second.goal_to_persist.unwrap().tokens_used, 14);
+}
+
+#[test]
+fn stale_turn_clear_does_not_disable_current_accounting() {
+    let runtime = ThreadGoalRuntime::new();
+    let active = goal(ThreadGoalStatus::Active);
+    runtime.mark_turn_started("new-turn", Some(&active));
+    runtime.clear_active_goal(Some("old-turn"));
+    runtime.record_round_billable_tokens("new-turn", 17);
+    assert_eq!(
+        runtime.current_turn_usage(),
+        Some(("new-turn".to_string(), 17))
+    );
+    runtime.clear_active_goal(None);
+    runtime.record_round_billable_tokens("new-turn", 12);
+    assert_eq!(runtime.current_turn_usage(), None);
+    assert_eq!(runtime.turn_cumulative_billable_tokens("new-turn"), 17);
+}
+
+#[test]
+fn resumed_blocked_goal_gets_a_fresh_continuation_window_without_resetting_usage() {
+    let mut blocked = goal(ThreadGoalStatus::Blocked);
+    blocked.auto_continuation_count = MAX_THREAD_GOAL_AUTO_CONTINUATIONS;
+    blocked.tokens_used = 45;
+    let result = build_set_thread_goal_result(SetThreadGoalRequest {
+        session_id: "s1".into(),
+        existing: Some(blocked),
+        objective: None,
+        status: Some(ThreadGoalStatus::Active),
+        token_budget: None,
+        replace_existing: false,
+        now_epoch_seconds: 5,
+        new_goal_id: "unused".into(),
+    })
+    .unwrap();
+    assert_eq!(result.goal.auto_continuation_count, 0);
+    assert_eq!(result.goal.tokens_used, 45);
+    assert_eq!(result.goal.goal_id, "g1");
+}

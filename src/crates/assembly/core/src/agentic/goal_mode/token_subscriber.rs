@@ -40,7 +40,7 @@ impl EventSubscriber for ThreadGoalTokenSubscriber {
         };
 
         coordinator
-            .thread_goal_runtime()
+            .thread_goal_runtime(session_id)
             .record_round_billable_tokens(turn_id, billable);
 
         debug!(

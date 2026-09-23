@@ -466,6 +466,9 @@ pub fn build_set_thread_goal_result(
             )));
         };
         if let Some(status) = request.status {
+            if status == ThreadGoalStatus::Active && existing.status == ThreadGoalStatus::Blocked {
+                existing.auto_continuation_count = 0;
+            }
             existing.status = status;
         }
         if let Some(token_budget) = request.token_budget {
@@ -574,14 +577,28 @@ impl ThreadGoalRuntime {
             .unwrap_or(0)
     }
 
+    pub fn current_turn_usage(&self) -> Option<(String, usize)> {
+        let accounting = lock_or_recover(&self.accounting);
+        accounting
+            .turn
+            .as_ref()
+            .filter(|turn| turn.active_goal_id.is_some())
+            .map(|turn| (turn.turn_id.clone(), turn.cumulative_billable))
+    }
+
     pub fn clear_active_goal(&self, turn_id: Option<&str>) {
         let mut accounting = lock_or_recover(&self.accounting);
-        if let Some(turn_id) = turn_id {
-            if let Some(turn) = accounting.turn.as_mut() {
-                if turn.turn_id == turn_id {
-                    turn.active_goal_id = None;
-                }
+        if let Some(expected) = turn_id {
+            if accounting
+                .turn
+                .as_ref()
+                .is_none_or(|turn| turn.turn_id != expected)
+            {
+                return;
             }
+        }
+        if let Some(turn) = accounting.turn.as_mut() {
+            turn.active_goal_id = None;
         }
         accounting.wall_clock.clear_active_goal();
     }
@@ -619,31 +636,17 @@ impl ThreadGoalRuntime {
         mut goal: ThreadGoal,
         facts: ThreadGoalContinuationFacts<'_>,
     ) -> ThreadGoalContinuationOutcome {
-        if goal.auto_continuation_count >= MAX_THREAD_GOAL_AUTO_CONTINUATIONS {
-            if goal.status == ThreadGoalStatus::Active {
-                goal.status = ThreadGoalStatus::Blocked;
-                goal.updated_at = facts.now_epoch_seconds;
-                return ThreadGoalContinuationOutcome {
-                    goal_to_persist: Some(goal),
-                    plan: None,
-                    reached_auto_continuation_limit: true,
-                    scheduled_auto_continuation: false,
-                };
-            }
-            return ThreadGoalContinuationOutcome::none();
-        }
-
         if !facts.turn_completed {
             return ThreadGoalContinuationOutcome::none();
         }
 
-        let became_budget_limited = self.account_turn_tokens(
+        self.account_turn_tokens(
             facts.turn_id,
             facts.turn_tokens,
             &mut goal,
             facts.now_epoch_seconds,
         );
-        if became_budget_limited {
+        if goal.status == ThreadGoalStatus::BudgetLimited {
             if self.mark_budget_limit_reported(goal.goal_id.as_str()) {
                 let plan = build_thread_goal_continuation_plan(&goal);
                 return ThreadGoalContinuationOutcome {
@@ -668,6 +671,20 @@ impl ThreadGoalRuntime {
                 reached_auto_continuation_limit: false,
                 scheduled_auto_continuation: false,
             };
+        }
+
+        if goal.auto_continuation_count >= MAX_THREAD_GOAL_AUTO_CONTINUATIONS {
+            if goal.status == ThreadGoalStatus::Active {
+                goal.status = ThreadGoalStatus::Blocked;
+                goal.updated_at = facts.now_epoch_seconds;
+                return ThreadGoalContinuationOutcome {
+                    goal_to_persist: Some(goal),
+                    plan: None,
+                    reached_auto_continuation_limit: true,
+                    scheduled_auto_continuation: false,
+                };
+            }
+            return ThreadGoalContinuationOutcome::none();
         }
 
         goal.auto_continuation_count = goal.auto_continuation_count.saturating_add(1);

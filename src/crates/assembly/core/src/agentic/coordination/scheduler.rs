@@ -622,7 +622,7 @@ impl DialogScheduler {
             .map_err(|error| error.to_string())?
         {
             self.coordinator
-                .thread_goal_runtime()
+                .thread_goal_runtime(session_id)
                 .mark_turn_started(turn_id, Some(&goal));
             injection.content = format!(
                 "{}\n\n{}",
@@ -4719,6 +4719,76 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn thread_goal_sessions_keep_independent_usage_and_terminal_counts() {
+        let (scheduler, sessions, _, root) = test_scheduler_with_persistence(true);
+        for (session, turn) in [("goal-a", "turn-a"), ("goal-b", "turn-b")] {
+            mark_session_processing(&sessions, &root, session, turn).await;
+            let storage = sessions
+                .effective_session_storage_path(session)
+                .await
+                .unwrap();
+            scheduler
+                .coordinator
+                .create_thread_goal(session, &storage, "finish work".into(), Some(1000))
+                .await
+                .unwrap();
+            scheduler
+                .coordinator
+                .thread_goal_runtime(session)
+                .record_round_billable_tokens(turn, 25);
+        }
+        let storage_a = sessions
+            .effective_session_storage_path("goal-a")
+            .await
+            .unwrap();
+        let done = scheduler
+            .coordinator
+            .update_thread_goal_status(
+                "goal-a",
+                &storage_a,
+                ThreadGoalStatus::Complete,
+                Some("turn-a"),
+            )
+            .await
+            .unwrap();
+        assert_eq!(done.tokens_used, 25);
+        assert_eq!(done.status, ThreadGoalStatus::Complete);
+        scheduler
+            .coordinator
+            .thread_goal_runtime("goal-b")
+            .record_round_billable_tokens("turn-b", 12);
+        let storage_b = sessions
+            .effective_session_storage_path("goal-b")
+            .await
+            .unwrap();
+        let other = scheduler
+            .coordinator
+            .get_thread_goal("goal-b", &storage_b)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(other.tokens_used, 37);
+        assert_eq!(other.status, ThreadGoalStatus::Active);
+        let repeated = scheduler
+            .coordinator
+            .get_thread_goal("goal-b", &storage_b)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            repeated.tokens_used, 37,
+            "repeated reads must not charge twice"
+        );
+        let paused = scheduler
+            .coordinator
+            .set_thread_goal_status("goal-b", &storage_b, ThreadGoalStatus::Paused)
+            .await
+            .unwrap();
+        assert_eq!(paused.tokens_used, 37);
+        assert_eq!(paused.status, ThreadGoalStatus::Paused);
+    }
+
+    #[tokio::test]
     async fn thread_goal_plain_prompt_steering_activates_without_an_extra_turn() {
         let (scheduler, session_manager, _, root) = test_scheduler_with_persistence(true);
         let session_id = "goal-steering-session";
@@ -4778,12 +4848,12 @@ mod tests {
         assert!(!scheduler.queues.has_items(session_id));
         scheduler
             .coordinator
-            .thread_goal_runtime()
+            .thread_goal_runtime(session_id)
             .record_round_billable_tokens(turn_id, 12);
         assert_eq!(
             scheduler
                 .coordinator
-                .thread_goal_runtime()
+                .thread_goal_runtime(session_id)
                 .turn_cumulative_billable_tokens(turn_id),
             12
         );

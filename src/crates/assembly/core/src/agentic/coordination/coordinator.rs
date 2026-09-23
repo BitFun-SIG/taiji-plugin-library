@@ -1260,7 +1260,7 @@ pub struct ConversationCoordinator {
     /// Recoverable stop intent observed by the spawned execution owner when
     /// cancellation reaches its terminal persistence boundary.
     interrupted_turn_intents: Arc<DashMap<String, InterruptedTurnIntentState>>,
-    thread_goal_runtime: Arc<ThreadGoalRuntime>,
+    thread_goal_runtimes: dashmap::DashMap<String, Arc<ThreadGoalRuntime>>,
     terminal_port: OnceLock<Arc<dyn TerminalPort>>,
     remote_exec_port: OnceLock<Arc<dyn RemoteExecPort>>,
     hook_registry: openbitfun_agent_runtime::native_hooks::RuntimeHookRegistry,
@@ -2153,7 +2153,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             turn_settlements: Arc::new(TurnSettlementTracker::default()),
             manual_compaction_controls: Arc::new(DashMap::new()),
             interrupted_turn_intents: Arc::new(DashMap::new()),
-            thread_goal_runtime: Arc::new(ThreadGoalRuntime::new()),
+            thread_goal_runtimes: dashmap::DashMap::new(),
             terminal_port: OnceLock::new(),
             remote_exec_port: OnceLock::new(),
             hook_registry: crate::native_hooks::new_runtime_hook_registry(),
@@ -2419,8 +2419,28 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         }
     }
 
-    pub fn thread_goal_runtime(&self) -> Arc<ThreadGoalRuntime> {
-        Arc::clone(&self.thread_goal_runtime)
+    pub fn thread_goal_runtime(&self, session_id: &str) -> Arc<ThreadGoalRuntime> {
+        Arc::clone(
+            self.thread_goal_runtimes
+                .entry(session_id.to_string())
+                .or_insert_with(|| Arc::new(ThreadGoalRuntime::new()))
+                .value(),
+        )
+    }
+
+    fn mark_session_goal_active(&self, session_id: &str, goal: &ThreadGoal) {
+        let turn_id = self
+            .session_manager
+            .get_session(session_id)
+            .and_then(|session| match session.state {
+                SessionState::Processing {
+                    current_turn_id, ..
+                } => Some(current_turn_id),
+                _ => None,
+            })
+            .unwrap_or_default();
+        self.thread_goal_runtime(session_id)
+            .mark_turn_started(&turn_id, Some(goal));
     }
 
     pub fn set_terminal_port(&self, terminal_port: Arc<dyn TerminalPort>) {
@@ -4852,6 +4872,46 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         }
     }
 
+    async fn settle_thread_goal_usage(
+        &self,
+        session_id: &str,
+        storage_path: &Path,
+    ) -> OpenBitFunResult<Option<ThreadGoal>> {
+        let Some(mut goal) = self
+            .thread_goal_store()
+            .get_thread_goal(session_id, storage_path)
+            .await?
+        else {
+            return Ok(None);
+        };
+        let Some(runtime) = self
+            .thread_goal_runtimes
+            .get(session_id)
+            .map(|entry| Arc::clone(entry.value()))
+        else {
+            return Ok(Some(goal));
+        };
+        if let Some((turn_id, tokens)) = runtime.current_turn_usage() {
+            let previous = goal.clone();
+            runtime.account_turn_tokens(
+                &turn_id,
+                tokens,
+                &mut goal,
+                crate::agentic::goal_mode::now_epoch_seconds(),
+            );
+            if previous != goal {
+                self.thread_goal_store()
+                    .persist_thread_goal(session_id, storage_path, Some(goal.clone()))
+                    .await?;
+                if previous.status != goal.status {
+                    self.emit_thread_goal_updated(session_id, Some(goal.clone()))
+                        .await;
+                }
+            }
+        }
+        Ok(Some(goal))
+    }
+
     pub async fn get_thread_goal(
         &self,
         session_id: &str,
@@ -4860,8 +4920,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         let storage_path = self
             .resolve_thread_goal_storage_path(session_id, workspace_path)
             .await?;
-        self.thread_goal_store()
-            .get_thread_goal(session_id, storage_path.as_path())
+        self.settle_thread_goal_usage(session_id, storage_path.as_path())
             .await
     }
 
@@ -4873,7 +4932,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         let storage_path = self
             .resolve_thread_goal_storage_path(session_id, workspace_path)
             .await?;
-        self.thread_goal_runtime.clear_active_goal(None);
+        self.thread_goal_runtime(session_id).clear_active_goal(None);
         self.thread_goal_store()
             .clear_thread_goal(session_id, storage_path.as_path())
             .await?;
@@ -4893,7 +4952,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .thread_goal_store()
             .create_thread_goal(session_id, storage_path.as_path(), objective, token_budget)
             .await?;
-        self.thread_goal_runtime.mark_turn_started("", Some(&goal));
+        self.mark_session_goal_active(session_id, &goal);
         self.emit_thread_goal_updated(session_id, Some(goal.clone()))
             .await;
         Ok(goal)
@@ -4934,8 +4993,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .await?;
         let objective_changed = existing.objective != result.goal.objective;
         if result.goal.is_active() {
-            self.thread_goal_runtime
-                .mark_turn_started("", Some(&result.goal));
+            self.mark_session_goal_active(session_id, &result.goal);
         }
         self.emit_thread_goal_updated(session_id, Some(result.goal.clone()))
             .await;
@@ -4979,8 +5037,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .map(|goal| goal.objective != result.goal.objective)
             .unwrap_or(true);
         if result.goal.is_active() {
-            self.thread_goal_runtime
-                .mark_turn_started("", Some(&result.goal));
+            self.mark_session_goal_active(session_id, &result.goal);
         }
         self.emit_thread_goal_updated(session_id, Some(result.goal.clone()))
             .await;
@@ -5096,8 +5153,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
     ) -> OpenBitFunResult<ThreadGoal> {
         let storage_path = self.require_main_session_storage_path(session_id).await?;
         let previous = self
-            .thread_goal_store()
-            .get_thread_goal(session_id, storage_path.as_path())
+            .settle_thread_goal_usage(session_id, storage_path.as_path())
             .await?;
         let resuming = status == ThreadGoalStatus::Active
             && previous
@@ -5115,10 +5171,9 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             )
             .await?;
         if !result.goal.is_active() {
-            self.thread_goal_runtime.clear_active_goal(None);
+            self.thread_goal_runtime(session_id).clear_active_goal(None);
         } else if resuming {
-            self.thread_goal_runtime
-                .mark_turn_started("", Some(&result.goal));
+            self.mark_session_goal_active(session_id, &result.goal);
         }
         self.emit_thread_goal_updated(session_id, Some(result.goal.clone()))
             .await;
@@ -5241,7 +5296,8 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         let goal = self
             .set_thread_goal_status(session_id, workspace_path, status)
             .await?;
-        self.thread_goal_runtime.clear_active_goal(turn_id);
+        self.thread_goal_runtime(session_id)
+            .clear_active_goal(turn_id);
         Ok(goal)
     }
 
@@ -5363,7 +5419,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         };
 
         let turn_tokens = self
-            .thread_goal_runtime
+            .thread_goal_runtime(session_id)
             .turn_cumulative_billable_tokens(source_turn_id);
 
         let goal_before = self
@@ -5373,7 +5429,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
 
         let plan = maybe_build_continuation_after_turn(
             &self.thread_goal_store(),
-            self.thread_goal_runtime.as_ref(),
+            self.thread_goal_runtime(session_id).as_ref(),
             session_id,
             storage_path.as_path(),
             source_turn_id,
@@ -6461,7 +6517,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         .await;
         if let Ok(Some(goal)) = self.load_active_thread_goal(&session_id).await {
             if !should_skip_goal_for_turn(&original_user_input, user_message_metadata.as_ref()) {
-                self.thread_goal_runtime
+                self.thread_goal_runtime(&session_id)
                     .mark_turn_started(&turn_id, Some(&goal));
             }
         }
@@ -8104,6 +8160,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         self.session_manager
             .delete_session_locked(workspace_path, session_id)
             .await?;
+        self.thread_goal_runtimes.remove(session_id);
         self.background_subagent_outcomes
             .delete_session_references(session_id)
             .await?;

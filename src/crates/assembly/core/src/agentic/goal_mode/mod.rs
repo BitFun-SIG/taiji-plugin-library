@@ -100,7 +100,7 @@ impl<'a> ThreadGoalStore<'a> {
         Ok(thread_goal_from_custom_metadata(metadata.as_ref()))
     }
 
-    async fn persist_thread_goal(
+    pub(crate) async fn persist_thread_goal(
         &self,
         session_id: &str,
         _workspace_path: &Path,
