@@ -505,7 +505,7 @@ export struct ChatTimeline {
     this.historyRestoreIndex = -1;
     this.historyRestoreCount = 0;
     setTimeout(() => {
-      this.listScroller.scrollToIndex(targetIndex, false, ScrollAlign.START);
+      this.listScroller.scrollToIndex(targetIndex, false, ScrollAlign.AUTO);
       RemoteLogger.info(`chat timeline history anchor restore index=${targetIndex}`);
     }, 0);
   }
