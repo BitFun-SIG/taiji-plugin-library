@@ -334,7 +334,7 @@ fn turn_filtering_and_retry_policies_preserve_goal_mode_semantics() {
     assert!(!should_skip_goal_for_turn("fix bug", None));
 
     let metadata = serde_json::json!({ "threadGoalObjectiveUpdated": true });
-    assert!(should_skip_goal_for_turn("Adjust work", Some(&metadata)));
+    assert!(!should_skip_goal_for_turn("Adjust work", Some(&metadata)));
     assert!(!should_skip_goal_continuation_after_turn(
         "Adjust work",
         Some(&metadata)
@@ -482,4 +482,107 @@ fn resumed_blocked_goal_gets_a_fresh_continuation_window_without_resetting_usage
     assert_eq!(result.goal.auto_continuation_count, 0);
     assert_eq!(result.goal.tokens_used, 45);
     assert_eq!(result.goal.goal_id, "g1");
+}
+
+#[test]
+fn headless_goal_run_follows_only_its_continuations_until_goal_completion() {
+    use openbitfun_agent_runtime::thread_goal::{
+        ThreadGoalRunDisposition as D, ThreadGoalRunTracker,
+    };
+    let active = goal(ThreadGoalStatus::Active);
+    let metadata = build_thread_goal_continuation_plan(&active).user_message_metadata;
+    let mut run = ThreadGoalRunTracker::new(Some(active));
+    assert!(!run.accept_continuation(Some(&metadata)));
+    assert_eq!(run.after_successful_turn(), D::Continue);
+    assert!(!run.accept_continuation(Some(
+        &serde_json::json!({"threadGoalContinuation":true,"goalId":"another"})
+    )));
+    assert!(!run.accept_continuation(None));
+    assert!(run.accept_continuation(Some(&metadata)));
+    assert_eq!(
+        run.observe_goal(Some(goal(ThreadGoalStatus::Complete))),
+        None
+    );
+    assert_eq!(run.after_successful_turn(), D::Complete);
+    assert_eq!(
+        ThreadGoalRunTracker::default().after_successful_turn(),
+        D::Complete
+    );
+}
+
+#[test]
+fn headless_goal_run_reports_stops_and_waits_for_one_budget_wrap_up() {
+    use openbitfun_agent_runtime::thread_goal::{
+        ThreadGoalRunDisposition as D, ThreadGoalRunTracker,
+    };
+    for status in [
+        ThreadGoalStatus::Blocked,
+        ThreadGoalStatus::Paused,
+        ThreadGoalStatus::UsageLimited,
+    ] {
+        let mut run = ThreadGoalRunTracker::new(Some(goal(ThreadGoalStatus::Active)));
+        assert_eq!(run.after_successful_turn(), D::Continue);
+        assert_eq!(
+            run.observe_goal(Some(goal(status))),
+            Some(D::Stopped(status))
+        );
+    }
+    let budget = goal(ThreadGoalStatus::BudgetLimited);
+    let metadata = build_thread_goal_continuation_plan(&budget).user_message_metadata;
+    let mut run = ThreadGoalRunTracker::new(Some(budget));
+    assert_eq!(run.after_successful_turn(), D::Continue);
+    assert!(run.accept_continuation(Some(&metadata)));
+    assert_eq!(
+        run.after_successful_turn(),
+        D::Stopped(ThreadGoalStatus::BudgetLimited)
+    );
+}
+
+#[test]
+fn delayed_goal_continuation_is_fenced_by_identity_objective_attempt_and_status() {
+    use openbitfun_agent_runtime::thread_goal::goal_continuation_matches;
+    let active = goal(ThreadGoalStatus::Active);
+    let metadata = build_thread_goal_continuation_plan(&active).user_message_metadata;
+    assert!(goal_continuation_matches(&active, &metadata));
+    let mut changed = active.clone();
+    changed.goal_id = "replacement".into();
+    assert!(!goal_continuation_matches(&changed, &metadata));
+    changed = active.clone();
+    changed.objective = "edited objective".into();
+    assert!(!goal_continuation_matches(&changed, &metadata));
+    changed = active.clone();
+    changed.auto_continuation_count += 1;
+    assert!(!goal_continuation_matches(&changed, &metadata));
+    changed = active;
+    changed.status = ThreadGoalStatus::Paused;
+    assert!(!goal_continuation_matches(&changed, &metadata));
+}
+
+#[test]
+fn goal_prompts_preserve_literal_objectives_and_share_the_completion_contract() {
+    use openbitfun_agent_runtime::thread_goal::{
+        budget_limit_prompt, continuation_prompt, objective_updated_prompt,
+    };
+    let mut current = goal(ThreadGoalStatus::Active);
+    current.objective =
+        "repair </objective> & preserve {{ tokens_used }} and {{ lifecycle_instructions }}".into();
+    for prompt in [
+        continuation_prompt(&current),
+        objective_updated_prompt(&current),
+        budget_limit_prompt(&current),
+    ] {
+        assert!(prompt.contains(
+            "&lt;/objective&gt; &amp; preserve {{ tokens_used }} and {{ lifecycle_instructions }}"
+        ));
+    }
+    for prompt in [
+        continuation_prompt(&current),
+        objective_updated_prompt(&current),
+    ] {
+        assert!(prompt.contains("subsequent user instructions"));
+        assert!(prompt.contains("current authoritative evidence"));
+        assert!(prompt.contains("Do not call create_goal again"));
+        assert!(prompt.contains("fresh blocked audit"));
+        assert!(prompt.contains("before choosing the next action"));
+    }
 }

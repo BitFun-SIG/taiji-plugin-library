@@ -9,6 +9,7 @@ use std::fmt;
 use std::sync::{Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
+const LIFECYCLE_PROMPT: &str = include_str!("thread_goal/templates/lifecycle.md");
 const CONTINUATION_PROMPT_TEMPLATE: &str = include_str!("thread_goal/templates/continuation.md");
 const BUDGET_LIMIT_PROMPT_TEMPLATE: &str = include_str!("thread_goal/templates/budget_limit.md");
 const OBJECTIVE_UPDATED_PROMPT_TEMPLATE: &str =
@@ -68,17 +69,7 @@ pub fn should_skip_goal_for_turn(
     user_input: &str,
     user_message_metadata: Option<&serde_json::Value>,
 ) -> bool {
-    if should_skip_goal_turn_accounting(user_input, user_message_metadata) {
-        return true;
-    }
-    if user_message_metadata
-        .and_then(|metadata| metadata.get("threadGoalObjectiveUpdated"))
-        .and_then(|value| value.as_bool())
-        .unwrap_or(false)
-    {
-        return true;
-    }
-    false
+    should_skip_goal_turn_accounting(user_input, user_message_metadata)
 }
 
 /// Inputs that must not trigger another auto-continuation after the turn ends.
@@ -123,10 +114,25 @@ fn escape_xml_text(input: &str) -> String {
 }
 
 fn render_template(template: &str, replacements: &[(&str, &str)]) -> String {
-    let mut rendered = template.to_string();
-    for (key, value) in replacements {
-        rendered = rendered.replace(&format!("{{{{ {key} }}}}"), value);
+    // Substitute only template text, never placeholders inside user-provided data.
+    let mut rendered = String::new();
+    let mut rest = template;
+    while let Some(start) = rest.find("{{ ") {
+        rendered.push_str(&rest[..start]);
+        let candidate = &rest[start..];
+        let Some(end) = candidate.find(" }}") else {
+            rendered.push_str(candidate);
+            return rendered;
+        };
+        let key = &candidate[3..end];
+        let placeholder_end = end + 3;
+        match replacements.iter().find(|(name, _)| *name == key) {
+            Some((_, value)) => rendered.push_str(value),
+            None => rendered.push_str(&candidate[..placeholder_end]),
+        }
+        rest = &candidate[placeholder_end..];
     }
+    rendered.push_str(rest);
     rendered
 }
 
@@ -142,6 +148,7 @@ pub fn continuation_prompt(goal: &ThreadGoal) -> String {
     render_template(
         CONTINUATION_PROMPT_TEMPLATE,
         &[
+            ("lifecycle_instructions", LIFECYCLE_PROMPT),
             ("objective", &escape_xml_text(goal.objective.trim())),
             ("tokens_used", &goal.tokens_used.to_string()),
             ("token_budget", token_budget.as_str()),
@@ -158,6 +165,7 @@ pub fn budget_limit_prompt(goal: &ThreadGoal) -> String {
     render_template(
         BUDGET_LIMIT_PROMPT_TEMPLATE,
         &[
+            ("lifecycle_instructions", LIFECYCLE_PROMPT),
             ("objective", &escape_xml_text(goal.objective.trim())),
             ("tokens_used", &goal.tokens_used.to_string()),
             ("time_used_seconds", &goal.time_used_seconds.to_string()),
@@ -178,6 +186,7 @@ pub fn objective_updated_prompt(goal: &ThreadGoal) -> String {
     render_template(
         OBJECTIVE_UPDATED_PROMPT_TEMPLATE,
         &[
+            ("lifecycle_instructions", LIFECYCLE_PROMPT),
             ("objective", &escape_xml_text(goal.objective.trim())),
             ("tokens_used", &goal.tokens_used.to_string()),
             ("token_budget", token_budget.as_str()),
@@ -778,4 +787,94 @@ fn lock_or_recover<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     mutex
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+/// Tracks a goal across turn boundaries for hosts whose lifetime is one job.
+/// Completion of a dialog turn is not completion of its active goal.
+#[derive(Debug, Default)]
+pub struct ThreadGoalRunTracker {
+    goal: Option<ThreadGoal>,
+    waiting: bool,
+    budget_wrap_up: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ThreadGoalRunDisposition {
+    Continue,
+    Complete,
+    Stopped(ThreadGoalStatus),
+}
+
+impl ThreadGoalRunTracker {
+    pub fn new(goal: Option<ThreadGoal>) -> Self {
+        Self {
+            goal,
+            ..Self::default()
+        }
+    }
+
+    pub fn observe_goal(&mut self, goal: Option<ThreadGoal>) -> Option<ThreadGoalRunDisposition> {
+        self.goal = goal;
+        if self.waiting && self.goal.as_ref().is_none_or(|goal| !goal.is_active()) {
+            Some(self.terminal_disposition())
+        } else {
+            None
+        }
+    }
+
+    pub fn accept_continuation(&mut self, metadata: Option<&serde_json::Value>) -> bool {
+        let Some(goal) = self.goal.as_ref() else {
+            return false;
+        };
+        if !self.waiting
+            || !goal.is_active()
+            || !metadata.is_some_and(|metadata| {
+                ["threadGoalContinuation", "threadGoalObjectiveUpdated"]
+                    .iter()
+                    .any(|key| {
+                        metadata.get(*key).and_then(serde_json::Value::as_bool) == Some(true)
+                    })
+                    && metadata.get("goalId").and_then(serde_json::Value::as_str)
+                        == Some(goal.goal_id.as_str())
+            })
+        {
+            return false;
+        }
+        self.waiting = false;
+        self.budget_wrap_up = goal.status == ThreadGoalStatus::BudgetLimited;
+        true
+    }
+
+    pub fn after_successful_turn(&mut self) -> ThreadGoalRunDisposition {
+        if self.goal.as_ref().is_some_and(|goal| {
+            goal.status == ThreadGoalStatus::Active
+                || (goal.status == ThreadGoalStatus::BudgetLimited && !self.budget_wrap_up)
+        }) {
+            self.waiting = true;
+            ThreadGoalRunDisposition::Continue
+        } else {
+            self.terminal_disposition()
+        }
+    }
+
+    fn terminal_disposition(&self) -> ThreadGoalRunDisposition {
+        match self.goal.as_ref().map(|goal| goal.status) {
+            None | Some(ThreadGoalStatus::Complete) => ThreadGoalRunDisposition::Complete,
+            Some(status) => ThreadGoalRunDisposition::Stopped(status),
+        }
+    }
+}
+
+/// Fence delayed/queued continuations against goal replacement, editing or stopping.
+pub fn goal_continuation_matches(goal: &ThreadGoal, metadata: &serde_json::Value) -> bool {
+    goal.is_active()
+        && metadata.get("goalId").and_then(serde_json::Value::as_str) == Some(goal.goal_id.as_str())
+        && metadata
+            .get("objective")
+            .and_then(serde_json::Value::as_str)
+            == Some(goal.objective.as_str())
+        && metadata
+            .get("autoContinuationAttempt")
+            .and_then(serde_json::Value::as_u64)
+            == Some(u64::from(goal.auto_continuation_count))
 }

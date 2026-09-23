@@ -170,4 +170,5 @@ For `/goal` prompt routing (including the pending-session guard):
 
 ```bash
 cargo test --locked -p openbitfun-cli --bin openbitfun goal_prompts_
+cargo test --locked -p openbitfun-cli --bin openbitfun -- modes::exec::tests:: dispatch::worker::tests::
 ```

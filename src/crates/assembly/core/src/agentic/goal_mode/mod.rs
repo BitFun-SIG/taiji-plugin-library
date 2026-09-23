@@ -320,9 +320,9 @@ mod tests {
     }
 
     #[test]
-    fn should_skip_goal_for_turn_ignores_objective_updated_followup() {
+    fn objective_updated_followup_participates_in_accounting() {
         let metadata = serde_json::json!({ "threadGoalObjectiveUpdated": true });
-        assert!(should_skip_goal_for_turn("Adjust work", Some(&metadata)));
+        assert!(!should_skip_goal_for_turn("Adjust work", Some(&metadata)));
     }
 
     #[test]
@@ -390,7 +390,7 @@ mod tests {
             auto_continuation_count: 0,
         })
         .user_message_metadata;
-        assert!(should_skip_goal_for_turn("Adjust work", Some(&metadata)));
+        assert!(!should_skip_goal_for_turn("Adjust work", Some(&metadata)));
         assert!(!should_skip_goal_continuation_after_turn(
             "Adjust work",
             Some(&metadata)

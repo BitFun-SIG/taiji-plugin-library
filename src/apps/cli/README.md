@@ -72,6 +72,28 @@ selected child Session's active execution subtree.
 configure a command that waits until the file is closed; missing commands,
 non-zero exits, and empty editor output leave the current draft unchanged.
 
+### Long-running goals
+
+A prompt beginning with `/goal <objective>` activates the goal on the executing
+host, including interactive input and `exec`. `exec` and detached dispatch keep
+observing the goal's continuation turns; a successful intermediate turn does not
+finish the job. Completion finishes successfully; blocked, paused, quota-limited,
+or budget-limited goals return an incomplete/error outcome with the saved session
+available for inspection and explicit resumption where supported.
+
+Plain `/goal` prompts have no token budget by default. The optional `create_goal`
+tool budget is set only on explicit request and accounts for non-cached input plus
+output on the main session, not provider-wide billing or child-session usage. It
+is a soft budget checked by the runtime, with one final wrap-up turn. An existing
+100-continuation safety stop marks an unfinished goal blocked; explicit resume
+starts a fresh continuation window without resetting accumulated usage.
+
+The host must contain this behavior; a newer mobile or peer controller cannot add
+it to an older target. Goal state survives in session storage, but host shutdown
+is not automatic restart/recovery. Review the saved session and explicitly resume
+after an interruption. Completion still depends on the model verifying the user's
+requirements against real evidence; the runtime does not prove arbitrary tasks.
+
 ### Prompt continuity
 
 Unsent drafts stay with their session while the TUI remains open. Switching,

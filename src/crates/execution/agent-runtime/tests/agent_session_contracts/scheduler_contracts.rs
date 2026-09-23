@@ -192,7 +192,7 @@ fn thread_goal_objective_updated_delivery_plan_preserves_follow_up_and_metadata(
     );
     assert!(plan
         .injection_prompt
-        .contains("The active thread goal objective was edited by the user."));
+        .contains("The active thread goal has been set or updated by the user."));
     assert_eq!(
         plan.prepended_reminders[0].kind,
         ThreadGoalDeliveryReminderKind::GoalObjectiveUpdated
