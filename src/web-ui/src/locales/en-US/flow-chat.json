@@ -2892,7 +2892,7 @@
     "refresh": "Refresh",
     "unknown": "Delivery is unconfirmed. Check before sending again.",
     "checkRetry": "Check / retry",
-    "copyDraft": "Copy text to composer",
+    "copyDraft": "Copy draft to composer",
     "dismiss": "Dismiss local reminder",
     "attachments": "{{count}} attachments",
     "edit": "Restore draft",

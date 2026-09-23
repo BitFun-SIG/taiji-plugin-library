@@ -2892,7 +2892,7 @@
     "refresh": "刷新",
     "unknown": "尚未确认是否送达，请先检查再重发。",
     "checkRetry": "检查 / 重试",
-    "copyDraft": "复制文字到输入框",
+    "copyDraft": "复制草稿到输入框",
     "dismiss": "关闭本地提醒",
     "attachments": "{{count}} 个附件",
     "edit": "恢复草稿",

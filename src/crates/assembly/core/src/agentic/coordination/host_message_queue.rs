@@ -28,6 +28,9 @@ struct Entry {
     fingerprint: String,
     view: DialogQueueItem,
     held: Option<QueuedTurn>,
+    // User work accepted after this turn settled must outlive its delayed
+    // outcome cleanup. This is host-local admission bookkeeping, not wire data.
+    after_terminal_turn: Option<String>,
 }
 impl Default for QueueSession {
     fn default() -> Self {
@@ -53,6 +56,31 @@ impl HostQueueState {
         self.sessions
             .get(session)
             .is_some_and(|s| s.entries.contains_key(turn))
+    }
+    pub(super) fn mark_after_terminal_turn(&mut self, session: &str, turn: &str, previous: String) {
+        if let Some(e) = self
+            .sessions
+            .get_mut(session)
+            .and_then(|s| s.entries.get_mut(turn))
+        {
+            e.after_terminal_turn = Some(previous);
+        }
+    }
+    pub(super) fn admitted_after(
+        &self,
+        session: &str,
+        previous: &str,
+    ) -> std::collections::HashSet<String> {
+        self.sessions
+            .get(session)
+            .map(|s| {
+                s.entries
+                    .iter()
+                    .filter(|(_, e)| e.after_terminal_turn.as_deref() == Some(previous))
+                    .map(|(id, _)| id.clone())
+                    .collect()
+            })
+            .unwrap_or_default()
     }
     pub(super) fn pending_held(&self, session: &str) -> usize {
         self.sessions.get(session).map_or(0, |s| {
@@ -178,6 +206,14 @@ impl HostQueueState {
 }
 impl DialogScheduler {
     pub(super) fn hold_managed_queue(&self, session: &str, reason: &str) {
+        self.hold_managed_queue_for_outcome(session, reason, None);
+    }
+    pub(super) fn hold_managed_queue_for_outcome(
+        &self,
+        session: &str,
+        reason: &str,
+        previous: Option<&str>,
+    ) {
         let ids: Vec<String> = self
             .queue_state()
             .sessions
@@ -185,7 +221,11 @@ impl DialogScheduler {
             .map(|s| {
                 s.entries
                     .iter()
-                    .filter(|(_, e)| e.view.status == DialogQueueStatus::Queued)
+                    .filter(|(_, e)| {
+                        e.view.status == DialogQueueStatus::Queued
+                            && previous
+                                .is_none_or(|id| e.after_terminal_turn.as_deref() != Some(id))
+                    })
                     .map(|(id, _)| id.clone())
                     .collect()
             })
@@ -253,7 +293,7 @@ impl DialogScheduler {
             .await
             .map_err(|e| PortError::new(PortErrorKind::Backend, e.to_string()))?
     }
-    async fn execute_queue_request(
+    pub(super) async fn execute_queue_request(
         &self,
         request: DialogQueueRequest,
     ) -> PortResult<DialogQueueSnapshot> {
@@ -346,6 +386,7 @@ impl DialogScheduler {
                     fingerprint: digest,
                     view,
                     held: None,
+                    after_terminal_turn: None,
                 },
             );
             s.order.push(message.turn_id.clone());
@@ -445,6 +486,7 @@ impl DialogScheduler {
                 ));
             }
         }
+        let mut interrupted_turn_to_abandon = None;
         if let DialogQueueAction::Promote {
             expected_active_turn_id,
             ..
@@ -460,13 +502,21 @@ impl DialogScheduler {
             {
                 return Err(error("queue_conflict: target is no longer active"));
             }
-            if self
-                .session_manager
-                .latest_dialog_turn_holds_dispatch(session)
-                .await
-                .map_err(|e| error(e.to_string()))?
+            if expected_active_turn_id.is_none() && self.active_turns.contains(session) {
+                return Err(error("queue_conflict: previous turn is still retiring"));
+            }
+            if expected_active_turn_id.is_none()
+                && self
+                    .session_manager
+                    .latest_dialog_turn_holds_dispatch(session)
+                    .await
+                    .map_err(|e| error(e.to_string()))?
             {
-                return Err(error("Queue is blocked by interrupted turn recovery"));
+                interrupted_turn_to_abandon = self
+                    .session_manager
+                    .get_session(session)
+                    .and_then(|s| s.dialog_turn_ids.last().cloned());
+                self.hold_managed_queue(session, "Turn interrupted; retry this message explicitly");
             }
         }
         let held = {
@@ -563,11 +613,22 @@ impl DialogScheduler {
             DialogQueueAction::Promote {
                 expected_active_turn_id: None,
                 ..
-            } => {
-                if let Err(e) = self.start_turn(session, &turn).await {
+            } => match self.start_turn(session, &turn).await {
+                Err(e) => {
                     self.queue_state().hold(session, &turn, &e.to_string());
                 }
-            }
+                Ok(_) => {
+                    if let Err(e) = self
+                        .abandon_superseded_interrupted_turn(
+                            session,
+                            interrupted_turn_to_abandon.as_deref(),
+                        )
+                        .await
+                    {
+                        warn!("Failed to retire interrupted recovery after explicit queue promotion: session_id={}, error={}", session, e);
+                    }
+                }
+            },
             _ => unreachable!(),
         }
         {

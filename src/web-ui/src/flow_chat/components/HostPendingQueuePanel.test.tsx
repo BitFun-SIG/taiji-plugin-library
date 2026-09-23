@@ -93,3 +93,36 @@ it('keeps four queued messages compact, exposes actions, and toggles help indepe
     container.remove();
   }
 });
+
+it('copies the complete unresolved draft after an owner restart without resending or deleting it', async () => {
+  const saved: QueueOutboxRecord = { key: 'draft', scope: 'scope', accepted: true,
+    request: { sessionId: 'session', queueEpoch: 'old-owner', action: 'submit',
+      message: { turnId: 'turn', content: 'full prompt', displayContent: 'display prompt',
+        agentType: 'Standard', attachments: [], metadata: { context: 'original' } } },
+    draft: { composerDraft: { text: 'full prompt' }, imageContexts: [{ id: 'attachment' }] } };
+  const records = new Map([[saved.key, saved]]);
+  const invoke = vi.fn(async () => ({ sessionId: 'session', queueEpoch: 'new-owner', revision: 0,
+    activeTurnId: null, items: [], capacity: 20, used: 0, receipt: null }));
+  const queue = new HostDialogQueue('scope', 'session', invoke, {
+    list: async () => [...records.values()], put: async record => { records.set(record.key, record); },
+    remove: async key => { records.delete(key); },
+  });
+  const onRestore = vi.fn(() => true);
+  const container = document.createElement('div');
+  document.body.append(container);
+  const root = createRoot(container);
+  try {
+    await act(async () => root.render(<HostPendingQueuePanel queue={queue} onRestore={onRestore} />));
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="hostQueue.copyDraft"]')!.click());
+    expect(onRestore).toHaveBeenCalledWith(expect.objectContaining({
+      content: 'full prompt', displayMessage: 'display prompt', composerDraft: { text: 'full prompt' },
+      imageContexts: [{ id: 'attachment' }], userMessageMetadata: { context: 'original' },
+    }));
+    expect(invoke.mock.calls).toHaveLength(1);
+    expect(records.has(saved.key)).toBe(true);
+    expect(queue.getSnapshot().pending).toHaveLength(1);
+  } finally {
+    await act(async () => root.unmount());
+    container.remove();
+  }
+});
