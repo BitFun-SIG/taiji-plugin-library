@@ -243,7 +243,8 @@ export struct ConversationView {
         .height('100%')
         if (this.isLoadingTranscript) {
           ConversationLoadingState({
-            maxContentWidth: this.composerPresentation === ComposerPresentation.Floating ? 760 : 0
+            maxContentWidth: this.composerPresentation === ComposerPresentation.Floating ? 760 : 0,
+            topInset: this.hoverOperateMode ? 0 : this.topInset
           })
             .width('100%')
             .height('100%')
