@@ -19,6 +19,14 @@ import {
   askUserQuestionDraftStore,
 } from './askUserQuestionDraftStore';
 
+vi.mock('@/shared/notification-system', () => ({
+  notificationService: { error: vi.fn(), warning: vi.fn() },
+}));
+
+vi.mock('../session-drivers/registry', () => ({
+  driverForSession: () => ({ id: 'local' }),
+}));
+
 const workspaceFixtures = vi.hoisted(() => new Map<string, any>());
 vi.mock('@/infrastructure/services/business/workspaceManager', () => ({
   workspaceManager: { getState: () => ({ openedWorkspaces: workspaceFixtures, recentWorkspaces: [] }) },
@@ -4339,6 +4347,57 @@ describe('FlowChatStore historical session hydration state', () => {
       });
       expect(flowChatStore.hasDeferredSessionHistoryProjection('history-1')).toBe(false);
     } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it.each([false, true])('opens an inactive historical session without a sidebar pointer intent (preload: %s)', async (preload) => {
+    vi.useFakeTimers();
+    try {
+      const { switchChatSession, preloadHistoricalSessionForOpen, pendingHistoryLoadKey } =
+        await import('../services/flow-chat-manager/SessionModule');
+      const session = createSession({
+        sessionId: 'history-1', isHistorical: true, historyState: 'metadata-only',
+      });
+      flowChatStore.setState(() => ({
+        sessions: new Map([[session.sessionId, session]]),
+        activeSessionId: null,
+      }));
+      apiMocks.restoreSessionView.mockResolvedValue({
+        session: {
+          sessionId: session.sessionId, sessionName: 'Saved session',
+          agentType: 'Standard', state: 'Idle', turnCount: 1, createdAt: 1,
+        },
+        turns: [{
+          turnId: 'saved-turn', turnIndex: 0, sessionId: session.sessionId,
+          timestamp: 1, startTime: 1, status: 'completed', modelRounds: [],
+          userMessage: { id: 'saved-message', content: 'Saved prompt', timestamp: 1 },
+        }],
+        contextRestoreState: 'ready', isPartial: false,
+        loadedTurnCount: 1, totalTurnCount: 1,
+      });
+      // Exercise the real manager/store boundary used by pet and other
+      // programmatic openers; mocking loadSessionHistory hid this regression.
+      const context = {
+        flowChatStore, pendingHistoryLoads: new Map(),
+      } as unknown as import('../services/flow-chat-manager/types').FlowChatContext;
+      if (preload) {
+        const competingKey = pendingHistoryLoadKey('other-session');
+        context.pendingHistoryLoads.set(competingKey, Promise.resolve());
+        preloadHistoricalSessionForOpen(context, session.sessionId);
+        context.pendingHistoryLoads.delete(competingKey);
+      }
+      await switchChatSession(context, session.sessionId);
+
+      expect(flowChatStore.getState().activeSessionId).toBe(session.sessionId);
+      expect(flowChatStore.getState().sessions.get(session.sessionId)).toMatchObject({
+        historyState: 'ready',
+        dialogTurns: [expect.objectContaining({ id: 'saved-turn' })],
+      });
+      expect(context.pendingHistoryLoads.size).toBe(0);
+      expect(apiMocks.restoreSessionView).toHaveBeenCalledTimes(preload ? 2 : 1);
+    } finally {
+      vi.clearAllTimers();
       vi.useRealTimers();
     }
   });

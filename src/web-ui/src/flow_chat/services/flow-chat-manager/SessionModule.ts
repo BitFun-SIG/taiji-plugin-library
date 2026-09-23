@@ -571,6 +571,11 @@ export async function switchChatSession(
     if (shouldHydrateBeforeSwitch) {
       try {
         await hydrateHistoricalSession(context, sessionId, true, {
+          // Programmatic opens (including pet bubbles) hydrate before selection.
+          // An active-only hydrate would discard their restored records as stale
+          // and then activate a metadata-only session with no load left running.
+          // Also upgrades any speculative active-only preload we are reusing.
+          deferFullHistoryUntilActive: shouldActivateBeforeHydrate,
           isRetryStillRelevant: () => (
             surfaceScope.isCurrent() && switchRequestId === latestSwitchRequestId && isStillRelevant()
           ),
