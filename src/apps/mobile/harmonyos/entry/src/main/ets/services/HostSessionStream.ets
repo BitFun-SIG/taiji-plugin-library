@@ -259,6 +259,7 @@ export class HostSessionStream {
     try {
       while (this.hasOlder && pages < MAX_HISTORY_PAGES_PER_REQUEST && !this.stopped) {
         const before = this.oldest;
+        RemoteLogger.info(`history page request stream=${this.streamId} before=${before} epoch=${this.epoch}`);
         const page = await this.read({ before: before, epoch: this.epoch });
         RemoteLogger.info(`history page received stream=${this.streamId} before=${before} events=${page.events.length} first=${page.events[0]?.seq} hasMore=${page.has_more} epoch=${page.epoch}`);
         if (this.stopped) return;

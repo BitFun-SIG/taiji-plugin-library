@@ -362,6 +362,7 @@ export struct ChatTimeline {
           if (!this.historyLoading) this.cancelHistoryAnchor();
           this.historyTouchActive = true;
           this.historyArrival.beginGesture();
+          RemoteLogger.info(`history gesture begin loading=${this.historyLoading} offset=${this.listScroller.currentOffset().yOffset}`);
         } else if (event.type === TouchType.Up || event.type === TouchType.Cancel) {
           this.historyTouchActive = false;
         }
@@ -381,7 +382,6 @@ export struct ChatTimeline {
         } else if (this.userScrollActive) {
           this.stickToBottom = false;
         }
-        if (this.historyLoading && this.userScrollActive) this.captureHistoryAnchor();
         this.evaluateHistoryStart();
         if (scrollState === ScrollState.Idle) {
           this.userScrollActive = false;
@@ -480,6 +480,9 @@ export struct ChatTimeline {
   private evaluateHistoryStart(): void {
     const atStart: boolean = this.listScroller.currentOffset().yOffset <= 0;
     const readerOwnsPosition: boolean = this.historyTouchActive && this.userScrollActive;
+    if (atStart && this.historyTouchActive) {
+      RemoteLogger.info(`history start check owns=${readerOwnsPosition} loading=${this.historyLoading} hasMore=${this.hasMoreMessages} failed=${this.historyFailed}`);
+    }
     if (!this.historyArrival.arrived(atStart && readerOwnsPosition)) {
       return;
     }
