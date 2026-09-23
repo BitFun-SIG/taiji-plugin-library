@@ -588,7 +588,12 @@ impl DialogScheduler {
                 );
                 Err(error)
             }
-            DialogSteeringAction::Buffer { injection, outcome } => {
+            DialogSteeringAction::Buffer {
+                mut injection,
+                outcome,
+            } => {
+                self.prepare_goal_steering(&session_id, &turn_id, &mut injection)
+                    .await?;
                 self.round_injection_buffer.push(&session_id, injection);
                 let DialogSteerOutcome::Buffered { steering_id, .. } = &outcome;
                 info!(
@@ -602,6 +607,30 @@ impl DialogScheduler {
                 Ok(outcome)
             }
         }
+    }
+
+    async fn prepare_goal_steering(
+        &self,
+        session_id: &str,
+        turn_id: &str,
+        injection: &mut RoundInjection,
+    ) -> Result<(), String> {
+        if let Some(goal) = self
+            .coordinator
+            .prepare_prompt_thread_goal(session_id, &injection.display_content)
+            .await
+            .map_err(|error| error.to_string())?
+        {
+            self.coordinator
+                .thread_goal_runtime()
+                .mark_turn_started(turn_id, Some(&goal));
+            injection.content = format!(
+                "{}\n\n{}",
+                injection.content,
+                crate::agentic::goal_mode::objective_updated_prompt(&goal)
+            );
+        }
+        Ok(())
     }
 
     /// Resume auto-continuation toward an active thread goal (after pause / blocked / usage limit).
@@ -4687,6 +4716,77 @@ mod tests {
         .expect_err("empty steering must fail");
 
         assert_eq!(error.kind, PortErrorKind::InvalidRequest);
+    }
+
+    #[tokio::test]
+    async fn thread_goal_plain_prompt_steering_activates_without_an_extra_turn() {
+        let (scheduler, session_manager, _, root) = test_scheduler_with_persistence(true);
+        let session_id = "goal-steering-session";
+        let turn_id = "active-goal-turn";
+        mark_session_processing(&session_manager, &root, session_id, turn_id).await;
+        scheduler
+            .active_turns
+            .insert(session_id, desktop_active_turn(turn_id));
+        scheduler
+            .buffer_steering(
+                session_id.into(),
+                "stale-turn".into(),
+                "/goal stale objective".into(),
+                None,
+                Vec::new(),
+                serde_json::Map::new(),
+            )
+            .await
+            .expect_err("stale steering must not activate a goal");
+        let storage = session_manager
+            .effective_session_storage_path(session_id)
+            .await
+            .unwrap();
+        assert!(scheduler
+            .coordinator
+            .get_thread_goal(session_id, &storage)
+            .await
+            .unwrap()
+            .is_none());
+        scheduler
+            .buffer_steering(
+                session_id.into(),
+                turn_id.into(),
+                "/goal finish tests".into(),
+                None,
+                Vec::new(),
+                serde_json::Map::new(),
+            )
+            .await
+            .expect("goal steering");
+        let goal = scheduler
+            .coordinator
+            .get_thread_goal(session_id, &storage)
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(goal.is_active());
+        assert_eq!(goal.objective, "finish tests");
+        let pending = scheduler
+            .round_injection_monitor()
+            .take_pending(session_id, turn_id);
+        assert_eq!(pending.len(), 1);
+        assert_eq!(pending[0].display_content, "/goal finish tests");
+        assert!(pending[0]
+            .content
+            .contains("<untrusted_objective>\nfinish tests"));
+        assert!(!scheduler.queues.has_items(session_id));
+        scheduler
+            .coordinator
+            .thread_goal_runtime()
+            .record_round_billable_tokens(turn_id, 12);
+        assert_eq!(
+            scheduler
+                .coordinator
+                .thread_goal_runtime()
+                .turn_cumulative_billable_tokens(turn_id),
+            12
+        );
     }
 
     #[tokio::test]

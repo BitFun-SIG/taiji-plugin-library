@@ -4831,9 +4831,8 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
     ) -> OpenBitFunResult<PathBuf> {
         self.require_main_session_workspace(session_id)?;
         self.session_manager
-            .resolve_session_workspace_binding(session_id)
+            .effective_session_storage_path(session_id)
             .await
-            .map(|binding| binding.session_storage_dir())
             .ok_or_else(|| {
                 OpenBitFunError::Validation(format!(
                     "Session storage path is unavailable: {session_id}"
@@ -5265,6 +5264,51 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .get_thread_goal(session_id, storage_path.as_path())
             .await?
             .filter(ThreadGoal::is_active))
+    }
+
+    /// Activate a plain-prompt objective in the turn being admitted. Do not use
+    /// the UI mutation API here: its steering delivery would submit another turn.
+    pub(super) async fn prepare_prompt_thread_goal(
+        &self,
+        session_id: &str,
+        prompt: &str,
+    ) -> OpenBitFunResult<Option<ThreadGoal>> {
+        use openbitfun_agent_runtime::thread_goal::goal_objective_from_prompt;
+        let Some(objective) = goal_objective_from_prompt(prompt) else {
+            return Ok(None);
+        };
+        openbitfun_runtime_ports::validate_thread_goal_objective(objective)
+            .map_err(OpenBitFunError::Validation)?;
+        if !self.session_manager.should_persist_session_id(session_id) {
+            return Err(OpenBitFunError::Validation(
+                "Thread goals require a persistent session".to_string(),
+            ));
+        }
+        let storage_path = self.require_main_session_storage_path(session_id).await?;
+        let existing = self
+            .thread_goal_store()
+            .get_thread_goal(session_id, storage_path.as_path())
+            .await?;
+        // A retried submission must not reset the same active goal's accounting.
+        let goal = match existing {
+            Some(goal) if goal.is_active() && goal.objective == objective => goal,
+            _ => {
+                self.thread_goal_store()
+                    .set_thread_goal(
+                        session_id,
+                        storage_path.as_path(),
+                        Some(objective.to_string()),
+                        Some(ThreadGoalStatus::Active),
+                        None,
+                        true,
+                    )
+                    .await?
+                    .goal
+            }
+        };
+        self.emit_thread_goal_updated(session_id, Some(goal.clone()))
+            .await;
+        Ok(Some(goal))
     }
 
     /// Set a thread goal from `/goal <objective>` (Codex-style direct objective).
@@ -6250,11 +6294,6 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             )
             .await?;
         let effective_user_input = wrapped_user_input_payload.content.clone();
-        let prepended_messages = merge_prepended_messages_for_turn(
-            additional_prepended_messages,
-            wrapped_user_input_payload.prepended_messages.clone(),
-            needs_computer_links_for_source(submission_policy.trigger_source),
-        );
 
         if original_user_input != effective_user_input {
             let mut metadata =
@@ -6352,6 +6391,26 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             );
         }
         user_message_metadata = Some(metadata);
+
+        // All sending surfaces converge here after restore and prompt hooks,
+        // including mobile/IM relay, peer hosts, CLI and detached dispatch.
+        if !should_skip_goal_for_turn(&original_user_input, user_message_metadata.as_ref()) {
+            if let Some(goal_context) = self
+                .prepare_prompt_thread_goal(&session_id, &original_user_input)
+                .await?
+            {
+                additional_prepended_messages.push(
+                    crate::agentic::goal_mode::goal_objective_updated_message(
+                        crate::agentic::goal_mode::objective_updated_prompt(&goal_context),
+                    ),
+                );
+            }
+        }
+        let prepended_messages = merge_prepended_messages_for_turn(
+            additional_prepended_messages,
+            wrapped_user_input_payload.prepended_messages.clone(),
+            needs_computer_links_for_source(submission_policy.trigger_source),
+        );
 
         // Start new dialog turn (sets state to Processing internally)
         // Pass frontend turnId, generate if not provided
@@ -20108,6 +20167,70 @@ mod tests {
 
         assert_eq!(created.session_id, session_id);
         assert_eq!(updated.status, ThreadGoalStatus::Complete);
+
+        assert!(coordinator
+            .prepare_prompt_thread_goal(&session_id, "/goal Repair remote login\nand verify")
+            .await
+            .expect("plain remote prompt must activate a goal")
+            .is_some());
+        let storage_path = coordinator
+            .require_main_session_storage_path(&session_id)
+            .await
+            .unwrap();
+        let activated = coordinator
+            .thread_goal_store()
+            .get_thread_goal(&session_id, &storage_path)
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(activated.is_active());
+        assert_eq!(activated.objective, "Repair remote login\nand verify");
+        assert_ne!(activated.goal_id, created.goal_id);
+        coordinator
+            .prepare_prompt_thread_goal(&session_id, "/goal Repair remote login\nand verify")
+            .await
+            .unwrap();
+        let retried = coordinator
+            .thread_goal_store()
+            .get_thread_goal(&session_id, &storage_path)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(retried.goal_id, activated.goal_id);
+        let invalid = "x".repeat(openbitfun_runtime_ports::MAX_THREAD_GOAL_OBJECTIVE_CHARS + 1);
+        assert!(coordinator
+            .thread_goal_store()
+            .set_thread_goal(
+                &session_id,
+                &storage_path,
+                Some(invalid),
+                Some(ThreadGoalStatus::Active),
+                None,
+                true,
+            )
+            .await
+            .is_err());
+        let after_invalid = coordinator
+            .thread_goal_store()
+            .get_thread_goal(&session_id, &storage_path)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(after_invalid.goal_id, activated.goal_id);
+        assert_eq!(after_invalid.objective, activated.objective);
+        assert!(coordinator
+            .prepare_prompt_thread_goal(&session_id, "ordinary prompt")
+            .await
+            .unwrap()
+            .is_none());
+        assert!(
+            session_manager
+                .get_session(&session_id)
+                .unwrap()
+                .dialog_turn_ids
+                .is_empty(),
+            "goal activation must not submit a duplicate dialog turn"
+        );
         if let Some(binding) = session_manager
             .resolve_session_workspace_binding(&session_id)
             .await

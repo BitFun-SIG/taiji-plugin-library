@@ -40,6 +40,29 @@ pub fn effective_subagent_timeout_seconds(
     }
 }
 
+/// Objective submitted through a plain prompt, independent of the sending surface.
+/// Keep the existing UI control commands out of objective creation.
+pub fn goal_objective_from_prompt(prompt: &str) -> Option<&str> {
+    let prompt = prompt.trim();
+    let command = prompt.get(..5)?;
+    if !command.eq_ignore_ascii_case("/goal") {
+        return None;
+    }
+    let rest = prompt.get(5..)?;
+    if !rest.starts_with(char::is_whitespace) {
+        return None;
+    }
+    let objective = rest.trim();
+    if objective.is_empty()
+        || ["edit", "clear", "pause", "resume"]
+            .iter()
+            .any(|control| objective.eq_ignore_ascii_case(control))
+    {
+        return None;
+    }
+    Some(objective)
+}
+
 /// Skip marking turn start / token accounting for turns that are not goal-driving work.
 pub fn should_skip_goal_for_turn(
     user_input: &str,
@@ -74,7 +97,11 @@ fn should_skip_goal_turn_accounting(
     if trimmed.eq_ignore_ascii_case("/compact")
         || trimmed.starts_with("/usage")
         || trimmed.starts_with("/btw")
-        || trimmed.starts_with("/goal")
+        || (trimmed
+            .get(..5)
+            .is_some_and(|prefix| prefix.eq_ignore_ascii_case("/goal"))
+            && (trimmed.len() == 5 || trimmed[5..].starts_with(char::is_whitespace))
+            && goal_objective_from_prompt(trimmed).is_none())
     {
         return true;
     }
@@ -497,6 +524,16 @@ impl ThreadGoalRuntime {
 
     pub fn mark_turn_started(&self, turn_id: &str, goal: Option<&ThreadGoal>) {
         let mut accounting = lock_or_recover(&self.accounting);
+        // Repeated steering toward the same active goal is not a new turn.
+        if let Some(goal) = goal.filter(|goal| goal.is_active()) {
+            if accounting.turn.as_ref().is_some_and(|turn| {
+                turn.turn_id == turn_id
+                    && turn.active_goal_id.as_deref() == Some(goal.goal_id.as_str())
+            }) {
+                accounting.wall_clock.mark_active_goal(goal.goal_id.clone());
+                return;
+            }
+        }
         accounting.turn = Some(GoalTurnAccounting {
             turn_id: turn_id.to_string(),
             baseline_tokens: 0,

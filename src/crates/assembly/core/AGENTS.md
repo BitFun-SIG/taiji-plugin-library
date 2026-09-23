@@ -337,3 +337,9 @@ cargo test -p openbitfun-core --no-default-features --features agent-runtime,git
 
 These mock-host tests do not validate native capture, background input or remote
 GUI behavior; native fixtures remain owned by the Desktop Computer Use guide.
+
+For plain-prompt goal activation and remote goal storage routing:
+
+```bash
+cargo test --locked -p openbitfun-core --no-default-features --features agent-runtime,git,remote-workspace --lib thread_goal_
+```

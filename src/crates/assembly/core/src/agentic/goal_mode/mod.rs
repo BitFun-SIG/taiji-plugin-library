@@ -16,10 +16,10 @@ pub use openbitfun_agent_runtime::thread_goal::{
     billable_tokens_from_counts, build_objective_updated_plan, build_thread_goal_continuation_plan,
     clear_thread_goal_patch, completion_budget_report, continuation_prompt,
     effective_subagent_timeout_seconds, goal_continuation_submit_retry_delay_ms,
-    goal_tool_response, objective_updated_prompt, should_skip_goal_continuation_after_turn,
-    should_skip_goal_for_turn, thread_goal_patch, thread_goal_status_is_resumable,
-    ThreadGoalContinuationFacts, ThreadGoalRuntime, GOAL_CONTINUATION_SUBMIT_RETRY_BASE_DELAY_MS,
-    GOAL_CONTINUATION_SUBMIT_RETRY_MAX_DELAY_MS,
+    goal_objective_from_prompt, goal_tool_response, objective_updated_prompt,
+    should_skip_goal_continuation_after_turn, should_skip_goal_for_turn, thread_goal_patch,
+    thread_goal_status_is_resumable, ThreadGoalContinuationFacts, ThreadGoalRuntime,
+    GOAL_CONTINUATION_SUBMIT_RETRY_BASE_DELAY_MS, GOAL_CONTINUATION_SUBMIT_RETRY_MAX_DELAY_MS,
 };
 use openbitfun_agent_runtime::thread_goal::{
     build_set_thread_goal_result, is_usage_limit_message, SetThreadGoalRequest,
@@ -134,10 +134,6 @@ impl<'a> ThreadGoalStore<'a> {
         replace_existing: bool,
     ) -> OpenBitFunResult<SetThreadGoalResult> {
         let existing = self.get_thread_goal(session_id, workspace_path).await?;
-
-        if replace_existing {
-            self.clear_thread_goal(session_id, workspace_path).await?;
-        }
 
         let result = build_set_thread_goal_result(SetThreadGoalRequest {
             session_id: session_id.to_string(),
@@ -317,8 +313,9 @@ mod tests {
     }
 
     #[test]
-    fn should_skip_goal_for_turn_ignores_goal_slash_commands() {
-        assert!(should_skip_goal_for_turn("/goal fix bug", None));
+    fn goal_objective_turns_participate_in_accounting() {
+        assert!(!should_skip_goal_for_turn("/goal fix bug", None));
+        assert!(should_skip_goal_for_turn("/goal pause", None));
         assert!(!should_skip_goal_for_turn("fix bug", None));
     }
 

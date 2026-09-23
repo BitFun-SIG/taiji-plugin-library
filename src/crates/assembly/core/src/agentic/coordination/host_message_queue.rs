@@ -530,7 +530,14 @@ impl DialogScheduler {
                     steering_id.clone(),
                     SystemTime::now(),
                 );
-                if let DialogSteeringAction::Buffer { injection, .. } = decision {
+                if let DialogSteeringAction::Buffer { mut injection, .. } = decision {
+                    if let Err(reason) = self
+                        .prepare_goal_steering(session, target, &mut injection)
+                        .await
+                    {
+                        self.queue_state().hold(session, &turn, &reason);
+                        return Err(error(&reason));
+                    }
                     {
                         let mut state = self.queue_state();
                         let e = state

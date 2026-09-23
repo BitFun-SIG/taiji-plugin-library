@@ -51,6 +51,7 @@ equivalent exists:
 | `/new` or `/clear` | Start a new session. |
 | `/timeline` | Navigate persisted user messages without changing the session. |
 | `/fork` | Fork the full session or fork immediately before a selected prompt. |
+| `/goal <objective>` | Start a persistent goal through the shared runtime; while working, steer the active turn toward it. |
 | `/compact` or `/summarize` | Compact model context without deleting the saved transcript. |
 | `/undo` / `/redo` | Move the persisted session timeline backward or forward. |
 | `/diff` | Review staged, unstaged, and untracked workspace changes. |

@@ -329,7 +329,8 @@ fn thread_goal_event_payload_and_token_usage_filter_preserve_core_delivery_contr
 
 #[test]
 fn turn_filtering_and_retry_policies_preserve_goal_mode_semantics() {
-    assert!(should_skip_goal_for_turn("/goal fix bug", None));
+    assert!(!should_skip_goal_for_turn("/goal fix bug", None));
+    assert!(should_skip_goal_for_turn("/goal pause", None));
     assert!(!should_skip_goal_for_turn("fix bug", None));
 
     let metadata = serde_json::json!({ "threadGoalObjectiveUpdated": true });
@@ -349,4 +350,65 @@ fn turn_filtering_and_retry_policies_preserve_goal_mode_semantics() {
     ));
     assert!(!is_usage_limit_message("tool failed"));
     assert_eq!(MAX_GOAL_CONTINUATIONS, 100);
+}
+
+#[test]
+fn plain_goal_prompts_parse_objectives_and_drive_continuation() {
+    use openbitfun_agent_runtime::thread_goal::goal_objective_from_prompt;
+    for (prompt, expected) in [
+        ("/goal fix bug", "fix bug"),
+        ("  /GOAL  ship feature  ", "ship feature"),
+        ("/goal\nfirst step\nsecond step", "first step\nsecond step"),
+        ("/goal clear\nextra", "clear\nextra"),
+        ("/goal 修复登录", "修复登录"),
+    ] {
+        assert_eq!(goal_objective_from_prompt(prompt), Some(expected));
+        assert!(!should_skip_goal_for_turn(prompt, None));
+        assert!(!should_skip_goal_continuation_after_turn(prompt, None));
+        assert!(should_skip_goal_for_turn(
+            prompt,
+            Some(&serde_json::json!({"maintenanceTurn": true}))
+        ));
+    }
+    for prompt in [
+        "/goal",
+        "/goal   ",
+        "/goal pause",
+        "/GOAL RESUME",
+        "/goal edit",
+        "/goal clear",
+    ] {
+        assert_eq!(goal_objective_from_prompt(prompt), None);
+        assert!(should_skip_goal_for_turn(prompt, None));
+        assert!(should_skip_goal_continuation_after_turn(prompt, None));
+    }
+    for prompt in [
+        "/goalie fix bug",
+        "/goals",
+        "explain /goal fix bug",
+        "修复登录问题",
+        "/goal: fix bug",
+    ] {
+        assert_eq!(goal_objective_from_prompt(prompt), None);
+        assert!(!should_skip_goal_for_turn(prompt, None));
+    }
+}
+
+#[test]
+fn repeated_goal_steering_preserves_unaccounted_tokens_and_budget() {
+    let runtime = ThreadGoalRuntime::new();
+    let mut active = goal(ThreadGoalStatus::Active);
+    active.token_budget = Some(100);
+    runtime.mark_turn_started("turn", Some(&active));
+    runtime.record_round_billable_tokens("turn", 40);
+    runtime.mark_turn_started("turn", Some(&active));
+    runtime.record_round_billable_tokens("turn", 20);
+    assert_eq!(runtime.turn_cumulative_billable_tokens("turn"), 60);
+    assert!(!runtime.account_turn_tokens("turn", 60, &mut active, 3));
+    assert_eq!(active.tokens_used, 60);
+    runtime.mark_turn_started("turn", Some(&active));
+    runtime.record_round_billable_tokens("turn", 40);
+    assert!(runtime.account_turn_tokens("turn", 100, &mut active, 4));
+    assert_eq!(active.tokens_used, 100);
+    assert_eq!(active.status, ThreadGoalStatus::BudgetLimited);
 }
