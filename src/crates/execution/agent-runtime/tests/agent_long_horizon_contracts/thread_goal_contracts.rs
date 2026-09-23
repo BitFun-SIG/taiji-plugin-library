@@ -586,3 +586,22 @@ fn goal_prompts_preserve_literal_objectives_and_share_the_completion_contract() 
         assert!(prompt.contains("before choosing the next action"));
     }
 }
+
+#[test]
+fn failed_goal_turn_preserves_usage_without_scheduling_more_work() {
+    let runtime = ThreadGoalRuntime::new();
+    let active = goal(ThreadGoalStatus::Active);
+    runtime.mark_turn_started("failed", Some(&active));
+    runtime.record_round_billable_tokens("failed", 25);
+    let outcome = runtime.continuation_after_turn(
+        active,
+        ThreadGoalContinuationFacts {
+            turn_id: "failed",
+            turn_tokens: 25,
+            turn_completed: false,
+            now_epoch_seconds: 3,
+        },
+    );
+    assert!(outcome.plan.is_none());
+    assert_eq!(outcome.goal_to_persist.unwrap().tokens_used, 25);
+}

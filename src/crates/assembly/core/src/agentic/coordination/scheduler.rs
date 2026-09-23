@@ -2530,6 +2530,119 @@ impl DialogScheduler {
         Ok(())
     }
 
+    async fn submit_goal_continuation(
+        self: Arc<Self>,
+        session_id: String,
+        active_turn: ActiveDialogTurn,
+        plan: openbitfun_runtime_ports::ThreadGoalContinuationPlan,
+    ) {
+        let prepended: Vec<Message> = plan
+            .prepended_reminders
+            .into_iter()
+            .map(|text| Message::internal_reminder(InternalReminderKind::GoalContinuation, text))
+            .collect();
+        let mut last_error = None;
+        for attempt in 1..=MAX_THREAD_GOAL_AUTO_CONTINUATIONS {
+            match self
+                .coordinator
+                .thread_goal_continuation_is_current(&session_id, &plan.user_message_metadata)
+                .await
+            {
+                Ok(true) => {}
+                Ok(false) => break,
+                Err(error) => {
+                    warn!(
+                        "Cannot verify goal continuation: session_id={}, error={}",
+                        session_id, error
+                    );
+                    self.coordinator
+                        .emit_event(AgenticEvent::SystemError {
+                            session_id: Some(session_id.clone()),
+                            error: format!("Cannot verify goal continuation: {error}"),
+                            recoverable: true,
+                        })
+                        .await;
+                    break;
+                }
+            }
+            if self.goal_continuation_abort.contains(&session_id) {
+                debug!(
+    "Aborting goal continuation submit retries after user cancellation: session_id={}",
+    session_id
+);
+                break;
+            }
+            match self
+                .submit_with_prepended_messages(
+                    session_id.clone(),
+                    "Continue working toward the active thread goal.".to_string(),
+                    Some(plan.display_message.clone()),
+                    None,
+                    active_turn.agent_type_owned(),
+                    active_turn.workspace_path_owned(),
+                    active_turn.remote_connection_id_owned(),
+                    active_turn.remote_ssh_host_owned(),
+                    DialogSubmissionPolicy::for_source(DialogTriggerSource::AgentSession),
+                    None,
+                    Some(plan.user_message_metadata.clone()),
+                    prepended.clone(),
+                    None,
+                )
+                .await
+            {
+                Ok(_) => {
+                    last_error = None;
+                    break;
+                }
+                Err(error) => {
+                    last_error = Some(error);
+                    if self.goal_continuation_abort.contains(&session_id) {
+                        debug!(
+            "Aborting goal continuation submit retries after user cancellation: session_id={}",
+            session_id
+        );
+                        break;
+                    }
+                    if attempt < MAX_THREAD_GOAL_AUTO_CONTINUATIONS {
+                        let delay_ms = goal_continuation_submit_retry_delay_ms(attempt);
+                        warn!(
+            "Goal continuation submit failed; retrying: session_id={}, attempt={}/{}, delay_ms={}, error={}",
+            session_id,
+            attempt,
+            MAX_THREAD_GOAL_AUTO_CONTINUATIONS,
+            delay_ms,
+            last_error.as_ref().unwrap()
+        );
+                        tokio::time::sleep(std::time::Duration::from_millis(delay_ms)).await;
+                    }
+                }
+            }
+        }
+        if let Some(error) = last_error {
+            if !self.goal_continuation_abort.contains(&session_id) {
+                if let Err(block_error) = self
+                    .coordinator
+                    .block_failed_goal_continuation(&session_id, &plan.user_message_metadata)
+                    .await
+                {
+                    warn!(
+                        "Failed to persist stopped goal continuation: session_id={}, error={}",
+                        session_id, block_error
+                    );
+                    self.coordinator.emit_event(AgenticEvent::SystemError {
+                    session_id: Some(session_id.clone()),
+                    error: format!("Goal continuation stopped but its status could not be saved: {block_error}"),
+                    recoverable: true,
+                }).await;
+                }
+                warn!(
+    "Failed to submit goal continuation turn after retries: session_id={}, error={}",
+    session_id, error
+);
+            }
+        }
+    }
+
     /// Background loop that receives turn outcome notifications from the coordinator.
     async fn run_outcome_handler(
         self: &Arc<Self>,
@@ -2683,134 +2796,11 @@ impl DialogScheduler {
                                     let scheduler = Arc::clone(self);
                                     let session_id = session_id.clone();
                                     let active_turn = active_turn.clone();
-                                    tokio::spawn(async move {
-                                        let prepended: Vec<Message> = plan
-                                            .prepended_reminders
-                                            .into_iter()
-                                            .map(|text| {
-                                                Message::internal_reminder(
-                                                    InternalReminderKind::GoalContinuation,
-                                                    text,
-                                                )
-                                            })
-                                            .collect();
-                                        let mut last_error = None;
-                                        for attempt in 1..=MAX_THREAD_GOAL_AUTO_CONTINUATIONS {
-                                            match scheduler
-                                                .coordinator
-                                                .thread_goal_continuation_is_current(
-                                                    &session_id,
-                                                    &plan.user_message_metadata,
-                                                )
-                                                .await
-                                            {
-                                                Ok(true) => {}
-                                                Ok(false) => break,
-                                                Err(error) => {
-                                                    warn!("Cannot verify goal continuation: session_id={}, error={}", session_id, error);
-                                                    scheduler.coordinator.emit_event(AgenticEvent::SystemError {
-                                                        session_id: Some(session_id.clone()),
-                                                        error: format!("Cannot verify goal continuation: {error}"),
-                                                        recoverable: true,
-                                                    }).await;
-                                                    break;
-                                                }
-                                            }
-                                            if scheduler
-                                                .goal_continuation_abort
-                                                .contains(&session_id)
-                                            {
-                                                debug!(
-                                        "Aborting goal continuation submit retries after user cancellation: session_id={}",
-                                        session_id
-                                    );
-                                                break;
-                                            }
-                                            match scheduler
-                                            .submit_with_prepended_messages(
-                                                session_id.clone(),
-                                                "Continue working toward the active thread goal."
-                                                    .to_string(),
-                                                Some(plan.display_message.clone()),
-                                                None,
-                                                active_turn.agent_type_owned(),
-                                                active_turn.workspace_path_owned(),
-                                                active_turn.remote_connection_id_owned(),
-                                                active_turn.remote_ssh_host_owned(),
-                                                DialogSubmissionPolicy::for_source(
-                                                    DialogTriggerSource::AgentSession,
-                                                ),
-                                                None,
-                                                Some(plan.user_message_metadata.clone()),
-                                                prepended.clone(),
-                                                None,
-                                            )
-                                            .await
-                                        {
-                                            Ok(_) => {
-                                                last_error = None;
-                                                break;
-                                            }
-                                            Err(error) => {
-                                                last_error = Some(error);
-                                                if scheduler
-                                                    .goal_continuation_abort
-                                                    .contains(&session_id)
-                                                {
-                                                    debug!(
-                                                "Aborting goal continuation submit retries after user cancellation: session_id={}",
-                                                session_id
-                                            );
-                                                    break;
-                                                }
-                                                if attempt < MAX_THREAD_GOAL_AUTO_CONTINUATIONS {
-                                                    let delay_ms =
-                                                        goal_continuation_submit_retry_delay_ms(
-                                                            attempt,
-                                                        );
-                                                    warn!(
-                                                "Goal continuation submit failed; retrying: session_id={}, attempt={}/{}, delay_ms={}, error={}",
-                                                session_id,
-                                                attempt,
-                                                MAX_THREAD_GOAL_AUTO_CONTINUATIONS,
-                                                delay_ms,
-                                                last_error.as_ref().unwrap()
-                                            );
-                                                    tokio::time::sleep(
-                                                        std::time::Duration::from_millis(delay_ms),
-                                                    )
-                                                    .await;
-                                                }
-                                            }
-                                        }
-                                        }
-                                        if let Some(error) = last_error {
-                                            if !scheduler
-                                                .goal_continuation_abort
-                                                .contains(&session_id)
-                                            {
-                                                if let Err(block_error) = scheduler
-                                                    .coordinator
-                                                    .block_failed_goal_continuation(
-                                                        &session_id,
-                                                        &plan.user_message_metadata,
-                                                    )
-                                                    .await
-                                                {
-                                                    warn!("Failed to persist stopped goal continuation: session_id={}, error={}", session_id, block_error);
-                                                    scheduler.coordinator.emit_event(AgenticEvent::SystemError {
-                                                        session_id: Some(session_id.clone()),
-                                                        error: format!("Goal continuation stopped but its status could not be saved: {block_error}"),
-                                                        recoverable: true,
-                                                    }).await;
-                                                }
-                                                warn!(
-                                        "Failed to submit goal continuation turn after retries: session_id={}, error={}",
-                                        session_id, error
-                                    );
-                                            }
-                                        }
-                                    });
+                                    tokio::spawn(scheduler.submit_goal_continuation(
+                                        session_id,
+                                        active_turn,
+                                        plan,
+                                    ));
                                 }
                                 Ok(None) => {}
                                 Err(error) => {
@@ -4807,6 +4797,63 @@ mod tests {
         .expect_err("empty steering must fail");
 
         assert_eq!(error.kind, PortErrorKind::InvalidRequest);
+    }
+
+    #[tokio::test]
+    async fn thread_goal_submit_retry_does_not_block_another_sessions_outcome() {
+        let (scheduler, sessions, _, root) = test_scheduler_with_persistence(true);
+        for (session, turn) in [
+            ("goal-retry-busy", "first-turn"),
+            ("unrelated-goal-session", "second-turn"),
+        ] {
+            mark_session_processing(&sessions, &root, session, turn).await;
+            sessions
+                .update_session_state(session, SessionState::Idle)
+                .await
+                .unwrap();
+            scheduler.active_turns.insert(
+                session,
+                ActiveDialogTurn::new(
+                    turn.into(),
+                    Some(root.path().to_string_lossy().into_owned()),
+                    None,
+                    None,
+                    "goal-test-missing-agent".into(),
+                    "work".into(),
+                    None,
+                    DialogSubmissionPolicy::for_source(DialogTriggerSource::Cli),
+                    None,
+                ),
+            );
+        }
+        scheduler
+            .coordinator
+            .prepare_prompt_thread_goal("goal-retry-busy", "/goal finish work")
+            .await
+            .unwrap();
+        for (session, turn) in [
+            ("goal-retry-busy", "first-turn"),
+            ("unrelated-goal-session", "second-turn"),
+        ] {
+            scheduler
+                .outcome_sender()
+                .send((
+                    session.into(),
+                    TurnOutcome::Completed {
+                        turn_id: turn.into(),
+                        final_response: "checkpoint".into(),
+                    },
+                ))
+                .unwrap();
+        }
+        tokio::time::timeout(Duration::from_secs(5), async {
+            while scheduler.active_turns.contains("unrelated-goal-session") {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("one session's retry backoff must not block other outcomes");
+        scheduler.goal_continuation_abort.mark("goal-retry-busy");
     }
 
     #[tokio::test]

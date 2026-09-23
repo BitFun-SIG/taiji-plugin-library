@@ -5008,9 +5008,9 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         if result.goal.is_active() {
             self.mark_session_goal_active(session_id, &result.goal);
         }
-        drop(goal_guard);
         self.emit_thread_goal_updated(session_id, Some(result.goal.clone()))
             .await;
+        drop(goal_guard);
         if objective_changed && result.goal.is_active() {
             self.apply_objective_updated_steering(session_id, &result.goal)
                 .await;
@@ -5054,9 +5054,9 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         if result.goal.is_active() {
             self.mark_session_goal_active(session_id, &result.goal);
         }
-        drop(goal_guard);
         self.emit_thread_goal_updated(session_id, Some(result.goal.clone()))
             .await;
+        drop(goal_guard);
         if objective_changed && result.goal.is_active() {
             self.apply_objective_updated_steering(session_id, &result.goal)
                 .await;
@@ -5192,9 +5192,9 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         } else if resuming {
             self.mark_session_goal_active(session_id, &result.goal);
         }
-        drop(goal_guard);
         self.emit_thread_goal_updated(session_id, Some(result.goal.clone()))
             .await;
+        drop(goal_guard);
         if resuming && result.goal.is_active() {
             clear_thread_goal_continuation_abort(session_id);
             self.schedule_thread_goal_resumed_steering(session_id, &result.goal);

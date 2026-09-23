@@ -645,16 +645,20 @@ impl ThreadGoalRuntime {
         mut goal: ThreadGoal,
         facts: ThreadGoalContinuationFacts<'_>,
     ) -> ThreadGoalContinuationOutcome {
-        if !facts.turn_completed {
-            return ThreadGoalContinuationOutcome::none();
-        }
-
         self.account_turn_tokens(
             facts.turn_id,
             facts.turn_tokens,
             &mut goal,
             facts.now_epoch_seconds,
         );
+        if !facts.turn_completed {
+            return ThreadGoalContinuationOutcome {
+                goal_to_persist: Some(goal),
+                plan: None,
+                reached_auto_continuation_limit: false,
+                scheduled_auto_continuation: false,
+            };
+        }
         if goal.status == ThreadGoalStatus::BudgetLimited {
             if self.mark_budget_limit_reported(goal.goal_id.as_str()) {
                 let plan = build_thread_goal_continuation_plan(&goal);

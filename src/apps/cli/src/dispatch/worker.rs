@@ -348,9 +348,9 @@ async fn run_inner(store: &DispatchStore, job_id: &str) -> Result<()> {
                 }
                 if let AgenticEvent::DialogTurnStarted { session_id: owner, turn_id: next_turn, user_message_metadata, .. } = &envelope.event {
                     if owner == &job.request.session_id && goal_run.accept_continuation(user_message_metadata.as_ref()) {
+                        store.advance_goal_turn(job_id, &turn_id, next_turn)?;
                         turn_id = next_turn.clone();
                         event_scope.turn_id = turn_id.clone();
-                        store.mark_state(job_id, DispatchJobState::Running, Some(&turn_id), None)?;
                     }
                 }
                 if !event_scope.admit(&envelope.event) {
