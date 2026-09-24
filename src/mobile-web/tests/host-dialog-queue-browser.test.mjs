@@ -60,7 +60,7 @@ test('queue stays above the measured composer across phone, keyboard-height and 
   const page=await browser.newPage();
   for(const [width,height] of [[320,568],[390,844],[390,420],[768,800],[1200,900]]) {
    await page.setViewport({width,height});
-   await page.goto(server.origin+'/tests/fixtures/host-queue.html?count=8');
+   await page.goto(server.origin+'/tests/fixtures/host-queue.html?count=8&theme='+ (width===768 ? 'light' : 'dark'));
    await page.waitForSelector('.host-message-queue li');
    await page.waitForFunction(()=>{
     const wrap=document.querySelector('.chat-page__input-wrap');
@@ -99,6 +99,21 @@ test('queue stays above the measured composer across phone, keyboard-height and 
   await page.goto(server.origin+'/tests/fixtures/host-queue.html?count=2&expanded=false');
   await page.waitForSelector('.host-message-queue li');
   assert.equal(await page.$('.chat-page__input'),null,'queue controls also work alongside the collapsed composer');
+  const geometry=await page.evaluate(()=>{
+    const box=s=>document.querySelector(s).getBoundingClientRect();
+    const composer=box('.chat-page__composer'),stop=box('.chat-page__send-btn.is-stop');
+    const plus=box('.chat-page__composer-leading');
+    const text=box('.chat-msg__assistant-content');
+    const icon=box('.chat-thinking [data-openbitfun-part="leading"]');
+    return {top:stop.top-composer.top,bottom:composer.bottom-stop.bottom,right:composer.right-stop.right,
+      left:plus.left-composer.left,width:stop.width,plusWidth:plus.width,
+      textLeft:text.left+parseFloat(getComputedStyle(document.querySelector('.chat-msg__assistant-content')).paddingLeft),iconLeft:icon.left};
+  });
+  assert.equal(geometry.width,44);
+  assert.equal(geometry.plusWidth,44);
+  for(const edge of ['top','bottom','left']) assert.ok(Math.abs(geometry[edge]-geometry.right)<1,JSON.stringify(geometry));
+  assert.ok(Math.abs(geometry.textLeft-geometry.iconLeft)<1,JSON.stringify(geometry));
+  await page.screenshot({path:'/tmp/mobile-queue-aligned.png',fullPage:true});
   await page.click('[aria-label="排队消息说明"]');
   await page.waitForSelector('.host-message-queue__help');
   await page.click('[aria-label="排队消息说明"]');

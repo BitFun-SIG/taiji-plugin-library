@@ -10,7 +10,8 @@
   font-size: var(--openbitfun-type-body-sm-font-size);
   line-height: var(--openbitfun-type-body-sm-line-height);
 
-  &__header { display: flex; align-items: center; padding: 0 12px; }
+  // 7px + half a 40px queue control matches the composer: 5px + half of 44px.
+  &__header { display: flex; align-items: center; padding: 0 7px 0 12px; }
   &__toggle {
     display: flex;
     align-items: center;
@@ -53,7 +54,7 @@
   &__list {
     list-style: none;
     margin: 0;
-    padding: 0 12px;
+    padding: 0 7px 0 12px;
     li { padding: 4px 0; border-top: 1px solid var(--openbitfun-color-border-subtle); }
     p { margin: 0 0 4px; }
   }
