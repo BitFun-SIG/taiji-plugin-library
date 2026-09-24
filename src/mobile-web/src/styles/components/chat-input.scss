@@ -619,7 +619,7 @@
   opacity: 1;
 }
 
-.chat-page__send-btn { border-radius: 20px; }
+.chat-page__send-btn { border-radius: 50%; }
 
 .chat-page__send-btn.is-stop:focus-visible {
   outline: 2px solid var(--openbitfun-color-focus-ring);

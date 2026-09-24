@@ -80,8 +80,14 @@ turn runs. Accepted follow-ups appear in the host message queue, shared with the
 desktop and supported Peer Device controllers. Closing this page, disconnecting
 the phone, or leaving the session does not stop host-side dispatch.
 
-- **Send now** starts the selected message when idle or steers it into the
-  observed active turn. Waiting for steering is distinct from being consumed.
+- **Send now** starts the selected message when idle. While a turn runs, the
+  host finishes the current atomic action and starts the selected message as
+  the next regular user turn. It has its own history and navigation entry on
+  desktop and mobile; existing tool results stay with the preceding turn.
+  Acceptance is distinct from the new turn actually starting. Older hosts may
+  still render steering inline within the active turn. The turn-scoped SDK
+  steering API used by CLI/Dispatch retains its inline contract; this handoff
+  belongs to host queue promotion.
 - **Remove from queue** only removes an unstarted message. It never stops the
   active turn. An operation that lost a race with dispatch is rejected.
 - A failed turn or unconsumed steering retains the message as blocked on the

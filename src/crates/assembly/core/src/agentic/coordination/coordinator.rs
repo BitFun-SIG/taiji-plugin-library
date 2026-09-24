@@ -3050,7 +3050,10 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         }
 
         if persistence_succeeded {
-            let status = if execution_result.success && execution_result.has_final_response {
+            let status = if execution_result.success
+                && (execution_result.has_final_response
+                    || execution_result.effective_finish_reason == "user_steering")
+            {
                 AgentTurnSettlementStatus::Completed
             } else {
                 AgentTurnSettlementStatus::Failed
@@ -3060,7 +3063,8 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 turn_id,
                 AgentTurnSettlementResult {
                     status,
-                    final_response: (status == AgentTurnSettlementStatus::Completed)
+                    final_response: (status == AgentTurnSettlementStatus::Completed
+                        && execution_result.has_final_response)
                         .then_some(final_response.clone()),
                     finish_reason: Some(execution_result.effective_finish_reason.clone()),
                 },
@@ -17434,6 +17438,87 @@ mod tests {
             Some("complete response".to_string())
         );
 
+        let events = coordinator.event_queue.dequeue_batch(10).await;
+        assert!(events.iter().any(|envelope| matches!(
+            &envelope.event,
+            AgenticEvent::SessionHistoryChanged {
+                session_id,
+                settled_turn_id: Some(settled_turn_id),
+            } if session_id == &session.session_id && settled_turn_id == &turn_id
+        )));
+        session_manager
+            .delete_session_by_id(&session.session_id)
+            .await
+            .expect("clean up persisted test session");
+    }
+
+    #[tokio::test]
+    async fn steering_handoff_settles_without_fabricating_a_final_response() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        crate::service::workspace::legacy_compat::register_local_fixture_blocking(workspace.path());
+        let (coordinator, session_manager) = test_persistent_coordinator();
+        let session = session_manager
+            .create_session(
+                "Durable completion".to_string(),
+                "Standard".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().into_owned()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("create session");
+        let turn_id = session_manager
+            .start_dialog_turn(
+                &session.session_id,
+                "Standard".to_string(),
+                "finish".to_string(),
+                Some("turn-durable-fence".to_string()),
+                None,
+                None,
+            )
+            .await
+            .expect("start turn");
+        let message = Message::assistant("complete response".to_string())
+            .with_turn_id(turn_id.clone())
+            .with_round_id("round-final".to_string());
+
+        ConversationCoordinator::persist_completed_dialog_turn(
+            coordinator.event_queue.as_ref(),
+            session_manager.as_ref(),
+            None,
+            &session.session_id,
+            &turn_id,
+            &ExecutionResult {
+                final_message: message.clone(),
+                total_rounds: 1,
+                success: true,
+                new_messages: vec![message],
+                finish_reason: FinishReason::Complete,
+                total_tools: 0,
+                duration_ms: 1,
+                partial_recovery_reason: None,
+                effective_finish_reason: "user_steering".to_string(),
+                has_final_response: false,
+            },
+            None,
+        )
+        .await;
+
+        assert_eq!(
+            session_manager
+                .turn_settlement_result(&session.session_id, &turn_id)
+                .and_then(|result| result.final_response),
+            None
+        );
+
+        assert_eq!(
+            session_manager
+                .turn_settlement_result(&session.session_id, &turn_id)
+                .unwrap()
+                .status,
+            AgentTurnSettlementStatus::Completed
+        );
         let events = coordinator.event_queue.dequeue_batch(10).await;
         assert!(events.iter().any(|envelope| matches!(
             &envelope.event,

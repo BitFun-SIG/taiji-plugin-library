@@ -82,19 +82,6 @@ export default function ChatComposerBar({
                 size="sm"
               />
             ) : null}
-            {streaming && (
-              <MobileIconButton
-                appearance="plain"
-                aria-label={t('common.stop')}
-                className={`chat-page__send-btn is-stop${cancelling ? ' is-cancelling' : ''}`}
-                disabled={cancelling}
-                icon={cancelling
-                  ? <span className="chat-page__stop-spinner" aria-hidden="true" />
-                  : <span className="chat-page__stop-glyph" aria-hidden="true" />}
-                onClick={onCancel}
-                size="sm"
-              />
-            )}
             {!imageAnalyzing && (expanded || input.trim() || pendingImages.length > 0) ? (
               <MobileIconButton
                 appearance="plain"
@@ -108,6 +95,19 @@ export default function ChatComposerBar({
                 size="sm"
               />
             ) : null}
+            {streaming && (
+              <MobileIconButton
+                appearance="plain"
+                aria-label={t('common.stop')}
+                className={`chat-page__send-btn is-stop${cancelling ? ' is-cancelling' : ''}`}
+                disabled={cancelling}
+                icon={cancelling
+                  ? <span className="chat-page__stop-spinner" aria-hidden="true" />
+                  : <span className="chat-page__stop-glyph" aria-hidden="true" />}
+                onClick={onCancel}
+                size="sm"
+              />
+            )}
           </>
         )}
         expanded={expanded}

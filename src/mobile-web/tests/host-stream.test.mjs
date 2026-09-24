@@ -238,3 +238,38 @@ test('loadOlder that lands on a restarted host resyncs and reports the restart',
   f.stream.close();
   await assert.doesNotReject(f.stream.loadOlder(), 'a closed stream answers immediately');
 });
+
+test('formal steering turns render once with stable message ownership after history replay', async () => {
+  async function load(path) {
+    const source = await readFile(new URL(path, import.meta.url), 'utf8');
+    const compiled = ts.transpileModule(source, {compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText;
+    return import(`data:text/javascript;base64,${Buffer.from(compiled).toString('base64')}`);
+  }
+  const {SessionRecordReplica} = await load('../../shared/relay-transport/SessionRecordReplica.ts');
+  const {presentSessionTurn} = await load('../src/services/SessionRecordPresentation.ts');
+  const turn = (id, index, content) => ({sessionId:'s1',turnId:id,turnIndex:index,status:'completed',timestamp:index,
+    userMessage:{id:`user-${id}`,content,timestamp:index}});
+  const first=turn('original',0,'Original request'), next=turn('steered',1,'New direction');
+  const records=[
+    {sessionId:'s1',id:'turn/original',revision:1,turn:first},
+    {sessionId:'s1',id:'item/tool-old',revision:2,turn:first,
+      round:{id:'round-old',turnId:'original',roundIndex:0},
+      item:{type:'tool',data:{id:'tool-old',toolName:'Read',status:'completed',toolCall:{id:'call-old',input:{}},toolResult:{success:true,result:'old result'}}}},
+    {sessionId:'s1',id:'turn/steered',revision:3,turn:next},
+    {sessionId:'s1',id:'item/text-new',revision:4,turn:next,
+      round:{id:'round-new',turnId:'steered',roundIndex:0},
+      item:{type:'text',data:{id:'text-new',content:'New answer'}}},
+  ];
+  function render(events) {
+    const replica=new SessionRecordReplica('s1'),turns=new Map();
+    for (const record of events) {const change=replica.apply(record);if(change?.turn)turns.set(change.turnId,change.turn);}
+    return [...turns.values()].sort((a,b)=>a.turnIndex-b.turnIndex).flatMap(presentSessionTurn);
+  }
+  const live=render(records);
+  assert.deepEqual(live.filter(message=>message.role==='user').map(message=>[message.id,message.content]),
+    [['user-original','Original request'],['user-steered','New direction']]);
+  assert.equal(live[1].tools[0].id,'call-old');
+  assert.equal(live[3].tools.length,0);
+  assert.equal(live[3].content,'New answer');
+  assert.deepEqual(render([...records].reverse().concat(records)),live,'newest-first reconnect and duplicate replay retain the same transcript');
+});

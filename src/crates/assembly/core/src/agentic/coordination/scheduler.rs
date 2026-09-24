@@ -321,7 +321,27 @@ impl DialogRoundInjectionSource for SchedulerRoundInjectionSource {
     }
 
     fn take_pending(&self, session_id: &str, turn_id: &str) -> Vec<RoundInjection> {
-        self.buffer.drain_for_turn(session_id, turn_id)
+        // Hold receipt state through the drain: promotion registers its receipt
+        // before publishing the injection. A racing promotion must never be
+        // mistaken for the turn-scoped SDK's legacy inline input.
+        let queue = self
+            .host_queue
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        let managed = queue.pending_steering_ids(session_id, turn_id);
+        self.buffer
+            .drain_matching_for_turn(session_id, turn_id, |message| {
+                !managed.contains(&message.id)
+            })
+    }
+
+    fn should_yield_to_user_turn(&self, session_id: &str, turn_id: &str) -> bool {
+        !self
+            .host_queue
+            .lock()
+            .unwrap_or_else(|error| error.into_inner())
+            .pending_steering_ids(session_id, turn_id)
+            .is_empty()
     }
 
     fn acknowledge_consumed(
@@ -2671,7 +2691,7 @@ impl DialogScheduler {
         mut outcome_rx: mpsc::UnboundedReceiver<(String, TurnOutcome)>,
     ) {
         while let Some((session_id, outcome)) = outcome_rx.recv().await {
-            let (active_turn, active_internal_turn, lifecycle_plan) = {
+            let (active_turn, active_internal_turn, lifecycle_plan, has_user_successor) = {
                 let _operation_guard = self.lock_session_operation(&session_id).await;
                 let Some(active_turn_result) = take_active_turn_for_outcome(
                     &self.active_turns,
@@ -2714,6 +2734,12 @@ impl DialogScheduler {
                 });
                 let lifecycle_plan =
                     resolve_turn_outcome_lifecycle_plan(&outcome, active_turn.is_some());
+                if active_turn.is_some() && lifecycle_plan.status == TurnOutcomeStatus::Completed {
+                    self.release_steering_turns(&session_id, outcome.turn_id());
+                }
+                // Include inputs already released by an earlier handoff. Each
+                // queued human turn takes priority over automatic goal follow-ups.
+                let has_user_successor = self.has_queued_host_message(&session_id);
                 let retired_injections = self
                     .host_queue
                     .lock()
@@ -2755,7 +2781,12 @@ impl DialogScheduler {
                         self.requeue_front(&session_id, turn);
                     }
                 }
-                (active_turn, active_internal_turn, lifecycle_plan)
+                (
+                    active_turn,
+                    active_internal_turn,
+                    lifecycle_plan,
+                    has_user_successor,
+                )
             };
             let status = lifecycle_plan.status;
             let queue_action = lifecycle_plan.queue_action;
@@ -2827,7 +2858,9 @@ impl DialogScheduler {
                                     outcome.turn_id(),
                                     active_turn.user_input(),
                                     active_turn.user_message_metadata(),
-                                    turn_completed,
+                                    // Account usage, but the accepted human turn
+                                    // replaces automatic goal continuation.
+                                    turn_completed && !has_user_successor,
                                 )
                                 .await
                             {

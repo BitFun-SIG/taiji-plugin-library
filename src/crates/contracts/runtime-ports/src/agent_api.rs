@@ -1041,6 +1041,13 @@ pub trait DialogRoundInjectionSource: Send + Sync {
     ) -> RoundInjectionToolPreemption;
     fn take_pending(&self, session_id: &str, turn_id: &str) -> Vec<RoundInjection>;
 
+    /// End the current execution at an atomic boundary so the scheduler can
+    /// start an accepted user message as a normal, persisted dialog turn.
+    /// Legacy providers retain their inline-injection behavior by default.
+    fn should_yield_to_user_turn(&self, _session_id: &str, _turn_id: &str) -> bool {
+        false
+    }
+
     fn acknowledge_consumed(
         &self,
         _session_id: &str,
