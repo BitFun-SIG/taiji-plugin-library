@@ -4,6 +4,8 @@ import '@openbitfun/theme-openbitfun/default.css';
 import '@openbitfun/ui/mobile.css';
 import '../../src/styles/index.scss';
 import { createRoot } from 'react-dom/client';
+import { ThinkingBlock } from '../../src/components/ChatTranscript';
+import { MarkdownContent } from '../../src/components/ChatMarkdown';
 import ChatComposerBar from '../../src/components/ChatComposerBar';
 import { MobileHostQueue } from '../../src/components/MobileHostQueue';
 import { useMobileViewport } from '../../src/hooks/useMobileViewport';
@@ -37,7 +39,7 @@ export function mountHostQueueFixture({ count = 1, expanded = true } = {}) {
     }, []);
     return <ThemeProvider><I18nProvider><div className={`chat-page${window.innerWidth >= 900 ? ' chat-page--wide' : ''}`} style={{ '--chat-composer-height': `${height}px` } as React.CSSProperties}>
     <header className="chat-page__header">项目介绍</header>
-    <div className="chat-page__messages"><p>正在检查代码和测试覆盖。</p><p>ExecCommand</p><p>分析当前项目的实现。</p></div>
+    <div className="chat-page__messages"><div className="chat-msg chat-msg--assistant"><ThinkingBlock thinking="检查代码和测试覆盖。" /><div className="chat-msg__assistant-content"><MarkdownContent content={"我先看一下工作区，再继续分析实现。\n\nhttps://example.com/very/long/path/that/should/wrap/without/overflowing/the/mobile/viewport"} /></div></div></div>
     <ChatComposerBar queueContent={<MobileHostQueue queue={queue} onRestore={noop} />}
       cancelling={false} containerRef={ref} expanded={expanded} imageAnalyzing={false} sending={false}
       input="继续检查" inputRef={null} modelControls={null} onActivate={noop} onAttach={noop} onCancel={() => calls.push('stop')}
