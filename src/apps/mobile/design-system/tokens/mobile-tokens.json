@@ -430,6 +430,7 @@
   "motion": {
     "quick": 180,
     "structure": 220,
-    "startup_brand": 6800
+    "startup_brand": 6800,
+    "cold_start_home": 2400
   }
 }

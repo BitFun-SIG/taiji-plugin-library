@@ -250,4 +250,5 @@ export class MobileDesignMotion {
   static readonly quick: number = 180;
   static readonly structure: number = 220;
   static readonly startupBrand: number = 6800;
+  static readonly coldStartHome: number = 2400;
 }

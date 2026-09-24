@@ -150,6 +150,15 @@ removing the running action. Test both postures and restore normal App afterward
 
 ## Theme and device verification
 
+For cold-start home animation geometry, launch the isolated design preview with
+`hdc shell aa start -a EntryAbility -b <bundle-id> --ps openbitfunDesignPreview cold-start-home`
+(or `cold-start-home-dark`). Use **Replay** to run the production 2400 ms
+transition over the production recent-home component and **Resize** during
+playback to remeasure its anchor. This fixture does not load account or remote
+state. Check compact and wide windows separately, then force-stop and start the
+normal EntryAbility without preview arguments. A fixture check does not replace
+authenticated cold-process, signed-out, and background/foreground verification.
+
 - Use existing semantic colors from `Theme.ets`; do not hard-code a light-only foreground or surface color.
 - For changes to navigation controls, menus, or responsive presentation, verify compact and wide behavior, light and dark theme legibility, and capture a real-device screenshot before completion when a device is connected.
 - Run the smallest matching HarmonyOS build/check plus `pnpm run theme:color-audit:all` for theme or color-related changes.

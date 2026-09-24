@@ -126,7 +126,7 @@ private fun PaneSeparator(gapWidth: Int) {
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun MobileScreen() {
+internal fun MobileScreen(onAccountRestored: (Boolean) -> Unit = {}) {
     var compactDrawerOpen by rememberSaveable { mutableStateOf(false) }
     val shell = rememberAppShellState()
 
@@ -137,6 +137,11 @@ internal fun MobileScreen() {
     val accountPhase by accountViewModel.connectionPhase.collectAsStateWithLifecycle()
     val accountWorkspaceDirectory by accountViewModel.workspaceDirectory.collectAsStateWithLifecycle()
     val readyAccount = accountState as? AccountUiState.Ready
+    LaunchedEffect(accountState) {
+        if (accountState !is AccountUiState.Idle && accountState !is AccountUiState.Restoring) {
+            onAccountRestored(readyAccount?.userId?.isNotBlank() == true)
+        }
+    }
     val linkContext = androidx.compose.ui.platform.LocalContext.current
     var pendingDeviceLink by rememberSaveable { mutableStateOf<String?>(null) }
     val connectDeviceLink: (String) -> Unit = { url ->
