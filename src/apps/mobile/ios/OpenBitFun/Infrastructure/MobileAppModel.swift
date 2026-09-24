@@ -80,6 +80,7 @@ final class MobileAppModel: ObservableObject {
     @Published var pairingBusy = false
     @Published var pairingError: String?
     @Published var coreErrorMessage: String?
+    @Published var launchAccountRestored: Bool? = nil
     @Published var accountUser: String?
     @Published var accountUserID: String?
     @Published var localDeviceID = ""

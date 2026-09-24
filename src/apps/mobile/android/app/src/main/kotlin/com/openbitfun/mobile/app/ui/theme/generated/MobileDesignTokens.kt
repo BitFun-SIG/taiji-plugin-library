@@ -271,4 +271,5 @@ internal object MobileDesignMotion {
     const val Quick: Int = 180
     const val Structure: Int = 220
     const val StartupBrand: Int = 6800
+    const val ColdStartHome: Int = 2400
 }

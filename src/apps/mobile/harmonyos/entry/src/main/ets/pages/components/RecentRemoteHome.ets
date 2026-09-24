@@ -1,3 +1,4 @@
+import { ColdStartPresentationState } from '../state/ColdStartPresentationState';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { MobileDesignGeometry, MobileDesignTypography } from '../../generated/MobileDesignTokens';
 import { WelcomeBrandFlow } from './WelcomeBrandFlow';
@@ -8,6 +9,7 @@ import { INK, MUTED, SOFT, LINE, TRANSPARENT } from './Theme';
 /** Current-device landing page. Session activation stays with the remote owner. */
 @ComponentV2
 export struct RecentRemoteHome {
+  @Consumer() coldStartGeometry: ColdStartPresentationState = new ColdStartPresentationState();
   @Param connected: boolean = false;
   @Param busy: boolean = false;
   @Param sessions: RemoteSession[] = [];
@@ -33,11 +35,18 @@ export struct RecentRemoteHome {
     return [this.desktopName, workspace].filter((value: string): boolean => value.length > 0).join(' · ');
   }
 
+  aboutToDisappear(): void { this.coldStartGeometry.targetSize = 0; }
+
   build() {
     Scroll() {
       Column() {
         Column() {
           WelcomeBrandFlow({ markSize: MobileDesignGeometry.recentHomeMarkSize, sweep: true })
+            .onAreaChange((_old: Area, area: Area) => {
+              this.coldStartGeometry.targetX = Number(area.globalPosition.x) + Number(area.width) / 2;
+              this.coldStartGeometry.targetY = Number(area.globalPosition.y) + Number(area.height) / 2;
+              this.coldStartGeometry.targetSize = Number(area.width);
+            })
             .margin({ top: 20, bottom: 8 })
           Text(RemoteI18n.t('home.recent_title')).fontSize(MobileDesignTypography.headlineLarge.size)
             .fontWeight(FontWeight.Medium).fontColor(INK).textAlign(TextAlign.Center)

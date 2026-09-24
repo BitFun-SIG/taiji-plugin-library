@@ -214,4 +214,5 @@ enum MobileDesignMotion {
     static let quick: CGFloat = 180
     static let structure: CGFloat = 220
     static let startupBrand: CGFloat = 6800
+    static let coldStartHome: CGFloat = 2400
 }

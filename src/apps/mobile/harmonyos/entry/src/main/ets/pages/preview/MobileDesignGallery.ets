@@ -1,4 +1,5 @@
 import { HistoryScrollPreview } from './HistoryScrollPreview';
+import { ColdStartHomePreview } from './ColdStartHomePreview';
 import { ComposerSubmissionPreview } from './ComposerSubmissionPreview';
 import { DurableTimelinePreview } from './DurableTimelinePreview';
 import { DeviceSelectorPreview } from './DeviceSelectorPreview';
@@ -37,7 +38,9 @@ struct MobileDesignGallery {
   }
 
   build() {
-    if (AppStorage.get<string>('scenarioId') === 'history-scroll') {
+    if ((AppStorage.get<string>('scenarioId') || '').startsWith('cold-start-home')) {
+      ColdStartHomePreview()
+    } else if (AppStorage.get<string>('scenarioId') === 'history-scroll') {
       HistoryScrollPreview()
     } else if (AppStorage.get<string>('scenarioId') === 'durable-timeline') {
       DurableTimelinePreview()
