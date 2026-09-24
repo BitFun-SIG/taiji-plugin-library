@@ -655,6 +655,30 @@ fn round_injection_buffer_drains_only_messages_for_the_active_turn() {
 }
 
 #[test]
+fn human_turn_handoff_leaves_runtime_reminders_and_other_targets_intact() {
+    let buffer = SessionRoundInjectionBuffer::default();
+    buffer.push("s1", exact_turn_msg("turn-a", "first"));
+    buffer.push("s1", current_turn_msg("background"));
+    buffer.push("s1", exact_turn_msg("turn-b", "other"));
+    buffer.push("s1", exact_turn_msg("turn-a", "second"));
+    let human = buffer.drain_matching_for_turn("s1", "turn-a", |message| {
+        message.kind == RoundInjectionKind::UserSteering
+    });
+    assert_eq!(
+        human
+            .iter()
+            .map(|message| message.content.as_str())
+            .collect::<Vec<_>>(),
+        vec!["first", "second"]
+    );
+    assert_eq!(
+        buffer.drain_for_turn("s1", "turn-a")[0].content,
+        "background"
+    );
+    assert_eq!(buffer.drain_for_turn("s1", "turn-b")[0].content, "other");
+}
+
+#[test]
 fn round_injection_buffer_removes_one_exact_delivery_by_id() {
     let buffer = SessionRoundInjectionBuffer::default();
     buffer.push("s1", exact_turn_msg("turn-a", "first"));

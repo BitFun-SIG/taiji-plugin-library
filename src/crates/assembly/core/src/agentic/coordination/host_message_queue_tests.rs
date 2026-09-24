@@ -103,7 +103,7 @@ async fn host_queue_cancel_is_idempotent_and_never_cancels_active_turn() {
 }
 
 #[tokio::test]
-async fn host_queue_steering_retains_payload_until_consumption_and_rejects_cancel() {
+async fn host_queue_steering_retains_payload_until_formal_turn_handoff_and_rejects_cancel() {
     let (scheduler, _, _root, epoch) = fixture().await;
     scheduler
         .manage_host_queue(request(
@@ -128,7 +128,13 @@ async fn host_queue_steering_retains_payload_until_consumption_and_rejects_cance
     let injections = scheduler
         .round_injection_source
         .take_pending("host-queue-session", "active-turn");
-    assert_eq!(injections.len(), 1);
+    assert!(
+        injections.is_empty(),
+        "human inputs must not become inline injections"
+    );
+    assert!(scheduler
+        .round_injection_source
+        .should_yield_to_user_turn("host-queue-session", "active-turn"));
     assert_eq!(
         scheduler.queue_depth("host-queue-session"),
         1,
@@ -146,13 +152,8 @@ async fn host_queue_steering_retains_payload_until_consumption_and_rejects_cance
         .unwrap_err()
         .message
         .contains("too_late"));
-    let injection = &injections[0];
-    scheduler.round_injection_source.acknowledge_consumed(
-        "host-queue-session",
-        "active-turn",
-        &injection.id,
-        injection.kind,
-    );
+    assert!(scheduler.release_steering_turns("host-queue-session", "active-turn"));
+    assert!(!scheduler.release_steering_turns("host-queue-session", "active-turn"));
     let result = scheduler
         .manage_host_queue(request(
             Some(&epoch),
@@ -162,8 +163,17 @@ async fn host_queue_steering_retains_payload_until_consumption_and_rejects_cance
         ))
         .await
         .unwrap();
-    assert_eq!(result.receipt.unwrap().status, Status::Steered);
-    assert_eq!(result.used, 0);
+    assert_eq!(result.receipt.unwrap().status, Status::Queued);
+    assert_eq!(result.used, 1);
+    assert_eq!(scheduler.queues.depth("host-queue-session"), 1);
+    assert_eq!(
+        scheduler
+            .dequeue_next("host-queue-session")
+            .unwrap()
+            .turn_id
+            .as_deref(),
+        Some("queued-a")
+    );
 }
 
 #[tokio::test]
@@ -1123,7 +1133,7 @@ fn host_queue_new_prompt_after_error_survives_delayed_failure_cleanup() {
 }
 
 #[tokio::test]
-async fn thread_goal_host_queue_promote_activates_once() {
+async fn thread_goal_host_queue_promote_preserves_one_unmodified_user_turn() {
     let (scheduler, sessions, _, root) = test_scheduler_with_persistence(true);
     mark_session_processing(&sessions, &root, "host-queue-session", "active-turn").await;
     scheduler
@@ -1159,20 +1169,254 @@ async fn thread_goal_host_queue_promote_activates_once() {
         .effective_session_storage_path("host-queue-session")
         .await
         .unwrap();
-    let goal = scheduler
+    assert!(scheduler
         .coordinator
         .get_thread_goal("host-queue-session", &storage)
         .await
         .unwrap()
+        .is_none());
+    assert!(scheduler.release_steering_turns("host-queue-session", "active-turn"));
+    let turn = scheduler.dequeue_next("host-queue-session").unwrap();
+    assert_eq!(turn.turn_id.as_deref(), Some("queued-goal"));
+    assert_eq!(turn.user_input, "/goal finish queued work");
+    assert!(!scheduler.release_steering_turns("host-queue-session", "active-turn"));
+}
+
+#[test]
+fn steering_creates_persisted_user_turns_in_order_without_a_connected_caller() {
+    run_host_queue_lifecycle_test(|| async {
+        let (scheduler, sessions, _, root) = test_scheduler_with_persistence(true);
+        let id = "host-queue-session";
+        let workspace = fixture_workspace_dir(root.path().join("steering-history"));
+        sessions
+            .create_session_with_id(
+                Some(id.into()),
+                "Steering history".into(),
+                "Standard".into(),
+                SessionConfig {
+                    workspace_path: Some(workspace.to_string_lossy().into_owned()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .unwrap();
+        sessions
+            .start_dialog_turn(
+                id,
+                "Standard".into(),
+                "first question".into(),
+                Some("original-turn".into()),
+                None,
+                None,
+            )
+            .await
+            .unwrap();
+        scheduler
+            .active_turns
+            .insert(id, desktop_active_turn("original-turn"));
+        TEST_MODEL_RESOLUTION_AI_CONFIG
+            .scope(
+                host_queue_lifecycle_model(),
+                sessions.update_session_model_id(id, "queue-lifecycle-model"),
+            )
+            .await
+            .unwrap();
+        let epoch = scheduler
+            .manage_host_queue(request(None, Action::List))
+            .await
+            .unwrap()
+            .queue_epoch;
+        for turn_id in ["waiting", "steer-a", "steer-b"] {
+            let mut input = message(turn_id);
+            input.content = format!("content {turn_id}");
+            input.metadata.insert(
+                "context".into(),
+                serde_json::json!({"path":"/workspace/source.rs"}),
+            );
+            scheduler
+                .manage_host_queue(request(Some(&epoch), Action::Submit { message: input }))
+                .await
+                .unwrap();
+        }
+        for turn_id in ["steer-a", "steer-b"] {
+            let promote = request(
+                Some(&epoch),
+                Action::Promote {
+                    turn_id: turn_id.into(),
+                    operation_id: format!("promote-{turn_id}"),
+                    expected_active_turn_id: Some("original-turn".into()),
+                },
+            );
+            scheduler.manage_host_queue(promote.clone()).await.unwrap();
+            scheduler.manage_host_queue(promote).await.unwrap();
+        }
+        assert!(scheduler
+            .round_injection_source
+            .should_yield_to_user_turn(id, "original-turn"));
+        assert!(scheduler
+            .round_injection_source
+            .take_pending(id, "original-turn")
+            .is_empty());
+        let storage = sessions.effective_session_storage_path(id).await.unwrap();
+        scheduler
+            .coordinator
+            .create_thread_goal(id, &storage, "finish the requested work".into(), Some(1000))
+            .await
+            .unwrap();
+        scheduler
+            .coordinator
+            .thread_goal_runtime(id)
+            .record_round_billable_tokens("original-turn", 25);
+
+        // Settle real persistent turns through the same owner used by execution.
+        // No further mutation from the submitting mobile/desktop caller is needed.
+        for (finished, next, index) in [("original-turn", "steer-a", 1), ("steer-a", "steer-b", 2)]
+        {
+            let answer =
+                Message::assistant(format!("response {finished}")).with_turn_id(finished.into());
+            sessions
+                .complete_dialog_turn(
+                    id,
+                    finished,
+                    format!("response {finished}"),
+                    &[answer],
+                    crate::agentic::core::TurnStats::default(),
+                    Some("user_steering".into()),
+                    Some(false),
+                )
+                .await
+                .unwrap();
+            sessions
+                .update_session_state(id, SessionState::Idle)
+                .await
+                .unwrap();
+            process_host_queue_outcome(
+                &scheduler,
+                TurnOutcome::Completed {
+                    turn_id: finished.into(),
+                    final_response: String::new(),
+                },
+            )
+            .await;
+            assert!(scheduler.active_turns.matches_turn(id, next));
+            let goal = scheduler
+                .coordinator
+                .get_thread_goal(id, &storage)
+                .await
+                .unwrap()
+                .unwrap();
+            assert_eq!(
+                goal.tokens_used, 25,
+                "handoff preserves old-turn accounting"
+            );
+            assert_eq!(
+                goal.auto_continuation_count, 0,
+                "human turn needs no automatic continuation"
+            );
+
+            assert_eq!(sessions.get_turn_count(id), index + 1);
+            let persisted = sessions
+                .persistence_manager()
+                .load_dialog_turn(&storage, id, index)
+                .await
+                .unwrap()
+                .unwrap();
+            assert_eq!(persisted.turn_id, next);
+            assert_eq!(persisted.user_message.content, format!("content {next}"));
+            assert_eq!(
+                persisted.user_message.metadata.as_ref().unwrap()["context"]["path"],
+                "/workspace/source.rs"
+            );
+            let preceding = sessions
+                .persistence_manager()
+                .load_dialog_turn(&storage, id, index - 1)
+                .await
+                .unwrap()
+                .unwrap();
+            assert_eq!(preceding.turn_id, finished);
+            assert!(
+                !preceding.model_rounds.is_empty(),
+                "previous output stays with the previous user message"
+            );
+            // Duplicate old outcomes must not retire or duplicate the new execution.
+            process_host_queue_outcome(
+                &scheduler,
+                TurnOutcome::Completed {
+                    turn_id: finished.into(),
+                    final_response: String::new(),
+                },
+            )
+            .await;
+            assert!(scheduler.active_turns.matches_turn(id, next));
+            assert_eq!(sessions.get_turn_count(id), index + 1);
+        }
+        assert_eq!(
+            scheduler.dequeue_next(id).unwrap().turn_id.as_deref(),
+            Some("waiting")
+        );
+        let _ = scheduler
+            .coordinator
+            .cancel_dialog_turn(id, "steer-b")
+            .await;
+    });
+}
+
+#[tokio::test]
+async fn host_queue_handoff_preserves_turn_scoped_sdk_steering() {
+    let (scheduler, _, _root, epoch) = fixture().await;
+    scheduler
+        .buffer_steering(
+            "host-queue-session".into(),
+            "active-turn".into(),
+            "SDK input".into(),
+            None,
+            Vec::new(),
+            serde_json::Map::new(),
+        )
+        .await
         .unwrap();
-    assert!(goal.is_active());
-    assert_eq!(goal.objective, "finish queued work");
-    let injections = scheduler
+    assert!(!scheduler
+        .round_injection_source
+        .should_yield_to_user_turn("host-queue-session", "active-turn"));
+    scheduler
+        .manage_host_queue(request(
+            Some(&epoch),
+            Action::Submit {
+                message: message("queued-user"),
+            },
+        ))
+        .await
+        .unwrap();
+    scheduler
+        .manage_host_queue(request(
+            Some(&epoch),
+            Action::Promote {
+                turn_id: "queued-user".into(),
+                operation_id: "promote-user".into(),
+                expected_active_turn_id: Some("active-turn".into()),
+            },
+        ))
+        .await
+        .unwrap();
+    let inline = scheduler
         .round_injection_source
         .take_pending("host-queue-session", "active-turn");
-    assert_eq!(injections.len(), 1);
-    assert_eq!(injections[0].display_content, "/goal finish queued work");
-    assert!(injections[0]
-        .content
-        .contains("<untrusted_objective>\nfinish queued work"));
+    assert_eq!(inline.len(), 1);
+    assert_eq!(inline[0].content, "SDK input");
+    assert!(scheduler
+        .round_injection_source
+        .should_yield_to_user_turn("host-queue-session", "active-turn"));
+    assert!(scheduler.release_steering_turns("host-queue-session", "active-turn"));
+    assert!(!scheduler
+        .round_injection_source
+        .should_yield_to_user_turn("host-queue-session", "active-turn"));
+    assert_eq!(
+        scheduler
+            .dequeue_next("host-queue-session")
+            .unwrap()
+            .turn_id
+            .as_deref(),
+        Some("queued-user")
+    );
+    assert!(!scheduler.queues.has_items("host-queue-session"));
 }

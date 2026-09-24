@@ -52,6 +52,22 @@ fn fingerprint(value: &impl serde::Serialize) -> PortResult<String> {
     Ok(format!("{:x}", Sha256::digest(bytes)))
 }
 impl HostQueueState {
+    pub(super) fn pending_steering_ids(
+        &self,
+        session: &str,
+        target: &str,
+    ) -> std::collections::HashSet<String> {
+        self.sessions
+            .get(session)
+            .into_iter()
+            .flat_map(|queue| queue.entries.values())
+            .filter(|entry| {
+                entry.view.status == DialogQueueStatus::SteeringPending
+                    && entry.view.target_turn_id.as_deref() == Some(target)
+            })
+            .filter_map(|entry| entry.view.steering_id.clone())
+            .collect()
+    }
     pub(super) fn contains(&self, session: &str, turn: &str) -> bool {
         self.sessions
             .get(session)
@@ -205,6 +221,54 @@ impl HostQueueState {
     }
 }
 impl DialogScheduler {
+    /// Transfer accepted inputs in acceptance order, preserving their original
+    /// turn IDs, images, metadata, routing and exactly-once queue receipts.
+    pub(super) fn release_steering_turns(&self, session: &str, target: &str) -> bool {
+        let managed = self.queue_state().pending_steering_ids(session, target);
+        let injections =
+            self.round_injection_buffer
+                .drain_matching_for_turn(session, target, |message| managed.contains(&message.id));
+        let mut turns = Vec::new();
+        {
+            let mut state = self.queue_state();
+            if let Some(s) = state.sessions.get_mut(session) {
+                for injection in injections {
+                    let entry = s.entries.values_mut().find(|entry| {
+                        entry.view.status == DialogQueueStatus::SteeringPending
+                            && entry.view.target_turn_id.as_deref() == Some(target)
+                            && entry.view.steering_id.as_deref() == Some(&injection.id)
+                    });
+                    if let Some(entry) = entry {
+                        if let Some(turn) = entry.held.take() {
+                            entry.view.status = DialogQueueStatus::Queued;
+                            entry.view.target_turn_id = None;
+                            entry.view.steering_id = None;
+                            entry.view.reason = None;
+                            s.revision += 1;
+                            turns.push(turn);
+                        }
+                    }
+                }
+            }
+        }
+        let released = !turns.is_empty();
+        for turn in turns.into_iter().rev() {
+            self.requeue_front(session, turn);
+        }
+        released
+    }
+    pub(super) fn has_queued_host_message(&self, session: &str) -> bool {
+        self.queue_state()
+            .sessions
+            .get(session)
+            .is_some_and(|queue| {
+                queue
+                    .entries
+                    .values()
+                    .any(|entry| entry.view.status == DialogQueueStatus::Queued)
+            })
+    }
+
     pub(super) fn hold_managed_queue(&self, session: &str, reason: &str) {
         self.hold_managed_queue_for_outcome(session, reason, None);
     }
@@ -580,14 +644,7 @@ impl DialogScheduler {
                     steering_id.clone(),
                     SystemTime::now(),
                 );
-                if let DialogSteeringAction::Buffer { mut injection, .. } = decision {
-                    if let Err(reason) = self
-                        .prepare_goal_steering(session, target, &mut injection)
-                        .await
-                    {
-                        self.queue_state().hold(session, &turn, &reason);
-                        return Err(error(&reason));
-                    }
+                if let DialogSteeringAction::Buffer { injection, .. } = decision {
                     {
                         let mut state = self.queue_state();
                         let e = state

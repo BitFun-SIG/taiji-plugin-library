@@ -4201,11 +4201,8 @@ impl ExecutionEngine {
                 }
             }
 
-            // User-steering messages submitted while this turn is running: drain and inject
-            // them as user messages into the working history before starting the next round
-            // (Codex-style mid-turn injection). This does NOT end the current turn: if the
-            // model wanted to finish but the user steered, we keep the turn running so the
-            // steering message gets a response.
+            // Human steering becomes the next persisted user turn. Runtime
+            // reminders still enter this turn through the injection channel.
             let mut injection_applied = false;
             if let Some(source) = context.round_injection.as_ref() {
                 let pending = source.take_pending(&context.session_id, &context.dialog_turn_id);
@@ -4300,6 +4297,17 @@ impl ExecutionEngine {
                         );
                         injection_applied = true;
                     }
+                }
+                if source.should_yield_to_user_turn(&context.session_id, &context.dialog_turn_id)
+                    && !self
+                        .round_executor
+                        .is_dialog_turn_cancelled(&dialog_turn_id)
+                {
+                    // Persist runtime reminders before handing off, so background
+                    // results arriving at this boundary stay in session context.
+                    // Already-started tools and results keep their original turn.
+                    finalization_reason = Some("user_steering");
+                    break;
                 }
             }
 
@@ -4678,7 +4686,7 @@ impl ExecutionEngine {
         let success = has_final_response
             || matches!(
                 effective_finish_reason,
-                "max_rounds" | "repeated_tool_failures"
+                "max_rounds" | "repeated_tool_failures" | "user_steering"
             );
 
         // Post-processing hook: when a DeepResearch dialog turn finishes
@@ -4689,7 +4697,7 @@ impl ExecutionEngine {
         {
             if openbitfun_agent_workflows::deep_research::should_post_process_research_report(
                 &agent_type,
-                success,
+                success && effective_finish_reason != "user_steering",
             ) {
                 if let Some(workspace) = context.workspace.as_ref() {
                     if let Some(workspace_services) = context.workspace_services.as_ref() {
