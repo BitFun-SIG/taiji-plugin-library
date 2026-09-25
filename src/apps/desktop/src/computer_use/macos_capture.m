@@ -133,6 +133,16 @@ static void obf_error(char *buffer, size_t capacity, NSString *message) {
     if (buffer && capacity) snprintf(buffer, capacity, "%s", message.UTF8String ?: "Native capture error");
 }
 
+// Avoid Objective-C availability syntax here. Rust links this bridge with
+// `-nodefaultlibs`, so clang's compiler-rt availability helper would remain
+// unresolved in the final desktop binary. NSProcessInfo is available on our
+// minimum deployment target and preserves the same runtime guard semantics.
+static BOOL obf_os_at_least(NSInteger major, NSInteger minor) {
+    NSOperatingSystemVersion version = NSProcessInfo.processInfo.operatingSystemVersion;
+    return version.majorVersion > major ||
+        (version.majorVersion == major && version.minorVersion >= minor);
+}
+
 // The lock fact is present on current macOS releases but is not a required
 // dictionary key. Missing metadata is unknown, never proof that a session is
 // locked; preserve ordinary capture errors in that case.
@@ -208,7 +218,7 @@ uint32_t obf_capture_validate_target(int32_t pid, uint32_t requestedWindow, char
 void *obf_capture_start(int32_t pid, uint32_t requestedWindow, uint64_t generation, char *error, size_t errorCapacity) {
     obf_install_activation_observer();
     @autoreleasepool {
-        if (@available(macOS 12.3, *)) {
+        if (obf_os_at_least(12, 3)) {
             if ([NSThread isMainThread]) {
                 obf_error(error, errorCapacity, @"CAPTURE_WRONG_THREAD: Start capture on a worker thread");
                 return NULL;
@@ -242,8 +252,8 @@ void *obf_capture_start(int32_t pid, uint32_t requestedWindow, uint64_t generati
                 config.queueDepth = 3;
                 config.showsCursor = NO;
                 config.pixelFormat = kCVPixelFormatType_32BGRA;
-                if (@available(macOS 13.0, *)) config.capturesAudio = NO;
-                if (@available(macOS 14.0, *)) config.ignoreShadowsSingleWindow = YES;
+                if (obf_os_at_least(13, 0)) config.capturesAudio = NO;
+                if (obf_os_at_least(14, 0)) config.ignoreShadowsSingleWindow = YES;
                 SCStream *stream = [[SCStream alloc] initWithFilter:filter configuration:config delegate:session];
                 session.stream = stream;
                 session.configuration = config;
