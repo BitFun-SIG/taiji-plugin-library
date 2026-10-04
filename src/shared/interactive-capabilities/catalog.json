@@ -6037,7 +6037,7 @@
             "reasonEn": "“Search and browse all app, scene, editor, and terminal shortcuts” spans multiple live-state-dependent steps and currently has no single structured Command that can deterministically complete the whole workflow; the Agent opens the exact entry and keeps the remaining interaction visible to the user."
           },
           "evidence": [
-            "source:src/web-ui/src/app/scenes/settings/components/KeyboardShortcutsTab.tsx#lists every known shortcut"
+            "source:src/web-ui/src/app/scenes/settings/pages/application/KeyboardShortcutsSection.tsx#lists every known shortcut"
           ]
         },
         {
@@ -6055,8 +6055,8 @@
             "reasonEn": "“Record new shortcuts, detect conflicts, revert one binding, or reset all custom bindings” spans multiple live-state-dependent steps and currently has no single structured Command that can deterministically complete the whole workflow; the Agent opens the exact entry and keeps the remaining interaction visible to the user."
           },
           "evidence": [
-            "source:src/web-ui/src/app/scenes/settings/components/KeyboardShortcutsTab.tsx#buildFinalConflictMap",
-            "source:src/web-ui/src/app/scenes/settings/components/KeyboardShortcutsTab.tsx#buildStoredKeybindings({})"
+            "source:src/web-ui/src/app/scenes/settings/pages/application/KeyboardShortcutsSection.tsx#buildFinalConflictMap",
+            "source:src/web-ui/src/app/scenes/settings/pages/application/KeyboardShortcutsSection.tsx#buildStoredKeybindings({})"
           ]
         }
       ],
@@ -6666,9 +6666,9 @@
             "reasonEn": "Custom headers and request bodies may contain tokens or other secrets, so they must be edited in the protected model configuration flow and cannot enter Agent-readable discovery data."
           },
           "evidence": [
-            "source:src/web-ui/src/infrastructure/config/components/ModelSettingsPage.tsx#custom_headers",
-            "source:src/web-ui/src/infrastructure/config/components/ModelSettingsPage.tsx#custom_request_body",
-            "source:src/web-ui/src/infrastructure/config/components/ModelSettingsPage.tsx#skip_ssl_verify"
+            "source:src/web-ui/src/app/scenes/settings/pages/ai/ModelSettingsPage.tsx#custom_headers",
+            "source:src/web-ui/src/app/scenes/settings/pages/ai/ModelSettingsPage.tsx#custom_request_body",
+            "source:src/web-ui/src/app/scenes/settings/pages/ai/ModelSettingsPage.tsx#skip_ssl_verify"
           ]
         },
         {
@@ -7076,7 +7076,7 @@
             "reasonEn": "“Make regular new sessions follow the last ChatInput selection or use a fixed Harness” is managed by related controls on the session settings page and currently has no single structured Command that can deterministically complete the whole workflow; the Agent opens the exact entry and keeps the selection visible to the user."
           },
           "evidence": [
-            "source:src/web-ui/src/infrastructure/config/components/DefaultHarnessConfig.tsx#DefaultHarnessConfig",
+            "source:src/web-ui/src/app/scenes/settings/pages/ai/DefaultHarnessSection.tsx#DefaultHarnessSection",
             "source:src/web-ui/src/locales/zh-CN/settings/runtime.json#defaultHarness.title"
           ]
         },
