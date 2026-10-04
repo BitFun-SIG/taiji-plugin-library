@@ -30,7 +30,7 @@ Follow `src/web-ui/AGENTS.md` and the settings control sizing rules in
 ## Focused verification
 
 ```bash
-pnpm --dir src/web-ui run test:run src/app/scenes/settings src/app/global-search/interactiveCapabilityActivator.test.ts src/infrastructure/config/settingsDraftRegistry.test.ts
+pnpm --dir src/web-ui run test:run src/app/scenes/settings src/app/global-search/interactiveCapabilityActivator.test.ts src/infrastructure/config/settingsDraftRegistry.test.ts src/flow_chat/components/btw/DeepReviewActionBar.test.tsx src/infrastructure/config/components/AcpAgentsConfig.test.tsx src/infrastructure/config/components/AppearancePackageConfigSection.test.tsx
 pnpm --dir src/web-ui run test:run src/infrastructure/config/components/common/SettingsControlSizing.test.ts
 ```
 
