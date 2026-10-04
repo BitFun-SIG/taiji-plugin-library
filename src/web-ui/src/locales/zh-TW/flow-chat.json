@@ -1162,6 +1162,8 @@
   },
   "btw": {
     "title": "側問",
+    "temporaryLabel": "臨時",
+    "temporaryHint": "關閉標籤頁後，對話內容將消失，無法復原。",
     "shortLabel": "側問",
     "hint": "不儲存 · 使用目前對話上下文 · 無工具",
     "placeholder": "問個小問題…",

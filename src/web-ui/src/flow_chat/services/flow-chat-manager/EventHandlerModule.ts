@@ -1833,6 +1833,7 @@ function handleDialogTurnStarted(context: FlowChatContext, event: any): void {
     // `surface: 'miniapp_agent'`. Register them as transient miniapp sessions
     // so they stay out of the session list and the agent companion bubbles.
     const isMiniAppAgentRun = userMessageMetadata?.surface === 'miniapp_agent';
+    const isBtwRun = userMessageMetadata?.kind === 'btw';
     const miniAppId = typeof userMessageMetadata?.appId === 'string'
       ? userMessageMetadata.appId
       : undefined;
@@ -1840,11 +1841,14 @@ function handleDialogTurnStarted(context: FlowChatContext, event: any): void {
     const workspace = resolveExternalSessionWorkspace(context, event);
     store.addExternalSession(
       sessionId,
-      isMiniAppAgentRun ? (miniAppId ? `MiniApp: ${miniAppId}` : 'MiniApp Agent') : 'Remote Session',
+      isMiniAppAgentRun ? (miniAppId ? `MiniApp: ${miniAppId}` : 'MiniApp Agent') : isBtwRun ? 'Side thread' : 'Remote Session',
       'Standard',
       workspace.workspacePath,
       isMiniAppAgentRun
         ? { sessionKind: 'miniapp', isTransient: true, agentBackedTransient: true, workspaceId: workspace.workspaceId }
+        : isBtwRun
+          ? { sessionKind: 'btw', isTransient: true, agentBackedTransient: true,
+              parentSessionId: userMessageMetadata.parentSessionId, workspaceId: workspace.workspaceId }
         : { workspaceId: workspace.workspaceId },
       extractEventRemoteConnectionId(event),
       extractEventRemoteSshHost(event)

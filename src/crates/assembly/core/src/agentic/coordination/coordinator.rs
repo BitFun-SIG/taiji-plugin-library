@@ -11311,7 +11311,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 snapshot.parent_agent_type.clone(),
                 snapshot.build_child_session_config(None),
                 Some(format!("session-{}", snapshot.parent_session_id)),
-                SessionKind::Standard,
+                SessionKind::EphemeralChild,
             )
             .await?;
         self.session_manager
@@ -21722,7 +21722,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn btw_session_persists_relationship_and_seeds_forked_listing_baselines() {
+    async fn btw_session_is_ephemeral_and_seeds_forked_listing_baselines() {
         let (coordinator, session_manager) = test_persistent_coordinator();
         // The parent lives in a registered remote workspace; the child must
         // inherit that record's SSH facts rather than transport hints.
@@ -21811,7 +21811,7 @@ mod tests {
 
         assert_eq!(
             child_session.kind,
-            crate::agentic::core::SessionKind::Standard
+            crate::agentic::core::SessionKind::EphemeralChild
         );
         assert_eq!(
             child_session.last_user_dialog_agent_type.as_deref(),
@@ -21871,26 +21871,27 @@ mod tests {
         let metadata = session_manager
             .load_session_metadata(&session_storage_path, &child_session.session_id)
             .await
-            .expect("BTW metadata should load")
-            .expect("BTW metadata should exist");
-        let relationship = metadata
-            .relationship
-            .expect("BTW relationship should persist");
-        assert_eq!(relationship.kind, Some(SessionRelationshipKind::Btw));
-        assert_eq!(
-            relationship.parent_session_id.as_deref(),
-            Some(parent_session.session_id.as_str())
-        );
-        assert_eq!(
-            relationship.parent_request_id.as_deref(),
-            Some("btw-request")
-        );
-        assert_eq!(
-            relationship.parent_dialog_turn_id.as_deref(),
-            Some("parent-turn")
-        );
-        assert_eq!(relationship.parent_turn_index, Some(2));
-        assert_eq!(metadata.memory_mode, SessionMemoryMode::Disabled);
+            .expect("BTW metadata lookup should succeed");
+        assert!(metadata.is_none(), "temporary BTW must not write history");
+        assert!(!session_manager.should_persist_session_id(&child_session.session_id));
+
+        let reused = coordinator
+            .ensure_btw_session(
+                &parent_session.session_id,
+                &child_session.session_id,
+                None,
+                "btw-follow-up",
+                Some("parent-turn"),
+                Some(2),
+            )
+            .await
+            .expect("temporary BTW should accept follow-up questions");
+        assert_eq!(reused.kind, SessionKind::EphemeralChild);
+        assert!(session_manager
+            .load_session_metadata(&session_storage_path, &child_session.session_id)
+            .await
+            .expect("BTW metadata lookup after reuse should succeed")
+            .is_none());
     }
 
     #[test]

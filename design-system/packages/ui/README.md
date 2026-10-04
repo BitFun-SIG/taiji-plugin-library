@@ -625,6 +625,8 @@ Compact tabs use `size="sm"` (30px, 14px icons, 4px icon gap); standard tabs ret
 
 Dialog titles use 24px bold type with their own 29px line box and normal tracking. `DialogHeader` and `DialogFooter` omit separators by default; pass `separator` for a deliberate divider. A direct `DialogBody` sibling of `DialogFooter appearance="floating"` owns the trailing scroll inset automatically. The floating footer provides the 68px centered action area and a masked blur/gradient using the current theme surface; reduced transparency and forced colors use an opaque fallback. Keep scrollable form content inside `DialogBody` instead of adding a second viewport with independent footer spacing.
 
+`ConfirmDialog secondaryActionPlacement="start"` presents an alternative action as a text button at the start of the footer, with cancel and confirm grouped at the end. The groups wrap when space is limited, keeping cancel and confirm together. The default `inline` placement retains the standard action order and outline secondary button.
+
 Extra-large (`xl`) dialogs have an 800px maximum width and continue shrinking within the viewport gutter. Provider editing uses the floating footer; small workspace creation retains its attached footer and existing button/input sizes. The Lab workspace pattern uses local sample paths and callbacks only.
 
 Keep `Dialog` and `Sheet` mounted and set `open={false}` to close them. They retain the last committed children during the exit animation, with interaction disabled, so clearing an owner selection does not collapse the surface. Reopening uses the latest children and cancels the pending exit. Owners that conditionally mount an editor can remove it in `onExitComplete`, which runs once after the surface unmounts.
