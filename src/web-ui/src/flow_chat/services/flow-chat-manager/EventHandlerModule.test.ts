@@ -46,6 +46,21 @@ describe('isAppWindowFocused', () => {
   });
 });
 
+describe('external BTW turn projection', () => {
+  beforeEach(() => { resetFlowChatStore(); stateMachineManager.clear(); });
+  afterEach(() => { resetFlowChatStore(); stateMachineManager.clear(); });
+
+  it('keeps a host-started side question transient and attached to its parent', () => {
+    __test_only__.handleDialogTurnStarted(createFlowChatContext(), {
+      sessionId: 'external-btw', turnId: 'btw-turn-question', turnIndex: 0,
+      userInput: 'Explain this', userMessageMetadata: { kind: 'btw', parentSessionId: 'parent' },
+    });
+    expect(FlowChatStore.getInstance().getState().sessions.get('external-btw')).toMatchObject({
+      sessionKind: 'btw', parentSessionId: 'parent', isTransient: true, agentBackedTransient: true,
+    });
+  });
+});
+
 describe('Claw bootstrap cancellation', () => {
   beforeEach(() => {
     resetFlowChatStore();

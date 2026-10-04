@@ -199,6 +199,10 @@ describe('ModelSelector external transport reuse', () => {
   it('defers only unsubmitted side-draft model updates until the parent is forked', () => {
     const draft = { sessionKind: 'btw', dialogTurns: [] };
     expect(isBtwSessionDraft(draft)).toBe(true);
+    const temporaryDraft = { ...draft, isTransient: true, agentBackedTransient: true };
+    expect(isBtwSessionDraft(temporaryDraft)).toBe(true);
+    expect(shouldSyncSessionModelSelection(temporaryDraft)).toBe(false);
+    expect(shouldSyncSessionModelSelection({ ...temporaryDraft, dialogTurns: [{}] })).toBe(true);
     expect(shouldSyncSessionModelSelection(draft)).toBe(false);
     expect(shouldSyncSessionModelSelection({ ...draft, isHistorical: true })).toBe(true);
     expect(shouldSyncSessionModelSelection({ ...draft, lastSubmittedMode: 'Standard' })).toBe(true);

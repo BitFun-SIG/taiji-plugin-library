@@ -1162,6 +1162,8 @@
   },
   "btw": {
     "title": "侧问",
+    "temporaryLabel": "临时",
+    "temporaryHint": "关闭标签页后，对话内容将消失，无法恢复。",
     "shortLabel": "侧问",
     "hint": "不保存 · 使用当前对话上下文 · 无工具",
     "placeholder": "问个小问题…",

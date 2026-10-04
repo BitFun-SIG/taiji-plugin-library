@@ -1162,6 +1162,8 @@
   },
   "btw": {
     "title": "Side question",
+    "temporaryLabel": "Temporary",
+    "temporaryHint": "This conversation is discarded when you close its tab.",
     "shortLabel": "Side",
     "hint": "Not saved · Uses current chat context · No tools",
     "placeholder": "Ask a quick question…",
