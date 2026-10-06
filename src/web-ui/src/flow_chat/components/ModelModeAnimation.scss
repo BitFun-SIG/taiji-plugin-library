@@ -1,0 +1,310 @@
+.openbitfun-model-mode {
+  --_model-mode-cycle: 16s;
+  --_model-mode-phase: 0s;
+
+  position: absolute;
+  inset: 0;
+  // Active star clouds stay above ambient haze, beneath the centered menu label.
+  z-index: 1;
+  inline-size: 100%;
+  block-size: 100%;
+  overflow: hidden;
+  border-radius: inherit;
+  fill: var(--openbitfun-color-content-on-dark);
+  stroke: none;
+  pointer-events: none;
+  user-select: none;
+
+  &[data-mode='pool'] {
+    --_model-mode-cycle: 20s;
+  }
+
+  &__region--lower,
+  &__region--next {
+    --_model-mode-phase: calc(var(--_model-mode-cycle) * -0.5);
+  }
+
+  &__source,
+  &__destination,
+  &__traveler,
+  &__energy,
+  &__transfer {
+    animation-duration: var(--_model-mode-cycle);
+    animation-timing-function: ease-in-out;
+    animation-delay: calc(var(--_model-mode-phase) + var(--_model-star-delay));
+    animation-iteration-count: infinite;
+  }
+
+  &__source {
+    opacity: calc(var(--_model-star-opacity) * 0.58);
+    animation-name: openbitfun-model-stars-listen;
+  }
+
+  &__destination {
+    opacity: calc(var(--_model-star-opacity) * 0.16);
+    transform: translate(var(--_model-star-spread-x), var(--_model-star-spread-y));
+    animation-name: openbitfun-model-stars-gather;
+  }
+
+  &__region--upper &__destination {
+    // Retain a readable density difference when animation is disabled.
+    opacity: var(--_model-star-opacity);
+    transform: translate(var(--_model-star-gather-x), var(--_model-star-gather-y));
+  }
+
+  &__traveler,
+  &__transfer {
+    opacity: 0;
+  }
+
+  &__traveler {
+    animation-name: openbitfun-model-stars-route;
+  }
+
+  &__energy {
+    opacity: var(--_model-star-opacity);
+    animation-name: openbitfun-model-stars-charge;
+  }
+
+  &__region--next &__energy {
+    opacity: calc(var(--_model-star-opacity) * 0.2);
+  }
+
+  &__transfer {
+    animation-name: openbitfun-model-stars-transfer;
+  }
+}
+
+// Uneven pauses and per-star offsets keep long sequences alive without a rigid moving cloud.
+@keyframes openbitfun-model-stars-listen {
+  0%, 100% {
+    opacity: calc(var(--_model-star-opacity) * 0.6);
+    transform: translate(0, 0);
+  }
+  9%, 14% {
+    opacity: var(--_model-star-opacity);
+    transform: translate(var(--_model-star-gather-x), var(--_model-star-gather-y));
+  }
+  25% {
+    opacity: calc(var(--_model-star-opacity) * 0.38);
+    transform: translate(var(--_model-star-sway-x), var(--_model-star-sway-y));
+  }
+  39% {
+    opacity: calc(var(--_model-star-opacity) * 0.72);
+    transform: translate(0, 0);
+  }
+  54%, 60% {
+    opacity: calc(var(--_model-star-opacity) * 0.9);
+    transform: translate(var(--_model-star-gather-x), var(--_model-star-gather-y));
+  }
+  74% {
+    opacity: calc(var(--_model-star-opacity) * 0.42);
+    transform: translate(calc(var(--_model-star-sway-x) * -1), calc(var(--_model-star-sway-y) * -1));
+  }
+  88% {
+    opacity: calc(var(--_model-star-opacity) * 0.76);
+    transform: translate(var(--_model-star-sway-x), var(--_model-star-sway-y));
+  }
+}
+
+// Respond to both a direct choice and the other cloud's relayed stars half a cycle later.
+@keyframes openbitfun-model-stars-gather {
+  0%, 100% {
+    opacity: calc(var(--_model-star-opacity) * 0.35);
+    transform: translate(var(--_model-star-spread-x), var(--_model-star-spread-y));
+  }
+  12%, 20% {
+    opacity: calc(var(--_model-star-opacity) * 0.78);
+    transform: translate(var(--_model-star-sway-x), var(--_model-star-sway-y));
+  }
+  31%, 37% {
+    opacity: var(--_model-star-opacity);
+    transform: translate(var(--_model-star-gather-x), var(--_model-star-gather-y));
+  }
+  46% {
+    opacity: calc(var(--_model-star-opacity) * 0.62);
+    transform: translate(var(--_model-star-sway-x), var(--_model-star-sway-y));
+  }
+  58% {
+    opacity: calc(var(--_model-star-opacity) * 0.26);
+    transform: translate(var(--_model-star-spread-x), var(--_model-star-spread-y));
+  }
+  72% {
+    opacity: calc(var(--_model-star-opacity) * 0.5);
+    transform: translate(calc(var(--_model-star-sway-x) * -1), calc(var(--_model-star-sway-y) * -1));
+  }
+  86% {
+    opacity: calc(var(--_model-star-opacity) * 0.12);
+    transform: translate(var(--_model-star-spread-x), var(--_model-star-spread-y));
+  }
+}
+
+// Probe, choose, settle, then reconsider via the card's outer edge; resets happen while hidden.
+@keyframes openbitfun-model-stars-route {
+  0%, 100% {
+    opacity: calc(var(--_model-star-opacity) * 0.25);
+    transform: translate(0, 0);
+  }
+  4% {
+    opacity: var(--_model-star-opacity);
+    transform: translate(0, 0);
+  }
+  12%, 16% {
+    opacity: calc(var(--_model-star-opacity) * 0.82);
+    transform: translate(var(--_model-star-probe-x), var(--_model-star-probe-y));
+  }
+  23% {
+    opacity: var(--_model-star-opacity);
+    transform: translate(var(--_model-star-mid-x), var(--_model-star-mid-y));
+  }
+  31%, 35% {
+    opacity: var(--_model-star-opacity);
+    transform: translate(var(--_model-star-end-x), var(--_model-star-end-y));
+  }
+  41% {
+    opacity: calc(var(--_model-star-opacity) * 0.18);
+    transform: translate(var(--_model-star-end-x), var(--_model-star-end-y));
+  }
+  47% {
+    opacity: calc(var(--_model-star-opacity) * 0.78);
+    transform: translate(var(--_model-star-end-x), var(--_model-star-end-y));
+  }
+  54% {
+    opacity: var(--_model-star-opacity);
+    transform: translate(var(--_model-star-relay-x), var(--_model-star-relay-y));
+  }
+  64%, 70% {
+    opacity: calc(var(--_model-star-opacity) * 0.9);
+    transform: translate(var(--_model-star-alternate-x), var(--_model-star-alternate-y));
+  }
+  80%, 84% {
+    opacity: 0;
+    transform: translate(var(--_model-star-release-x), var(--_model-star-release-y));
+  }
+  85%, 91% {
+    opacity: 0;
+    transform: translate(0, 0);
+  }
+}
+
+// Build from a small reservoir, sustain with a local swirl, release, then slowly replenish.
+@keyframes openbitfun-model-stars-charge {
+  0%, 100% {
+    opacity: calc(var(--_model-star-opacity) * 0.48);
+    transform: translate(var(--_model-star-seed-x), var(--_model-star-seed-y));
+  }
+  8% {
+    opacity: calc(var(--_model-star-opacity) * 0.8);
+    transform: translate(var(--_model-star-gather-x), var(--_model-star-gather-y));
+  }
+  16% {
+    opacity: var(--_model-star-opacity);
+    transform: translate(0, 0);
+  }
+  23% {
+    opacity: calc(var(--_model-star-opacity) * 0.82);
+    transform: translate(var(--_model-star-sway-x), var(--_model-star-sway-y));
+  }
+  29% {
+    opacity: var(--_model-star-opacity);
+    transform: translate(var(--_model-star-gather-x), var(--_model-star-gather-y));
+  }
+  38% {
+    opacity: calc(var(--_model-star-opacity) * 0.68);
+    transform: translate(var(--_model-star-spread-x), var(--_model-star-spread-y));
+  }
+  49% {
+    opacity: calc(var(--_model-star-opacity) * 0.16);
+    transform: translate(var(--_model-star-sway-x), var(--_model-star-sway-y));
+  }
+  61% {
+    opacity: calc(var(--_model-star-opacity) * 0.24);
+    transform: translate(var(--_model-star-spread-x), var(--_model-star-spread-y));
+  }
+  73% {
+    opacity: calc(var(--_model-star-opacity) * 0.12);
+    transform: translate(calc(var(--_model-star-sway-x) * -1), calc(var(--_model-star-sway-y) * -1));
+  }
+  84% {
+    opacity: calc(var(--_model-star-opacity) * 0.3);
+    transform: translate(var(--_model-star-gather-x), var(--_model-star-gather-y));
+  }
+  94% {
+    opacity: calc(var(--_model-star-opacity) * 0.4);
+    transform: translate(var(--_model-star-seed-x), var(--_model-star-seed-y));
+  }
+}
+
+// Small staggered groups pass on their charge, then return along a different side to replenish.
+@keyframes openbitfun-model-stars-transfer {
+  0%, 22%, 96%, 100% {
+    opacity: 0;
+    transform: translate(0, 0);
+  }
+  26% {
+    opacity: calc(var(--_model-star-opacity) * 0.7);
+    transform: translate(0, 0);
+  }
+  30% {
+    opacity: var(--_model-star-opacity);
+    transform: translate(var(--_model-star-outlet-x), var(--_model-star-outlet-y));
+  }
+  35% {
+    opacity: var(--_model-star-opacity);
+    transform: translate(var(--_model-star-mid-x), var(--_model-star-mid-y));
+  }
+  40% {
+    opacity: var(--_model-star-opacity);
+    transform: translate(var(--_model-star-inlet-x), var(--_model-star-inlet-y));
+  }
+  43% {
+    opacity: calc(var(--_model-star-opacity) * 0.82);
+    transform: translate(var(--_model-star-end-x), var(--_model-star-end-y));
+  }
+  47%, 65% {
+    opacity: 0;
+    transform: translate(var(--_model-star-end-x), var(--_model-star-end-y));
+  }
+  68% {
+    opacity: calc(var(--_model-star-opacity) * 0.65);
+    transform: translate(var(--_model-star-end-x), var(--_model-star-end-y));
+  }
+  73% {
+    opacity: var(--_model-star-opacity);
+    transform: translate(var(--_model-star-inlet-x), calc(var(--_model-star-inlet-y) * -1));
+  }
+  79% {
+    opacity: var(--_model-star-opacity);
+    transform: translate(var(--_model-star-mid-x), calc(var(--_model-star-mid-y) * -1));
+  }
+  84% {
+    opacity: var(--_model-star-opacity);
+    transform: translate(var(--_model-star-outlet-x), calc(var(--_model-star-outlet-y) * -1));
+  }
+  89% {
+    opacity: calc(var(--_model-star-opacity) * 0.82);
+    transform: translate(0, var(--_model-star-end-y));
+  }
+  94% {
+    opacity: 0;
+    transform: translate(0, var(--_model-star-end-y));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .openbitfun-model-mode {
+    &__source,
+    &__destination,
+    &__traveler,
+    &__energy,
+    &__transfer {
+      animation: none;
+    }
+  }
+}
+
+@media (forced-colors: active) {
+  .openbitfun-model-mode {
+    display: none;
+  }
+}

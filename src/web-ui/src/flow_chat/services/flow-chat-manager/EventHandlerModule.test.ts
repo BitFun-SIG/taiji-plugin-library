@@ -1939,6 +1939,32 @@ describe('handleTokenUsageUpdate', () => {
     stateMachineManager.clear();
   });
 
+  it('accumulates reported cache hits across camel and snake case events without treating missing telemetry as zero', () => {
+    putFinishingSessionInStore();
+    const context = createFlowChatContext();
+    handleTokenUsageUpdate(context, {
+      sessionId: 'session-1', turnId: 'turn-1', inputTokens: 100,
+      outputTokens: 20, totalTokens: 120, cachedTokens: 0,
+    });
+    handleTokenUsageUpdate(context, {
+      session_id: 'session-1', turn_id: 'turn-1', input_tokens: 200,
+      output_tokens: 30, total_tokens: 230, cached_tokens: 150,
+    });
+    const current = () => FlowChatStore.getInstance().getState().sessions.get('session-1');
+    expect(current()?.dialogTurns[0].tokenUsage).toMatchObject({
+      inputTokens: 300, outputTokens: 50, totalTokens: 350, cachedTokens: 150,
+    });
+    handleTokenUsageUpdate(context, {
+      sessionId: 'session-1', turnId: 'turn-1', inputTokens: 50, totalTokens: 60, outputTokens: 10,
+    });
+    expect(current()?.dialogTurns[0].tokenUsage?.cachedTokens).toBeUndefined();
+    handleTokenUsageUpdate(context, {
+      sessionId: 'session-1', turnId: 'turn-1', inputTokens: 10, totalTokens: 12, outputTokens: 2, cachedTokens: 5,
+    });
+    expect(current()?.dialogTurns[0].tokenUsage?.cachedTokens).toBeUndefined();
+    expect(current()?.currentTokenUsage?.cachedTokens).toBe(5);
+  });
+
   it('tracks the source turn on current usage without adding provenance to accumulated turn usage', () => {
     putFinishingSessionInStore();
 

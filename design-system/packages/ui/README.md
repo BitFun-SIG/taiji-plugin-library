@@ -105,6 +105,15 @@ do not add press scaling in components or host-wide semantic selectors.
 Explicit content zoom, loading indicators, and enter/exit motion remain owned
 by the component that needs them.
 
+## Icons
+
+Use `Icon` for shared size, tone and accessible labels. General-purpose symbols
+use Lucide. Automatic reasoning uses the authored `reasoning-auto` SVG mark with
+a `currentColor` mask so it follows the active theme. Manual reasoning levels use
+the product slider and text labels.
+Product consumers own capability filtering, translated names and
+availability; the icon catalog does not imply runtime support for these modes.
+
 ## Native scrollbars
 
 `styles.css` owns scrollbar presentation inside `ThemeRoot` (or
@@ -659,3 +668,28 @@ Collapsed ambient tool runs use their 22px minimum line boxes without extra
 spacing between adjacent rows; expanded/prominent cards retain the section gap.
 The enclosing composition owns those gaps, and card bodies own their internal
 padding. The Lab tool sequence demonstrates both arrangements with real cards.
+
+`FlowChatTurnMetrics` pairs total usage with an input-cache ring and a four-level
+output-speed glyph. It uses `Icon` with Lucide `Circle` and `Signal` variants,
+the shared FlowChat metadata typography, and semantic colors. Total usage and the
+cache ring form one unit, hidden only when both values are missing. An unknown
+cache ratio retains a neutral dashed ring; a missing total adds no placeholder.
+Other unavailable metrics and detail rows are omitted; reported zero remains
+visible. The host owns measurements, speed thresholds and localized descriptions. `FlowChatMetric` and
+`FlowChatMetricDetails` provide the same capsule trigger and independent details
+card for elapsed time. Native button triggers support hover, focus, click and
+keyboard activation without resizing the row. `Tooltip openOnClick` opens
+immediately and keeps the card open until another trigger click, an outside
+press, Escape, or scrolling; ordinary action tooltips still dismiss on click.
+All shared Tooltips dismiss immediately on window or container scrolling,
+including click-open and cursor-following cards. Scrolling also cancels pending
+opening and clears click persistence; scrolling back does not reopen the card.
+Viewport-exit observation additionally closes cards when their trigger is clipped
+without a scroll event.
+Cards share the selected-text capsule's 80% raised surface, subtle
+half-width border, small shadow and base blur, using the existing Tooltip
+portal, positioning, dismissal and keyboard behavior.
+The outer animated surface owns both paint and backdrop blur; its content is
+transparent and unfiltered. An opaque fallback covers unsupported filters and
+reduced-transparency preferences. Tooltip declares ownership of its entrance
+motion to avoid the product's additional popup animation.

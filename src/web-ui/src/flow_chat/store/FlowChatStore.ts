@@ -6668,7 +6668,7 @@ export class FlowChatStore {
     sessionId: string, 
     tokenUsage: Pick<
       TokenUsage,
-      'inputTokens' | 'outputTokens' | 'totalTokens' | 'turnId' | 'source'
+      'inputTokens' | 'outputTokens' | 'cachedTokens' | 'totalTokens' | 'turnId' | 'source'
     >,
     dialogTurnId?: string
   ): void {
@@ -6679,6 +6679,7 @@ export class FlowChatStore {
       const nextTokenUsage: TokenUsage = {
         inputTokens: tokenUsage.inputTokens,
         outputTokens: tokenUsage.outputTokens,
+        cachedTokens: tokenUsage.cachedTokens,
         totalTokens: tokenUsage.totalTokens,
         timestamp: Date.now(),
         ...(tokenUsage.turnId ? { turnId: tokenUsage.turnId } : {}),
@@ -6700,6 +6701,10 @@ export class FlowChatStore {
           const accumulatedTurnUsage: TokenUsage = {
             inputTokens: (previousTurnUsage?.inputTokens ?? 0) + nextTokenUsage.inputTokens,
             outputTokens: accumulatedOutputTokens,
+            cachedTokens: previousTurnUsage
+              ? (typeof previousTurnUsage.cachedTokens === 'number' && typeof nextTokenUsage.cachedTokens === 'number'
+                ? previousTurnUsage.cachedTokens + nextTokenUsage.cachedTokens : undefined)
+              : nextTokenUsage.cachedTokens,
             totalTokens: (previousTurnUsage?.totalTokens ?? 0) + nextTokenUsage.totalTokens,
             timestamp: nextTokenUsage.timestamp,
           };
@@ -9225,6 +9230,7 @@ export class FlowChatStore {
         ? {
             inputTokens: rawTokenUsage.inputTokens ?? rawTokenUsage.input_tokens,
             outputTokens: rawTokenUsage.outputTokens ?? rawTokenUsage.output_tokens,
+            cachedTokens: rawTokenUsage.cachedTokens ?? rawTokenUsage.cached_tokens,
             totalTokens: rawTokenUsage.totalTokens ?? rawTokenUsage.total_tokens,
             timestamp: rawTokenUsage.timestamp,
           }

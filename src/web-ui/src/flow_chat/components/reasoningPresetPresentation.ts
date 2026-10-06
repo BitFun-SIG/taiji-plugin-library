@@ -1,25 +1,24 @@
-import type { useTranslation } from 'react-i18next';
 import type { ReasoningPresetDescriptor } from '@/infrastructure/config/types';
+
+type Translate = (key: string, options?: Record<string, unknown>) => string;
 
 export function presetLabel(
   preset: ReasoningPresetDescriptor,
-  t: ReturnType<typeof useTranslation>['t'],
+  t: Translate,
 ): string {
   return t(`reasoningEffort.${preset.id}`, { defaultValue: preset.label || preset.id });
 }
 
 export function presetDisplayLabel(
   preset: ReasoningPresetDescriptor,
-  t: ReturnType<typeof useTranslation>['t'],
+  t: Translate,
 ): string {
   const fallback = presetLabel(preset, t);
   const semanticKey = presetSemanticKey(preset);
   return semanticKey
-    ? t(`reasoningSelector.levels.${semanticKey}`, { defaultValue: fallback })
+    ? t(`reasoningSelector.levels.${semanticKey === 'on' ? 'low' : semanticKey}`, { defaultValue: fallback })
     : fallback;
 }
-
-export type ReasoningIntensityLevel = 0 | 1 | 2 | 3 | 4;
 
 type ReasoningPresetSemanticKey =
   | 'off'
@@ -77,30 +76,38 @@ function presetSemanticKey(
   return undefined;
 }
 
-function presetDisablesReasoning(preset: ReasoningPresetDescriptor): boolean {
-  if (presetSemanticKey(preset) === 'off') return true;
-  return preset.actions.some(action => (
-    action.type === 'toggle' && !action.enabled
-  ));
+/** Collapse the enabled toggle into Low without changing persisted or wire ids. */
+export function reasoningPresetChoices(presets: ReasoningPresetDescriptor[]): ReasoningPresetDescriptor[] {
+  return presets.some(preset => presetSemanticKey(preset) === 'low')
+    ? presets.filter(preset => presetSemanticKey(preset) !== 'on')
+    : presets;
 }
 
-export function reasoningIntensityLevel(
+export function resolveReasoningPresetChoice(
   preset: ReasoningPresetDescriptor | undefined,
-  orderedPresets: ReasoningPresetDescriptor[],
-): ReasoningIntensityLevel {
-  if (!preset) return 0;
-  if (presetDisablesReasoning(preset)) return 0;
+  presets: ReasoningPresetDescriptor[],
+): ReasoningPresetDescriptor | undefined {
+  return preset && presetSemanticKey(preset) === 'on'
+    ? presets.find(candidate => presetSemanticKey(candidate) === 'low') ?? preset
+    : preset;
+}
 
-  const activePresets = orderedPresets.filter(item => !presetDisablesReasoning(item));
-  const activeIndex = activePresets.findIndex(item => item.id === preset.id);
-  if (activeIndex < 0) return 0;
-  if (activePresets.length === 1) return 1;
-
-  // The catalog may merge toggle, effort and token-budget presets. Ranking by
-  // the catalog order keeps the visual series monotonic even when ids come from
-  // different action families (off, on, low, high, max).
-  return Math.min(
-    4,
-    Math.max(1, Math.round((activeIndex / (activePresets.length - 1)) * 3) + 1),
-  ) as 1 | 2 | 3 | 4;
+/** Fixed slider positions; use the advertised enabled toggle when no Low effort exists. */
+export function reasoningSliderPresets(
+  presets: ReasoningPresetDescriptor[],
+): Array<ReasoningPresetDescriptor | undefined> {
+  const byMeaning = new Map<ReasoningPresetSemanticKey, ReasoningPresetDescriptor>();
+  for (const preset of presets) {
+    const meaning = presetSemanticKey(preset);
+    if (meaning && !byMeaning.has(meaning)) byMeaning.set(meaning, preset);
+  }
+  // Custom presets retain their named picker. Toggle-only models expose Off/Low
+  // while still sending the original off/on ids to their provider.
+  return [
+    byMeaning.get('off'),
+    byMeaning.get('low') ?? byMeaning.get('on') ?? byMeaning.get('minimal'),
+    byMeaning.get('medium'),
+    byMeaning.get('high'),
+    byMeaning.get('xhigh') ?? byMeaning.get('max'),
+  ];
 }

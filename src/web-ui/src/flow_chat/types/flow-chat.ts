@@ -233,6 +233,8 @@ export interface ModelRound {
 export interface TokenUsage {
   inputTokens: number;
   outputTokens?: number;
+  /** Cache-read tokens; absent when any request in the turn did not report them. */
+  cachedTokens?: number;
   totalTokens: number;
   timestamp: number;
   /** Persisted source turn used to invalidate usage after history rewrites. */

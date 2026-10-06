@@ -1,16 +1,12 @@
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
-import {
-  Circle,
-  CircleOff,
-} from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { subscribeOverlayInteraction, createOverlayPortal, OverflowText, Menu, MenuItem, MenuList } from '@openbitfun/ui';
-import { Tooltip } from '@openbitfun/ui';
+import { Tooltip, Icon } from '@openbitfun/ui';
 import { RetainedMountBoundary } from '@/shared/presence';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import type { ReasoningCatalogProjection } from '@/infrastructure/config/types';
 import { getModelSelectorDropdownLayout } from './modelSelectorDropdownPosition';
-import { presetLabel, presetDisplayLabel, reasoningIntensityLevel, type ReasoningIntensityLevel } from './reasoningPresetPresentation';
+import { presetLabel, presetDisplayLabel, reasoningPresetChoices, resolveReasoningPresetChoice } from './reasoningPresetPresentation';
 import './ReasoningPresetSelector.scss';
 
 interface ReasoningPresetSelectorProps {
@@ -22,58 +18,6 @@ interface ReasoningPresetSelectorProps {
   dropdownPlacement?: 'top' | 'bottom';
   onSelect: (presetId: string | null) => void | Promise<void>;
 }
-
-interface ReasoningIntensityMarkProps {
-  level: ReasoningIntensityLevel;
-  compact?: boolean;
-}
-
-export const ReasoningIntensityMark: React.FC<ReasoningIntensityMarkProps> = ({
-  level,
-  compact = false,
-}) => {
-  const ringSizes = compact ? [14, 9, 4.5] : [24, 14, 6.5];
-  const ringCount = level === 0 ? 0 : Math.min(level, 3);
-
-  return (
-    <span
-      className="openbitfun-reasoning-preset-selector__status-meter"
-      data-intensity={level}
-      data-size={compact ? 'compact' : 'option'}
-      aria-hidden="true"
-    >
-      {level === 0 ? (
-        <CircleOff
-          className="openbitfun-reasoning-preset-selector__status-off"
-          size={compact ? 14 : 22}
-          strokeWidth={compact ? 1.5 : 1.2}
-        />
-      ) : (
-        <>
-          {ringSizes.slice(0, ringCount).map((size, index) => (
-            <Circle
-              key={size}
-              className="openbitfun-reasoning-preset-selector__status-ring"
-              data-ring={index + 1}
-              size={size}
-              strokeWidth={index === 0
-                ? (compact ? 1.45 : 1.1)
-                : (compact ? 1.7 : 1.35)}
-            />
-          ))}
-          {level === 4 && (
-            <Circle
-              className="openbitfun-reasoning-preset-selector__status-peak"
-              size={compact ? 3.5 : 5.5}
-              strokeWidth={0}
-              fill="currentColor"
-            />
-          )}
-        </>
-      )}
-    </span>
-  );
-};
 
 export const ReasoningPresetSelector: React.FC<ReasoningPresetSelectorProps> = ({
   projection,
@@ -101,8 +45,8 @@ export const ReasoningPresetSelector: React.FC<ReasoningPresetSelectorProps> = (
     () => (projection?.status === 'known' ? projection.presets ?? [] : []),
     [projection],
   );
-  const selected = presets.find(preset => preset.id === selectedPreset);
-  const defaultPreset = presets.find(preset => preset.id === projection?.default_preset);
+  const selected = resolveReasoningPresetChoice(presets.find(preset => preset.id === selectedPreset), presets);
+  const defaultPreset = resolveReasoningPresetChoice(presets.find(preset => preset.id === projection?.default_preset), presets);
 
   useEffect(() => {
     if (presets.length === 0) setOpen(false);
@@ -147,10 +91,6 @@ export const ReasoningPresetSelector: React.FC<ReasoningPresetSelectorProps> = (
   }, [dropdownPlacement, open]);
 
   const select = useCallback((presetId: string | null) => {
-    if (menuRef.current?.contains(document.activeElement)) {
-      triggerRef.current?.focus();
-    }
-    setOpen(false);
     void onSelect(presetId);
   }, [onSelect]);
 
@@ -164,7 +104,7 @@ export const ReasoningPresetSelector: React.FC<ReasoningPresetSelectorProps> = (
 
   if (presets.length === 0) return null;
 
-  const orderedPresets = [...presets].sort((left, right) => left.order - right.order);
+  const orderedPresets = [...reasoningPresetChoices(presets)].sort((left, right) => left.order - right.order);
   const presetLabels = orderedPresets.map(preset => (
     presetDisplayLabel(preset, t)
   ));
@@ -173,13 +113,11 @@ export const ReasoningPresetSelector: React.FC<ReasoningPresetSelectorProps> = (
     ? presetLabel(selected, t)
     : t('reasoningSelector.auto');
   const effectivePreset = selected ?? defaultPreset;
-  const intensityLevel = reasoningIntensityLevel(effectivePreset, orderedPresets);
   const statusLabel = effectivePreset
     ? presetDisplayLabel(effectivePreset, t)
     : currentLabel;
-  // The trigger is the meter and nothing else, so this string is both the hover
-  // text and the control's accessible name. Preserve the preset's actual meaning:
-  // its position in the visual series must not rename an on toggle to low effort.
+  const showLabel = triggerPresentation === 'label' || Boolean(selected);
+  // Preserve the advertised preset's meaning in the text and accessible name.
   const tooltip = selected
     ? t('reasoningSelector.current', { preset: statusLabel })
     : t('reasoningSelector.currentAuto', {
@@ -193,7 +131,7 @@ export const ReasoningPresetSelector: React.FC<ReasoningPresetSelectorProps> = (
       data-openbitfun-component="reasoning-preset-selector"
       data-openbitfun-part="root"
       data-openbitfun-state={open ? 'open' : undefined}
-      data-openbitfun-presentation={triggerPresentation}
+      data-openbitfun-presentation={showLabel ? 'label' : 'meter'}
     >
       <Tooltip content={tooltip} disabled={open}>
         <button data-overflow-trigger
@@ -232,12 +170,12 @@ export const ReasoningPresetSelector: React.FC<ReasoningPresetSelectorProps> = (
             }
           }}
         >
-          {triggerPresentation === 'label' ? (
+          {showLabel ? (
             <OverflowText className="openbitfun-reasoning-preset-selector__trigger-label">
               {statusLabel}
             </OverflowText>
           ) : (
-            <ReasoningIntensityMark level={intensityLevel} compact />
+            <Icon name="reasoning-auto" size="xs" />
           )}
         </button>
       </Tooltip>

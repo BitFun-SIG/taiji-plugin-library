@@ -3,11 +3,47 @@
  * Shows current model info at the bottom when ChatInput is expanded,
  * with quick switching support.
  *
- * Design guidelines:
- * - Radius: 4px (button/badge), 6px (dropdown)
- * - Border: light gray; blue-purple gradient on hover/active
- * - Shadow: layered soft shadows, avoid harsh glow
+ * Model information and reasoning share one compact, navigable surface.
+ * All color, geometry and type follow the public design-system tokens.
  */
+@use 'sass:list';
+@use 'sass:math';
+
+// A small, deterministic grain tile gives the glass texture without image assets.
+// Keep it on the surface background so the animated stars never move the grain.
+$model-mode-grain: ();
+$model-mode-grain-sizes: ();
+@for $grain-index from 1 through 32 {
+  $grain-x: math.div(($grain-index * 37 + $grain-index * $grain-index * 11) % 101, 101) * 100%;
+  $grain-y: math.div(($grain-index * 53 + $grain-index * $grain-index * 7) % 103, 103) * 100%;
+  $grain-radius: 0.25px + ($grain-index % 3) * 0.08px;
+  $grain-color: var(--_model-mode-grain-light);
+  @if $grain-index % 3 == 0 {
+    $grain-color: var(--_model-mode-grain-shadow);
+  }
+  $model-mode-grain: list.append(
+    $model-mode-grain,
+    radial-gradient(circle at $grain-x $grain-y, $grain-color 0 $grain-radius, transparent 0.8px),
+    comma
+  );
+  $model-mode-grain-sizes: list.append($model-mode-grain-sizes, 31px 29px, comma);
+}
+
+// Distant dust stays visible beneath the moving stars and mode-specific light paths.
+$model-mode-dust: ();
+$model-mode-dust-sizes: ();
+@for $dust-index from 1 through 28 {
+  $dust-x: math.div(($dust-index * 43 + $dust-index * $dust-index * 13) % 127, 127) * 100%;
+  $dust-y: math.div(($dust-index * 59 + $dust-index * $dust-index * 17) % 131, 131) * 100%;
+  $dust-radius: 0.3px + ($dust-index % 3) * 0.12px;
+  $model-mode-dust: list.append(
+    $model-mode-dust,
+    radial-gradient(circle at $dust-x $dust-y, var(--_model-mode-star-soft) 0 $dust-radius, transparent 1px),
+    comma
+  );
+  $model-mode-dust-sizes: list.append($model-mode-dust-sizes, auto, comma);
+}
+
 .openbitfun-model-selector {
   position: relative;
   display: inline-flex;
@@ -73,15 +109,12 @@
   }
 
   &__trigger-reasoning {
-    display: inline-flex;
-    align-items: center;
-    min-width: 0;
-    max-width: 72px;
+    // Keep the current intensity in the accessible name without repeating it in the composer.
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
     overflow: hidden;
-    color: var(--openbitfun-color-content-muted);
-    font-size: var(--openbitfun-type-flow-control-font-size);
-    font-weight: var(--openbitfun-type-body-sm-font-weight);
-    line-height: var(--openbitfun-type-modifier-leading-none-line-height);
+    clip-path: inset(50%);
     white-space: nowrap;
   }
 
@@ -150,10 +183,20 @@
 
   &__dropdown {
     --openbitfun-model-dropdown-offset: -4px;
+    --openbitfun-overlay-menu-inline-size: min(280px, calc(100vw - 16px));
+
+    // Non-row content uses the same typography as MenuItem's shared label slot.
+    font-family: var(--openbitfun-type-label-md-font-family);
+    font-size: var(--openbitfun-type-label-md-font-size);
+    font-weight: var(--openbitfun-type-label-md-font-weight);
+    line-height: var(--openbitfun-type-action-row-line-height);
+    letter-spacing: var(--openbitfun-type-label-md-letter-spacing);
 
     position: fixed;
-    min-width: clamp(0px, 220px, calc(100vw - 16px));
-    max-width: clamp(0px, 280px, calc(100vw - 16px));
+    inline-size: var(--openbitfun-overlay-menu-inline-size);
+    max-width: calc(100vw - 16px);
+    border: 0;
+    border-radius: var(--openbitfun-radius-xl);
     z-index: var(--openbitfun-layer-popover);
     transform-origin: center top;
     transition:
@@ -174,7 +217,9 @@
 
     &[data-open='false'] {
       opacity: 0;
-      transform: translateY(var(--openbitfun-model-dropdown-offset)) scale(0.98);
+      // Fade the stable surface in one step; retention uses the same duration.
+      transform: none;
+      transition: opacity var(--_model-selector-exit-duration) linear;
       pointer-events: none;
     }
 
@@ -182,47 +227,133 @@
       transition: none;
     }
 
-  }
-
-  &__submenu {
-    position: fixed;
-    min-width: clamp(0px, 220px, calc(100vw - 16px));
-    max-width: clamp(0px, 280px, calc(100vw - 16px));
-    overflow-y: auto;
-    z-index: var(--openbitfun-layer-popover);
-    transform-origin: left bottom;
-    transition:
-      opacity 100ms ease,
-      transform 120ms cubic-bezier(0.23, 1, 0.32, 1);
-
-    &[data-placement='left'] {
-      transform-origin: right bottom;
+    &[data-menu-level='settings'][data-model-mode='manual'] {
+      border-radius: var(--openbitfun-radius-lg);
+      // An inset edge retains the existing card dimensions.
+      box-shadow:
+        inset 0 0 0 var(--openbitfun-border-width-default) var(--openbitfun-color-border-subtle),
+        var(--openbitfun-shadow-menu);
     }
 
-    @starting-style {
-      opacity: 0;
-      transform: translateX(-4px) scale(0.98);
-    }
+    &[data-model-mode='smart'][data-menu-level='settings'] {
+      --_model-mode-tint: var(--openbitfun-color-accent-secondary);
+      --_model-mode-sky: color-mix(
+        in srgb,
+        var(--_model-mode-tint) 50%,
+        var(--openbitfun-color-surface-panel)
+      );
 
-    &[data-placement='left'] {
-      @starting-style {
-        transform: translateX(4px) scale(0.98);
+      @supports (color: oklch(from currentColor l c h)) {
+        // Retain the theme's purple hue while lifting muted accents for the glass.
+        --_model-mode-tint: oklch(from var(--openbitfun-color-accent-secondary) l max(c, 0.2) h);
       }
     }
 
-    &--direct {
-      transform-origin: center bottom;
+    &[data-model-mode='pool'][data-menu-level='settings'] {
+      --_model-mode-tint: var(--openbitfun-color-link-default);
+      --_model-mode-sky: color-mix(
+        in srgb,
+        var(--_model-mode-tint) 40%,
+        var(--openbitfun-color-surface-panel)
+      );
+    }
 
-      @starting-style {
-        transform: translateY(4px) scale(0.98);
+    &[data-menu-level='settings']:is([data-model-mode='smart'], [data-model-mode='pool']) {
+      --_model-mode-grain-light: color-mix(in srgb, var(--openbitfun-color-content-on-dark) 28%, transparent);
+      --_model-mode-grain-shadow: color-mix(in srgb, var(--openbitfun-color-content-on-light) 8%, transparent);
+      --_model-mode-star: color-mix(in srgb, var(--openbitfun-color-content-on-dark) 82%, var(--_model-mode-sky));
+      --_model-mode-star-soft: color-mix(in srgb, var(--openbitfun-color-content-on-dark) 48%, transparent);
+
+      isolation: isolate;
+      overflow: hidden;
+      border-radius: var(--openbitfun-radius-lg);
+      background-color: var(--_model-mode-sky);
+      background-image:
+        #{$model-mode-grain},
+        #{$model-mode-dust},
+        radial-gradient(ellipse at 18% 12%, color-mix(in srgb, var(--openbitfun-color-content-on-dark) 36%, transparent), transparent 72%),
+        radial-gradient(ellipse at 86% 88%, color-mix(in srgb, var(--_model-mode-tint) 14%, transparent), transparent 76%),
+        linear-gradient(145deg, color-mix(in srgb, var(--openbitfun-color-content-on-dark) 26%, transparent), transparent 48%, color-mix(in srgb, var(--_model-mode-tint) 10%, transparent));
+      background-size: #{$model-mode-grain-sizes}, #{$model-mode-dust-sizes}, auto, auto, auto;
+      box-shadow:
+        inset 0 0 0 var(--openbitfun-border-width-default) color-mix(in srgb, var(--openbitfun-color-content-on-dark) 46%, transparent),
+        inset 0 var(--openbitfun-border-width-default) 0 color-mix(in srgb, var(--openbitfun-color-content-on-dark) 72%, transparent),
+        var(--openbitfun-shadow-menu);
+
+      @supports (backdrop-filter: none) or (-webkit-backdrop-filter: none) {
+        // Every gradient above this translucent base also lets the backdrop through.
+        background-color: color-mix(in srgb, var(--_model-mode-sky) 72%, transparent);
+        -webkit-backdrop-filter: var(--openbitfun-effect-blur-medium);
+        backdrop-filter: var(--openbitfun-effect-blur-medium);
       }
 
-      &[data-placement='bottom'] {
-        transform-origin: center top;
+      @media (prefers-reduced-transparency: reduce) {
+        background-color: var(--_model-mode-sky);
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
+      }
 
-        @starting-style {
-          transform: translateY(-4px) scale(0.98);
-        }
+      // Two transparent star layers drift independently above the full-card sky.
+      // Only transform and opacity animate; the centered text stays on its own plane.
+      &::before,
+      &::after {
+        content: '';
+        position: absolute;
+        inset: calc(-1 * var(--openbitfun-space-6));
+        z-index: 0;
+        pointer-events: none;
+        background-repeat: no-repeat;
+        opacity: 0.5;
+      }
+
+      &::before {
+        background-image:
+          radial-gradient(circle at 9% 21%, var(--_model-mode-star) 0 0.65px, transparent 1.35px),
+          radial-gradient(circle at 21% 68%, var(--_model-mode-star-soft) 0 0.45px, transparent 1px),
+          radial-gradient(circle at 30% 34%, var(--_model-mode-star) 0 0.75px, transparent 1.65px),
+          radial-gradient(circle at 41% 15%, var(--_model-mode-star-soft) 0 0.45px, transparent 1px),
+          radial-gradient(circle at 53% 73%, var(--_model-mode-star) 0 0.6px, transparent 1.4px),
+          radial-gradient(circle at 65% 27%, var(--_model-mode-star-soft) 0 0.5px, transparent 1.1px),
+          radial-gradient(circle at 73% 62%, var(--_model-mode-star) 0 0.75px, transparent 1.7px),
+          radial-gradient(circle at 87% 39%, var(--_model-mode-star-soft) 0 0.5px, transparent 1.1px),
+          radial-gradient(circle at 94% 78%, var(--_model-mode-star) 0 0.6px, transparent 1.35px),
+          radial-gradient(circle at 16% 87%, var(--_model-mode-star-soft) 0 0.45px, transparent 1px),
+          radial-gradient(circle at 61% 91%, var(--_model-mode-star-soft) 0 0.45px, transparent 1px),
+          radial-gradient(circle at 81% 12%, var(--_model-mode-star) 0 0.55px, transparent 1.2px),
+          radial-gradient(ellipse at 24% 36%, color-mix(in srgb, var(--openbitfun-color-content-on-dark) 30%, transparent), transparent 72%);
+        animation:
+          openbitfun-model-mode-drift 4s ease-in-out -1.2s infinite alternate,
+          openbitfun-model-mode-twinkle 1.6s ease-in-out -0.5s infinite;
+      }
+
+      &::after {
+        background-image:
+          radial-gradient(circle at 15% 43%, var(--_model-mode-star-soft) 0 0.5px, transparent 1.1px),
+          radial-gradient(circle at 26% 12%, var(--_model-mode-star) 0 0.55px, transparent 1.2px),
+          radial-gradient(circle at 35% 82%, var(--_model-mode-star-soft) 0 0.45px, transparent 1px),
+          radial-gradient(circle at 45% 61%, var(--_model-mode-star) 0 0.6px, transparent 1.35px),
+          radial-gradient(circle at 57% 23%, var(--_model-mode-star-soft) 0 0.45px, transparent 1px),
+          radial-gradient(circle at 68% 80%, var(--_model-mode-star) 0 0.6px, transparent 1.35px),
+          radial-gradient(circle at 78% 46%, var(--_model-mode-star-soft) 0 0.5px, transparent 1.15px),
+          radial-gradient(circle at 89% 66%, var(--_model-mode-star) 0 0.55px, transparent 1.2px),
+          radial-gradient(circle at 8% 74%, var(--_model-mode-star-soft) 0 0.45px, transparent 1px),
+          radial-gradient(circle at 48% 89%, var(--_model-mode-star-soft) 0 0.45px, transparent 1px),
+          radial-gradient(circle at 93% 19%, var(--_model-mode-star) 0 0.6px, transparent 1.3px),
+          radial-gradient(circle at 33% 52%, var(--_model-mode-star-soft) 0 0.4px, transparent 0.9px),
+          radial-gradient(ellipse at 78% 68%, color-mix(in srgb, var(--_model-mode-tint) 14%, transparent), transparent 72%);
+        animation:
+          openbitfun-model-mode-drift 6s ease-in-out -2.4s infinite alternate-reverse,
+          openbitfun-model-mode-twinkle 2.2s ease-in-out -1s infinite reverse;
+      }
+    }
+
+    &[data-model-mode='pool'][data-menu-level='settings'] {
+      &::before {
+        animation-delay: -2s, -0.8s;
+      }
+
+      &::after {
+        animation-delay: -3.8s, -1.2s;
       }
     }
   }
@@ -250,47 +381,166 @@
     }
   }
 
-  &__settings-value {
-    display: block;
-    max-width: 112px;
-    overflow: hidden;
-    white-space: nowrap;
+  &__selection-back [data-openbitfun-part='metadata'],
+  &__mode-option [data-openbitfun-part='metadata'] {
+    min-inline-size: 0;
+    max-inline-size: 60%;
+  }
+
+  &__settings-card {
+    position: relative;
+    z-index: 2;
+    box-sizing: border-box;
+    block-size: calc(var(--openbitfun-space-16) + var(--openbitfun-space-8));
+    min-block-size: calc(var(--openbitfun-space-16) + var(--openbitfun-space-8));
+    // The Menu owns equal surface insets; keep spare height between its rows.
+    justify-content: space-between;
+    padding: 0;
+  }
+
+  &__loading {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    place-items: center;
+    min-block-size: calc(var(--openbitfun-space-16) + var(--openbitfun-space-8));
+
+    [data-openbitfun-component='loading-state'] {
+      color: inherit;
+    }
+
+    [data-openbitfun-part='label'] {
+      color: inherit;
+      font: inherit;
+      letter-spacing: inherit;
+    }
+  }
+
+  &__model-control {
+    // The model and provider are separate text actions.
+    flex: 0 1 auto;
+    inline-size: fit-content;
+    min-inline-size: 0;
+    max-inline-size: 100%;
+    min-block-size: var(--openbitfun-overlay-menu-item-height);
+    margin-inline-start: calc(-1 * var(--openbitfun-space-2));
+    padding-inline: var(--openbitfun-space-2);
+  }
+
+  &__model-field {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: center;
+    flex: 0 0 auto;
+    column-gap: var(--openbitfun-space-3);
+    min-inline-size: 0;
+    text-align: start;
+
+    .openbitfun-model-selector__model-control {
+      justify-self: start;
+      margin-inline-start: 0;
+      padding-inline: var(--openbitfun-space-1);
+
+      [data-openbitfun-part='trigger'] {
+        gap: var(--openbitfun-space-1);
+      }
+    }
+  }
+
+  &__provider-control {
+    flex: 0 1 auto;
+    inline-size: fit-content;
+    min-inline-size: 0;
+    max-inline-size: 100%;
+    min-block-size: var(--openbitfun-overlay-menu-item-height);
+    justify-self: end;
+    padding-inline: var(--openbitfun-space-1);
+    text-align: end;
+  }
+
+  &__model-provider,
+  &__model-name {
+    min-inline-size: 0;
+  }
+
+  &__reasoning-control {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    justify-content: flex-start;
+    min-inline-size: 0;
+    min-block-size: 0;
+    padding-inline: var(--openbitfun-space-1);
+  }
+
+  &__reasoning-choice {
+    inline-size: max-content;
+    max-inline-size: 100%;
+    min-inline-size: 0;
+    min-block-size: var(--openbitfun-overlay-menu-item-height);
+
+    [data-openbitfun-part='trigger'] {
+      gap: var(--openbitfun-space-1);
+      text-align: center;
+    }
+  }
+
+  &__reasoning-choice [data-openbitfun-part='label'] {
+    // Size the shared label slot itself so the four-character automatic label
+    // cannot collapse inside a shrink-to-fit menu trigger.
+    flex: 0 1 auto;
+    inline-size: max-content;
+    min-inline-size: 4em;
+    text-align: center;
+  }
+
+  &__mode-header {
+    padding-inline: var(--openbitfun-space-1);
+  }
+
+  &__mode-summary {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    place-items: center;
+    flex: 1;
+    block-size: 100%;
+    min-block-size: 0;
+    text-align: center;
+
+    .openbitfun-model-selector__mode-control {
+      margin-inline-start: 0;
+
+      [data-openbitfun-part='trigger'] {
+        justify-content: center;
+        text-align: center;
+      }
+    }
+  }
+
+  &__mode-control {
+    flex: 0 1 auto;
+    inline-size: fit-content;
+    min-inline-size: 0;
+    max-inline-size: 100%;
+    min-block-size: var(--openbitfun-overlay-menu-item-height);
+    margin-inline-start: calc(-1 * var(--openbitfun-space-1));
+    padding-inline: var(--openbitfun-space-1);
   }
 
   &__option-main {
     display: flex;
-    flex-direction: column;
-    gap: 2px;
+    align-items: center;
+    gap: var(--openbitfun-space-1);
     min-width: 0;
     flex: 1;
   }
 
   &__option-name {
     display: flex;
+    min-inline-size: 0;
     align-items: center;
     gap: 4px;
-    font-size: var(--openbitfun-type-flow-control-font-size);
-    font-weight: var(--openbitfun-type-label-sm-font-weight);
-    color: var(--openbitfun-color-content-secondary);
     white-space: nowrap;
-    overflow: hidden;
-  }
-
-  &__option-desc {
-    font-size: var(--openbitfun-type-flow-support-font-size);
-    color: var(--openbitfun-color-content-muted);
-    white-space: nowrap;
-    overflow: hidden;
-
-    &--selected-model {
-      display: flex;
-      align-items: center;
-      gap: 4px;
-    }
-  }
-
-  &__option-desc-label {
-    min-width: 0;
     overflow: hidden;
   }
 
@@ -319,15 +569,64 @@
 
 }
 
+@keyframes openbitfun-model-mode-drift {
+  from {
+    transform: translate3d(calc(-1 * var(--openbitfun-space-2)), var(--openbitfun-space-1), 0);
+  }
+
+  to {
+    transform: translate3d(var(--openbitfun-space-2), calc(-1 * var(--openbitfun-space-1)), 0);
+  }
+}
+
+@keyframes openbitfun-model-mode-twinkle {
+  0%,
+  100% {
+    opacity: 0.3;
+  }
+
+  42% {
+    opacity: 0.64;
+  }
+
+  72% {
+    opacity: 0.42;
+  }
+}
+
+@media (forced-colors: active) {
+  .openbitfun-model-selector__dropdown[data-menu-level='settings']:is([data-model-mode='smart'], [data-model-mode='pool']) {
+    background-image: none;
+    background-color: Canvas;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    box-shadow: none;
+
+    &::before,
+    &::after {
+      display: none;
+      animation: none;
+    }
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .openbitfun-model-selector__dropdown,
   .openbitfun-model-selector__trigger,
   .openbitfun-model-selector__chevron,
-  .openbitfun-model-selector__submenu,
   .openbitfun-model-selector__level {
     transition-duration: 0ms;
   }
 
   .openbitfun-model-selector__dropdown {
     animation: none;
+
+    &[data-menu-level='settings']:is([data-model-mode='smart'], [data-model-mode='pool']) {
+      &::before,
+      &::after {
+        animation: none;
+        transform: none;
+      }
+    }
   }
 }

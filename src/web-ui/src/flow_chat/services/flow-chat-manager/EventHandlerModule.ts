@@ -2432,6 +2432,7 @@ function handleTokenUsageUpdate(context: FlowChatContext, event: any): void {
   const inputTokens = event.inputTokens ?? event.input_tokens;
   const outputTokens = event.outputTokens ?? event.output_tokens;
   const totalTokens = event.totalTokens ?? event.total_tokens;
+  const cachedTokens = event.cachedTokens ?? event.cached_tokens;
   const maxContextTokens = event.maxContextTokens ?? event.max_context_tokens;
   
   const store = FlowChatStore.getInstance();
@@ -2456,6 +2457,8 @@ function handleTokenUsageUpdate(context: FlowChatContext, event: any): void {
   store.updateTokenUsage(sessionId, {
     inputTokens,
     outputTokens: typeof outputTokens === 'number' ? outputTokens : undefined,
+    cachedTokens: typeof cachedTokens === 'number' && Number.isFinite(cachedTokens) && cachedTokens >= 0
+      ? cachedTokens : undefined,
     totalTokens,
     turnId,
     source: 'model_request',
