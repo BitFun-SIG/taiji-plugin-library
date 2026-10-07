@@ -138,6 +138,48 @@ with each step: that recreates the node and closes the branch the reader opened.
 
 Return to normal `EntryAbility` afterward.
 
+For file visibility in a conversation, run
+`node --test tools/tests/file-visibility.test.cjs`. The native preview scenarios
+`file-visibility` and `file-visibility-dark` mount the real `ChatTimeline` and
+`ChatMessageBubble` over the production reducer, timeline store and rows with an
+assistant turn whose prose links workspace files, and route a card tap through
+the real `FilePreviewController` into the real `FilePreviewSurface`. Only the
+transport is faked: the fixture host answers `get_file_info`, `read_file_chunk`
+and the streamed read exactly like `remote_connect.rs` does, so the image branch
+decodes a real PNG. The `file-visibility-state` line reports
+`shape= phase= kind= bytes= last=` plus `saved=` after a download, and
+**Next shape** swaps the same links between the final-answer body and a
+composite turn's trailing text, the two content paths that draw cards:
+
+```bash
+"$HDC" shell aa force-stop <bundle-id>
+"$HDC" shell aa start -a EntryAbility -b <bundle-id> --ps openbitfunDesignPreview file-visibility
+```
+
+The stages that scenario covers, and the rule each one must keep:
+
+- Markdown links and bare `computer://…` references in prose become file cards. A
+  scheme-less path in prose never does, on any mobile client, so a reply that
+  only mentions `artifacts/report.md` shows no card at all. When that happens the
+  fix is the host's reply text, not the card projector.
+- A relative link target is a card only when its extension is output-shaped
+  (`.png`/`.zip`/`.pdf`/office/media); an explicit `computer://` link is a card
+  for any extension. The per-message budget is 4 cards, and one bare mention plus
+  one link to the same path stay one card.
+- Cards are drawn from the final-answer body, a structured turn's trailing text,
+  and each structured item's own text. Keep all three in step when the bubble's
+  content paths change.
+- Image extensions render in `FilePreviewSurface.ImagePreview`; `.zip`, `.svg`
+  and `.pdf` have no renderer and must show the unsupported phase while their
+  download still succeeds. A missing renderer is not a broken card, and it is
+  not the reason a reader cannot reach a file.
+
+Capture evidence with `uitest dumpLayout` and `snapshot_display` into
+`artifacts/file-visibility/`, and replace the bundle id in saved layout dumps
+with `<bundle-id>` so the product-identity audit stays clean.
+
+Return to normal `EntryAbility` afterward.
+
 For history loading and explicit jump-to-bottom navigation, install the debug
 HAP and run `python3 tools/check-history-scroll.py --hdc "$HDC"`. The
 `history-scroll` preview holds a mock history response while the production

@@ -6,6 +6,7 @@ import { DeviceSelectorPreview } from './DeviceSelectorPreview';
 import { CatalogRefreshPreview } from './CatalogRefreshPreview';
 import { ModelRoleSelectorPreview } from './ModelRoleSelectorPreview';
 import { SubagentProcessPreview } from './SubagentProcessPreview';
+import { FileVisibilityPreview } from './FileVisibilityPreview';
 import { WelcomeHome } from '../components/WelcomeHome';
 import { InteractionMailboxPreview } from './InteractionMailboxPreview';
 import { MobileDesignGeometry, MobileDesignTypography } from '../../generated/MobileDesignTokens';
@@ -54,6 +55,8 @@ struct MobileDesignGallery {
       ModelRoleSelectorPreview()
     } else if ((AppStorage.get<string>('scenarioId') || '').startsWith('subagent-process')) {
       SubagentProcessPreview()
+    } else if ((AppStorage.get<string>('scenarioId') || '').startsWith('file-visibility')) {
+      FileVisibilityPreview()
     } else if ((AppStorage.get<string>('scenarioId') || '').startsWith('device-selector')) {
       DeviceSelectorPreview()
     } else if (AppStorage.get<string>('scenarioId') === 'welcome-home') {
