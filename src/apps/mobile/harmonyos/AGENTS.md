@@ -90,6 +90,26 @@ fake RPC: send must clear the input before pressing **Acknowledge**, and a
 **Next draft** entered while pending must survive acknowledgment. Exercise both
 compact and wide layouts and return to normal `EntryAbility` afterward.
 
+For the composer model selector's `primary` / `fast` role entries, run
+`node --test tools/tests/model-role-selection.test.cjs`. The native preview
+scenarios `model-role-selector`, `model-role-selector-dark`, and
+`model-role-selector-wide` drive the real `ComposerBar` with a catalog fixture
+projected through `toConversationUiModelCatalog`: opening the selector must show
+both role rows with their resolved model metadata and the `主力` / `快速` badges
+on the models that serve them, and tapping a role row must change the trigger
+label, highlight that role row, and report the same payload in the
+`selected=/received=` status line. The x86_64 emulator cannot install the
+arm64-only `default` artifact, so build and install that scenario through the
+`emulator` target, which carries the x86_64 `abiFilters` while `default` stays
+arm64-only:
+
+```bash
+"$HVIGORW" --mode module -p product=default -p module=entry@emulator assembleHap --no-daemon
+"$HDC" install -r entry/build/default/outputs/emulator/entry-emulator-unsigned.hap
+```
+
+Return to normal `EntryAbility` afterward.
+
 For history loading and explicit jump-to-bottom navigation, install the debug
 HAP and run `python3 tools/check-history-scroll.py --hdc "$HDC"`. The
 `history-scroll` preview holds a mock history response while the production

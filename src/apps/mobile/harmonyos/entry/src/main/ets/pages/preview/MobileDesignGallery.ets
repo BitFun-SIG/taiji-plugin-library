@@ -4,6 +4,7 @@ import { ComposerSubmissionPreview } from './ComposerSubmissionPreview';
 import { DurableTimelinePreview } from './DurableTimelinePreview';
 import { DeviceSelectorPreview } from './DeviceSelectorPreview';
 import { CatalogRefreshPreview } from './CatalogRefreshPreview';
+import { ModelRoleSelectorPreview } from './ModelRoleSelectorPreview';
 import { WelcomeHome } from '../components/WelcomeHome';
 import { InteractionMailboxPreview } from './InteractionMailboxPreview';
 import { MobileDesignGeometry, MobileDesignTypography } from '../../generated/MobileDesignTokens';
@@ -48,6 +49,8 @@ struct MobileDesignGallery {
       ComposerSubmissionPreview()
     } else if ((AppStorage.get<string>('scenarioId') || '').startsWith('catalog-refresh')) {
       CatalogRefreshPreview()
+    } else if ((AppStorage.get<string>('scenarioId') || '').startsWith('model-role-selector')) {
+      ModelRoleSelectorPreview()
     } else if ((AppStorage.get<string>('scenarioId') || '').startsWith('device-selector')) {
       DeviceSelectorPreview()
     } else if (AppStorage.get<string>('scenarioId') === 'welcome-home') {
