@@ -13,7 +13,7 @@ export default class EntryAbility extends UIAbility {
 
   onCreate(want: Want, launchParam: AbilityConstant.LaunchParam): void {
     const scenarioId = want.parameters?.['openbitfunDesignPreview'];
-    if (scenarioId === 'history-scroll' || scenarioId === 'durable-timeline' || scenarioId === 'composer-submit' || scenarioId === 'catalog-refresh' || scenarioId === 'catalog-refresh-dark' || scenarioId === 'model-role-selector' || scenarioId === 'model-role-selector-dark' || scenarioId === 'model-role-selector-wide' || scenarioId === 'subagent-process' || scenarioId === 'subagent-process-dark' || scenarioId === 'file-visibility' || scenarioId === 'file-visibility-dark' || scenarioId === 'device-selector' || scenarioId === 'device-selector-dark' || scenarioId === 'welcome-home' || scenarioId === 'connected-conversation' ||
+    if (scenarioId === 'history-scroll' || scenarioId === 'durable-timeline' || scenarioId === 'composer-submit' || scenarioId === 'catalog-refresh' || scenarioId === 'catalog-refresh-dark' || scenarioId === 'model-role-selector' || scenarioId === 'model-role-selector-dark' || scenarioId === 'model-role-selector-wide' || scenarioId === 'subagent-process' || scenarioId === 'subagent-process-dark' || scenarioId === 'file-visibility' || scenarioId === 'file-visibility-dark' || scenarioId === 'composer-overflow' || scenarioId === 'composer-overflow-empty' || scenarioId === 'composer-overflow-dark' || scenarioId === 'composer-overflow-wide' || scenarioId === 'composer-overflow-expanded' || scenarioId === 'composer-overflow-expanded-dark' || scenarioId === 'device-selector' || scenarioId === 'device-selector-dark' || scenarioId === 'welcome-home' || scenarioId === 'connected-conversation' ||
       scenarioId === 'streaming-dark' ||
       scenarioId === 'reconnecting-wide' || scenarioId === 'narrow-multiline' ||
       scenarioId === 'fold-context' || scenarioId === 'long-reading' ||
@@ -25,9 +25,9 @@ export default class EntryAbility extends UIAbility {
       AppStorage.setOrCreate('scenarioId', scenarioId);
     }
     try {
-      const colorMode = scenarioId === 'cold-start-home-dark' || scenarioId === 'catalog-refresh-dark' || scenarioId === 'model-role-selector-dark' || scenarioId === 'subagent-process-dark' || scenarioId === 'file-visibility-dark' || scenarioId === 'device-selector-dark' || scenarioId === 'streaming-dark' || scenarioId === 'interaction-mailbox-dark'
+      const colorMode = scenarioId === 'cold-start-home-dark' || scenarioId === 'catalog-refresh-dark' || scenarioId === 'model-role-selector-dark' || scenarioId === 'subagent-process-dark' || scenarioId === 'file-visibility-dark' || scenarioId === 'composer-overflow-dark' || scenarioId === 'composer-overflow-expanded-dark' || scenarioId === 'device-selector-dark' || scenarioId === 'streaming-dark' || scenarioId === 'interaction-mailbox-dark'
         ? ConfigurationConstant.ColorMode.COLOR_MODE_DARK
-        : scenarioId === 'cold-start-home' || scenarioId === 'catalog-refresh' || scenarioId === 'model-role-selector' || scenarioId === 'model-role-selector-wide' || scenarioId === 'subagent-process' || scenarioId === 'file-visibility' || scenarioId === 'device-selector' || scenarioId === 'connected-conversation' || scenarioId === 'reconnecting-wide'
+        : scenarioId === 'cold-start-home' || scenarioId === 'catalog-refresh' || scenarioId === 'model-role-selector' || scenarioId === 'model-role-selector-wide' || scenarioId === 'subagent-process' || scenarioId === 'file-visibility' || scenarioId === 'composer-overflow' || scenarioId === 'composer-overflow-empty' || scenarioId === 'composer-overflow-wide' || scenarioId === 'composer-overflow-expanded' || scenarioId === 'device-selector' || scenarioId === 'connected-conversation' || scenarioId === 'reconnecting-wide'
           ? ConfigurationConstant.ColorMode.COLOR_MODE_LIGHT
           : ConfigurationConstant.ColorMode.COLOR_MODE_NOT_SET;
       this.context.getApplicationContext().setColorMode(colorMode);

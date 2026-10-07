@@ -90,6 +90,43 @@ fake RPC: send must clear the input before pressing **Acknowledge**, and a
 **Next draft** entered while pending must survive acknowledgment. Exercise both
 compact and wide layouts and return to normal `EntryAbility` afterward.
 
+For the composer's draft chrome — the supplemental voice slot and the collapsed
+input's overflow — run
+`node --test tools/tests/composer-content-affordance.test.cjs`. A draft keeps a
+second way into dictation, but only where there is room for it: the supplemental
+microphone is mounted in the expanded action row alone, so a collapsed draft shows
+the primary action only while an expanded one shows both. The collapsed field
+marks what it cannot show with an ellipsis instead of scrolling sideways, and the
+expanded field keeps its scrollable multi-line viewport. An empty field reaches
+dictation from the primary slot.
+
+Capture that chrome on device with the native preview scenarios
+`composer-overflow`, `composer-overflow-empty`, `composer-overflow-expanded`,
+`composer-overflow-dark`, `composer-overflow-expanded-dark`, and
+`composer-overflow-wide`, and keep the evidence in
+`artifacts/composer-overflow/`. The fixture mounts the production `ComposerBar`
+with the remote chat capabilities and no host, and its `composer-overflow-state`
+line reports what the production `ChatComposerPolicy` decided —
+`draft= collapsed= action= supplementalVoice=` — so a capture can be read
+without inferring the decision from the glyphs; `supplementalVoice` is the slot as
+mounted, so it stays false while the draft is collapsed. The wide single-line
+draft must end in an ellipsis and carry no second microphone; the empty field must
+reach dictation from the primary slot. The multiline draft is the counterpart to
+check: the tall field keeps every line and no ellipsis, and the supplemental
+microphone sits beside Send. **Next draft** cycles the same install through all
+three drafts. The `-wide` suffix swaps the collapsed card's presentation, not the
+window posture, so a wide-window check remains a separate pass:
+
+```bash
+"$HDC" shell aa force-stop <bundle-id>
+"$HDC" shell aa start -a EntryAbility -b <bundle-id> --ps openbitfunDesignPreview composer-overflow
+```
+
+Return to normal `EntryAbility` afterward. `assembleHap` for this app stops at
+`SignHap` on a host without `signing.local.json5`, because the checked-in
+`build-profile.json5` names a macOS signing material path; the unsigned emulator
+HAP is written before that task and installs on the emulator as usual.
+
 For the composer model selector's `primary` / `fast` role entries, run
 `node --test tools/tests/model-role-selection.test.cjs`. The native preview
 scenarios `model-role-selector`, `model-role-selector-dark`, and

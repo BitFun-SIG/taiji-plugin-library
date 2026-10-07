@@ -178,6 +178,8 @@ export struct ComposerBar {
             this.ModelControl()
           }
           Blank()
+          // The draft keeps the collapsed field's one line to itself, so the
+          // supplemental slot is mounted in this row alone.
           if (this.shouldShowSupplementalVoice()) {
             this.SupplementalVoiceButton()
           }
@@ -452,9 +454,14 @@ export struct ComposerBar {
           top: this.isComposerExpanded() ? 10 : 0,
           bottom: this.isComposerExpanded() ? 8 : 0
         })
-        // Limit the viewport, not the editable text; keep overflow scrollable.
-        .textOverflow(TextOverflow.Clip)
-        .maxLines(this.isComposerExpanded() ? 4 : 1, { overflowMode: MaxLinesMode.SCROLL })
+        // Limit the viewport, not the editable text. The collapsed field is one
+        // line tall, so what it cannot show is marked with an ellipsis instead of
+        // scrolling sideways under the reader's finger; the expanded field keeps
+        // its scrollable multi-line viewport.
+        .textOverflow(this.isComposerExpanded() ? TextOverflow.Clip : TextOverflow.Ellipsis)
+        .maxLines(this.isComposerExpanded() ? 4 : 1, {
+          overflowMode: this.isComposerExpanded() ? MaxLinesMode.SCROLL : MaxLinesMode.CLIP
+        })
         .defaultFocus(false)
         .onFocus(() => {
           this.inputFocused = true;
@@ -472,9 +479,6 @@ export struct ComposerBar {
           this.inputText = value;
           this.onChatInputChange(value);
         })
-      if (this.shouldShowSupplementalVoice() && !this.isComposerExpanded()) {
-        this.SupplementalVoiceButton()
-      }
     }
     .layoutWeight(1)
     .constraintSize({
