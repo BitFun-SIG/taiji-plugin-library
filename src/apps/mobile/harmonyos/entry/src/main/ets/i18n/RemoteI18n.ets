@@ -35,7 +35,10 @@ export class RemoteI18n {
   static t(key: string): string {
     try {
       const resourceManager = getContext(RemoteI18n).resourceManager;
-      return resourceManager.getStringByNameSync(key);
+      // HarmonyOS resource names only allow [a-zA-Z0-9_]; map dotted code keys
+      // (e.g. "workspaceTools.browse") to underscore resource names.
+      const resourceName = key.replace(/\./g, '_');
+      return resourceManager.getStringByNameSync(resourceName);
     } catch (error) {
       return key;
     }
@@ -130,6 +133,6 @@ export class RemoteI18n {
       RemoteI18n.retranslator = new HostTextRetranslator(locale);
       RemoteI18n.retranslatorLocale = locale;
     }
-    return RemoteI18n.retranslate.retranslate(message);
+    return RemoteI18n.retranslator!.retranslate(message);
   }
 }

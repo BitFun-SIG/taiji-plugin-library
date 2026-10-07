@@ -5,6 +5,15 @@ interface TemplateEntry {
   template: string;
 }
 
+interface StringEntry {
+  name: string;
+  value: string;
+}
+
+interface StringCatalog {
+  string: StringEntry[];
+}
+
 export class HostTextRetranslator {
   private forward: Map<string, string> = new Map();
   private reverse: Map<string, string> = new Map();
@@ -17,9 +26,12 @@ export class HostTextRetranslator {
   private loadCatalog(locale: string): void {
     try {
       const resourceManager = getContext(this).resourceManager;
-      const rawResource = resourceManager.getRawFileContent('resources/rawfile/string.json');
-      const jsonString = String.fromCharCode.apply(null, rawResource);
-      const catalog = JSON.parse(jsonString);
+      const rawResource = resourceManager.getRawFileContentSync('resources/rawfile/string.json');
+      let jsonString = '';
+      for (let i = 0; i < rawResource.length; i++) {
+        jsonString += String.fromCharCode(rawResource[i]);
+      }
+      const catalog = JSON.parse(jsonString) as StringCatalog;
       const strings = catalog.string || [];
       
       for (let index = 0; index < strings.length; index += 1) {
