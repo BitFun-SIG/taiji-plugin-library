@@ -167,7 +167,7 @@ export struct AppSidebar {
   @Builder
   private PrimaryNavigationHeader() {
     Row() {
-      Text('OpenBitFun')
+      Text($r('app.string.app.title'))
         .fontSize(MobileDesignTypography.headlineMedium.size)
         .fontWeight(FontWeight.Medium)
         .fontColor(SIDEBAR_INK)

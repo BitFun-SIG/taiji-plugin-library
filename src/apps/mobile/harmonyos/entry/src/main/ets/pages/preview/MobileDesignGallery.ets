@@ -113,11 +113,11 @@ struct MobileDesignGallery {
   @Builder
   private PlatformLabel() {
     Row({ space: 8 }) {
-      Text('HarmonyOS')
+      Text($r('app.string.app.title'))
         .fontSize(MobileDesignTypography.labelMedium.size)
         .fontWeight(FontWeight.Medium)
         .fontColor(INK)
-      Text('BASELINE')
+      Text($r('app.string.app.title'))
         .fontSize(MobileDesignTypography.labelSmall.size)
         .fontColor(MUTED)
         .padding({ left: 8, right: 8, top: 4, bottom: 4 })
