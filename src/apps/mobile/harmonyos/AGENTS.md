@@ -110,6 +110,34 @@ arm64-only:
 
 Return to normal `EntryAbility` afterward.
 
+For subagent process visibility, run
+`node --test tools/tests/subagent-process-visibility.test.cjs`. The native preview
+scenarios `subagent-process` and `subagent-process-dark` mount the real
+`ChatTimeline` over the production reducer, timeline store and rows with a running
+Task whose child Session publishes thinking, tool and text records flat behind it.
+**Next step** publishes the next record. The Task card must show its chevron while
+the subagent runs, expand to those steps, keep the new step it gains while open,
+and still show them after the Task completes:
+
+```bash
+"$HDC" shell aa force-stop <bundle-id>
+"$HDC" shell aa start -a EntryAbility -b <bundle-id> --ps openbitfunDesignPreview subagent-process
+```
+
+Two client-side defects made that process invisible. The owner Task tool item is
+itself marked as a subagent record — the host records the child Session id on it —
+so the branch owner must not be disqualified by the marker, and a marked record
+that arrives before its Task must keep its own branch instead of being dropped.
+And the structured `ForEach` is keyed by the branch view key, which deliberately
+does not change while steps arrive, so its item builder keeps the entry it
+captured: a Task card born before its subagent started would keep an empty list
+forever. Card params are re-evaluated on every render, so the bubble re-resolves
+its branch through `ChatMessageStructurePolicy.subagentBranchAt` instead of
+passing the captured snapshot. Do not "fix" this by making the branch key change
+with each step: that recreates the node and closes the branch the reader opened.
+
+Return to normal `EntryAbility` afterward.
+
 For history loading and explicit jump-to-bottom navigation, install the debug
 HAP and run `python3 tools/check-history-scroll.py --hdc "$HDC"`. The
 `history-scroll` preview holds a mock history response while the production
