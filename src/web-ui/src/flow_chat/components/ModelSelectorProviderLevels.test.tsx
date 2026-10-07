@@ -159,9 +159,11 @@ describe('ModelSelector provider levels', () => {
     '[data-testid="chat-model-selector-settings-mode"]',
   )!;
 
-  const modeOption = (mode: 'manual' | 'smart' | 'pool') => document.body.querySelector<HTMLButtonElement>(
-    `[data-testid="chat-model-selector-mode-${mode}"]`,
-  )!;
+  const modeChoices = () => document.body.querySelector<HTMLElement>('[data-testid="chat-model-selector-mode-choices"]');
+  const modeOption = (mode: 'manual' | 'smart' | 'pool') => modeChoices()?.querySelector<HTMLButtonElement>(
+    `[data-openbitfun-value="${mode}"]`,
+  ) ?? null;
+  const modeTooltip = (mode: 'manual' | 'smart' | 'pool') => modeOption(mode)?.querySelector('[data-tooltip]')?.getAttribute('data-tooltip');
 
   const openModeMenu = async () => {
     await openSettingsMenu();
@@ -303,7 +305,7 @@ describe('ModelSelector provider levels', () => {
     expect(modelField?.textContent).toContain('acme-fast-native');
     expect(trigger.hasAttribute('aria-busy')).toBe(false);
     expect(menu.hasAttribute('aria-busy')).toBe(false);
-    expect(document.activeElement).toBe(modeTrigger());
+    expect(document.activeElement).toBe(modelField);
   });
 
   it.each(['configuration', 'catalog'])('leaves loading when the %s request fails', async source => {
@@ -391,9 +393,10 @@ describe('ModelSelector provider levels', () => {
       '[data-testid="chat-model-selector-settings-reasoning"]',
     )?.textContent).toContain('reasoningSelector.levels.high');
     expect(settings?.querySelectorAll('button[role="menuitem"]')).toHaveLength(4);
-    expect(settings?.querySelector('.openbitfun-reasoning-slider__header')?.contains(modeTrigger())).toBe(true);
+    expect(settings?.querySelector('.openbitfun-model-selector__mode-footer')?.contains(modeTrigger())).toBe(true);
+    expect(settings?.querySelector('.openbitfun-reasoning-control')?.contains(modeTrigger())).toBe(false);
     expect(modeTrigger().textContent).toBe('modelSelector.modes.manual');
-    expect(settings?.querySelector('.openbitfun-reasoning-slider__title')).toBeNull();
+    expect(settings?.querySelector('.openbitfun-reasoning-control__title')).toBeNull();
     expect(settings?.textContent).not.toContain('modelSelector.fastMode');
     expect(settings?.querySelector(
       '[data-testid="chat-model-selector-settings-reset"]',
@@ -452,7 +455,7 @@ describe('ModelSelector provider levels', () => {
     expect(configManager.setConfig).not.toHaveBeenCalled();
   });
 
-  it('presents an existing enabled override as the single Low choice without rewriting it', async () => {
+  it('presents an existing enabled override as Auto without rewriting it', async () => {
     flowChatStoreMocks.sessions.set('session-a', {
       config: { agentType: 'Standard', modelName: 'umbra-main', reasoningPreset: 'on' },
     });
@@ -485,20 +488,20 @@ describe('ModelSelector provider levels', () => {
 
     expect(document.body.querySelector(
       '[data-testid="chat-model-selector-settings"]',
-    )).toBeNull();
-    expect(optionsPanel()?.dataset.panelKind).toBe('reasoning');
+    )).not.toBeNull();
+    expect(optionsPanel()).toBeNull();
     const options = Array.from(document.body.querySelectorAll<HTMLButtonElement>(
-      '[data-testid="chat-model-selector-reasoning-option"]',
+      '[data-testid="chat-model-selector-reasoning-options"] button',
     ));
-    expect(sharedPanelItems()).not.toBeNull();
-    expect(options.every(option => sharedPanelItems()?.contains(option))).toBe(true);
-    expect(options.map(option => option.dataset.presetId))
-      .toEqual(['auto', 'off', 'low', 'medium', 'high']);
+    expect(options.every(option => option.closest('[data-testid="chat-model-selector-settings"]'))).toBe(true);
+    expect(options.map(option => option.dataset.openbitfunValue))
+      .toEqual(['auto', 'preset:off', 'preset:low', 'preset:medium', 'preset:high']);
+    expect(options.find(option => option.dataset.openbitfunValue === 'unavailable:xhigh')).toBeUndefined();
     expect(options.every(option => (
       option.querySelector('.openbitfun-model-selector__option-desc') === null
     ))).toBe(true);
     expect(options.every(option => option.querySelector('svg') === null)).toBe(true);
-    expect(options.find(option => option.dataset.presetId === 'low')?.getAttribute('aria-checked'))
+    expect(options.find(option => option.dataset.openbitfunValue === 'auto')?.getAttribute('aria-pressed'))
       .toBe('true');
     expect(flowChatStoreMocks.store.updateSessionReasoningPreset).not.toHaveBeenCalled();
     expect(agentAPI.updateSessionModel).not.toHaveBeenCalled();
@@ -532,7 +535,7 @@ describe('ModelSelector provider levels', () => {
     await act(async () => reasoningRow?.click());
     await act(async () => {
       document.body.querySelector<HTMLButtonElement>(
-        '[data-testid="chat-model-selector-reasoning-option"][data-preset-id="high"]',
+        '[data-openbitfun-value="preset:high"]',
       )?.click();
     });
 
@@ -546,23 +549,30 @@ describe('ModelSelector provider levels', () => {
   it.each(['smart', 'pool'] as const)('selects %s mode with a notification-center notice and no blocking dialog', async (mode) => {
     aiApiMocks.getModelCatalog.mockResolvedValue({
       version: 1, default_models: { primary: 'acme-fast' },
-      models: [{ id: 'acme-fast', reasoning: {
+      models: [{ id: 'umbra-main', reasoning: { status: 'unknown', presets: [] } }, { id: 'acme-fast', reasoning: {
         status: 'known', default_preset: 'high',
         presets: [{ id: 'high', label: 'High', order: 1, source: 'models_dev', actions: [{ type: 'effort', value: 'high' }] }],
       } }],
     });
     await renderSelector(CATALOG_MODELS, 'umbra-main');
     await openSettingsMenu();
-    expect(document.body.querySelector(`[data-testid="chat-model-selector-mode-${mode}"]`)).toBeNull();
+    expect(document.body.querySelector('[data-testid="chat-model-selector-reasoning-status"]')).toBeNull();
+    expect(modeChoices()).toBeNull();
     await act(async () => modeTrigger().click());
-    expect(optionsPanel()?.dataset.panelKind).toBe('modes');
-    expect(optionsPanel()?.querySelectorAll('[role="menuitemradio"]')).toHaveLength(3);
-    expect(modeOption('manual').getAttribute('aria-checked')).toBe('true');
-    expect(modeOption('manual').textContent).toContain('umbra-main-native');
+    expect(optionsPanel()).toBeNull();
+    expect(modeChoices()?.querySelectorAll('button')).toHaveLength(3);
+    expect(modeChoices()?.querySelector('[role="menuitemradio"]')).toBeNull();
+    expect(modeOption('manual')?.getAttribute('aria-pressed')).toBe('true');
+    expect(modeOption('manual')?.textContent).toBe('modelSelector.modes.manual');
+    expect(modeTooltip('manual')).toBe('umbra-main-native');
+    expect(document.body.querySelector('.openbitfun-model-selector__model-summary[aria-hidden="true"][inert]')).not.toBeNull();
+    expect(document.body.querySelector('[data-testid="chat-model-selector-reasoning-status"]')).toBeNull();
+    expect(document.body.querySelector('.openbitfun-model-selector__mode-footer[aria-hidden="true"][inert]')).not.toBeNull();
+    expect(document.body.querySelector('[data-testid="chat-model-selector-menu"]')?.getAttribute('data-menu-level')).toBe('settings');
     expect(modelOption('primary')).toBeNull();
     const trigger = container.querySelector<HTMLButtonElement>('[data-testid="chat-model-selector-btn"]')!;
-    const entry = document.body.querySelector<HTMLButtonElement>(`[data-testid="chat-model-selector-mode-${mode}"]`)!;
-    expect(entry.textContent).toContain('modelSelector.modes.comingSoon');
+    const entry = modeOption(mode)!;
+    expect(modeTooltip(mode)).toBe('modelSelector.modes.comingSoon');
     await act(async () => entry.click());
 
     expect(useConfirmDialogStore.getState().isOpen).toBe(false);
@@ -587,10 +597,10 @@ describe('ModelSelector provider levels', () => {
     await act(async () => settings.click());
     expect(optionsPanel()).toBeNull();
     await act(async () => modeTrigger().click());
-    expect(optionsPanel()?.dataset.panelKind).toBe('modes');
-    expect(document.body.querySelector(`[data-testid="chat-model-selector-mode-${mode}"]`)?.getAttribute('aria-checked')).toBe('true');
-    expect(modeOption('manual').textContent).toContain('umbra-main-native');
-    await act(async () => modeOption('manual').click());
+    expect(modeChoices()).not.toBeNull();
+    expect(modeOption(mode)?.getAttribute('aria-pressed')).toBe('true');
+    expect(modeTooltip('manual')).toBe('umbra-main-native');
+    await act(async () => modeOption('manual')!.click());
     expect(trigger.textContent).not.toContain(`modelSelector.modes.${mode}`);
     expect(trigger.textContent).toContain('umbra-main-native');
     expect(trigger.getAttribute('aria-expanded')).toBe('true');
@@ -604,9 +614,7 @@ describe('ModelSelector provider levels', () => {
     });
     await renderSelector(CATALOG_MODELS, 'primary', 'session-a');
     await openModeMenu();
-    await act(async () => document.body.querySelector<HTMLButtonElement>(
-      '[data-testid="chat-model-selector-mode-smart"]',
-    )!.click());
+    await act(async () => modeOption('smart')!.click());
     expect(agentAPI.updateSessionModel).toHaveBeenCalledWith(expect.objectContaining({
       sessionId: 'session-a', modelName: 'primary', reasoningPreset: null,
     }));
@@ -617,20 +625,19 @@ describe('ModelSelector provider levels', () => {
     await renderSelector(CATALOG_MODELS, 'umbra-main');
     vi.mocked(configManager.setConfig).mockRejectedValueOnce(new Error('Settings unavailable'));
     await openModeMenu();
-    await act(async () => document.body.querySelector<HTMLButtonElement>(
-      '[data-testid="chat-model-selector-mode-pool"]',
-    )!.click());
+    await act(async () => modeOption('pool')!.click());
     expect(useConfirmDialogStore.getState().isOpen).toBe(false);
     expect(notificationStore.getState().notificationHistory.filter(notice => notice.type === 'info')).toEqual([]);
     expect(container.querySelector('[data-testid="chat-model-selector-btn"]')?.textContent).toContain('umbra-main-native');
     expect(container.querySelector('[data-testid="chat-model-selector-btn"]')?.getAttribute('aria-expanded')).toBe('true');
-    expect(optionsPanel()?.dataset.panelKind).toBe('modes');
+    expect(modeChoices()).not.toBeNull();
+    expect(document.activeElement).toBe(modeOption('pool'));
   });
 
   it('disables upcoming modes when their primary-model fallback is unavailable', async () => {
     await renderSelector([]);
     await openModeMenu();
-    const entry = document.body.querySelector<HTMLButtonElement>('[data-testid="chat-model-selector-mode-smart"]')!;
+    const entry = modeOption('smart')!;
     expect(entry.disabled).toBe(true);
     await act(async () => entry.click());
     expect(configManager.setConfig).not.toHaveBeenCalled();
@@ -650,11 +657,11 @@ describe('ModelSelector provider levels', () => {
 
     for (const mode of ['smart', 'pool'] as const) {
       await act(async () => modeTrigger().click());
-      expect(modeOption('manual').textContent).toContain('acme-deep-native');
-      await act(async () => modeOption(mode).click());
+      expect(modeTooltip('manual')).toBe('acme-deep-native');
+      await act(async () => modeOption(mode)!.click());
     }
     await act(async () => modeTrigger().click());
-    await act(async () => modeOption('manual').click());
+    await act(async () => modeOption('manual')!.click());
     expect(agentAPI.updateSessionModel).toHaveBeenLastCalledWith(expect.objectContaining({
       sessionId: 'session-a', modelName: 'acme-deep',
     }));
@@ -670,7 +677,7 @@ describe('ModelSelector provider levels', () => {
     });
     await renderSelector(CATALOG_MODELS, 'primary', 'session-a');
     await openModeMenu();
-    await act(async () => modeOption('smart').click());
+    await act(async () => modeOption('smart')!.click());
     expect(getRecentManualModel(getActiveSurfaceScope().key('model-selector', 'Standard', 'session-b')))
       .toBeUndefined();
     expect(getRecentManualModel(surfaceScopedKey('other-device', 'model-selector', 'Standard', 'session-a')))
@@ -680,8 +687,8 @@ describe('ModelSelector provider levels', () => {
     root = createRoot(container);
     await renderSelector(CATALOG_MODELS, 'primary', 'session-a');
     await openModeMenu();
-    expect(modeOption('manual').textContent).toContain('umbra-main-native');
-    await act(async () => modeOption('manual').click());
+    expect(modeTooltip('manual')).toBe('umbra-main-native');
+    await act(async () => modeOption('manual')!.click());
     expect(agentAPI.updateSessionModel).toHaveBeenLastCalledWith(expect.objectContaining({
       sessionId: 'session-a', modelName: 'umbra-main',
     }));
@@ -690,14 +697,15 @@ describe('ModelSelector provider levels', () => {
   it('retains the saved manual model when restoration fails and allows retrying', async () => {
     await renderSelector(CATALOG_MODELS, 'umbra-main');
     await openModeMenu();
-    await act(async () => modeOption('pool').click());
+    await act(async () => modeOption('pool')!.click());
     await act(async () => modeTrigger().click());
     vi.mocked(configManager.setConfig).mockRejectedValueOnce(new Error('Settings unavailable'));
-    await act(async () => modeOption('manual').click());
-    expect(optionsPanel()?.dataset.panelKind).toBe('modes');
-    expect(modeOption('pool').getAttribute('aria-checked')).toBe('true');
-    expect(modeOption('manual').textContent).toContain('umbra-main-native');
-    await act(async () => modeOption('manual').click());
+    await act(async () => modeOption('manual')!.click());
+    expect(modeChoices()).not.toBeNull();
+    expect(modeOption('pool')?.getAttribute('aria-pressed')).toBe('true');
+    expect(modeTooltip('manual')).toBe('umbra-main-native');
+    expect(document.activeElement).toBe(modeOption('manual'));
+    await act(async () => modeOption('manual')!.click());
     expect(container.querySelector('[data-testid="chat-model-selector-btn"]')?.textContent)
       .toContain('umbra-main-native');
   });
@@ -705,7 +713,7 @@ describe('ModelSelector provider levels', () => {
   it('asks for another model when the remembered model has been removed', async () => {
     await renderSelector(CATALOG_MODELS, 'umbra-main');
     await openModeMenu();
-    await act(async () => modeOption('smart').click());
+    await act(async () => modeOption('smart')!.click());
     vi.mocked(configManager.getConfigs).mockResolvedValue({
       'ai.models': CATALOG_MODELS.filter(model => model.id !== 'umbra-main'),
       'ai.default_models': { primary: 'acme-fast' },
@@ -716,7 +724,7 @@ describe('ModelSelector provider levels', () => {
     });
     await act(async () => modeTrigger().click());
     vi.mocked(configManager.setConfig).mockClear();
-    await act(async () => modeOption('manual').click());
+    await act(async () => modeOption('manual')!.click());
     expect(configManager.setConfig).not.toHaveBeenCalled();
     expect(optionsPanel()?.dataset.panelKind).toBe('models');
     expect(getRecentManualModel(getActiveSurfaceScope().key('model-selector', 'Standard', undefined)))
@@ -730,15 +738,55 @@ describe('ModelSelector provider levels', () => {
       modeTrigger().focus();
       modeTrigger().dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
     });
-    expect(optionsPanel()?.dataset.panelKind).toBe('modes');
+    expect(optionsPanel()).toBeNull();
+    expect(modeChoices()).not.toBeNull();
     expect(document.activeElement).toBe(modeOption('manual'));
     await act(async () => {
-      optionsPanel()!.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
+      modeOption('manual')!.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
     });
+    expect(document.activeElement).toBe(modeOption('smart'));
+    expect(modeOption('manual')?.getAttribute('aria-pressed')).toBe('true');
+    expect(configManager.setConfig).not.toHaveBeenCalled();
+    await act(async () => {
+      modeOption('smart')!.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
+    });
+    expect(document.activeElement).toBe(modeOption('manual'));
+    await act(async () => {
+      modeOption('manual')!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    });
+    expect(modeChoices()).toBeNull();
+    expect(document.activeElement).toBe(modeTrigger());
+    expect(container.querySelector('[data-testid="chat-model-selector-btn"]')?.getAttribute('aria-expanded')).toBe('true');
+  });
+
+  it('retains the card and its background until mode persistence succeeds, without duplicate saves', async () => {
+    aiApiMocks.getModelCatalog.mockResolvedValue({
+      version: 1, default_models: { primary: 'acme-fast' },
+      models: [{ id: 'acme-fast', reasoning: { status: 'known', presets: [
+        { id: 'high', label: 'High', order: 1, source: 'models_dev', actions: [{ type: 'effort', value: 'high' }] },
+      ] } }],
+    });
+    await renderSelector();
+    await openSettingsMenu();
+    const sky = document.body.querySelector('[data-openbitfun-part="reasoningSliderSky"]');
+    expect(sky).not.toBeNull();
+    await act(async () => modeTrigger().click());
+    expect(document.body.querySelector('[data-openbitfun-part="reasoningSliderSky"]')).toBe(sky);
+    let finish!: () => void;
+    vi.mocked(configManager.setConfig).mockImplementationOnce(() => new Promise<void>(resolve => { finish = resolve; }));
+    await act(async () => modeOption('smart')!.click());
+    expect(modeChoices()).not.toBeNull();
+    expect(Array.from(modeChoices()!.querySelectorAll('button')).every(button => button.disabled)).toBe(true);
+    expect(modeOption('manual')?.getAttribute('aria-pressed')).toBe('true');
+    await act(async () => modeOption('pool')!.click());
+    expect(configManager.setConfig).toHaveBeenCalledTimes(1);
+    await act(async () => finish());
+    expect(modeChoices()).toBeNull();
+    expect(modeTrigger().textContent).toBe('modelSelector.modes.smart');
     expect(document.activeElement).toBe(modeTrigger());
   });
 
-  it('keeps auto separate from the five-stop slider and saves without closing the card', async () => {
+  it('selects the advertised levels inline and keeps Auto separate from Off without closing the card', async () => {
     aiApiMocks.getModelCatalog.mockResolvedValue({
       version: 1,
       default_models: { primary: 'acme-fast' },
@@ -765,35 +813,37 @@ describe('ModelSelector provider levels', () => {
     expect(slider()).toBeNull();
     expect(document.body.querySelector('[data-reasoning-mode="auto"] [data-testid="chat-model-selector-settings-reasoning"]')?.textContent)
       .toBe('reasoningSelector.thinking · reasoningSelector.auto');
+    expect(document.body.querySelector('[data-testid="chat-model-selector-intensity-control"]')?.getAttribute('data-intensity')).toBe('1');
 
     await openReasoning();
+    expect(document.body.querySelectorAll('[data-testid="chat-model-selector-reasoning-options"] [aria-pressed="true"]')).toHaveLength(1);
+    expect(document.body.querySelector('[data-openbitfun-value="auto"]')?.getAttribute('aria-pressed')).toBe('true');
     await act(async () => document.body.querySelector<HTMLButtonElement>(
-      '[data-testid="chat-model-selector-reasoning-option"][data-preset-id="high"]',
+      '[data-openbitfun-value="preset:high"]',
     )!.click());
     expect(container.querySelector('[data-testid="chat-model-selector-btn"]')?.getAttribute('aria-expanded')).toBe('true');
-    expect(slider()?.value).toBe('3');
-    expect(slider()?.getAttribute('aria-valuetext')).toBe('reasoningSelector.levels.high');
+    expect(slider()).toBeNull();
+    expect(optionsPanel()).toBeNull();
+    expect(document.body.querySelector('[data-testid="chat-model-selector-intensity-control"]')?.getAttribute('data-intensity')).toBe('3');
     const manualRow = document.body.querySelector('[data-reasoning-mode="manual"]')!;
     expect(manualRow.querySelector('[data-testid="chat-model-selector-settings-reasoning"]')?.textContent)
       .toBe('reasoningSelector.thinking · reasoningSelector.levels.high');
     expect(manualRow.querySelectorAll('[data-testid="chat-model-selector-settings-reasoning"]')).toHaveLength(1);
     expect(document.body.querySelector('[data-reasoning-mode="manual"] [data-openbitfun-name="reasoning-auto"]')).toBeNull();
-    await act(async () => {
-      slider()!.focus();
-      slider()!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Home', bubbles: true }));
-    });
+    await openReasoning();
     expect(getRecentReasoningPreset('acme-fast')).toBe('high');
     await act(async () => {
-      slider()!.dispatchEvent(new KeyboardEvent('keyup', { key: 'Home', bubbles: true }));
+      document.body.querySelector<HTMLButtonElement>('[data-openbitfun-value="preset:off"]')!.click();
     });
     expect(getRecentReasoningPreset('acme-fast')).toBe('off');
-    expect(slider()?.value).toBe('0');
+    expect(slider()).toBeNull();
+    expect(document.body.querySelector('[data-testid="chat-model-selector-intensity-control"]')?.getAttribute('data-intensity')).toBe('1');
     expect(container.querySelector('[data-testid="chat-model-selector-btn"]')?.getAttribute('aria-expanded')).toBe('true');
-    expect(document.activeElement).toBe(slider());
+    expect(document.activeElement).toBe(document.body.querySelector('[data-testid="chat-model-selector-settings-reasoning"]'));
 
     await openReasoning();
     await act(async () => document.body.querySelector<HTMLButtonElement>(
-      '[data-testid="chat-model-selector-reasoning-option"][data-preset-id="auto"]',
+      '[data-openbitfun-value="auto"]',
     )!.click());
     expect(container.querySelector('[data-testid="chat-model-selector-btn"]')?.getAttribute('aria-expanded')).toBe('true');
     expect(slider()).toBeNull();
@@ -1273,12 +1323,12 @@ describe('ModelSelector provider levels', () => {
     )!;
     expect(document.activeElement).toBe(document.body.querySelector('[data-testid="chat-model-selector-settings-model"]'));
     await act(async () => reasoningRow.click());
-    expect(optionsPanel()?.dataset.panelKind).toBe('reasoning');
+    expect(optionsPanel()).toBeNull();
     expect(document.body.querySelector('[data-testid="chat-model-selector-menu"]')).toBe(surface);
-    expect(document.body.querySelector('[data-testid="chat-model-selector-settings"]')).toBeNull();
-    await act(async () => document.body.querySelector<HTMLButtonElement>(
-      '[data-testid="chat-model-selector-summary-back"]',
-    )!.click());
+    expect(document.body.querySelector('[data-testid="chat-model-selector-settings"]')).not.toBeNull();
+    await act(async () => document.activeElement?.dispatchEvent(new KeyboardEvent('keydown', {
+      key: 'Escape', bubbles: true, cancelable: true,
+    })));
     expect(optionsPanel()).toBeNull();
     expect(document.activeElement).toBe(document.body.querySelector('[data-testid="chat-model-selector-settings-reasoning"]'));
   });

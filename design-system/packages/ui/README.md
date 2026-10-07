@@ -367,7 +367,20 @@ focus ring. Use it for toolbar, dialog, and row utilities. `fill` and `primary`
 keep an opaque backing surface for persistent emphasis. Disabled quiet actions
 remain transparent and do not show hover or pressed feedback.
 
-Use `size="xs"` for 22px square controls with 14px glyphs and a 4px radius.
+For supplemental label annotations, compose `Tooltip trigger="hover-focus"
+openOnClick` with `IconButton variant="annotation" size="xs"` and an `info`
+icon. The annotation uses `color.content.muted` at rest and
+`color.content.secondary` on hover or keyboard focus, without a resting fill or
+border. Its glyph uses `control.icon.sizeXs` (12px); the existing xs hit area
+(22px), focus ring, disabled behavior, and shared icon stroke remain intact.
+Do not reduce opacity, stroke weight, or hit geometry in product CSS. Place the
+annotation beside the label, using `Field.labelAction` for form fields, and
+supply a localized accessible label. Hover/focus previews the explanation;
+click or keyboard activation pins it until dismissal, so touch users can read
+it too. Keep required instructions and validation messages visible in the
+field; annotations are for supplemental explanations.
+
+Use `size="xs"` for 22px square controls with 14px glyphs (12px for annotations) and a 4px radius.
 `size="standard" shape="circle" variant="outline"` provides the 30px outlined
 circle with a 16px glyph. Quiet and outline controls use the shared neutral
 hover surface for both hover and pressed states; outline keeps its border when

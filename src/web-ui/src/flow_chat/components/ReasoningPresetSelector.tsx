@@ -6,7 +6,7 @@ import { RetainedMountBoundary } from '@/shared/presence';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import type { ReasoningCatalogProjection } from '@/infrastructure/config/types';
 import { getModelSelectorDropdownLayout } from './modelSelectorDropdownPosition';
-import { presetLabel, presetDisplayLabel, reasoningPresetChoices, resolveReasoningPresetChoice } from './reasoningPresetPresentation';
+import { isAutomaticReasoningPreset, presetLabel, presetDisplayLabel, reasoningAutomaticValue, reasoningPresetChoices, reasoningSelectionLabel, resolveReasoningPresetChoice } from './reasoningPresetPresentation';
 import './ReasoningPresetSelector.scss';
 
 interface ReasoningPresetSelectorProps {
@@ -104,24 +104,21 @@ export const ReasoningPresetSelector: React.FC<ReasoningPresetSelectorProps> = (
 
   if (presets.length === 0) return null;
 
-  const orderedPresets = [...reasoningPresetChoices(presets)].sort((left, right) => left.order - right.order);
+  const orderedPresets = reasoningPresetChoices(presets).filter(preset => !isAutomaticReasoningPreset(preset));
+  const automaticValue = reasoningAutomaticValue(presets, true) ?? null;
+  const automatic = !selected || isAutomaticReasoningPreset(selected);
   const presetLabels = orderedPresets.map(preset => (
     presetDisplayLabel(preset, t)
   ));
 
-  const currentLabel = selected
-    ? presetLabel(selected, t)
-    : t('reasoningSelector.auto');
   const effectivePreset = selected ?? defaultPreset;
-  const statusLabel = effectivePreset
-    ? presetDisplayLabel(effectivePreset, t)
-    : currentLabel;
+  const statusLabel = reasoningSelectionLabel(selected, t);
   const showLabel = triggerPresentation === 'label' || Boolean(selected);
   // Preserve the advertised preset's meaning in the text and accessible name.
   const tooltip = selected
     ? t('reasoningSelector.current', { preset: statusLabel })
     : t('reasoningSelector.currentAuto', {
-        preset: effectivePreset ? statusLabel : t('reasoningSelector.modelDefault'),
+        preset: effectivePreset ? presetDisplayLabel(effectivePreset, t) : t('reasoningSelector.modelDefault'),
       });
 
   return (
@@ -210,12 +207,12 @@ export const ReasoningPresetSelector: React.FC<ReasoningPresetSelectorProps> = (
             <MenuItem
               type="button"
               role="menuitemradio"
-              checked={!selected}
+              checked={automatic}
               className="openbitfun-reasoning-preset-selector__auto-row"
               data-openbitfun-component="reasoning-preset-selector"
               data-openbitfun-part="auto"
-              data-openbitfun-state={!selected ? 'selected' : undefined}
-              onClick={() => select(null)}
+              data-openbitfun-state={automatic ? 'selected' : undefined}
+              onClick={() => select(automaticValue)}
             >
               <span>{t('reasoningSelector.auto')}</span>
             </MenuItem>

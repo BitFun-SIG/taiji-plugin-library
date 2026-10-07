@@ -422,12 +422,12 @@ describe('ModelSelector ACP mode picker', () => {
     expect(document.body.querySelectorAll('[data-testid="chat-model-selector-option"]')).toHaveLength(1);
     await click('chat-model-selector-summary-back');
     await click('chat-model-selector-settings-reasoning');
-    expect(document.body.querySelector('[data-preset-id="auto"]')).toBeNull();
+    expect(document.body.querySelector('[data-openbitfun-value="preset:auto"]')).toBeNull();
     vi.mocked(ACPClientAPI.setSessionConfigOption).mockResolvedValue({
       ...modelOptions, configOptions: [MODE_OPTION, { ...reasoningOption, currentValue: 'high' }],
     } as never);
     await act(async () => {
-      document.body.querySelector<HTMLButtonElement>('[data-preset-id="high"]')?.click();
+      document.body.querySelector<HTMLButtonElement>('[data-openbitfun-value="preset:high"]')?.click();
     });
     expect(ACPClientAPI.setSessionConfigOption).toHaveBeenCalledWith(expect.objectContaining({
       sessionId: 'acp-session', clientId: 'dsh', configId: 'reasoning-effort',
@@ -445,7 +445,8 @@ describe('ModelSelector ACP mode picker', () => {
     await click('chat-model-selector-btn');
     expect(document.body.querySelector('[data-testid="chat-model-selector-settings-model"]')).toBeNull();
     await click('chat-model-selector-settings-reasoning');
-    expect(document.body.querySelectorAll('[data-testid="chat-model-selector-reasoning-option"]')).toHaveLength(2);
+    expect(document.body.querySelectorAll('[data-testid="chat-model-selector-reasoning-options"] button:not(:disabled)')).toHaveLength(2);
+    expect(document.body.querySelector('[data-openbitfun-value="unavailable:xhigh"]')).toBeNull();
     expect(container.querySelector('[data-testid="chat-acp-mode-selector-btn"]')).not.toBeNull();
   });
 
@@ -458,13 +459,13 @@ describe('ModelSelector ACP mode picker', () => {
       row.focus();
       row.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
     });
-    expect(document.activeElement?.getAttribute('data-preset-id')).toBe('medium');
+    expect(document.activeElement?.getAttribute('data-openbitfun-value')).toBe('preset:medium');
     if (frameTarget === 'choices') {
       await act(async () => { vi.advanceTimersToNextFrame(); });
-      expect(document.activeElement?.getAttribute('data-preset-id')).toBe('medium');
+      expect(document.activeElement?.getAttribute('data-openbitfun-value')).toBe('preset:medium');
     }
     await act(async () => {
-      document.activeElement?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
+      document.activeElement?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
     });
     const returnedRow = document.body.querySelector<HTMLButtonElement>('[data-testid="chat-model-selector-settings-reasoning"]')!;
     expect(document.activeElement).toBe(returnedRow);
@@ -484,7 +485,7 @@ describe('ModelSelector ACP mode picker', () => {
     await click('chat-model-selector-btn');
     await click('chat-model-selector-settings-reasoning');
     await act(async () => {
-      document.body.querySelector<HTMLButtonElement>('[data-preset-id="high"]')?.click();
+      document.body.querySelector<HTMLButtonElement>('[data-openbitfun-value="preset:high"]')?.click();
     });
     expect(container.querySelector('[data-testid="chat-model-selector-trigger-reasoning"]')?.textContent)
       .toContain('reasoningSelector.levels.medium');
@@ -512,13 +513,13 @@ describe('ModelSelector ACP mode picker', () => {
     await renderWithOptions([withAuto], modelOptions);
     await click('chat-model-selector-btn');
     await click('chat-model-selector-settings-reasoning');
-    expect(document.body.querySelectorAll('[data-preset-id="auto"]')).toHaveLength(1);
+    expect(document.body.querySelectorAll('[data-openbitfun-value="auto"]')).toHaveLength(1);
     const autoOptions = {
       ...modelOptions, configOptions: [{ ...withAuto, currentValue: 'auto' }],
     };
     vi.mocked(ACPClientAPI.setSessionConfigOption).mockResolvedValue(autoOptions as never);
     vi.mocked(ACPClientAPI.getSessionOptions).mockResolvedValue(autoOptions as never);
-    await act(async () => { document.body.querySelector<HTMLButtonElement>('[data-preset-id="auto"]')?.click(); });
+    await act(async () => { document.body.querySelector<HTMLButtonElement>('[data-openbitfun-value="auto"]')?.click(); });
     expect(ACPClientAPI.setSessionConfigOption).toHaveBeenCalledWith(expect.objectContaining({
       configId: 'reasoning-effort', value: { type: 'select', value: 'auto' },
     }));

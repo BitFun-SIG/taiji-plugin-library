@@ -231,7 +231,7 @@ describe('ReasoningPresetSelector', () => {
     expect(options[2]?.getAttribute('aria-checked')).toBe('true');
   });
 
-  it('merges On into Low and restores an older enabled selection without writing it back', async () => {
+  it('presents an older enabled selection as Auto without rewriting it', async () => {
     const onSelect = vi.fn();
     await act(async () => {
       root.render(
@@ -275,8 +275,9 @@ describe('ReasoningPresetSelector', () => {
     const trigger = container.querySelector<HTMLButtonElement>(
       '[data-testid="chat-reasoning-preset-selector-btn"]',
     );
-    expect(trigger?.getAttribute('aria-label')).toBe('Thinking: Low');
-    expect(options.find(option => option.dataset.presetId === 'low')?.getAttribute('aria-checked')).toBe('true');
+    expect(trigger?.getAttribute('aria-label')).toBe('Thinking: Auto');
+    expect(options.find(option => option.dataset.presetId === 'low')?.getAttribute('aria-checked')).toBe('false');
+    expect(document.body.querySelector('.openbitfun-reasoning-preset-selector__auto-row [aria-checked="true"]')).not.toBeNull();
     expect(onSelect).not.toHaveBeenCalled();
 
     for (const [label, presetId] of [['Low', 'low'], ['Off', 'off']] as const) {
@@ -293,7 +294,7 @@ describe('ReasoningPresetSelector', () => {
     }
 
     expect(zhCnFlowChat.reasoningSelector.levels)
-      .toMatchObject({ off: '关闭', low: '轻', medium: '中', high: '高', max: '最高' });
+      .toMatchObject({ off: '关闭', low: '轻', medium: '中', high: '高', max: '最大' });
   });
 
   it('keeps the reasoning menu open and its focused choice available after selection', async () => {
