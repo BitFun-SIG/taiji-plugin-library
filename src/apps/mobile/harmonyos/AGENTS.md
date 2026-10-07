@@ -165,23 +165,58 @@ the framework avoided the system bars for them:
   surface that already clears it: measure first. A `bindContentCover` bound
   with `enableSafeArea: true` is inset by the framework already, and a
   `bindSheet` is not.
+- The workspace tools editor tab is the one bottom edge that is a WebView: its
+  scrolling and its padding live inside the web renderer, so the ArkUI tail
+  spacer cannot reach its content. The editor card is therefore fixed content
+  like the terminal key row — its bottom margin stops at the bar top while the
+  sheet's own fill still reaches the screen edge. Pushing a vp tail through the
+  JS bridge was rejected: the web side cannot measure the strip, so the padding
+  would rest on an unverifiable vp-to-CSS-px assumption instead of the device
+  fact the binding reads.
+- The remaining `bindSheet` surfaces from the bottom-edge audit:
+  - Immersive (viewport plus tail): the session details sheet and the remote
+    view settings sheet run their scrolling column to the screen edge and end
+    it in `insets.tailSpacing(24)`.
+  - Fixed controls at the edge: the session action sheet's rows (the sheet
+    host resolves `insets.bottomPadding(18)` and passes it down, because only
+    the host knows whether its presentation is the bottom sheet or a floating
+    popover) and the workspace tools file action form (`insets.bottomPadding(24)`
+    on the form, so the sheet's card still reaches the edge).
+- One node carries at most one `bindSheet`: chaining two on the same node
+  leaves the first sheet unopenable (the session action sheet was, until the
+  audit split it). Bind each sheet on its own node — a zero-height carrier row
+  is the established pattern — and keep the pairing asserted in
+  `tools/tests/immersive-bottom.test.cjs`.
+- Audit status on the reference emulator (1256x2760, bar top 2662): the
+  session action sheet and the session details sheet were dump-verified with
+  fixture content that ends above the strip (their last rows at 2351 and 2137),
+  so their strip-aware offsets are hardening for content that grows to fill
+  their sheets, not corrections of a measured overlap; the file action form
+  (fixed 24vp padding left its input at 2662+14) and the view settings sheet
+  (fixed 24vp tail left its last control at 2662+14) were measured overlaps and
+  are now clear at 2662 and 2512. The wide/side/center placements of these
+  sheets, and the action sheet's delete-confirmation state, were not re-measured
+  in this pass.
 
 Capture the surfaces with the native preview scenarios `immersive-bottom`
 (compact chat), `immersive-bottom-dark`, `immersive-bottom-wide`,
 `immersive-bottom-wide-shell` (wide master/detail), `immersive-bottom-drawer`,
 `immersive-bottom-settings` (and `-settings-dark`),
 `immersive-bottom-cover`, `immersive-bottom-miniapps`,
-`immersive-bottom-tools` (the workspace tools sheet over the open drawer) and
-`immersive-bottom-connect`, and keep the evidence in
-`artifacts/immersive-bottom/` (replace the bundle id with `<bundle-id>` as
-above). Read the bottom edge out of the layout dump rather than the pixels: the
-`conversation-bottom-fade` node and the transcript's own node are what say where
-the chat page ends, and a content node whose bottom passes the navigation
-indicator's top edge — `2662` on the 1256x2760 emulator, whose indicator is 98 px
-— is a control that has slipped under the bar. A scrolling surface is judged in
-two states: not scrolled to the end, where its content must appear inside the
-strip (`2662`–`2760`) instead of a band of bare page colour, and scrolled to the
-end, where its last row's bottom must stay at or above `2662`.
+`immersive-bottom-tools` (the workspace tools sheet over the open drawer, with
+`-tools-editor` opening it on the editor tab and `-tools-file-action` opening
+its file action form), `immersive-bottom-view-settings` (the remote view
+settings sheet over the same conversation) and `immersive-bottom-connect`, and
+keep the evidence in `artifacts/immersive-bottom/` (replace the bundle id with
+`<bundle-id>` as above). Read the bottom edge out of the layout dump rather
+than the pixels: the `conversation-bottom-fade` node and the transcript's own
+node are what say where the chat page ends, and a content node whose bottom
+passes the navigation indicator's top edge — `2662` on the 1256x2760 emulator,
+whose indicator is 98 px — is a control that has slipped under the bar. A
+scrolling surface is judged in two states: not scrolled to the end, where its
+content must appear inside the strip (`2662`–`2760`) instead of a band of bare
+page colour, and scrolled to the end, where its last row's bottom must stay at
+or above `2662`.
 
 For the composer model selector's `primary` / `fast` role entries, run
 `node --test tools/tests/model-role-selection.test.cjs`. The native preview

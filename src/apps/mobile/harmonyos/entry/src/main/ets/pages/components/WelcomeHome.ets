@@ -1,7 +1,7 @@
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { MobileDesignTypography, MobileDesignGeometry as G } from '../../generated/MobileDesignTokens';
 import { MotionPreference } from '../../services/MotionPreference';
-import { WindowSystemBarService } from '../../services/WindowSystemBarService';
+import { WindowInsetsBinding, WindowSystemBarService } from '../../services/WindowSystemBarService';
 import { WelcomeBrandFlow } from './WelcomeBrandFlow';
 import { INK, PAGE_BG, WELCOME_PAGE_BG, MUTED, TRANSPARENT } from './Theme';
 
@@ -23,15 +23,25 @@ export struct WelcomeHome {
   @Local pageHeight: number = 700;
   @Local pageWidth: number = 390;
   @Local topInset: number = 0;
+  // The dock paints into the strip (expandSafeArea carries its background to
+  // the screen edge), so its buttons read the strip: the design's own clearance
+  // where it is already taller than the indicator, the indicator's height
+  // where it is not.
+  @Local insets: WindowInsetsBinding = new WindowInsetsBinding();
   private timer: number = -1;
   private started: number = 0;
 
   aboutToAppear(): void {
     this.readTopInset();
+    const context = this.getUIContext().getHostContext();
+    if (context) {
+      this.insets.bind(this.getUIContext(), context);
+    }
   }
 
   aboutToDisappear(): void {
     this.stop();
+    this.insets.unbind();
   }
 
   private readTopInset(): void {
@@ -155,7 +165,7 @@ export struct WelcomeHome {
       }.height(44).width('100%').backgroundColor(TRANSPARENT).onClick(this.onMiniApps)
     }.width('100%').constraintSize({ maxWidth: this.wide() ? 400 : G.welcomeMaxWidth })
       .padding({ left: G.welcomeGutter, right: G.welcomeGutter, top: this.wide() ? 0 : G.welcomeGutter,
-        bottom: this.wide() ? 0 : G.welcomeDockBottom })
+        bottom: this.wide() ? 0 : this.insets.bottomPadding(G.welcomeDockBottom) })
       .backgroundColor(this.wide() ? TRANSPARENT : $r('app.color.welcome_dock'))
       .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
       .borderRadius({ topLeft: G.welcomeDockRadius, topRight: G.welcomeDockRadius })

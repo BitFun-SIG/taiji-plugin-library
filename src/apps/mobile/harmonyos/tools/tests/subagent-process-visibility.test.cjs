@@ -62,10 +62,12 @@ function record(revision, id, type, order, data) {
 /**
  * The owner Task tool record.
  *
- * The host records the child Session id on the Task tool item
- * (`coordinator.rs:4598`), and every mobile client maps that field onto the
- * subagent marker (`DurableSessionReducer.ets:157`), so the owner Task arrives
- * marked exactly like the records it owns.
+ * The host records the child Session id on the Task tool item — the durable
+ * record contract is `is_subagent_item` / `subagent_session_id` on the item
+ * data in `src/crates/services/services-core/src/session/types.rs`, published
+ * as `isSubagentItem` / `subagentSessionId` — and every mobile client maps that
+ * field onto the subagent marker (`DurableSessionReducer.ets:157`), so the
+ * owner Task arrives marked exactly like the records it owns.
  */
 function ownerTaskRecord(revision) {
   return record(revision, TASK_CALL_ID, 'tool', 0, {

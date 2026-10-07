@@ -107,7 +107,7 @@ export struct WorkspaceToolsPanel {
       }
       if (this.state.error) { Text(this.state.error).fontColor(MUTED).fontSize(MobileDesignTypography.bodySmall.size) }
       if (this.state.busy) { LoadingProgress().width(24).height(24).color(MUTED) }
-    }.padding({ left: 20, right: 20, top: 20, bottom: 24 }).width('100%').backgroundColor(CARD)
+    }.padding({ left: 20, right: 20, top: 20, bottom: this.insets.bottomPadding(24) }).width('100%').backgroundColor(CARD)
   }
   @Builder
   private FileDirectory() {
@@ -240,9 +240,15 @@ export struct WorkspaceToolsPanel {
             .onClick(() => this.onIntent({ type: 'editor-edit' }))
         }
       }.width('100%').justifyContent(FlexAlign.End)
+      // The editor is a WebView: its scrolling and its padding live inside the
+      // web renderer, so the panel cannot end it in an ArkUI tail spacer the
+      // way the file list does. The card is therefore fixed content, like the
+      // terminal key row: its bottom edge stops at the navigation bar's top,
+      // while the sheet's own fill still reaches the screen edge below it.
       WorkspaceFileEditorView({ content: this.state.content, editing: this.state.editing,
         lineNumbers: this.state.lineNumbers, onIntent: this.onIntent }).layoutWeight(1)
         .border({ width: 1, color: LINE }).borderRadius(8).backgroundColor(CARD)
+        .margin({ bottom: this.insets.bottomPadding(16) })
     }.padding({ top: 12 }).width('100%').height('100%')
   }
   private terminalOptions(): SelectOption[] {

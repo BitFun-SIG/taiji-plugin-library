@@ -25,6 +25,11 @@ const workspaceToolsPanel = source('entry/src/main/ets/pages/components/Workspac
 const workspacePicker = source('entry/src/main/ets/pages/components/SidebarWorkspacePicker.ets');
 const connectView = source('entry/src/main/ets/pages/components/ConnectView.ets');
 const filePreviewSurface = source('entry/src/main/ets/pages/components/FilePreviewSurface.ets');
+const remoteSessionList = source('entry/src/main/ets/pages/components/RemoteSessionList.ets');
+const sessionActionSurface = source('entry/src/main/ets/pages/components/SessionActionSurface.ets');
+const sessionDetailsView = source('entry/src/main/ets/pages/components/SessionDetailsView.ets');
+const conversationViewSettings = source('entry/src/main/ets/pages/components/ConversationViewSettings.ets');
+const welcomeHome = source('entry/src/main/ets/pages/components/WelcomeHome.ets');
 
 // Reads one @Builder out of a component, so an assertion can name the layer it
 // is about instead of counting matches in the whole file.
@@ -195,6 +200,59 @@ test('the workspace tools sheet scrolls under the bar and its fixed controls do 
   assert.match(normalize(workspaceToolsPanel),
     /\.margin\(\{ bottom: this\.insets\.bottomPadding\(16\) \}\)/,
     'the fixed bottom controls must keep the strip clear');
+  // The file action form is a FIT_CONTENT sheet: its buttons are the fixed
+  // controls at the screen edge, so the form's own bottom padding is what keeps
+  // them out of the strip.
+  assert.match(normalize(workspaceToolsPanel),
+    /\.padding\(\{ left: 20, right: 20, top: 20, bottom: this\.insets\.bottomPadding\(24\) \}\)/,
+    'the file action form must keep its buttons out of the strip');
+});
+
+test('the workspace tools editor keeps its card above the bar', () => {
+  // The editor is a WebView: its scrolling and padding live inside the web
+  // renderer, so the ArkUI tail spacer cannot reach its content and the card is
+  // fixed content instead — its bottom edge stops at the navigation bar's top,
+  // the same clearance the terminal key row keeps.
+  const editor = normalize(builderBody(workspaceToolsPanel, 'Editor'));
+  assert.match(editor,
+    /\.backgroundColor\(CARD\) \.margin\(\{ bottom: this\.insets\.bottomPadding\(16\) \}\)/,
+    'the editor card must stop at the bar top instead of running under it');
+});
+
+test('the remaining bottom sheets keep their content out of the bar', () => {
+  // The session action sheet is a fixed-height bottom sheet: its action rows
+  // are fixed controls, so the surface's bottom padding is strip-aware — the
+  // sheet host resolves it, because only the host knows which presentation
+  // sits at the screen edge.
+  assert.match(normalize(sessionActionSurface),
+    /\.padding\(\{ left: 16, right: 16, top: 10, bottom: this\.bottomPadding \}\)/,
+    'the action surface must take its bottom padding from its host');
+  assert.match(normalize(remoteSessionList),
+    /bottomPadding: presentation === SessionActionPresentation\.BottomSheet \? this\.insets\.bottomPadding\(18\) : 18/,
+    'the bottom-sheet presentation must clear the strip, the popover must not grow');
+  // The session details and view settings sheets are scrolling surfaces: their
+  // viewport runs to the screen edge and their content ends in a strip-aware
+  // tail, the same contract the settings sheet keeps.
+  assert.match(normalize(sessionDetailsView),
+    /\.padding\(\{ left: 20, right: 20, top: 8, bottom: this\.insets\.tailSpacing\(24\) \}\)/,
+    'the session details tail must clear the strip');
+  assert.match(normalize(conversationViewSettings),
+    /\.padding\(\{ left: 20, right: 20, bottom: this\.insets\.tailSpacing\(24\) \}\)/,
+    'the view settings tail must clear the strip');
+});
+
+test('the session sheets each bind on their own node', () => {
+  // A node carries at most one bindSheet: chaining the action sheet and the
+  // details sheet on one node left the first sheet unopenable, so the action
+  // sheet binds on its own zero-height carrier row and the details sheet stays
+  // on the root — the same pattern the sidebar's section uses for its pair.
+  const build = normalize(remoteSessionList.slice(
+    remoteSessionList.indexOf('build() {'),
+    remoteSessionList.indexOf('@Builder', remoteSessionList.indexOf('build() {'))));
+  assert.match(build, /Row\(\) \{\}\.height\(0\) \.bindSheet\(\$\$this\.showSessionActionSheet/,
+    'the action sheet must bind on its own carrier node');
+  assert.match(build, /\.alignItems\(HorizontalAlign\.Start\) \.bindSheet\(\$\$this\.showSessionDetails/,
+    'the details sheet must be the root chain\'s only sheet');
 });
 
 test('the full-height sheets keep their fixed bottom controls out of the bar', () => {
@@ -220,11 +278,27 @@ test('the file preview scrollers end in strip-aware tails', () => {
     'the markdown preview tail must clear the strip');
 });
 
+test('the welcome dock reads the strip through the shared binding', () => {
+  // The dock paints into the strip (expandSafeArea carries its background to
+  // the screen edge), so its buttons must keep their clearance from a measured
+  // strip: the design spacing where it is already taller, the strip itself
+  // where a device's indicator is higher. A hard-coded clearance only looked
+  // right on the reference device.
+  assert.match(normalize(welcomeHome),
+    /bottom: this\.wide\(\) \? 0 : this\.insets\.bottomPadding\(G\.welcomeDockBottom\)/,
+    'the dock must lift its content by the strip wherever the indicator is taller');
+  assert.match(welcomeHome,
+    /\.expandSafeArea\(\[SafeAreaType\.SYSTEM\], \[SafeAreaEdge\.BOTTOM\]\)/,
+    'the dock fill must still reach the screen edge');
+});
+
 test('every surface that owns a bottom edge reads the shared binding, not a constant', () => {
   for (const [name, text] of [['AppSidebar', appSidebar], ['MiniAppSurface', miniAppSurface],
     ['SettingsSheet', settingsSheet], ['ConversationView', conversationView],
     ['WorkspaceToolsPanel', workspaceToolsPanel], ['SidebarWorkspacePicker', workspacePicker],
-    ['ConnectView', connectView], ['FilePreviewSurface', filePreviewSurface]]) {
+    ['ConnectView', connectView], ['FilePreviewSurface', filePreviewSurface],
+    ['RemoteSessionList', remoteSessionList], ['SessionDetailsView', sessionDetailsView],
+    ['ConversationViewSettings', conversationViewSettings], ['WelcomeHome', welcomeHome]]) {
     assert.match(text, /@Local insets: WindowInsetsBinding = new WindowInsetsBinding\(\);/,
       `${name} must hold the shared inset binding`);
     assert.match(text, /this\.insets\.bind\(this\.getUIContext\(\), context\)/,
