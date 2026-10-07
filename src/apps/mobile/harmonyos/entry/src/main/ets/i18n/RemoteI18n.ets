@@ -91,14 +91,13 @@ export class RemoteI18n {
   }
 
   static formatAbsoluteDate(timestamp: number): string {
-    const date = new Date(timestamp);
-    const year = `${date.getFullYear()}`;
-    const month = `${date.getMonth() + 1}`.padStart(2, '0');
-    const day = `${date.getDate()}`.padStart(2, '0');
-    if (RemoteI18n.language() === APP_LOCALE_EN_US) {
-      return `${month}/${day}/${year}`;
-    }
-    return `${year}年${month}月${day}日`;
+    const locale = RemoteI18n.language() === APP_LOCALE_EN_US ? 'en-US' : 'zh-CN';
+    const formatter = new intl.DateTimeFormat(locale, {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    });
+    return formatter.format(new Date(timestamp));
   }
 
   static speechLanguage(): string {

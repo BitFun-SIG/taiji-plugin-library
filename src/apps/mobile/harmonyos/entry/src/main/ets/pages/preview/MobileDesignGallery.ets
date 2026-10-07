@@ -20,6 +20,7 @@ import {
 import { ComposerBar, ComposerPresentation } from '../components/ComposerBar';
 import { ConversationHeader } from '../components/ConversationHeader';
 import { INK, LINE, MUTED, PAGE_BG, SOFT, TRANSPARENT } from '../components/Theme';
+import { RemoteI18n } from '../../i18n/RemoteI18n';
 
 @Entry
 @ComponentV2
@@ -113,11 +114,11 @@ struct MobileDesignGallery {
   @Builder
   private PlatformLabel() {
     Row({ space: 8 }) {
-      Text($r('app.string.app.title'))
+      Text(RemoteI18n.t('app.title'))
         .fontSize(MobileDesignTypography.labelMedium.size)
         .fontWeight(FontWeight.Medium)
         .fontColor(INK)
-      Text($r('app.string.app.title'))
+      Text(RemoteI18n.t('app.title'))
         .fontSize(MobileDesignTypography.labelSmall.size)
         .fontColor(MUTED)
         .padding({ left: 8, right: 8, top: 4, bottom: 4 })

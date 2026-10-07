@@ -167,7 +167,7 @@ export struct AppSidebar {
   @Builder
   private PrimaryNavigationHeader() {
     Row() {
-      Text($r('app.string.app.title'))
+      Text(RemoteI18n.t('app.title'))
         .fontSize(MobileDesignTypography.headlineMedium.size)
         .fontWeight(FontWeight.Medium)
         .fontColor(SIDEBAR_INK)
