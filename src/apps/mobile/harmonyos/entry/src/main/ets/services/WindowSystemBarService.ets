@@ -148,4 +148,16 @@ export class WindowInsetsBinding {
   bottomPadding(designSpacing: number): number {
     return Math.max(designSpacing, this.bottom);
   }
+
+  /**
+   * The tail spacer a scrolling surface appends after its last row: the strip
+   * itself plus the design's own breathing. The viewport then runs to the
+   * screen edge — rows roll under the navigation indicator while they are
+   * still moving — while the last row still comes to rest above the bar.
+   * Padding on the scrolling container cannot do that: it shrinks the viewport
+   * and leaves a band of bare page colour under the bar instead.
+   */
+  tailSpacing(designSpacing: number): number {
+    return this.bottom + designSpacing;
+  }
 }

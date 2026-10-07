@@ -147,26 +147,41 @@ the framework avoided the system bars for them:
   the layer, which is what lets the last message scroll above the fade. The
   header band reserves the status bar the same way, and its box is what the
   transcript borrows as its content start offset.
-- Every other surface keeps the strip as **content**: the sidebar footer, the
-  mini-app gallery, the settings sheet and the welcome dock put
-  `insets.bottomPadding(designSpacing)` on the container that holds their bottom
-  controls, so the surface's fill still reaches the screen edge while its rows and
-  its scrolling viewport stop above the navigation bar. Do not hard-code the strip
-  in a page, and do not pad a surface that already clears it: measure first. A
-  `bindContentCover` bound with `enableSafeArea: true` is inset by the framework
-  already, and a `bindSheet` is not.
+- Every other scrolling surface owns the bottom edge as **viewport plus tail**:
+  the settings sheet, the mini-app gallery, the sidebar's session list and the
+  workspace tools file list run their scrolling viewport to the screen edge —
+  rows roll under the navigation indicator while they are still moving — and end
+  their content in a tail spacer (`insets.tailSpacing(designSpacing)`: the strip
+  plus the design's own breathing) so the last row still rests above the bar.
+  Padding on the scrolling container is the rejected alternative: it shrinks
+  the viewport and leaves a band of bare page colour under the bar instead.
+- A surface whose bottom edge is a fixed control keeps the strip clear on that
+  control instead: the sidebar's floating footer and its fade, the workspace
+  tools terminal key row, the workspace picker's confirm button, the connect
+  sheet's status strip and the welcome dock put
+  `insets.bottomPadding(designSpacing)` on the control that sits at the edge,
+  so the surface's fill still reaches the screen edge while nothing tappable
+  lands in the strip. Do not hard-code the strip in a page, and do not pad a
+  surface that already clears it: measure first. A `bindContentCover` bound
+  with `enableSafeArea: true` is inset by the framework already, and a
+  `bindSheet` is not.
 
 Capture the surfaces with the native preview scenarios `immersive-bottom`
 (compact chat), `immersive-bottom-dark`, `immersive-bottom-wide`,
 `immersive-bottom-wide-shell` (wide master/detail), `immersive-bottom-drawer`,
-`immersive-bottom-settings`, `immersive-bottom-cover` and
-`immersive-bottom-miniapps`, and keep the evidence in
+`immersive-bottom-settings` (and `-settings-dark`),
+`immersive-bottom-cover`, `immersive-bottom-miniapps`,
+`immersive-bottom-tools` (the workspace tools sheet over the open drawer) and
+`immersive-bottom-connect`, and keep the evidence in
 `artifacts/immersive-bottom/` (replace the bundle id with `<bundle-id>` as
 above). Read the bottom edge out of the layout dump rather than the pixels: the
 `conversation-bottom-fade` node and the transcript's own node are what say where
 the chat page ends, and a content node whose bottom passes the navigation
 indicator's top edge — `2662` on the 1256x2760 emulator, whose indicator is 98 px
-— is a control that has slipped under the bar.
+— is a control that has slipped under the bar. A scrolling surface is judged in
+two states: not scrolled to the end, where its content must appear inside the
+strip (`2662`–`2760`) instead of a band of bare page colour, and scrolled to the
+end, where its last row's bottom must stay at or above `2662`.
 
 For the composer model selector's `primary` / `fast` role entries, run
 `node --test tools/tests/model-role-selection.test.cjs`. The native preview
