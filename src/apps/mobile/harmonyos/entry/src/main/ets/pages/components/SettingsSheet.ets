@@ -8,6 +8,7 @@ import { LanguageSettingsPanel } from './LanguageSettingsPanel';
 import { SheetCloseHeader } from './SheetCloseHeader';
 import { SHEET_HORIZONTAL_PADDING, SHEET_TOP_RADIUS } from './SheetLayout';
 import { CloudAccountDevice } from '../../services/CloudAccountClient';
+import { WindowInsetsBinding } from '../../services/WindowSystemBarService';
 import { RemotePermissionMode } from '../../model/RemoteModels';
 import { RemotePermissionSection } from './RemotePermissionSection';
 
@@ -39,6 +40,20 @@ export struct SettingsSheet {
   @Event setPermissionMode: (mode: RemotePermissionMode) => Promise<RemotePermissionMode> =
     async (mode: RemotePermissionMode): Promise<RemotePermissionMode> => mode;
   @Event onSetLanguage: (language: string) => Promise<void> = async (_language: string) => {};
+  /** The sheet's own bottom edge, so its last row clears the navigation bar. */
+  @Local insets: WindowInsetsBinding = new WindowInsetsBinding();
+
+  aboutToAppear(): void {
+    const context = this.getUIContext().getHostContext();
+    if (context) {
+      this.insets.bind(this.getUIContext(), context);
+    }
+  }
+
+  aboutToDisappear(): void {
+    this.insets.unbind();
+  }
+
   build() {
     Stack({ alignContent: Alignment.TopEnd }) {
       if (this.sheetState.page === 'language') {
@@ -49,6 +64,12 @@ export struct SettingsSheet {
     }
     .width('100%')
     .height('100%')
+    // The sheet's fill is the shell's bottom edge and runs to the screen edge,
+    // but its rows and its scrolling viewport are content: they stop above the
+    // navigation bar, so nothing can be read or tapped under the gesture
+    // indicator. The framework does not inset a bottom sheet for the app while
+    // the window is immersive, so the sheet does it itself.
+    .padding({ bottom: this.insets.bottom })
     .backgroundColor(PAGE_BG)
     .borderRadius({ topLeft: SHEET_TOP_RADIUS, topRight: SHEET_TOP_RADIUS })
   }

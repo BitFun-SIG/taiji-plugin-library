@@ -19,6 +19,7 @@ import {
 import { SidebarToggleButton } from './SidebarToggleButton';
 import { SidebarGlyph } from './SidebarGlyphs';
 import { SidebarConnectionActionPolicy } from '../policy/SidebarConnectionActionPolicy';
+import { WindowInsetsBinding } from '../../services/WindowSystemBarService';
 
 /** Device and workspace navigation shared by compact and wide controllers. */
 @ComponentV2
@@ -47,6 +48,8 @@ export struct AppSidebar {
   @Event onOpenAccount: () => void = () => {};
   @Local showSearch: boolean = false;
   @Local sessionSearchQuery: string = '';
+  /** The panel reaches the screen edge; its footer controls stop above the bar. */
+  @Local insets: WindowInsetsBinding = new WindowInsetsBinding();
   /**
    * The authenticated device/workspace section.
    *
@@ -54,6 +57,17 @@ export struct AppSidebar {
    * sidebar has no business knowing about remote state; the host wires it.
    */
   @BuilderParam contentSlot: () => void = this.EmptySlot;
+
+  aboutToAppear(): void {
+    const context = this.getUIContext().getHostContext();
+    if (context) {
+      this.insets.bind(this.getUIContext(), context);
+    }
+  }
+
+  aboutToDisappear(): void {
+    this.insets.unbind();
+  }
 
   build() {
     this.SidebarContent()
@@ -128,7 +142,10 @@ export struct AppSidebar {
     }
     .width('100%')
     .height('100%')
-    .padding({ left: 20, right: 20, top: 0, bottom: 16 })
+    // The footer's controls are the sidebar's own bottom edge, so they carry the
+    // navigation bar's height instead of sitting inside it: the panel's fill runs
+    // to the screen edge, the buttons above it do not.
+    .padding({ left: 20, right: 20, top: 0, bottom: this.insets.bottomPadding(16) })
     .backgroundColor(SIDEBAR_BG)
   }
 

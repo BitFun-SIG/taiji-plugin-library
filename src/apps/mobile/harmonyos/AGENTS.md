@@ -127,6 +127,47 @@ Return to normal `EntryAbility` afterward. `assembleHap` for this app stops at
 `build-profile.json5` names a macOS signing material path; the unsigned emulator
 HAP is written before that task and installs on the emulator as usual.
 
+For the bottom edge of the chat page — and of every other surface that ends at the
+screen edge — run `node --test tools/tests/immersive-bottom.test.cjs`. The shell
+runs the window full-screen for every page, not only for the welcome page: the
+transcript can only reach the bottom edge of the screen while the window stops
+reserving the strip above it. Immersive layout also moves each page's own origin
+to the top of the window, so pages read the insets themselves instead of assuming
+the framework avoided the system bars for them:
+
+- `WindowSystemBarService.observeInsets` and `WindowInsetsBinding`
+  (`services/WindowSystemBarService.ets`) are the only place the strip is
+  measured. The binding holds vp values, follows `avoidAreaChange` — fold,
+  rotation and the soft keyboard all move the avoid areas without recreating the
+  page — and releases its listener when its component goes away.
+- The chat page owns the bottom edge as **background**: `ConversationView`'s
+  bottom layer carries the bottom inset, so its own gradient fills the strip; the
+  composer keeps the distance from the screen edge it had while the page area
+  ended above the navigation bar; and the transcript's measured inset grows with
+  the layer, which is what lets the last message scroll above the fade. The
+  header band reserves the status bar the same way, and its box is what the
+  transcript borrows as its content start offset.
+- Every other surface keeps the strip as **content**: the sidebar footer, the
+  mini-app gallery, the settings sheet and the welcome dock put
+  `insets.bottomPadding(designSpacing)` on the container that holds their bottom
+  controls, so the surface's fill still reaches the screen edge while its rows and
+  its scrolling viewport stop above the navigation bar. Do not hard-code the strip
+  in a page, and do not pad a surface that already clears it: measure first. A
+  `bindContentCover` bound with `enableSafeArea: true` is inset by the framework
+  already, and a `bindSheet` is not.
+
+Capture the surfaces with the native preview scenarios `immersive-bottom`
+(compact chat), `immersive-bottom-dark`, `immersive-bottom-wide`,
+`immersive-bottom-wide-shell` (wide master/detail), `immersive-bottom-drawer`,
+`immersive-bottom-settings`, `immersive-bottom-cover` and
+`immersive-bottom-miniapps`, and keep the evidence in
+`artifacts/immersive-bottom/` (replace the bundle id with `<bundle-id>` as
+above). Read the bottom edge out of the layout dump rather than the pixels: the
+`conversation-bottom-fade` node and the transcript's own node are what say where
+the chat page ends, and a content node whose bottom passes the navigation
+indicator's top edge — `2662` on the 1256x2760 emulator, whose indicator is 98 px
+— is a control that has slipped under the bar.
+
 For the composer model selector's `primary` / `fast` role entries, run
 `node --test tools/tests/model-role-selection.test.cjs`. The native preview
 scenarios `model-role-selector`, `model-role-selector-dark`, and

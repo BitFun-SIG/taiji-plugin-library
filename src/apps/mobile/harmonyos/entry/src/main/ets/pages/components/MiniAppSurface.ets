@@ -5,12 +5,25 @@ import { MiniAppState } from '../state/MiniAppState';
 import { MiniAppWebView } from './MiniAppWebView';
 import { NavigationBackButton } from './NavigationBackButton';
 import { PAGE_BG, INK, MUTED, SOFT, LINE, TRANSPARENT } from './Theme';
+import { WindowInsetsBinding } from '../../services/WindowSystemBarService';
 
 @ComponentV2
 export struct MiniAppSurface {
   @Param state: MiniAppState = new MiniAppState();
   @Param actions: MiniAppActions = emptyMiniAppActions();
   @Local galleryWidth: number = 0;
+  @Local insets: WindowInsetsBinding = new WindowInsetsBinding();
+
+  aboutToAppear(): void {
+    const context = this.getUIContext().getHostContext();
+    if (context) {
+      this.insets.bind(this.getUIContext(), context);
+    }
+  }
+
+  aboutToDisappear(): void {
+    this.insets.unbind();
+  }
 
   build() {
     Column() {
@@ -57,7 +70,10 @@ export struct MiniAppSurface {
               .columnsGap(14).rowsGap(20).layoutWeight(1).width('100%').scrollBar(BarState.Off)
           }
         }.width('100%').constraintSize({ maxWidth: 1000 }).layoutWeight(1)
-          .alignItems(HorizontalAlign.Start).padding({ left: 16, right: 16, bottom: 24 })
+          // The gallery is the surface's bottom edge: the last row of tiles keeps
+          // the navigation bar's height under it instead of scrolling into it.
+          .alignItems(HorizontalAlign.Start)
+          .padding({ left: 16, right: 16, bottom: this.insets.bottomPadding(24) })
           .onAreaChange((_oldArea: Area, area: Area) => { this.galleryWidth = Number(area.width); })
       }
     }.width('100%').height('100%').backgroundColor(PAGE_BG)

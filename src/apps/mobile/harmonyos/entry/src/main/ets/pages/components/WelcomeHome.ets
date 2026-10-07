@@ -5,7 +5,15 @@ import { WindowSystemBarService } from '../../services/WindowSystemBarService';
 import { WelcomeBrandFlow } from './WelcomeBrandFlow';
 import { INK, PAGE_BG, WELCOME_PAGE_BG, MUTED, TRANSPARENT } from './Theme';
 
-/** A welcome composition with the C staggered-slide phrase timeline. */
+/**
+ * A welcome composition with the C staggered-slide phrase timeline.
+ *
+ * The window layout mode is not this page's business any more: it used to switch
+ * the whole shell in and out of full-screen as the compact welcome page came and
+ * went, which left every other page — the chat page above all — laid out without
+ * it. The shell runs immersive for every page now, and this page only reserves
+ * the status bar for its own header.
+ */
 @ComponentV2
 export struct WelcomeHome {
   @Param signedIn: boolean = false;
@@ -17,19 +25,25 @@ export struct WelcomeHome {
   @Local topInset: number = 0;
   private timer: number = -1;
   private started: number = 0;
-  private immersiveCompact: boolean = false;
+
+  aboutToAppear(): void {
+    this.readTopInset();
+  }
 
   aboutToDisappear(): void {
     this.stop();
-    if (this.immersiveCompact) {
-      const context = this.getUIContext().getHostContext();
-      if (context) {
-        void WindowSystemBarService.setLayoutFullScreen(context, false);
-      }
-      this.immersiveCompact = false;
-      this.topInset = 0;
-    }
   }
+
+  private readTopInset(): void {
+    const context = this.getUIContext().getHostContext();
+    if (!context) {
+      return;
+    }
+    void WindowSystemBarService.topSystemInsetPx(context).then((topInsetPx: number): void => {
+      this.topInset = this.getUIContext().px2vp(topInsetPx);
+    });
+  }
+
   private stop(): void { if (this.timer >= 0) clearInterval(this.timer); this.timer = -1; }
   private play(): void {
     this.stop();
@@ -108,34 +122,8 @@ export struct WelcomeHome {
       .onSizeChange((_old: SizeOptions, size: SizeOptions) => {
         this.pageHeight = Number(size.height);
         this.pageWidth = Number(size.width);
-        this.updateWindowLayout();
       })
       .onVisibleAreaChange([0], (visible: boolean) => { if (visible) this.play(); else this.stop(); })
-  }
-
-  private updateWindowLayout(): void {
-    const compact = this.pageWidth < 600;
-    if (compact === this.immersiveCompact) {
-      return;
-    }
-    const context = this.getUIContext().getHostContext();
-    if (!context) {
-      return;
-    }
-    this.immersiveCompact = compact;
-    if (!compact) {
-      this.topInset = 0;
-      void WindowSystemBarService.setLayoutFullScreen(context, false);
-      return;
-    }
-    void WindowSystemBarService.setLayoutFullScreen(context, true).then(async (): Promise<void> => {
-      if (this.immersiveCompact) {
-        const topInsetPx: number = await WindowSystemBarService.topSystemInsetPx(context);
-        if (this.immersiveCompact) {
-          this.topInset = this.getUIContext().px2vp(topInsetPx);
-        }
-      }
-    });
   }
 
   @Builder

@@ -8,6 +8,7 @@ import { ModelRoleSelectorPreview } from './ModelRoleSelectorPreview';
 import { SubagentProcessPreview } from './SubagentProcessPreview';
 import { FileVisibilityPreview } from './FileVisibilityPreview';
 import { ComposerOverflowPreview } from './ComposerOverflowPreview';
+import { ImmersiveBottomPreview } from './ImmersiveBottomPreview';
 import { WelcomeHome } from '../components/WelcomeHome';
 import { InteractionMailboxPreview } from './InteractionMailboxPreview';
 import { MobileDesignGeometry, MobileDesignTypography } from '../../generated/MobileDesignTokens';
@@ -60,6 +61,8 @@ struct MobileDesignGallery {
       FileVisibilityPreview()
     } else if ((AppStorage.get<string>('scenarioId') || '').startsWith('composer-overflow')) {
       ComposerOverflowPreview()
+    } else if ((AppStorage.get<string>('scenarioId') || '').startsWith('immersive-bottom')) {
+      ImmersiveBottomPreview()
     } else if ((AppStorage.get<string>('scenarioId') || '').startsWith('device-selector')) {
       DeviceSelectorPreview()
     } else if (AppStorage.get<string>('scenarioId') === 'welcome-home') {
