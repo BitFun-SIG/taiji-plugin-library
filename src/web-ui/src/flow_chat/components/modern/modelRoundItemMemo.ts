@@ -8,6 +8,7 @@ export interface ModelRoundItemProps {
   projectedGroups?: ModelRoundItemGroup[];
   turnId: string;
   isLastRound?: boolean;
+  isLatestTurn?: boolean;
   isTurnComplete?: boolean;
   turnStartedAt?: number;
   turnEndedAt?: number;
@@ -52,6 +53,7 @@ export function areModelRoundItemPropsEqual(prev: ModelRoundItemProps, next: Mod
     prev.round.attemptDiagnostics === next.round.attemptDiagnostics &&
     prev.round.historyRounds === next.round.historyRounds &&
     prev.isLastRound === next.isLastRound &&
+    prev.isLatestTurn === next.isLatestTurn &&
     prev.isTurnComplete === next.isTurnComplete &&
     prev.expandedThinkingItemIds === next.expandedThinkingItemIds &&
     prev.turnStartedAt === next.turnStartedAt &&

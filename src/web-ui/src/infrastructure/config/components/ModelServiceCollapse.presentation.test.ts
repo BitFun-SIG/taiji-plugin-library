@@ -68,7 +68,7 @@ describe('model service collapsed presentation', () => {
 
   it('marks the primary model slot as required in both label and control semantics', () => {
     expect(defaultModelSource).toMatch(
-      /label=\{t\('core\.primary\.label'\)\}[\s\S]*?description=\{t\('core\.primary\.description'\)\}[\s\S]*?required[\s\S]*?<Combobox[\s\S]*?aria-required="true"/,
+      /label=\{renderSlotLabel\(t\('core\.primary\.label'\), t\('core\.primary\.description'\)\)\}[\s\S]*?required[\s\S]*?<Combobox[\s\S]*?aria-required="true"/,
     );
   });
 

@@ -6577,6 +6577,32 @@ describe('FlowChatStore historical session hydration state', () => {
     expect(apiMocks.loadSessionTurnWindow).toHaveBeenCalledTimes(1);
   });
 
+  it.each([
+    [{ inputTokens: 100, outputTokens: 20, totalTokens: 120, cachedTokens: 75 }, 75],
+    [{ input_tokens: 100, output_tokens: 20, total_tokens: 120, cached_tokens: 75 }, 75],
+    [{ inputTokens: 100, outputTokens: 20, totalTokens: 120, cachedTokens: 0 }, 0],
+    [{ inputTokens: 100, outputTokens: 20, totalTokens: 120 }, undefined],
+  ])('restores optional cache telemetry from current and legacy turn payloads: %j', async (tokenUsage, cachedTokens) => {
+    peerModeFlagMock.active = true;
+    apiMocks.restoreSessionView.mockResolvedValueOnce({
+      session: { sessionId: 'history-1', sessionName: 'History 1', agentType: 'Standard', state: 'Idle', turnCount: 1, createdAt: 1 },
+      turns: [{ ...createPersistedTurn(0), endTime: 2, tokenUsage: JSON.parse(JSON.stringify(tokenUsage)) }],
+      contextRestoreState: 'ready',
+    });
+    flowChatStore.setState(() => ({
+      sessions: new Map([['history-1', createSession({ sessionId: 'history-1', isHistorical: true, historyState: 'metadata-only' })]]),
+      activeSessionId: 'history-1',
+    }));
+    await flowChatStore.loadSessionHistory('history-1');
+    const restored = flowChatStore.getState().sessions.get('history-1')?.dialogTurns[0].tokenUsage;
+    expect(restored).toMatchObject({ inputTokens: 100, outputTokens: 20, totalTokens: 120 });
+    expect(restored?.cachedTokens).toBe(cachedTokens);
+    // Both cached zero and absent telemetry survive the next JSON persistence boundary.
+    const saved = JSON.parse(JSON.stringify(restored));
+    expect(saved.cachedTokens).toBe(cachedTokens);
+    if (cachedTokens === undefined) expect(saved).not.toHaveProperty('cachedTokens');
+  });
+
   it('backfills currentTokenUsage from the last completed turn after hydration', async () => {
     peerModeFlagMock.active = true;
     apiMocks.restoreSessionView.mockResolvedValueOnce({

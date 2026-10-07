@@ -26,6 +26,14 @@ describe('model round memoization', () => {
       renderHints: { disableExploreGrouping: true } } })).toBe(false);
   });
 
+  it('refreshes the previous and next latest-turn footers without changing their round contents', () => {
+    const latest = { ...props, isLatestTurn: true };
+    const historical = { ...props, isLatestTurn: false };
+    expect(areModelRoundItemPropsEqual(latest, historical)).toBe(false);
+    expect(areModelRoundItemPropsEqual(historical, latest)).toBe(false);
+    expect(areModelRoundItemPropsEqual(latest, { ...latest })).toBe(true);
+  });
+
   it('refreshes a settled native retry when its grouping hint becomes an explicit host policy', () => {
     const legacy: ModelRoundItemProps = { ...props, round: { ...props.round,
       renderHints: { disableExploreGrouping: true }, attempts: [

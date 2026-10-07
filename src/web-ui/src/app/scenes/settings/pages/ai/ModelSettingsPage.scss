@@ -9,15 +9,188 @@
   color: var(--openbitfun-color-content-primary);
   font-family: var(--openbitfun-type-body-sm-font-family);
 
+  &__import-row,
+  &__import-heading,
+  &__import-summary,
+  &__pool-tags,
+  &__pool-card-controls {
+    display: flex;
+    align-items: center;
+    gap: var(--openbitfun-space-2);
+    min-width: 0;
+  }
+
+  &__import-row {
+    width: 100%;
+    justify-content: space-between;
+
+    > [data-openbitfun-component='button'] {
+      flex-shrink: 0;
+    }
+  }
+
+  &__acquisition-row > .openbitfun-config-page-row__meta,
+  &__mode-row > .openbitfun-config-page-row__meta {
+    max-width: none;
+  }
+
+  &__mode-row > .openbitfun-config-page-row__meta > .openbitfun-config-page-row__description {
+    max-inline-size: none;
+  }
+
+  &__import-heading {
+    flex-wrap: wrap;
+    align-items: baseline;
+  }
+
+  &__import-summary {
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  &__import-item {
+    min-width: 0;
+    max-inline-size: 100%;
+  }
+
+  &__source-pill {
+    max-inline-size: 100%;
+  }
+
+  &__import-summary,
+  &__pool-tags {
+    flex-wrap: wrap;
+  }
+
+  &__pool-tags > [data-openbitfun-component='status-pill'] {
+    max-inline-size: 100%;
+  }
+
+  &__pool-caption {
+    color: var(--openbitfun-color-content-secondary);
+    font-size: var(--openbitfun-type-label-sm-font-size);
+  }
+
+  &__pool-slots {
+    padding: var(--openbitfun-space-4);
+    margin-bottom: var(--openbitfun-space-4);
+    border-radius: var(--openbitfun-layout-field-group-radius);
+    background: var(--openbitfun-color-surface-tertiary);
+  }
+
+  &__pool-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--openbitfun-space-3);
+    margin-block: var(--openbitfun-space-4);
+
+    > [data-openbitfun-component='search-field'] {
+      flex: 1 1 220px;
+      min-width: 0;
+    }
+
+    > [data-openbitfun-component='select'] {
+      flex: 0 1 180px;
+      min-width: 0;
+    }
+  }
+
+  &__pool-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--openbitfun-space-3);
+  }
+
+  @container config-panel (max-width: 760px) {
+    &__pool-grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+
+  &__pool-item {
+    min-width: 0;
+  }
+
+  &__pool-card {
+    height: 100%;
+  }
+
+  &__pool-card-header > [data-openbitfun-part='header-content'] {
+    align-items: stretch;
+  }
+
+  &__pool-card-title {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-start;
+    gap: var(--openbitfun-space-2);
+    min-width: 0;
+  }
+
+  // Both states share one layout: keep the identity anchored and the source's
+  // available width stable. Interaction only reveals the trailing controls.
+  // Opacity keeps hidden controls focusable for keyboard access.
+  &__pool-card-controls {
+    flex: 0 0 auto;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
+  }
+
+  &__pool-card:hover &__pool-card-controls,
+  &__pool-card:focus-within &__pool-card-controls,
+  &__pool-card-controls[data-menu-open='true'] {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  &__pool-card-source {
+    flex: 1 1 0;
+    min-width: 0;
+    text-align: start;
+    font-family: var(--openbitfun-type-meta-font-family);
+    font-size: var(--openbitfun-type-meta-font-size);
+    font-weight: var(--openbitfun-type-meta-font-weight);
+    line-height: var(--openbitfun-type-meta-line-height);
+    letter-spacing: var(--openbitfun-type-meta-letter-spacing);
+  }
+
+  &__pool-card-footer {
+    margin-block-start: auto;
+    min-block-size: max(var(--openbitfun-control-height-sm), var(--openbitfun-control-switch-track-height));
+  }
+
+  &__dialog-status {
+    padding-inline: var(--openbitfun-space-4);
+    color: var(--openbitfun-color-content-secondary);
+  }
+
+  &__more-settings {
+    min-width: 0;
+    width: 100%;
+  }
+
+  &__more-content {
+    // Expanded settings share the page's existing gutters, without a second inset.
+    padding-inline: 0;
+  }
+
+  &__advanced-sections {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    width: 100%;
+    gap: var(--openbitfun-space-6);
+    padding-top: var(--openbitfun-space-4);
+  }
+
   &__catalog-status-value {
     color: var(--openbitfun-color-content-secondary);
     font-size: var(--openbitfun-type-label-md-font-size);
-  }
-
-  &__catalog-actions {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--openbitfun-space-1);
   }
 
   &__catalog-details {
@@ -1327,8 +1500,15 @@
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
-  &__selected-model-route {
+  &__selected-model-route,
+  &__selected-model-tags {
     grid-column: 1 / -1;
+  }
+
+  &__selected-model-tags {
+    display: grid;
+    gap: var(--openbitfun-space-4);
+    min-width: 0;
   }
 
   &__selected-model-field {
@@ -2252,8 +2432,16 @@
   }
 
   .openbitfun-model-settings__model-actions,
+  .openbitfun-model-settings__pool-card-controls,
   .openbitfun-model-settings__provider-group-list .openbitfun-collection-item__details-toggle {
     transition: none;
+  }
+}
+
+@media (hover: none), (pointer: coarse) {
+  .openbitfun-model-settings__pool-card-controls {
+    opacity: 1;
+    pointer-events: auto;
   }
 }
 

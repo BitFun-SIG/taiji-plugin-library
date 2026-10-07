@@ -235,6 +235,8 @@ export interface ReasoningPresetDescriptor {
   order: number;
   actions: ReasoningPresetAction[];
   source: ReasoningPresetSource;
+  /** Effective effort reported by the executing adapter; wire ids stay unchanged. */
+  effective_effort?: string;
 }
 
 export interface ReasoningCatalogProjection {
