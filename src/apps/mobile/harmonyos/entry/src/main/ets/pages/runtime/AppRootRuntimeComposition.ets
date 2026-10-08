@@ -121,6 +121,7 @@ export abstract class AppRootRuntimeComposition {
   abstract failRemoteConnection(err: Object): void;
   abstract handleNavigationBack(route: AppRoute): boolean;
   abstract hasRemoteBindingForResume(): boolean;
+  protected abstract startWatchProvisioning(): Promise<void>;
   abstract isRemoteConversationContext(sessionId: string): boolean;
   abstract mergeSessions(primary: RemoteSession[], extras: RemoteSession[]): RemoteSession[];
   abstract loadWorkspaceSessionsOnDevice(deviceId: string, path: string, remoteConnectionId?: string, remoteSshHost?: string, workspaceId?: string): Promise<void>;
@@ -894,6 +895,9 @@ export abstract class AppRootRuntimeComposition {
       cloudCancelLogin: (): void => this.settingsController.cancelCloudLogin(),
       cloudLogin: async (): Promise<string> => {
         const user = await this.settingsController.loginCloudAccount();
+        // Returning from authorization can show the page before the account
+        // session is saved. Start listening after login completes as well.
+        await this.startWatchProvisioning();
         const pending = this.pendingAccountDeviceId;
         this.pendingAccountDeviceId = '';
         if (pending.length > 0) {
