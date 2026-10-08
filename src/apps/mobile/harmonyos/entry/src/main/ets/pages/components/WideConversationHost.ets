@@ -27,6 +27,7 @@ import {
 } from './remote/RemoteSurfaceHost';
 import { SidebarToggleButton } from './SidebarToggleButton';
 import { SidebarWorkspaceSection } from './SidebarWorkspaceSection';
+import { WindowInsetsBinding } from '../../services/WindowSystemBarService';
 import {
   LINE,
   PAGE_BG,
@@ -63,6 +64,23 @@ export struct WideConversationHost {
   @Event onRestoreMasterPane: () => void = () => {};
   @Event onToggleFilePreviewExpanded: () => void = () => {};
   @Event onOpenRemoteViewSettings: () => void = () => {};
+  /**
+   * The window's own insets, in vp. Every pane in this host is pinned to the
+   * window's edges, so the floating controls that are not part of a page's own
+   * header band keep the status bar strip clear themselves.
+   */
+  @Local insets: WindowInsetsBinding = new WindowInsetsBinding();
+
+  aboutToAppear(): void {
+    const context = this.getUIContext().getHostContext();
+    if (context) {
+      this.insets.bind(this.getUIContext(), context);
+    }
+  }
+
+  aboutToDisappear(): void {
+    this.insets.unbind();
+  }
 
   build() {
     if (this.showsRemoteConversation() &&
@@ -117,8 +135,10 @@ export struct WideConversationHost {
       .width('100%').height('100%').justifyContent(FlexAlign.Start).backgroundColor(PAGE_BG)
 
       if (this.wideMasterPaneCollapsed) {
+        // The detail pane's top edge is the window's, so the floating control
+        // keeps the status bar strip above it instead of sitting under it.
         SidebarToggleButton({ restore: true, controlSize: 44, onToggle: this.onRestoreMasterPane })
-          .position({ x: 12, y: 12 }).zIndex(2)
+          .position({ x: 12, y: 12 + this.insets.top }).zIndex(2)
           .hitTestBehavior(HitTestMode.Default)
       }
     }

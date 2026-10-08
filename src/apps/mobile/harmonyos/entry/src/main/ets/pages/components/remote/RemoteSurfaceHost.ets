@@ -17,6 +17,7 @@ import { RemoteSessionList } from '../RemoteSessionList';
 import { RemoteSessionLoadingView } from '../RemoteSessionLoadingView';
 import { SidebarToggleButton } from '../SidebarToggleButton';
 import { SessionActionPresentation } from '../SessionActionSurface';
+import { WindowInsetsBinding } from '../../../services/WindowSystemBarService';
 import {
   SettingsPlacement,
   SettingsPlacementPolicy,
@@ -62,6 +63,13 @@ export struct RemoteSurfaceHost {
   @Param wideMasterPaneCollapsed: boolean = false;
   @Param sessionDetailsPlacement: SettingsPlacement =
     SettingsPlacementPolicy.compactBottom(SettingsSheetKind.SessionDetails);
+  /**
+   * The window's own insets, in vp. The home surfaces are full-screen pages —
+   * the compact header and the wide placeholder are both the page's top edge —
+   * so their header bands reserve the status bar themselves rather than being
+   * handed a page that already ends below it.
+   */
+  @Local insets: WindowInsetsBinding = new WindowInsetsBinding();
   @Event onOpenSidebar: () => void = () => {};
   @Event onRestoreSidebar: () => void = () => {};
   @Event onCloseSettings: () => void = () => {};
@@ -71,9 +79,17 @@ export struct RemoteSurfaceHost {
   // down for a change that is only page state — the sidebar rebuild this used
   // to pay for. See AppShellViewModel.replaceRouteWithoutAnimation.
   aboutToAppear(): void {
+    const context = this.getUIContext().getHostContext();
+    if (context) {
+      this.insets.bind(this.getUIContext(), context);
+    }
     RemoteLogger.info(
       `remote surface mounted mode=${this.mode} connection=${this.remotePageState.connectionState} sessions=${this.remotePageState.visibleSessions().length}`
     );
+  }
+
+  aboutToDisappear(): void {
+    this.insets.unbind();
   }
 
   build() {
@@ -219,6 +235,9 @@ export struct RemoteSurfaceHost {
   @Builder
   private CompactHomeContent() {
     Column() {
+      // The compact home is a page, not a sheet: its header band is the top edge
+      // of the window, so the band reserves the status bar and the drawer
+      // control and title start below the clock and the indicators.
       ConversationHeader({
         title: RemoteI18n.t('app.title'),
         subtitle: this.compactHeaderContext(),
@@ -226,6 +245,7 @@ export struct RemoteSurfaceHost {
         showSidebarButton: true,
         onOpenSidebar: this.onOpenSidebar
       })
+        .padding({ top: this.insets.top })
       if (RemoteCompactHomePolicy.shouldShowConnectHome(this.remotePageState.connectionState)) {
         this.ConnectionEntry()
       } else {
@@ -270,8 +290,11 @@ export struct RemoteSurfaceHost {
       // No hairline under the welcome header. The compact header does not draw
       // one and neither does the desktop client; the wide surface is the same
       // page, not a sheet, so it should not grow a divider just because it is
-      // wider.
-      .width('100%').height(76).padding({ left: 16, right: 16, top: 14, bottom: 12 })
+      // wider. The band's box grows by the status bar strip for the same reason
+      // the compact header's does: the wide detail pane's top edge is the
+      // window's top edge too.
+      .width('100%').height(76 + this.insets.top)
+      .padding({ left: 16, right: 16, top: 14 + this.insets.top, bottom: 12 })
 
       this.CompactEmptyState()
 

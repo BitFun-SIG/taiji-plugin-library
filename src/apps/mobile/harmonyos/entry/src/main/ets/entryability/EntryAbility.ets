@@ -129,15 +129,18 @@ export default class EntryAbility extends UIAbility {
       return;
     }
     const dark = colorMode === ConfigurationConstant.ColorMode.COLOR_MODE_DARK;
-    const background = dark ? MobileDesignColors.pageBg.dark : MobileDesignColors.pageBg.light;
     const content = dark ? MobileDesignColors.ink.dark : MobileDesignColors.ink.light;
     try {
       this.mainWindow.setWindowSystemBarProperties({
-        // The status bar keeps the page colour it has always had — the window
-        // does not draw behind it on every device, and an opaque bar cannot
-        // regress the header band either way. The navigation bar is transparent
-        // instead: the chat page's bottom fade is what should be visible there.
-        statusBarColor: background,
+        // Both bars are transparent, because the window is laid out full-screen
+        // and the strips they occupy are the page's own edges: the drawer's fill
+        // and the chat page's blurred header band are what should show there.
+        // An opaque status bar painted the page colour over both, which clipped
+        // the sidebar's title, and it also sat over the pull-down notification
+        // centre's frosted background as a white strip instead of blending into
+        // it. `statusBarContentColor` is what keeps the clock and the icons
+        // legible against whatever the page puts behind them.
+        statusBarColor: MobileDesignColors.transparent.light,
         navigationBarColor: MobileDesignColors.transparent.light,
         statusBarContentColor: content,
         navigationBarContentColor: content
