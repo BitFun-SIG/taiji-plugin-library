@@ -3305,8 +3305,8 @@
       "manualUnavailable": "上次選擇的模型暫不可用，請重新選擇模型。",
       "smart": "智慧模式",
       "pool": "電池模式",
-      "comingSoon": "即將推出",
-      "developmentNotice": "目前模式尚未完成，暫時直接使用主力模型。",
+      "comingSoon": "尚未開放",
+      "developmentNotice": "目前模式尚未開放，暫時直接使用主力模型。",
       "primaryRequired": "請先設定主力模型"
     },
     "model": "模型",
