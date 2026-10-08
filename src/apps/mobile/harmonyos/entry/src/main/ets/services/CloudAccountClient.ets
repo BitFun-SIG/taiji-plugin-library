@@ -370,11 +370,13 @@ export class CloudAccountClient {
     session: CloudAccountSession,
     deviceId: string,
     deviceName: string,
-    requestId: string
+    requestId: string,
+    deviceSecret?: Uint8Array
   ): Promise<CloudProvisionedDevice> {
-    const keys = X25519.generateKeyPair();
+    const privateKey = deviceSecret ? Encoding.copyBytes(deviceSecret) : X25519.generateKeyPair().privateKey;
+    if (privateKey.length !== 32) throw new Error('Invalid watch device identity.');
     const body: ProvisionDeviceRequest = {
-      public_key: Encoding.bytesToBase64(keys.publicKey),
+      public_key: Encoding.bytesToBase64(X25519.scalarMultBase(privateKey)),
       device_id: deviceId,
       device_name: deviceName,
       device_kind: DEVICE_KIND_WATCH,
@@ -390,7 +392,7 @@ export class CloudAccountClient {
       // in as somebody else. Refuse rather than pass it on.
       throw new Error('Relay returned a mismatched provisioned device identity.');
     }
-    return { token, userId, deviceId: provisionedDeviceId, deviceSecret: keys.privateKey };
+    return { token, userId, deviceId: provisionedDeviceId, deviceSecret: privateKey };
   }
 
   /**
