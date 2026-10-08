@@ -3305,8 +3305,8 @@
       "manualUnavailable": "Your previous model is unavailable. Choose another model.",
       "smart": "Smart mode",
       "pool": "Battery mode",
-      "comingSoon": "Coming soon",
-      "developmentNotice": "This mode is not ready yet. It currently uses your primary model directly.",
+      "comingSoon": "Not available yet",
+      "developmentNotice": "This mode is not available yet. It currently uses your primary model directly.",
       "primaryRequired": "Configure a primary model first"
     },
     "model": "Model",
