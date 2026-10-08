@@ -27,6 +27,10 @@ export struct MiniAppSurface {
 
   build() {
     Column() {
+      // The gallery is a full-screen surface, so its header band owns the top
+      // edge of the window: the box grows by the status bar strip and the
+      // controls keep the 56 the design gives them below it, instead of sitting
+      // under the clock and the indicators.
       Row({ space: 8 }) {
         NavigationBackButton({ onBack: (): void => {
           if (this.state.appId) this.actions.back();
@@ -37,7 +41,7 @@ export struct MiniAppSurface {
           .fontColor(INK).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
           .textAlign(TextAlign.Center).layoutWeight(1)
         Blank().width(48)
-      }.width('100%').height(56).padding({ left: 12, right: 12 })
+      }.width('100%').height(56 + this.insets.top).padding({ left: 12, right: 12, top: this.insets.top })
       if (this.state.document) {
         MiniAppWebView({ document: this.state.document, revision: this.state.revision, request: this.actions.request })
           .layoutWeight(1)

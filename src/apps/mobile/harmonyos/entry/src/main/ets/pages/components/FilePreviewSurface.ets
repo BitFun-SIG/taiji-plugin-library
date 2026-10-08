@@ -176,8 +176,12 @@ export struct FilePreviewSurface {
       })
     }
     .width('100%')
-    .height(68)
-    .padding({ left: 8, right: 8, top: 8, bottom: 8 })
+    .height(68 + this.insets.top)
+    // The header band is the surface's top edge in both hosts — the compact
+    // full-page overlay and the wide preview pane — so it carries the status bar
+    // strip itself: the band's fill still reaches the top of the window and the
+    // back control and title sit below the clock and the indicators.
+    .padding({ left: 8, right: 8, top: 8 + this.insets.top, bottom: 8 })
     .alignItems(VerticalAlign.Center)
     .border({ width: { bottom: 1 }, color: LINE })
     .backgroundColor(PAGE_BG)

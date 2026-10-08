@@ -30,6 +30,8 @@ const sessionActionSurface = source('entry/src/main/ets/pages/components/Session
 const sessionDetailsView = source('entry/src/main/ets/pages/components/SessionDetailsView.ets');
 const conversationViewSettings = source('entry/src/main/ets/pages/components/ConversationViewSettings.ets');
 const welcomeHome = source('entry/src/main/ets/pages/components/WelcomeHome.ets');
+const remoteSurfaceHost = source('entry/src/main/ets/pages/components/remote/RemoteSurfaceHost.ets');
+const wideConversationHost = source('entry/src/main/ets/pages/components/WideConversationHost.ets');
 
 // Reads one @Builder out of a component, so an assertion can name the layer it
 // is about instead of counting matches in the whole file.
@@ -78,13 +80,19 @@ test('the shell runs the window full-screen for every page', () => {
     'the welcome page must not switch the window layout any more');
 });
 
-test('the navigation bar is transparent and the status bar keeps the page colour', () => {
-  // The fade is what should be visible where the navigation bar sits, and the
-  // header band keeps its opaque page colour so the top does not regress.
+test('both system bars are transparent so the page owns their strips', () => {
+  // The window runs full-screen, so the status bar's strip is the page's own
+  // top edge: the drawer's fill and the chat page's blurred header band are what
+  // should show there. An opaque bar painted the page colour over both — it
+  // clipped the sidebar's title — and it also sat over the pull-down
+  // notification centre's frosted background as a white strip. The content
+  // colour is what keeps the clock and the icons legible either way.
   assert.match(entryAbility, /navigationBarColor: MobileDesignColors\.transparent\.light/,
     'the navigation bar must be transparent so the page bottom shows through');
-  assert.match(entryAbility, /statusBarColor: background/,
-    'the status bar must keep the page colour');
+  assert.match(entryAbility, /statusBarColor: MobileDesignColors\.transparent\.light/,
+    'the status bar must be transparent so the page top shows through');
+  assert.match(entryAbility, /statusBarContentColor: content/,
+    'the status bar icons must keep following the colour mode');
 });
 
 test('the window inset service is the only place the strip is measured', () => {
@@ -131,6 +139,45 @@ test('the chat page header band reserves the status bar itself', () => {
     'the band that carries the inset must stay the one that paints the header');
 });
 
+test('every surface whose top edge is the screen edge reserves the status bar', () => {
+  // Immersive layout moved every page's origin to the top of the window, so the
+  // first row of a full-screen surface is what has to keep clear of the status
+  // bar. The band that owns the surface's fill carries the padding, which is
+  // what keeps that fill reaching the top of the window while the controls start
+  // below the clock and the indicators: the drawer panel's title, the gallery's
+  // back control, the preview's header and the home headers' drawer control are
+  // all one strip lower than they were while the page area ended below it.
+  assert.match(normalize(builderBody(appSidebar, 'SidebarContent')),
+    /\.padding\(\{ left: 20, right: 20, top: this\.insets\.top \}\)/,
+    'the drawer panel must reserve the strip above its title');
+  assert.match(normalize(miniAppSurface),
+    /\.height\(56 \+ this\.insets\.top\)\.padding\(\{ left: 12, right: 12, top: this\.insets\.top \}\)/,
+    'the mini-app gallery header must reserve the strip');
+  assert.match(normalize(filePreviewSurface),
+    /\.height\(68 \+ this\.insets\.top\)[\s\S]*?\.padding\(\{ left: 8, right: 8, top: 8 \+ this\.insets\.top, bottom: 8 \}\)/,
+    'the file preview header must reserve the strip');
+  assert.match(normalize(remoteSurfaceHost),
+    /\.padding\(\{ top: this\.insets\.top \}\)/,
+    'the compact home header must reserve the strip');
+  assert.match(normalize(remoteSurfaceHost),
+    /\.height\(76 \+ this\.insets\.top\) \.padding\(\{ left: 16, right: 16, top: 14 \+ this\.insets\.top, bottom: 12 \}\)/,
+    'the wide home header must reserve the strip');
+  // A floating control on a pane whose top edge is the window's keeps the strip
+  // clear itself, the way the surfaces' fixed bottom controls keep the
+  // navigation bar clear.
+  assert.match(normalize(wideConversationHost),
+    /\.position\(\{ x: 12, y: 12 \+ this\.insets\.top \}\)/,
+    'the floating master-restore control must reserve the strip');
+  for (const [name, text] of [['RemoteSurfaceHost', remoteSurfaceHost],
+    ['WideConversationHost', wideConversationHost]]) {
+    assert.match(text, /@Local insets: WindowInsetsBinding = new WindowInsetsBinding\(\);/,
+      `${name} must hold the shared inset binding`);
+    assert.match(text, /this\.insets\.bind\(this\.getUIContext\(\), context\)/,
+      `${name} must bind the insets while it is mounted`);
+    assert.match(text, /this\.insets\.unbind\(\)/, `${name} must release the insets when it goes`);
+  }
+});
+
 test('the settings sheet viewport reaches the screen edge and its rows end in a tail spacer', () => {
   // The sheet is a bindSheet, which the framework does not inset while the
   // window is immersive, so its own box decides where content can scroll. The
@@ -171,8 +218,8 @@ test('the sidebar list scrolls under the bar and its floating footer keeps the s
   // the footer keeps its distance from that edge itself, and the list ends in
   // a tail spacer so its last row rests above the navigation bar.
   const content = normalize(builderBody(appSidebar, 'SidebarContent'));
-  assert.match(content, /\.padding\(\{ left: 20, right: 20, top: 0 \}\)/,
-    'the panel root must not shrink its scrolling viewport');
+  assert.match(content, /\.padding\(\{ left: 20, right: 20, top: this\.insets\.top \}\)/,
+    'the panel root must reserve the status bar without shrinking its scrolling viewport');
   assert.match(content, /\.padding\(\{ bottom: this\.scrollTailPadding\(\) \}\)/,
     'the session list must end in a tail spacer');
   assert.match(content, /\.margin\(\{ bottom: this\.footerBottomPadding\(\) \}\)/,
