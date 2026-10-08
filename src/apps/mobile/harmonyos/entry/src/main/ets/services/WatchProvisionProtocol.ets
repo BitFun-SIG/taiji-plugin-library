@@ -25,7 +25,7 @@ export const WATCH_PROVISION_PROTOCOL_VERSION: number = 1;
  * watch never got to clear would re-open the confirmation card on every phone
  * launch, long after whoever asked for it walked away.
  */
-export const WATCH_PROVISION_REQUEST_TTL_MS: number = 3 * 60 * 1000;
+export const WATCH_PROVISION_REQUEST_TTL_MS: number = 5 * 60 * 1000;
 
 export const WATCH_PROVISION_STATUS_OK: string = 'ok';
 export const WATCH_PROVISION_STATUS_ERROR: string = 'error';

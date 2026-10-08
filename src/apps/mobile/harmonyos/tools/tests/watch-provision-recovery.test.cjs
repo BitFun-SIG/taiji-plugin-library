@@ -110,3 +110,50 @@ test('a legacy orphaned registration reports conflict rather than network failur
   await f.controller.approve();
   assert.equal(f.display.message, 'watchProvision.errors.alreadyRegistered');
 });
+
+test('phone retains the existing five-minute lifetime beyond the watch three-minute wait', () => {
+  const now = Date.now();
+  const request = { createdMs: now - 4 * 60 * 1000 };
+  assert.equal(WatchProvisionProtocol.isExpired(request, now), false);
+  assert.equal(WatchProvisionProtocol.isExpired(request, now + 2 * 60 * 1000), true);
+});
+
+function accountClientFixture(response) {
+  let copiedKey;
+  const { CloudAccountClient } = load('services/CloudAccountClient.ets', {
+    './Encoding': { Encoding: {
+      ...Encoding,
+      copyBytes: bytes => { copiedKey = new Uint8Array(bytes); return copiedKey; },
+    } },
+    './X25519': { X25519: { scalarMultBase: () => new Uint8Array(32) } },
+    './RemoteCrypto': { HarmonyRemoteCryptoCipher: class {} },
+  });
+  const client = new CloudAccountClient();
+  client.request = response;
+  const original = new Uint8Array(32).fill(7);
+  const provision = () => client.provisionDevice('https://relay', { token: 'phone', userId: 'account' },
+    'watch', 'Watch', 'request', original);
+  return { provision, original, copied: () => copiedKey };
+}
+
+test('HTTP failure clears the owned copy without destroying the persisted identity input', async () => {
+  const failure = new Error('response lost');
+  const f = accountClientFixture(async () => { throw failure; });
+  await assert.rejects(f.provision(), err => err === failure);
+  assert.ok(f.copied().every(byte => byte === 0));
+  assert.ok(f.original.every(byte => byte === 7));
+});
+
+test('mismatched relay identity clears the copied private key', async () => {
+  const f = accountClientFixture(async () => ({ token: 'watch-token', user_id: 'other', device_id: 'watch' }));
+  await assert.rejects(f.provision(), /mismatched/);
+  assert.ok(f.copied().every(byte => byte === 0));
+});
+
+test('successful registration transfers the copied private key to its caller', async () => {
+  const f = accountClientFixture(async () => ({ token: 'watch-token', user_id: 'account', device_id: 'watch' }));
+  const result = await f.provision();
+  assert.equal(result.deviceSecret, f.copied());
+  assert.ok(result.deviceSecret.every(byte => byte === 7));
+  result.deviceSecret.fill(0);
+});
