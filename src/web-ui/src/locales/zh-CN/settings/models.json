@@ -534,7 +534,7 @@
   },
   "messages": {
     "loading": "正在加载模型设置…",
-    "loadFailedLocked": "无法读取模型设置。为避免覆盖现有配置，当前页面已锁定。",
+    "loadFailedLocked": "无法读取此处的设置。为避免覆盖现有配置，相关操作已锁定，请重新加载。",
     "retry": "重新加载",
     "unsaved": "未保存",
     "fillRequired": "请填写必要字段",
