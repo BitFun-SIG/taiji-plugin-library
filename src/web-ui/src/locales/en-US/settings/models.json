@@ -534,7 +534,7 @@
   },
   "messages": {
     "loading": "Loading model settings…",
-    "loadFailedLocked": "Model settings could not be read. This page is locked to avoid overwriting the current configuration.",
+    "loadFailedLocked": "These settings could not be read. Related controls are locked to avoid overwriting the current configuration. Please reload.",
     "retry": "Reload",
     "unsaved": "Unsaved",
     "fillRequired": "Please fill in required fields",

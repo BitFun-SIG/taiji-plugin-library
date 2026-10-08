@@ -402,6 +402,7 @@ const ModelSettingsPage: React.FC = () => {
   const { t: tDefault } = useI18n('settings/default-model');
   const { t: tComponents } = useI18n('components');
   const peerDevice = usePeerDeviceModeOptional();
+  const modelDiscoverySurface = peerDevice?.peerMode.active ? peerDevice.peerMode.deviceId : 'local';
   const connectionTestSupported = !peerDevice?.peerMode.active
     || peerDevice.currentPeerCapabilities?.hostKind !== 'cli';
   const [aiModels, setAiModels] = useState<AIModelConfigType[]>([]);
@@ -415,6 +416,9 @@ const ModelSettingsPage: React.FC = () => {
   const [subscriptionLoadError, setSubscriptionLoadError] = useState(false);
   const [isConfigLoading, setIsConfigLoading] = useState(true);
   const [configLoadError, setConfigLoadError] = useState(false);
+  const [proxyLoadState, setProxyLoadState] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [streamTimeoutLoadState, setStreamTimeoutLoadState] = useState<'loading' | 'ready' | 'error'>('loading');
+  const modelConfigReady = !isConfigLoading && !configLoadError;
   const [modelCatalog, setModelCatalog] = useState<Awaited<ReturnType<typeof aiApi.getModelCatalog>> | null>(null);
   const [modelsDevStatus, setModelsDevStatus] = useState<Awaited<ReturnType<typeof aiApi.getModelsDevCatalogStatus>> | null>(null);
   const [modelsDevStatusAvailable, setModelsDevStatusAvailable] = useState(true);
@@ -533,7 +537,7 @@ const ModelSettingsPage: React.FC = () => {
   const [subscriptionAccounts, setSubscriptionAccounts] = useState<SubscriptionAccount[]>([]);
   const subscriptionRefreshesRef = React.useRef(new Set<SubscriptionProvider>());
   const [refreshingSubscriptionProviders, setRefreshingSubscriptionProviders] = useState<ReadonlySet<SubscriptionProvider>>(new Set());
-  const [isLoadingSubscriptions, setIsLoadingSubscriptions] = useState(false);
+  const [isLoadingSubscriptions, setIsLoadingSubscriptions] = useState(true);
   const [loggingInProvider, setLoggingInProvider] = useState<SubscriptionProvider | null>(null);
   const [subscriptionLoginPanel, setSubscriptionLoginPanel] = useState<SubscriptionLoginPanelState | null>(null);
   const [subscriptionLoginClock, setSubscriptionLoginClock] = useState(() => Date.now());
@@ -606,6 +610,7 @@ const ModelSettingsPage: React.FC = () => {
   }, [getCustomRequestBodyTrimHint, t]);
 
   const loadModelCatalog = useCallback(async () => {
+    const scope = getActiveSurfaceScope();
     try {
       // Host-owned facts (configured models, defaults, session selection) come
       // from the rendered host. The provider templates and the reasoning
@@ -622,6 +627,7 @@ const ModelSettingsPage: React.FC = () => {
           return null;
         }),
       ]);
+      if (!scope.isCurrent()) return;
       setModelCatalog(localCatalogs
         ? {
           ...hostCatalog,
@@ -630,16 +636,21 @@ const ModelSettingsPage: React.FC = () => {
         }
         : hostCatalog);
     } catch (error) {
+      if (!scope.isCurrent()) return;
       setModelCatalog(null);
       log.warn('Failed to load model reasoning catalog', { error });
     }
   }, []);
 
   const loadModelsDevStatus = useCallback(async () => {
+    const scope = getActiveSurfaceScope();
     try {
-      setModelsDevStatus(await aiApi.getModelsDevCatalogStatus());
+      const status = await aiApi.getModelsDevCatalogStatus();
+      if (!scope.isCurrent()) return;
+      setModelsDevStatus(status);
       setModelsDevStatusAvailable(true);
     } catch (error) {
+      if (!scope.isCurrent()) return;
       setModelsDevStatusAvailable(false);
       log.warn('Failed to load models.dev catalog status', { error });
     }
@@ -668,42 +679,80 @@ const ModelSettingsPage: React.FC = () => {
   }, [loadModelCatalog, loadModelsDevStatus, notification, t]);
 
   const loadConfig = useCallback(async () => {
+    const scope = getActiveSurfaceScope();
     setIsConfigLoading(true);
     setConfigLoadError(false);
     try {
-      const [models, proxy, streamIdleTimeoutSecs, streamTtftTimeoutSecs] = await Promise.all([
-        configManager.getConfig<AIModelConfigType[]>('ai.models'),
-        configManager.getConfig<ProxyConfig>('ai.proxy'),
+      // Optional reads preserve missing-key compatibility while propagating host
+      // failures, instead of presenting a failed model read as an empty pool.
+      const [models, defaults] = await Promise.all([
+        configManager.getOptionalConfig<AIModelConfigType[]>('ai.models'),
+        configManager.getOptionalConfig<DefaultModelsConfig>('ai.default_models'),
+      ]);
+      if (!scope.isCurrent()) return;
+      setAiModels(models || []);
+      setPoolDefaults(defaults || {});
+    } catch (error) {
+      if (!scope.isCurrent()) return;
+      log.error('Failed to load AI model config', error);
+      setConfigLoadError(true);
+    } finally {
+      if (scope.isCurrent()) setIsConfigLoading(false);
+    }
+  }, []);
+
+  const loadProxyConfig = useCallback(async () => {
+    const scope = getActiveSurfaceScope();
+    setProxyLoadState('loading');
+    try {
+      const proxy = await configManager.getConfig<ProxyConfig>('ai.proxy');
+      if (!scope.isCurrent()) return;
+      const resolvedProxy = proxy || { enabled: false, url: '', username: '', password: '' };
+      setProxyConfig(resolvedProxy);
+      setSavedProxyConfig(resolvedProxy);
+      setProxyLoadState('ready');
+    } catch (error) {
+      if (!scope.isCurrent()) return;
+      log.error('Failed to load AI proxy config', error);
+      setProxyLoadState('error');
+    }
+  }, []);
+
+  const loadStreamTimeouts = useCallback(async () => {
+    const scope = getActiveSurfaceScope();
+    setStreamTimeoutLoadState('loading');
+    try {
+      const [streamIdleTimeoutSecs, streamTtftTimeoutSecs] = await Promise.all([
         configManager.getConfig<number | null>('ai.stream_idle_timeout_secs'),
         configManager.getConfig<number | null>('ai.stream_ttft_timeout_secs'),
       ]);
-      setAiModels(models || []);
-      await loadModelCatalog();
-      await loadModelsDevStatus();
-      const resolvedProxy = proxy || { enabled: false, url: '', username: '', password: '' };
+      if (!scope.isCurrent()) return;
       const idle = streamIdleTimeoutSecs != null ? String(streamIdleTimeoutSecs) : '';
       const ttft = streamTtftTimeoutSecs != null ? String(streamTtftTimeoutSecs) : '';
-      setProxyConfig(resolvedProxy);
-      setSavedProxyConfig(resolvedProxy);
       setStreamIdleTimeoutInput(idle);
       setStreamTtftTimeoutInput(ttft);
       setSavedStreamTimeouts({ idle, ttft });
+      setStreamTimeoutLoadState('ready');
     } catch (error) {
-      log.error('Failed to load AI config', error);
-      setConfigLoadError(true);
-    } finally {
-      setIsConfigLoading(false);
+      if (!scope.isCurrent()) return;
+      log.error('Failed to load AI stream timeout config', error);
+      setStreamTimeoutLoadState('error');
     }
-  }, [loadModelCatalog, loadModelsDevStatus]);
+  }, []);
 
   useEffect(() => {
     const unsubscribeCatalog = aiApi.onModelCatalogUpdated(() => {
       void loadModelCatalog();
       void loadModelsDevStatus();
     });
-    loadConfig();
+    // Independent sections become usable as soon as their own data is ready.
+    void loadConfig();
+    void loadProxyConfig();
+    void loadStreamTimeouts();
+    void loadModelCatalog();
+    void loadModelsDevStatus();
     return unsubscribeCatalog;
-  }, [loadConfig, loadModelCatalog, loadModelsDevStatus]);
+  }, [loadConfig, loadProxyConfig, loadStreamTimeouts, loadModelCatalog, loadModelsDevStatus, modelDiscoverySurface]);
 
   const refreshSubscriptionAccounts = useCallback(async () => {
     const scope = getActiveSurfaceScope();
@@ -724,7 +773,7 @@ const ModelSettingsPage: React.FC = () => {
 
   useEffect(() => {
     refreshSubscriptionAccounts();
-  }, [refreshSubscriptionAccounts]);
+  }, [refreshSubscriptionAccounts, modelDiscoverySurface]);
 
   useEffect(() => {
     if (!subscriptionLoginPanel || subscriptionLoginPanel.status !== 'pending') return;
@@ -845,7 +894,6 @@ const ModelSettingsPage: React.FC = () => {
     modelDiscoveryRef.current.reset();
   }, []);
 
-  const modelDiscoverySurface = peerDevice?.peerMode.active ? peerDevice.peerMode.deviceId : 'local';
   useEffect(() => {
     let disposed = false;
     let revision = 0;
@@ -854,8 +902,8 @@ const ModelSettingsPage: React.FC = () => {
       const requestRevision = ++revision;
       try {
         const [models, defaults] = await Promise.all([
-          configManager.getConfig<AIModelConfigType[]>('ai.models'),
-          configManager.getConfig<DefaultModelsConfig>('ai.default_models'),
+          configManager.getOptionalConfig<AIModelConfigType[]>('ai.models'),
+          configManager.getOptionalConfig<DefaultModelsConfig>('ai.default_models'),
         ]);
         if (disposed || !scope.isCurrent() || revision !== requestRevision) return;
         setAiModels(models || []);
@@ -864,7 +912,6 @@ const ModelSettingsPage: React.FC = () => {
         if (!disposed && scope.isCurrent()) log.warn('Failed to refresh model pool', { error });
       }
     };
-    void refreshPool();
     const unsubscribe = configManager.onConfigChange(path => {
       if (!path || path === 'ai' || path.startsWith('ai.models') || path.startsWith('ai.default_models')) {
         void refreshPool();
@@ -2186,6 +2233,7 @@ const ModelSettingsPage: React.FC = () => {
   };
 
   const handleSaveProxy = async (): Promise<boolean> => {
+    if (proxyLoadState !== 'ready') return false;
     if (!isProxyDirty) return true;
     if (proxySavingRef.current) return false;
     if (proxyConfig.enabled && !proxyConfig.url.trim()) {
@@ -2213,6 +2261,7 @@ const ModelSettingsPage: React.FC = () => {
   };
 
   const handleSaveStreamTimeouts = async (): Promise<boolean> => {
+    if (streamTimeoutLoadState !== 'ready') return false;
     if (!isStreamTimeoutDirty) return true;
     if (streamTimeoutSavingRef.current) return false;
     if (isStreamTimeoutInvalid) {
@@ -2430,25 +2479,6 @@ const ModelSettingsPage: React.FC = () => {
         .join(' ').toLowerCase().includes(query);
     }).sort((a, b) => priority(a) - priority(b));
   }, [aiModels, poolQuery, poolCapability, poolProvider, poolRoles, poolDefaults]);
-
-  if (isConfigLoading || configLoadError) {
-    return (
-      <ConfigPageLayout className="openbitfun-model-settings" data-openbitfun-component="model-settings" data-openbitfun-part="root" data-openbitfun-view="settings">
-        <ConfigPageHeader title={t('title')} subtitle={t('subtitle')} />
-        <ConfigPageContent className="openbitfun-model-settings__content">
-          {isConfigLoading ? (
-            <div className="openbitfun-model-settings__loading" role="status">{t('messages.loading')}</div>
-          ) : (
-            <ConfigRetryState
-              message={t('messages.loadFailedLocked')}
-              retryLabel={t('messages.retry')}
-              onRetry={() => void loadConfig()}
-            />
-          )}
-        </ConfigPageContent>
-      </ConfigPageLayout>
-    );
-  }
 
   if (creationMode === 'selection') {
     return (
@@ -3569,7 +3599,7 @@ const ModelSettingsPage: React.FC = () => {
                         <Button
                           size="sm"
                           variant="outline"
-                          disabled={anyLoginInProgress}
+                          disabled={anyLoginInProgress || !modelConfigReady}
                           onClick={() => requestSubscriptionLogout(account)}
                         >
                           {t('subscriptionAuth.logout')}
@@ -3578,7 +3608,7 @@ const ModelSettingsPage: React.FC = () => {
                           <Button
                             size="sm"
                             variant="primary"
-                            disabled={anyLoginInProgress}
+                            disabled={anyLoginInProgress || !modelConfigReady}
                             onClick={() => handleImportFromSubscription(account)}
                           >
                             {t('subscriptionAuth.import')}
@@ -3977,12 +4007,33 @@ const ModelSettingsPage: React.FC = () => {
   const modelsDevSourceLabel = modelsDevStatus
     ? t(`modelsDevCatalog.source.${modelsDevStatus.active_source}`)
     : t('modelsDevCatalog.loading');
-  const modelsDevUpdatedAt = modelsDevStatus?.cache_updated_at_ms
-    ? i18nService.formatDate(new Date(modelsDevStatus.cache_updated_at_ms), {
-      dateStyle: 'medium',
-      timeStyle: 'short',
-    })
-    : t('modelsDevCatalog.noCache');
+  const modelsDevUpdatedAt = !modelsDevStatus
+    ? t('modelsDevCatalog.loading')
+    : modelsDevStatus.cache_updated_at_ms
+      ? i18nService.formatDate(new Date(modelsDevStatus.cache_updated_at_ms), {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+      })
+      : t('modelsDevCatalog.noCache');
+  const pendingConfigSummary = (
+    <span className="openbitfun-model-settings__pool-caption" role="status">
+      {isConfigLoading ? t('messages.loading') : tDefault('messages.loadFailed')}
+    </span>
+  );
+  const renderSectionLoadState = (state: 'loading' | 'ready' | 'error', onRetry: () => Promise<void>) => (
+    state === 'loading' ? (
+      <div className="openbitfun-model-settings__loading" role="status">{t('messages.loading')}</div>
+    ) : state === 'error' ? (
+      <ConfigRetryState message={t('messages.loadFailedLocked')} retryLabel={t('messages.retry')}
+        onRetry={() => void onRetry()} />
+    ) : null
+  );
+  const streamTimeoutPlaceholder = streamTimeoutLoadState === 'loading'
+    ? t('messages.loading')
+    : streamTimeoutLoadState === 'error' ? tDefault('messages.loadFailed') : undefined;
+  const proxyPlaceholder = proxyLoadState === 'loading'
+    ? t('messages.loading')
+    : proxyLoadState === 'error' ? tDefault('messages.loadFailed') : undefined;
 
   return (
     <ConfigPageLayout className="openbitfun-model-settings" data-openbitfun-component="model-settings" data-openbitfun-part="root" data-openbitfun-view="settings">
@@ -3998,7 +4049,7 @@ const ModelSettingsPage: React.FC = () => {
               <div className="openbitfun-model-settings__import-row">
                 <div className="openbitfun-model-settings__import-heading">
                   <span>{t('acquisition.api')}</span>
-                  {apiProviderGroups.length > 0 && (
+                  {modelConfigReady && apiProviderGroups.length > 0 && (
                     <span className="openbitfun-model-settings__pool-caption">
                       {t('acquisition.configuredSummary', {
                         providers: i18nService.formatNumber(apiProviderGroups.length),
@@ -4007,13 +4058,13 @@ const ModelSettingsPage: React.FC = () => {
                     </span>
                   )}
                 </div>
-                <Button size="sm" onClick={handleCreateNew} leadingIcon={<Icon name="plus" size="sm" />}>
+                <Button size="sm" onClick={handleCreateNew} disabled={!modelConfigReady} leadingIcon={<Icon name="plus" size="sm" />}>
                   {t('actions.addModel')}
                 </Button>
               </div>
             )}
           >
-            {apiProviderGroups.length > 0 ? (
+            {!modelConfigReady ? pendingConfigSummary : apiProviderGroups.length > 0 ? (
               <ul className="openbitfun-model-settings__import-summary" aria-label={t('acquisition.api')}>
                 {apiProviderGroups.map(group => (
                   <li key={group.key} className="openbitfun-model-settings__import-item">
@@ -4034,7 +4085,7 @@ const ModelSettingsPage: React.FC = () => {
               <div className="openbitfun-model-settings__import-row">
                 <div className="openbitfun-model-settings__import-heading">
                   <span>{t('acquisition.subscriptions')}</span>
-                  {subscriptionProviderGroups.length > 0 && (
+                  {modelConfigReady && subscriptionProviderGroups.length > 0 && (
                     <span className="openbitfun-model-settings__pool-caption">
                       {t('acquisition.importedSummary', {
                         providers: i18nService.formatNumber(subscriptionProviderGroups.length),
@@ -4049,7 +4100,7 @@ const ModelSettingsPage: React.FC = () => {
               </div>
             )}
           >
-            {subscriptionProviderGroups.length > 0 ? (
+            {!modelConfigReady ? pendingConfigSummary : subscriptionProviderGroups.length > 0 ? (
               <ul className="openbitfun-model-settings__import-summary" aria-label={t('acquisition.subscriptions')}>
                 {subscriptionProviderGroups.map(group => (
                   <li key={group.key} className="openbitfun-model-settings__import-item">
@@ -4097,6 +4148,7 @@ const ModelSettingsPage: React.FC = () => {
                       size="sm"
                       variant="quiet"
                       aria-label={t('pool.manageConnections')}
+                      disabled={!modelConfigReady}
                       onClick={() => setShowProviderManager(true)}
                       icon={<Icon name="plug" size="sm" />}
                     />
@@ -4104,35 +4156,37 @@ const ModelSettingsPage: React.FC = () => {
                 )}
               </>
             )}>
-            {aiModels.length > 0 && (
-              <div className="openbitfun-model-settings__pool-slots">
-                <DefaultModelConfig compact />
-              </div>
-            )}
+            <div className="openbitfun-model-settings__pool-slots">
+              <DefaultModelConfig compact models={aiModels} defaultModels={poolDefaults}
+                loading={isConfigLoading} disabled={configLoadError} onDefaultModelsChange={setPoolDefaults} />
+            </div>
             {hasSuspendedEditorDraft && (
               <ConfigActionBar status="unsaved" statusMessage={t('draftClose.retainedHint')}
                 saveLabel={t('draftClose.continueEditing')} discardLabel={t('draftClose.discardDraft')}
                 onSave={() => setIsEditing(true)} onDiscard={closeEditingModal} />
             )}
-            {aiModels.length > 0 ? (
+            <div className="openbitfun-model-settings__pool-toolbar">
+              <SearchField size="sm" value={poolQuery}
+                onChange={event => setPoolQuery(event.target.value)} placeholder={t('pool.search')}
+                aria-label={t('pool.search')} />
+              <Select size="sm" value={poolCapability} aria-label={t('pool.capabilityFilter')}
+                onValueChange={value => setPoolCapability(String(value) as ModelCapability | '')}
+                options={[
+                  { value: '', label: t('pool.allCapabilities') },
+                  { value: 'text_chat', label: t('capabilities.text_chat') },
+                  { value: 'image_understanding', label: t('capabilities.image_understanding') },
+                  { value: 'speech_recognition', label: t('capabilities.speech_recognition') },
+                  { value: 'function_calling', label: t('capabilities.function_calling') },
+                ]} />
+              <Select size="sm" value={poolProvider} aria-label={t('pool.providerFilter')}
+                disabled={!modelConfigReady}
+                onValueChange={value => setPoolProvider(String(value))}
+                options={[{ value: '', label: t('pool.allProviders') }, ...poolProviderOptions]} />
+            </div>
+            {!modelConfigReady ? (
+              renderSectionLoadState(isConfigLoading ? 'loading' : 'error', loadConfig)
+            ) : aiModels.length > 0 ? (
               <>
-                <div className="openbitfun-model-settings__pool-toolbar">
-                  <SearchField size="sm" value={poolQuery}
-                    onChange={event => setPoolQuery(event.target.value)} placeholder={t('pool.search')}
-                    aria-label={t('pool.search')} />
-                  <Select size="sm" value={poolCapability} aria-label={t('pool.capabilityFilter')}
-                    onValueChange={value => setPoolCapability(String(value) as ModelCapability | '')}
-                    options={[
-                      { value: '', label: t('pool.allCapabilities') },
-                      { value: 'text_chat', label: t('capabilities.text_chat') },
-                      { value: 'image_understanding', label: t('capabilities.image_understanding') },
-                      { value: 'speech_recognition', label: t('capabilities.speech_recognition') },
-                      { value: 'function_calling', label: t('capabilities.function_calling') },
-                    ]} />
-                  <Select size="sm" value={poolProvider} aria-label={t('pool.providerFilter')}
-                    onValueChange={value => setPoolProvider(String(value))}
-                    options={[{ value: '', label: t('pool.allProviders') }, ...poolProviderOptions]} />
-                </div>
                 {visiblePoolModels.length > 0 ? (
                   <div className="openbitfun-model-settings__pool-grid" data-openbitfun-component="model-settings"
                     data-openbitfun-part="collection" data-testid="settings-model-pool">
@@ -4165,7 +4219,8 @@ const ModelSettingsPage: React.FC = () => {
                 <Input
                   value={streamTtftTimeoutInput}
                   onChange={(e) => setStreamTtftTimeoutInput(e.target.value)}
-                  placeholder={t('streamTtftTimeout.placeholder')}
+                  placeholder={streamTimeoutPlaceholder ?? t('streamTtftTimeout.placeholder')}
+                  disabled={streamTimeoutLoadState !== 'ready'}
                   size="sm"
                 />
               </ConfigPageRow>
@@ -4176,11 +4231,13 @@ const ModelSettingsPage: React.FC = () => {
                 <Input
                   value={streamIdleTimeoutInput}
                   onChange={(e) => setStreamIdleTimeoutInput(e.target.value)}
-                  placeholder={t('streamIdleTimeout.placeholder')}
+                  placeholder={streamTimeoutPlaceholder ?? t('streamIdleTimeout.placeholder')}
+                  disabled={streamTimeoutLoadState !== 'ready'}
                   size="sm"
                 />
               </ConfigPageRow>
-              <ConfigActionBar
+              {renderSectionLoadState(streamTimeoutLoadState, loadStreamTimeouts)}
+              {streamTimeoutLoadState === 'ready' && <ConfigActionBar
                 status={isStreamTimeoutSaving
                   ? 'saving'
                   : streamTimeoutSaveError
@@ -4195,7 +4252,7 @@ const ModelSettingsPage: React.FC = () => {
                 saveLabel={t('streamIdleTimeout.save')}
                 onSave={() => void handleSaveStreamTimeouts()}
                 onDiscard={discardStreamTimeoutDraft}
-              />
+              />}
             </ConfigPageSection>
 
             <ConfigPageSection
@@ -4203,17 +4260,17 @@ const ModelSettingsPage: React.FC = () => {
               description={t('proxy.enableHint')}
             >
               <ConfigPageRow label={t('proxy.enable')} align="center">
-                <Switch
+                {proxyLoadState === 'ready' ? <Switch
                   checked={proxyConfig.enabled}
                   onChange={(e) => setProxyConfig(prev => ({ ...prev, enabled: e.target.checked }))}
-                />
+                /> : <span className="openbitfun-model-settings__loading">{proxyPlaceholder}</span>}
               </ConfigPageRow>
               <ConfigPageRow label={t('proxy.url')} description={t('proxy.urlHint')} align="center">
                 <Input
                   value={proxyConfig.url}
                   onChange={(e) => setProxyConfig(prev => ({ ...prev, url: e.target.value }))}
-                  placeholder={t('proxy.urlPlaceholder')}
-                  disabled={!proxyConfig.enabled}
+                  placeholder={proxyPlaceholder ?? t('proxy.urlPlaceholder')}
+                  disabled={proxyLoadState !== 'ready' || !proxyConfig.enabled}
                   size="sm"
                 />
               </ConfigPageRow>
@@ -4221,8 +4278,8 @@ const ModelSettingsPage: React.FC = () => {
                 <Input
                   value={proxyConfig.username || ''}
                   onChange={(e) => setProxyConfig(prev => ({ ...prev, username: e.target.value }))}
-                  placeholder={t('proxy.usernamePlaceholder')}
-                  disabled={!proxyConfig.enabled}
+                  placeholder={proxyPlaceholder ?? t('proxy.usernamePlaceholder')}
+                  disabled={proxyLoadState !== 'ready' || !proxyConfig.enabled}
                   size="sm"
                 />
               </ConfigPageRow>
@@ -4231,12 +4288,13 @@ const ModelSettingsPage: React.FC = () => {
                   type="password"
                   value={proxyConfig.password || ''}
                   onChange={(e) => setProxyConfig(prev => ({ ...prev, password: e.target.value }))}
-                  placeholder={t('proxy.passwordPlaceholder')}
-                  disabled={!proxyConfig.enabled}
+                  placeholder={proxyPlaceholder ?? t('proxy.passwordPlaceholder')}
+                  disabled={proxyLoadState !== 'ready' || !proxyConfig.enabled}
                   size="sm"
                 />
               </ConfigPageRow>
-              <ConfigActionBar
+              {renderSectionLoadState(proxyLoadState, loadProxyConfig)}
+              {proxyLoadState === 'ready' && <ConfigActionBar
                 status={isProxySaving
                   ? 'saving'
                   : proxySaveError
@@ -4251,7 +4309,7 @@ const ModelSettingsPage: React.FC = () => {
                 saveLabel={t('proxy.save')}
                 onSave={() => void handleSaveProxy()}
                 onDiscard={discardProxyDraft}
-              />
+              />}
             </ConfigPageSection>
           </div>
         </Disclosure>

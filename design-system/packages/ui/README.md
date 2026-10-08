@@ -465,6 +465,8 @@ inside one border and shadow. Flipping above the field keeps the search header
 beside the anchor. Labels, validation, and the field id follow the active input;
 Escape or selection restores the trigger, and Tab continues from its position
 in the form. Search, typed values, and multiple selection remain component-owned.
+Joined picker surfaces use the default neutral border on focus, matching the
+quiet search treatment while preserving validation and forced-color states.
 `SearchField variant="embedded"` removes its standalone pill surface for these
 compositions; its container must supply padding, height, and visible focus
 treatment. Standalone SearchField pills use a subtle neutral border, increasing
@@ -619,6 +621,11 @@ FormSection descriptions use primary content with 16px leading at 13px. Both
 leading roles scale with user typography. FieldGroup uses the form group tint,
 retaining its existing row padding, dividers, and radius. The Patterns form
 specimen shows both orientations and long values over a tinted container.
+
+FormSection keeps descriptions below the title by default. Use
+`descriptionLayout="inline"` for compact summaries that share one line with
+the title. The description uses OverflowText while the heading and actions
+remain independent.
 
 Menu and Listbox row surfaces are separated by `overlay.menu.rowGap` (2px),
 including grouped options and the Listbox used by Select, Combobox and MultiSelect.
