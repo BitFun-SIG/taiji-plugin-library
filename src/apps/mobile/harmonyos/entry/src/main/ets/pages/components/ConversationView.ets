@@ -184,10 +184,26 @@ export struct ConversationView {
       .width('100%')
       // Carried by the band that owns the background, not by the wrapper: the
       // band is what has to reach the status bar, and its measured height is
-      // what the transcript borrows as its content start offset.
-      .padding({ top: this.topSafeInset })
+      // what the transcript borrows as its content start offset. Its sides are
+      // the window's wherever this page *is* the window — the compact layout,
+      // and the wide compositions that put it flush against an edge — so it
+      // reserves the side strips as well; the header's own gutter lives inside
+      // it and is not restated here.
+      //
+      // In the usual wide layout this page is the detail pane instead, and then
+      // only its right edge is the window's: the left one is the master pane's.
+      // A layout dump of that posture reads the left strip as a 21.14vp indent
+      // on a band that never touches that edge (see the note on `FlowPlaceholder`
+      // in RemoteSurfaceHost — the padding model cannot drop one side per edge,
+      // and dropping both would put the compact header back under the cutout).
+      .padding({ left: this.insets.leftPadding(0), right: this.insets.rightPadding(0), top: this.topSafeInset })
       .backgroundColor(PAGE_BG_OVERLAY)
       .backgroundBlurStyle(BlurStyle.Thin)
+      // Named so a layout dump can be read against the pixels, the way the
+      // bottom fade is: this band's own box is what says where the page's top
+      // edge sits, and the side padding it carries is only visible in a dump as
+      // an offset between the box and its first child.
+      .id('conversation-top-band')
       this.TopEdgeFade()
     }
     .width('100%')
@@ -206,8 +222,19 @@ export struct ConversationView {
     // The composer keeps the distance from the screen edge it had while the page
     // area ended above the navigation bar, and the layer's own box grows by that
     // strip: the gradient below is the layer's background, so it fills the strip
-    // and the transcript behind it reaches the bottom of the screen.
-    .padding({ bottom: this.bottomSafeInset })
+    // and the transcript behind it reaches the bottom of the screen. Wherever the
+    // layer's sides are the window's — the compact layout, and the wide
+    // compositions that put the page flush against an edge — they are the
+    // layer's own business as well: the composer's gutter is inside it, and on a
+    // rotated device the camera cutout would otherwise sit over the first control
+    // of the row. In the usual wide layout the layer is the detail pane's width
+    // instead, so only its right edge is the window's and the left strip is an
+    // indent nothing needs; see the note on `TopOverlay` above.
+    .padding({
+      left: this.insets.leftPadding(0),
+      right: this.insets.rightPadding(0),
+      bottom: this.bottomSafeInset
+    })
     // The fade covers the whole layer, not just a strip above it: the transcript
     // runs behind the composer, so anything short of that leaves a line of text
     // sitting crisp and legible beside the pill after it has already faded out
@@ -221,8 +248,19 @@ export struct ConversationView {
     // into it. Where the immersive layout already puts the page area there the
     // two overlap and nothing extra is drawn; on a window that still ends above
     // the navigation bar this is what keeps the strip from being bare page
-    // colour under the fade.
-    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
+    // colour under the fade. The cutout is a separate avoid area, so the fade
+    // claims it as well: a device that rotated its camera onto an edge the fade
+    // reaches would otherwise show the page colour beside the gradient. Both of
+    // its sides are named because `expandSafeArea` is per edge and only takes
+    // effect where this box's own boundary meets that edge's safe-area
+    // boundary: a side the compact layer owns expands, and the same claim on the
+    // detail pane's left side — where the master pane is in between — draws
+    // nothing. `TOP` is deliberately absent: this layer is only as tall as the
+    // status line and the composer and sits at the bottom of the pane, so its
+    // top edge is nowhere near the window's top avoid area and naming it would
+    // claim a strip the fade never touches.
+    .expandSafeArea([SafeAreaType.SYSTEM, SafeAreaType.CUTOUT],
+      [SafeAreaEdge.START, SafeAreaEdge.END, SafeAreaEdge.BOTTOM])
     // Named so a layout dump can be read against the pixels: the fade's own box
     // is what says where the chat page's bottom edge sits and how far the
     // transcript can scroll, and neither is visible in the composer's bounds.

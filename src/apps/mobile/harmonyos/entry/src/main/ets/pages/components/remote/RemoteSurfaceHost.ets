@@ -237,7 +237,9 @@ export struct RemoteSurfaceHost {
     Column() {
       // The compact home is a page, not a sheet: its header band is the top edge
       // of the window, so the band reserves the status bar and the drawer
-      // control and title start below the clock and the indicators.
+      // control and title start below the clock and the indicators. The band is
+      // the window's full width, so it reserves the side strips as well — the
+      // drawer control is the control a landscape cutout would land on.
       ConversationHeader({
         title: RemoteI18n.t('app.title'),
         subtitle: this.compactHeaderContext(),
@@ -245,7 +247,11 @@ export struct RemoteSurfaceHost {
         showSidebarButton: true,
         onOpenSidebar: this.onOpenSidebar
       })
-        .padding({ top: this.insets.top })
+        .padding({
+          left: this.insets.leftPadding(0),
+          right: this.insets.rightPadding(0),
+          top: this.insets.top
+        })
       if (RemoteCompactHomePolicy.shouldShowConnectHome(this.remotePageState.connectionState)) {
         this.ConnectionEntry()
       } else {
@@ -293,8 +299,32 @@ export struct RemoteSurfaceHost {
       // wider. The band's box grows by the status bar strip for the same reason
       // the compact header's does: the wide detail pane's top edge is the
       // window's top edge too.
+      //
+      // The sides are not stated the same way, because the wide surface has two
+      // parents and only one of them is the window. Mounted by `WideRouteContent`
+      // the band is the whole wide page and both of its side edges are the
+      // window's; mounted by `WideConversationHost.RemoteHomeDetail` it is the
+      // detail pane, and then only its right edge is the window's — its left one
+      // is the master pane's, so the left strip only indents the restore control
+      // instead of clearing a cutout. A layout dump of the master/detail posture
+      // reads exactly that: the band's own box sits at the pane's left edge
+      // (x=980 on a 789vp landscape window) while its content starts 72px further
+      // in, and the same band collapsed flush against the window's left edge does
+      // need that strip. Padding cannot be claimed per edge the way
+      // `expandSafeArea` can, so the strip is reserved on both sides and the
+      // over-reservation is a bounded indent rather than a missing clearance;
+      // reverting both sides would put the compact header and the flush-left wide
+      // composition back under the cutout this strip exists for.
       .width('100%').height(76 + this.insets.top)
-      .padding({ left: 16, right: 16, top: 14 + this.insets.top, bottom: 12 })
+      .padding({
+        left: this.insets.leftPadding(16),
+        right: this.insets.rightPadding(16),
+        top: 14 + this.insets.top,
+        bottom: 12
+      })
+      // Named so a layout dump can be read against the pixels: this band is the
+      // one whose box-vs-content offset is the whole question above.
+      .id('remote-wide-home-band')
 
       this.CompactEmptyState()
 
