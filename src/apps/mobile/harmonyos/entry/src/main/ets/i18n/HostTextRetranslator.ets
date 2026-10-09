@@ -1,4 +1,4 @@
-import { resourceManager } from '@kit.LocalizationKit';
+import { util } from '@kit.ArkTS';
 
 interface TemplateEntry {
   key: string;
@@ -14,39 +14,37 @@ interface StringCatalog {
   string: StringEntry[];
 }
 
+interface EntryLanguage {
+  key: string;
+  language: string;
+}
+
+// Retranslates catalog-backed host text across the app catalog languages.
+//
+// The rawfile catalog keeps every language in one document: a trailing
+// 2-3 letter lowercase dot segment (for example "common.back.zh") tags the
+// entry language, and untagged entries are the generator's English block.
+//
+// Per-language reverse indexes identify which catalog language a stored
+// message was rendered in; the matched key is then re-rendered in the output
+// language: the constructor language when the message matches another
+// catalog language, and otherwise the first other catalog language. That way
+// a stored string never re-renders in the language it matched.
+//
+// Values that several keys share in one language cannot identify their key,
+// so ambiguous values are refused rather than guessed, like the legacy
+// retranslate policy.
 export class HostTextRetranslator {
-  private forward: Map<string, string> = new Map();
-  private reverse: Map<string, string> = new Map();
-  private templates: TemplateEntry[] = [];
+  private currentLanguage: string = 'en';
+  private languages: string[] = [];
+  private forwardByLanguage: Map<string, Map<string, string>> = new Map();
+  private reverseByLanguage: Map<string, Map<string, string>> = new Map();
+  private ambiguousByLanguage: Map<string, Set<string>> = new Map();
+  private templatesByLanguage: Map<string, TemplateEntry[]> = new Map();
 
   constructor(locale: string) {
-    this.loadCatalog(locale);
-  }
-
-  private loadCatalog(locale: string): void {
-    try {
-      const resourceManager = getContext(this).resourceManager;
-      const rawResource = resourceManager.getRawFileContentSync('resources/rawfile/string.json');
-      let jsonString = '';
-      for (let i = 0; i < rawResource.length; i++) {
-        jsonString += String.fromCharCode(rawResource[i]);
-      }
-      const catalog = JSON.parse(jsonString) as StringCatalog;
-      const strings = catalog.string || [];
-      
-      for (let index = 0; index < strings.length; index += 1) {
-        const entry = strings[index];
-        const key = entry.name;
-        const value = entry.value;
-        this.forward.set(key, value);
-        this.reverse.set(value, key);
-        if (value.indexOf('%1$s') >= 0 || value.indexOf('%2$s') >= 0) {
-          this.templates.push({ key, template: value });
-        }
-      }
-    } catch (error) {
-      // Fallback: catalog unavailable, retranslate returns original message
-    }
+    this.currentLanguage = this.languageTag(locale);
+    this.loadCatalog();
   }
 
   retranslate(message: string): string {
@@ -54,25 +52,193 @@ export class HostTextRetranslator {
       return message;
     }
 
-    // 1. Exact match O(1)
-    const exactKey = this.reverse.get(message);
-    if (exactKey) {
-      return this.forward.get(exactKey) || message;
+    // 1. Exact match per language O(1)
+    for (let languageIndex = 0; languageIndex < this.languages.length; languageIndex += 1) {
+      const language = this.languages[languageIndex];
+      const reverse = this.reverseByLanguage.get(language);
+      if (!reverse) {
+        continue;
+      }
+      const exactKey = reverse.get(message);
+      if (exactKey !== undefined) {
+        const translated = this.renderEntry(exactKey, language);
+        if (translated !== null) {
+          return translated;
+        }
+      }
     }
 
-    // 2. Template match O(M)
-    for (let index = 0; index < this.templates.length; index += 1) {
-      const entry = this.templates[index];
-      const matched = this.matchTemplate(entry.template, message);
-      if (matched !== null) {
-        return this.fillTemplate(entry.key, matched);
+    // 2. Template match per language O(M)
+    for (let languageIndex = 0; languageIndex < this.languages.length; languageIndex += 1) {
+      const language = this.languages[languageIndex];
+      const templates = this.templatesByLanguage.get(language);
+      if (!templates) {
+        continue;
+      }
+      for (let templateIndex = 0; templateIndex < templates.length; templateIndex += 1) {
+        const entry = templates[templateIndex];
+        const matched = this.matchTemplate(entry.template, message);
+        if (matched !== null) {
+          const translated = this.renderTemplate(entry, language, matched);
+          if (translated !== null) {
+            return translated;
+          }
+        }
       }
     }
 
     return message;
   }
 
-  private matchTemplate(template: string, message: string): string | null {
+  private loadCatalog(): void {
+    try {
+      const resourceManager = getContext(this).resourceManager;
+      // Rawfile paths are relative to the resources/rawfile root, and the
+      // content arrives as UTF-8 bytes. Decode multi-byte catalog text with
+      // TextDecoder instead of per-byte fromCharCode, which mangles it.
+      const rawResource = resourceManager.getRawFileContentSync('string.json');
+      const jsonString = util.TextDecoder.create('utf-8').decodeWithStream(rawResource);
+      const catalog = JSON.parse(jsonString) as StringCatalog;
+      const strings = catalog.string || [];
+
+      for (let index = 0; index < strings.length; index += 1) {
+        const entry = strings[index];
+        const tagged = this.splitEntryLanguage(entry.name);
+        this.ensureLanguage(tagged.language);
+        const forward = this.forwardByLanguage.get(tagged.language);
+        const reverse = this.reverseByLanguage.get(tagged.language);
+        const ambiguous = this.ambiguousByLanguage.get(tagged.language);
+        const templates = this.templatesByLanguage.get(tagged.language);
+        if (!forward || !reverse || !ambiguous || !templates) {
+          continue;
+        }
+        forward.set(tagged.key, entry.value);
+        const existingKey = reverse.get(entry.value);
+        if (existingKey !== undefined) {
+          if (existingKey !== tagged.key) {
+            // A second key shares this value within the language, so the
+            // value cannot identify its key: refuse it instead of letting
+            // the later entry win like a plain overwrite would.
+            ambiguous.add(entry.value);
+            reverse.delete(entry.value);
+          }
+        } else if (!ambiguous.has(entry.value)) {
+          reverse.set(entry.value, tagged.key);
+        }
+        if (entry.value.indexOf('%1$s') >= 0 || entry.value.indexOf('%2$s') >= 0) {
+          templates.push({ key: tagged.key, template: entry.value });
+        }
+      }
+      this.pruneAmbiguousTemplates();
+    } catch (error) {
+      // Fallback: catalog unavailable, retranslate returns original message
+    }
+  }
+
+  // A template is trustworthy only when its key's value is unique in every
+  // catalog language: one shared value in any language leaves the template
+  // shape unable to identify its key. Refuse such templates in every
+  // language, matching the legacy hasUniqueTemplate gate.
+  private pruneAmbiguousTemplates(): void {
+    for (let languageIndex = 0; languageIndex < this.languages.length; languageIndex += 1) {
+      const language = this.languages[languageIndex];
+      const templates = this.templatesByLanguage.get(language);
+      if (!templates) {
+        continue;
+      }
+      const kept: TemplateEntry[] = [];
+      for (let templateIndex = 0; templateIndex < templates.length; templateIndex += 1) {
+        const entry = templates[templateIndex];
+        if (!this.hasAmbiguousTemplate(entry.key)) {
+          kept.push(entry);
+        }
+      }
+      this.templatesByLanguage.set(language, kept);
+    }
+  }
+
+  private hasAmbiguousTemplate(key: string): boolean {
+    for (let languageIndex = 0; languageIndex < this.languages.length; languageIndex += 1) {
+      const language = this.languages[languageIndex];
+      const forward = this.forwardByLanguage.get(language);
+      const ambiguous = this.ambiguousByLanguage.get(language);
+      if (!forward || !ambiguous) {
+        return true;
+      }
+      const value = forward.get(key);
+      if (value === undefined || ambiguous.has(value)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private ensureLanguage(language: string): void {
+    if (this.forwardByLanguage.has(language)) {
+      return;
+    }
+    this.forwardByLanguage.set(language, new Map());
+    this.reverseByLanguage.set(language, new Map());
+    this.ambiguousByLanguage.set(language, new Set<string>());
+    this.templatesByLanguage.set(language, []);
+    this.languages.push(language);
+  }
+
+  private languageTag(locale: string): string {
+    const primary = locale.split('-')[0].toLowerCase();
+    return primary.length > 0 ? primary : 'en';
+  }
+
+  private splitEntryLanguage(name: string): EntryLanguage {
+    const lastDot = name.lastIndexOf('.');
+    if (lastDot >= 0) {
+      const suffix = name.slice(lastDot + 1);
+      if (suffix.length >= 2 && suffix.length <= 3 && suffix.toLowerCase() === suffix) {
+        return { key: name.slice(0, lastDot), language: suffix };
+      }
+    }
+    // Untagged entries are the generator's English block.
+    return { key: name, language: 'en' };
+  }
+
+  private outputLanguageFor(sourceLanguage: string): string {
+    if (sourceLanguage !== this.currentLanguage && this.forwardByLanguage.has(this.currentLanguage)) {
+      return this.currentLanguage;
+    }
+    for (let index = 0; index < this.languages.length; index += 1) {
+      const language = this.languages[index];
+      if (language !== sourceLanguage) {
+        return language;
+      }
+    }
+    return sourceLanguage;
+  }
+
+  private renderEntry(baseKey: string, sourceLanguage: string): string | null {
+    const forward = this.forwardByLanguage.get(this.outputLanguageFor(sourceLanguage));
+    if (!forward) {
+      return null;
+    }
+    const value = forward.get(baseKey);
+    return value !== undefined ? value : null;
+  }
+
+  private renderTemplate(entry: TemplateEntry, sourceLanguage: string, matched: string[]): string | null {
+    const forward = this.forwardByLanguage.get(this.outputLanguageFor(sourceLanguage));
+    if (!forward) {
+      return null;
+    }
+    const template = forward.get(entry.key);
+    if (template === undefined) {
+      return null;
+    }
+    if (matched.length === 1) {
+      return template.replace('%1$s', matched[0]);
+    }
+    return template.replace('%1$s', matched[0]).replace('%2$s', matched[1]);
+  }
+
+  private matchTemplate(template: string, message: string): string[] | null {
     // Parse %1$s and %2$s placeholders
     const firstSlot = template.indexOf('%1$s');
     if (firstSlot < 0) {
@@ -90,7 +256,7 @@ export class HostTextRetranslator {
         return null;
       }
       const value = message.slice(prefix.length, message.length - suffix.length);
-      return value;
+      return [value];
     }
 
     // Two placeholders: %1$s and %2$s
@@ -106,14 +272,6 @@ export class HostTextRetranslator {
     }
     const first = body.slice(0, middleAt);
     const second = body.slice(middleAt + middle.length);
-    return `${first}${second}`;
-  }
-
-  private fillTemplate(key: string, matched: string): string {
-    const template = this.forward.get(key) || '';
-    // Replace %1$s and %2$s with the matched value
-    // For single placeholder, matched is the value
-    // For two placeholders, matched is concatenated value
-    return template.replace('%1$s', matched).replace('%2$s', matched);
+    return [first, second];
   }
 }
