@@ -366,6 +366,32 @@ describe('useMiniAppBridge floating Agent routing', () => {
     expect(postMessage).toHaveBeenCalledWith(expect.objectContaining({ id: 2, result: expect.objectContaining({ sessionId: 'saved' }) }), '*');
   });
 
+  it('restores the exact saved topic only after its hidden history has loaded', async () => {
+    await act(async () => { root.render(<BridgeHarness />); });
+    const iframe = container.querySelector('iframe') as HTMLIFrameElement;
+    const postMessage = vi.spyOn(iframe.contentWindow!, 'postMessage');
+    mocks.registeredSessions.set('latest-chat', {});
+    mocks.agentEnsureSession.mockResolvedValue({ sessionId: 'saved-topic', created: false, workspacePath: '/app/decks/saved' });
+    let finishHistory = () => {};
+    const history = new Promise<void>((resolve) => { finishHistory = resolve; });
+    mocks.loadSessionHistory.mockReturnValueOnce(history);
+
+    await dispatchRpc(iframe, 1, 'chat.claimComposer');
+    await dispatchRpc(iframe, 2, 'agent.ensureSession', { sessionId: 'saved-topic', appDataWorkspace: 'decks/saved' });
+    expect(mocks.loadSessionHistory).toHaveBeenCalledWith('saved-topic', { includeInternal: true });
+    expect(postMessage).not.toHaveBeenCalledWith(expect.objectContaining({ id: 2 }), '*');
+    await dispatchRpc(iframe, 3, 'chat.focusSession', { sessionId: 'saved-topic' });
+    expect(useMiniAppStore.getState().composerClaims[app.id]?.sessionId).toBeUndefined();
+
+    await act(async () => { finishHistory(); await history; });
+    expect(postMessage).toHaveBeenCalledWith(expect.objectContaining({ id: 2, result: expect.objectContaining({ sessionId: 'saved-topic' }) }), '*');
+    await dispatchRpc(iframe, 4, 'chat.focusSession', { sessionId: 'saved-topic' });
+    expect(useMiniAppStore.getState().composerClaims[app.id]?.sessionId).toBe('saved-topic');
+    await dispatchRpc(iframe, 5, 'agent.ensureSession', { sessionId: 'saved-topic', appDataWorkspace: 'decks/saved' });
+    expect(mocks.loadSessionHistory).toHaveBeenCalledTimes(1);
+    expect(mocks.openMainSession).not.toHaveBeenCalled();
+  });
+
   it('rejects an old-topic message before it reaches the new topic in the iframe', async () => {
     await act(async () => { root.render(<BridgeHarness />); });
     const iframe = container.querySelector('iframe') as HTMLIFrameElement;
