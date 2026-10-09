@@ -2937,10 +2937,13 @@ mod tests {
     #[tokio::test]
     async fn legacy_miniapp_history_loads_without_losing_workspace_references() {
         let mut env = TestEnvironment::new();
-        // macOS temp_dir uses /var while opened local roots resolve /private/var.
-        // Give this persisted-history fixture one consistent local root.
+        // Use the production canonicalizer for macOS /var aliases and Windows
+        // verbatim-path prefixes so the fixture has one consistent local root.
         env.path_manager = Arc::new(PathManager::with_user_root_for_tests(
-            std::fs::canonicalize(&env.root).unwrap().join("user-root"),
+            canonicalize_local_workspace_root(&env.root)
+                .unwrap()
+                .0
+                .join("user-root"),
         ));
         let service = build_test_workspace_service(env.path_manager.clone()).await;
         let project = service
