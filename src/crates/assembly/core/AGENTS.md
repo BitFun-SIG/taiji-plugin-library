@@ -305,6 +305,12 @@ MiniApp Agent appdata workspace registration and pre-ID session compatibility:
 cargo test --locked -p openbitfun-core --no-default-features --features agent-runtime,git,tools-miniapp --lib miniapp::agent_workspace::tests
 ```
 
+Workspace history upgrade compatibility and MiniApp record preservation:
+
+```bash
+cargo test --locked -p openbitfun-core --no-default-features --features agent-runtime,git --lib legacy_miniapp_history
+```
+
 Skill hook activation, session cleanup, and tool preflight/permission ordering:
 
 ```bash
