@@ -1904,10 +1904,19 @@ impl WorkspaceService {
             .await;
             validate_workspace_persistence_data(&data, &self.path_manager.miniapps_dir())?;
 
+            // Older current-format catalogs tracked MiniApp activity as recent
+            // projects. Normalize only that UI history; keep every workspace
+            // record and its opened/current/session references intact. Remote
+            // paths belong to another host and must not match our local root.
+            data.recent_workspaces.retain(|id| {
+                let workspace = &data.workspaces[id];
+                workspace.workspace_kind == WorkspaceKind::Remote
+                    || !self.is_miniapp_owned_path(&workspace.root_path)
+            });
+
             let mut manager = self.manager.write().await;
             *manager.get_workspaces_mut() = data.workspaces;
             manager.set_opened_workspace_ids(data.opened_workspace_ids);
-            manager.set_recent_workspaces(data.recent_workspaces);
             manager.set_recent_assistant_workspaces(data.recent_assistant_workspaces);
             manager.set_primary_assistant_key(data.primary_assistant_key);
 
@@ -1918,6 +1927,10 @@ impl WorkspaceService {
                     )));
                 }
             }
+
+            // Selecting the current workspace touches recency, so restore the
+            // filtered history afterwards, including when a MiniApp is current.
+            manager.set_recent_workspaces(data.recent_workspaces);
 
             let workspaces_to_restore = Self::collect_startup_restored_workspaces(&manager);
             drop(manager);
@@ -2918,6 +2931,81 @@ mod tests {
         assert!(
             service.get_current_workspace().await.is_none(),
             "tracked workspace activity should not change the current workspace"
+        );
+    }
+
+    #[tokio::test]
+    async fn legacy_miniapp_history_loads_without_losing_workspace_references() {
+        let mut env = TestEnvironment::new();
+        // macOS temp_dir uses /var while opened local roots resolve /private/var.
+        // Give this persisted-history fixture one consistent local root.
+        env.path_manager = Arc::new(PathManager::with_user_root_for_tests(
+            std::fs::canonicalize(&env.root).unwrap().join("user-root"),
+        ));
+        let service = build_test_workspace_service(env.path_manager.clone()).await;
+        let project = service
+            .open_workspace(env.create_workspace_dir("project"))
+            .await
+            .unwrap();
+        let root = env.path_manager.miniapp_dir("legacy-deck").join("appdata");
+        std::fs::create_dir_all(&root).unwrap();
+        let miniapp = service.open_workspace(root).await.unwrap();
+        let mut payload: serde_json::Value = service
+            .persistence
+            .load_json("workspace_data")
+            .await
+            .unwrap()
+            .unwrap();
+        // Reproduce the old writer, which included app-owned workspaces here.
+        // A remote record with the same path is still a user project, even
+        // while its connection is unavailable.
+        let mut remote = payload["workspaces"][&miniapp.id].clone();
+        remote["id"] = "offline-remote".into();
+        remote["workspaceKind"] = "remote".into();
+        payload["workspaces"]["offline-remote"] = remote;
+        payload["recent_workspaces"] =
+            serde_json::json!([miniapp.id, project.id, "offline-remote"]);
+        service
+            .persistence
+            .save_json("workspace_data", &payload, StorageOptions::default())
+            .await
+            .unwrap();
+
+        let restored = build_test_workspace_service(env.path_manager.clone()).await;
+        restored.load_workspace_history_only().await.unwrap();
+        assert_eq!(
+            restored.get_current_workspace().await.unwrap().id,
+            miniapp.id
+        );
+        assert!(restored
+            .get_opened_workspaces()
+            .await
+            .iter()
+            .any(|ws| ws.id == miniapp.id));
+        assert_eq!(
+            restored
+                .get_recent_workspaces()
+                .await
+                .iter()
+                .map(|ws| &ws.id)
+                .collect::<Vec<_>>(),
+            vec![&project.id, &"offline-remote".to_string()]
+        );
+        let saved: WorkspacePersistenceData = restored
+            .persistence
+            .load_json("workspace_data")
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(saved.workspaces.contains_key(&miniapp.id));
+        assert_eq!(
+            saved.workspaces["offline-remote"].workspace_kind,
+            WorkspaceKind::Remote
+        );
+        assert_eq!(saved.current_workspace_id, Some(miniapp.id));
+        assert_eq!(
+            saved.recent_workspaces,
+            vec![project.id, "offline-remote".to_string()]
         );
     }
 

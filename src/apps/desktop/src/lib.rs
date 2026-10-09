@@ -615,6 +615,10 @@ pub async fn run() {
         Ok(state) => state,
         Err(e) => {
             log::error!("Failed to initialize AppState: {}", e);
+            show_fatal_startup_error(&format!(
+                "OpenBitFun could not initialize its application state and cannot continue.\n\n{e}\n\nSee {} for details.",
+                logging::early_startup_log_path(&session_log_dir).display()
+            ));
             return;
         }
     };
