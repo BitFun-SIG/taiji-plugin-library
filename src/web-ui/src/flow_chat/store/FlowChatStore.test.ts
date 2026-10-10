@@ -31,8 +31,9 @@ vi.mock('../session-drivers/registry', () => ({
 }));
 
 const workspaceFixtures = vi.hoisted(() => new Map<string, any>());
+const recentWorkspaceFixtures = vi.hoisted(() => [] as any[]);
 vi.mock('@/infrastructure/services/business/workspaceManager', () => ({
-  workspaceManager: { getState: () => ({ openedWorkspaces: workspaceFixtures, recentWorkspaces: [] }) },
+  workspaceManager: { getState: () => ({ openedWorkspaces: workspaceFixtures, recentWorkspaces: recentWorkspaceFixtures }) },
 }));
 function fixtureWorkspaceId(rootPath: string, connectionId?: string, sshHost?: string) {
   const existing = [...workspaceFixtures.values()].find(record => record.rootPath === rootPath && record.connectionId === connectionId && record.sshHost === sshHost);
@@ -1810,6 +1811,46 @@ describe('FlowChatStore historical session hydration state', () => {
       historyState: 'metadata-only',
       dialogTurns: [],
     });
+  });
+
+  it('lists pre-ID worktree sessions under their project without borrowing its execution identity', async () => {
+    const legacyWorktreeMetadata = (sessionId: string, projectPath: string) => ({
+      sessionId,
+      title: 'Legacy worktree session',
+      agentType: 'Standard',
+      createdAt: 10,
+      lastActiveAt: 20,
+      workspacePath: `${projectPath}/tree`,
+      projectWorkspacePath: projectPath,
+    });
+
+    try {
+      const unknownProjectId = fixtureWorkspaceId('/legacy/unknown-repo', undefined, undefined);
+      apiMocks.listSessions.mockResolvedValueOnce([
+        legacyWorktreeMetadata('legacy-worktree-unknown', '/legacy/unknown-repo'),
+      ]);
+      await flowChatStore.initializeFromDisk(unknownProjectId, undefined);
+      const unresolved = flowChatStore.getState().sessions.get('legacy-worktree-unknown');
+      expect(unresolved?.projectWorkspaceId).toBe(unknownProjectId);
+      expect(unresolved?.workspaceId).toBeUndefined();
+      expect(unresolved?.workspacePath).toBe('/legacy/unknown-repo/tree');
+
+      // A worktree the host knows about but has not opened still owns it.
+      const knownProjectId = fixtureWorkspaceId('/legacy/known-repo', undefined, undefined);
+      recentWorkspaceFixtures.push({
+        id: 'legacy-worktree-record', rootPath: '/legacy/known-repo/tree', workspaceKind: 'normal',
+      });
+      apiMocks.listSessions.mockResolvedValueOnce([
+        legacyWorktreeMetadata('legacy-worktree-known', '/legacy/known-repo'),
+      ]);
+      await flowChatStore.initializeFromDisk(knownProjectId, undefined);
+      expect(flowChatStore.getState().sessions.get('legacy-worktree-known')).toMatchObject({
+        workspaceId: 'legacy-worktree-record',
+        projectWorkspaceId: knownProjectId,
+      });
+    } finally {
+      recentWorkspaceFixtures.length = 0;
+    }
   });
 
   it('keeps persisted workspace identity separate from remote execution scope', async () => {
