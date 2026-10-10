@@ -8,7 +8,7 @@ import { WorkspaceKind, WorkspaceType } from '@/shared/types/global-state';
 import { notificationService } from '@/shared/notification-system';
 
 import { SSHRemoteProvider } from './SSHRemoteProvider';
-import { SSHContext, type ConnectionStatus } from './SSHRemoteContext';
+import { SSHContext, type ConnectionStatus, type SSHContextValue } from './SSHRemoteContext';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -64,6 +64,19 @@ vi.mock('@/shared/notification-system', () => ({
     error: vi.fn(),
     success: vi.fn(),
   },
+}));
+
+const confirmWarningMock = vi.hoisted(() => vi.fn());
+
+vi.mock('@/infrastructure/confirm-dialog', () => ({
+  confirmWarning: confirmWarningMock,
+}));
+
+const translate = vi.hoisted(() => (key: string, params?: Record<string, unknown>) =>
+  params ? `${key} ${JSON.stringify(params)}` : key);
+
+vi.mock('@/infrastructure/i18n', () => ({
+  useI18n: () => ({ t: translate }),
 }));
 
 vi.mock('@/shared/utils/logger', () => ({
@@ -641,5 +654,190 @@ describe('SSHRemoteProvider workspace connection state', () => {
     expect(workspaceManagerMock.removeRemoteWorkspace).not.toHaveBeenCalled();
     expect(sshApiMock.removeWorkspace).not.toHaveBeenCalled();
     expect(notificationService.error).not.toHaveBeenCalled();
+  });
+});
+
+function connectionConflictError(owner: string, requested: string): Error {
+  return new Error(
+    `remote_workspace_connection_conflict: Workspace remote_shared is bound to SSH connection ${owner}; reopening it with connection ${requested} requires confirmation.`
+  );
+}
+
+describe('SSHRemoteProvider remote workspace connection conflicts', () => {
+  let container: HTMLDivElement;
+  let root: Root;
+  let context: SSHContextValue | null;
+
+  function ContextProbe() {
+    context = React.useContext(SSHContext);
+    return null;
+  }
+
+  const savedConnections = [
+    {
+      id: 'ssh-root@example.com', name: 'root-profile', host: 'example.com', port: 22,
+      username: 'root', authType: { type: 'PrivateKey', keyPath: '/tmp/root_key' },
+    },
+    {
+      id: 'ssh-deploy@example.com', name: 'deploy-profile', host: 'example.com', port: 22,
+      username: 'deploy', authType: { type: 'PrivateKey', keyPath: '/tmp/deploy_key' },
+    },
+  ];
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    peerModeFlagMock.active = false;
+    context = null;
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+    workspaceManagerMock.getState.mockReturnValue({
+      loading: false,
+      openedWorkspaces: new Map(),
+      activeWorkspaceId: null,
+    });
+    workspaceManagerMock.addEventListener.mockReturnValue(() => undefined);
+    workspaceManagerMock.consumeStartupLegacyRemoteWorkspaceSnapshot.mockReturnValue({
+      available: true,
+      workspace: null,
+    });
+    sshApiMock.getWorkspaceInfo.mockResolvedValue(null);
+    sshApiMock.listSavedConnections.mockResolvedValue(savedConnections);
+    sshApiMock.isConnected.mockResolvedValue(true);
+    sshApiMock.openWorkspace.mockResolvedValue(undefined);
+    sshApiMock.removeWorkspace.mockResolvedValue(undefined);
+    workspaceManagerMock.removeRemoteWorkspace.mockResolvedValue(undefined);
+  });
+
+  afterEach(() => {
+    act(() => {
+      root.unmount();
+    });
+    container.remove();
+  });
+
+  async function renderProvider(): Promise<void> {
+    await act(async () => {
+      root.render(
+        <SSHRemoteProvider>
+          <ContextProbe />
+        </SSHRemoteProvider>
+      );
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+  }
+
+  async function connectDeployProfile(): Promise<void> {
+    sshApiMock.connect.mockResolvedValue({
+      success: true,
+      connectionId: 'ssh-deploy@example.com',
+      serverInfo: { homeDir: '/home/deploy' },
+    });
+    await act(async () => {
+      await context!.connect('ssh-deploy@example.com', {
+        id: 'ssh-deploy@example.com',
+        name: 'deploy-profile',
+        host: 'example.com',
+        port: 22,
+        username: 'deploy',
+        auth: { type: 'PrivateKey', keyPath: '/tmp/deploy_key' },
+      } as never);
+    });
+    sshApiMock.openWorkspace.mockClear();
+  }
+
+  it('keeps a background-restored record bound to its owner and reports it', async () => {
+    workspaceManagerMock.consumeStartupLegacyRemoteWorkspaceSnapshot.mockReturnValue({
+      available: true,
+      workspace: {
+        connectionId: 'ssh-deploy@example.com',
+        connectionName: 'deploy-profile',
+        remotePath: '/srv/shared',
+        sshHost: 'example.com',
+      },
+    });
+    workspaceManagerMock.openRemoteWorkspace.mockRejectedValue(
+      connectionConflictError('ssh-root@example.com', 'ssh-deploy@example.com')
+    );
+
+    await renderProvider();
+
+    expect(workspaceManagerMock.openRemoteWorkspace).toHaveBeenCalledTimes(1);
+    expect(workspaceManagerMock.openRemoteWorkspace.mock.calls[0]).toHaveLength(1);
+    expect(confirmWarningMock).not.toHaveBeenCalled();
+    expect(notificationService.warning).toHaveBeenCalledWith(
+      'ssh.remote.connectionConflictRestoreDeferred {"path":"/srv/shared"}',
+      { duration: 8000 }
+    );
+    expect(workspaceManagerMock.removeRemoteWorkspace).not.toHaveBeenCalled();
+    expect(sshApiMock.removeWorkspace).not.toHaveBeenCalled();
+  });
+
+  it('rebinds an interactively selected record only after the user confirms', async () => {
+    await renderProvider();
+    await connectDeployProfile();
+    workspaceManagerMock.openRemoteWorkspace
+      .mockRejectedValueOnce(connectionConflictError('ssh-root@example.com', 'ssh-deploy@example.com'))
+      .mockResolvedValueOnce({ id: 'remote_shared' });
+    confirmWarningMock.mockResolvedValue(true);
+
+    let opened: boolean | undefined;
+    await act(async () => {
+      opened = await context!.openWorkspace('/srv/shared');
+    });
+
+    expect(opened).toBe(true);
+    expect(confirmWarningMock).toHaveBeenCalledWith(
+      'ssh.remote.connectionConflictTitle',
+      'ssh.remote.connectionConflictMessage {"path":"/srv/shared","owner":"root-profile","connection":"deploy-profile"}',
+      { confirmText: 'ssh.remote.connectionConflictConfirm' }
+    );
+    expect(workspaceManagerMock.openRemoteWorkspace).toHaveBeenCalledTimes(2);
+    expect(workspaceManagerMock.openRemoteWorkspace.mock.calls[1][1]).toEqual({ rebindConnection: true });
+    expect(sshApiMock.openWorkspace).toHaveBeenCalledWith('ssh-deploy@example.com', '/srv/shared');
+    expect(context!.remoteWorkspace).toMatchObject({
+      workspaceId: 'remote_shared',
+      connectionId: 'ssh-deploy@example.com',
+      remotePath: '/srv/shared',
+    });
+  });
+
+  it('leaves no host-side state when the user keeps the existing binding', async () => {
+    await renderProvider();
+    await connectDeployProfile();
+    workspaceManagerMock.openRemoteWorkspace.mockRejectedValue(
+      connectionConflictError('ssh-root@example.com', 'ssh-deploy@example.com')
+    );
+    confirmWarningMock.mockResolvedValue(false);
+
+    let opened: boolean | undefined;
+    await act(async () => {
+      opened = await context!.openWorkspace('/srv/shared');
+    });
+
+    expect(opened).toBe(false);
+    expect(workspaceManagerMock.openRemoteWorkspace).toHaveBeenCalledTimes(1);
+    expect(sshApiMock.openWorkspace).not.toHaveBeenCalled();
+    expect(context!.remoteWorkspace).toBeNull();
+    expect(context!.showFileBrowser).toBe(true);
+  });
+
+  it('propagates other open failures without asking to rebind', async () => {
+    await renderProvider();
+    await connectDeployProfile();
+    workspaceManagerMock.openRemoteWorkspace.mockRejectedValue(
+      new Error('Remote workspace path is not a directory')
+    );
+
+    let failure: unknown;
+    await act(async () => {
+      failure = await context!.openWorkspace('/srv/missing').catch(error => error);
+    });
+
+    expect(failure).toBeInstanceOf(Error);
+    expect(confirmWarningMock).not.toHaveBeenCalled();
+    expect(sshApiMock.openWorkspace).not.toHaveBeenCalled();
   });
 });

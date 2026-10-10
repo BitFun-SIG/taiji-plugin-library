@@ -1864,7 +1864,11 @@
       "downloadDialogTitle": "保存文件",
       "transferFailed": "传输失败",
       "transferNeedsDesktop": "上传与下载仅适用于桌面版应用。",
-      "transferring": "正在传输…"
+      "transferring": "正在传输…",
+      "connectionConflictTitle": "工作区已绑定其他连接",
+      "connectionConflictMessage": "远程工作区 {{path}} 已绑定到 SSH 连接 {{owner}}。是否改为绑定到 {{connection}}？之后它的文件、终端和会话都将通过 {{connection}} 执行。",
+      "connectionConflictConfirm": "改为绑定",
+      "connectionConflictRestoreDeferred": "远程工作区已保留，因为它绑定的是另一个 SSH 连接。请从远程连接对话框重新打开它并选择连接：{{path}}"
     },
     "portForward": {
       "menuEntry": "端口映射",

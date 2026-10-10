@@ -13,6 +13,13 @@ import { ACPClientAPI } from '@/infrastructure/api/service-api/ACPClientAPI';
 import { normalizeRemoteWorkspacePath } from '@/shared/utils/pathUtils';
 import { notificationService } from '@/shared/notification-system';
 import { isPeerDeviceModeActive } from '@/infrastructure/peer-device/peerModeFlag';
+import { useI18n } from '@/infrastructure/i18n';
+import { confirmWarning } from '@/infrastructure/confirm-dialog';
+import {
+  isRemoteWorkspaceConnectionConflictError,
+  remoteWorkspaceConnectionConflictOwner,
+} from '@/infrastructure/api/errors/TauriCommandError';
+import type { WorkspaceInfo } from '@/shared/types';
 import {
   SSHContext,
   type ConnectionStatus,
@@ -147,6 +154,11 @@ interface SSHRemoteProviderProps {
 }
 
 export const SSHRemoteProvider: React.FC<SSHRemoteProviderProps> = ({ children }) => {
+  const { t } = useI18n('common');
+  // Restore callbacks feed the startup check effect; a language change must
+  // not re-run a remote reconnect probe.
+  const translateRef = useRef(t);
+  translateRef.current = t;
   const [status, setStatus] = useState<ConnectionStatus>('disconnected');
   const [isConnected, setIsConnected] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
@@ -262,12 +274,19 @@ export const SSHRemoteProvider: React.FC<SSHRemoteProviderProps> = ({ children }
 
   const reportRemoteWorkspaceRestoreDeferred = useCallback((
     workspace: RemoteWorkspace,
-    reason: 'missing-connection' | 'missing-password'
+    reason: 'missing-connection' | 'missing-password' | 'connection-conflict'
   ) => {
     if (isPeerDeviceModeActive()) {
       return;
     }
     const path = normalizeRemoteWorkspacePath(workspace.remotePath);
+    if (reason === 'connection-conflict') {
+      notificationService.warning(
+        translateRef.current('ssh.remote.connectionConflictRestoreDeferred', { path }),
+        { duration: 8000 }
+      );
+      return;
+    }
     notificationService.warning(
       reason === 'missing-password'
         ? `Remote workspace was kept. Re-enter its SSH password to reconnect: ${path}`
@@ -275,6 +294,30 @@ export const SSHRemoteProvider: React.FC<SSHRemoteProviderProps> = ({ children }
       { duration: 8000 }
     );
   }, []);
+
+  /**
+   * Background restore never moves a record to another connection: that is a
+   * user decision. The record stays bound to its owner and the entry is kept.
+   */
+  const openRestoredRemoteWorkspaceRecord = useCallback(async (
+    workspace: RemoteWorkspace
+  ): Promise<WorkspaceInfo | null> => {
+    try {
+      return await workspaceManager.openRemoteWorkspace(workspace);
+    } catch (error) {
+      if (!isRemoteWorkspaceConnectionConflictError(error)) {
+        throw error;
+      }
+      log.warn('Deferring remote workspace restore because its record is bound to another connection', {
+        connectionId: workspace.connectionId,
+        remotePath: workspace.remotePath,
+        owner: remoteWorkspaceConnectionConflictOwner(error),
+      });
+      setWorkspaceStatus(workspace.connectionId, 'error');
+      reportRemoteWorkspaceRestoreDeferred(workspace, 'connection-conflict');
+      return null;
+    }
+  }, [reportRemoteWorkspaceRestoreDeferred, setWorkspaceStatus]);
 
   // Cleanup heartbeat on unmount
   useEffect(() => {
@@ -603,7 +646,10 @@ export const SSHRemoteProvider: React.FC<SSHRemoteProviderProps> = ({ children }
             setWorkspaceStatus(workspace.connectionId, 'connected');
             refreshRemoteAcpCapabilities(workspace.connectionId);
 
-            const record = openedRecord ?? await workspaceManager.openRemoteWorkspace(workspace);
+            const record = openedRecord ?? await openRestoredRemoteWorkspaceRecord(workspace);
+            if (!record) {
+              return { ok: false as const };
+            }
             workspace.workspaceId = record.id;
             void flowChatStore.initializeFromDisk(record.id, 'ssh_remote_auto_restore_existing').catch(() => {});
 
@@ -641,7 +687,10 @@ export const SSHRemoteProvider: React.FC<SSHRemoteProviderProps> = ({ children }
             setWorkspaceStatus(result.workspace.connectionId, 'connected');
             refreshRemoteAcpCapabilities(result.connectionId);
 
-            const record = openedRecord ?? await workspaceManager.openRemoteWorkspace(result.workspace);
+            const record = openedRecord ?? await openRestoredRemoteWorkspaceRecord(result.workspace);
+            if (!record) {
+              return { ok: false as const };
+            }
             result.workspace.workspaceId = record.id;
             void flowChatStore.initializeFromDisk(record.id, 'ssh_remote_auto_restore_reconnected').catch(() => {});
 
@@ -679,6 +728,7 @@ export const SSHRemoteProvider: React.FC<SSHRemoteProviderProps> = ({ children }
       checkRemoteWorkspaceInFlightRef.current = false;
     }
   }, [
+    openRestoredRemoteWorkspaceRecord,
     reportRemoteWorkspaceReconnectFailure,
     reportRemoteWorkspaceRestoreDeferred,
     setWorkspaceStatus,
@@ -877,30 +927,77 @@ export const SSHRemoteProvider: React.FC<SSHRemoteProviderProps> = ({ children }
     }
   }, [connectionId, remoteWorkspace, setWorkspaceStatus]);
 
-  const openWorkspace = useCallback(async (pingPath: string) => {
+  /**
+   * Opens the record for an interactive selection. A record bound to another
+   * saved connection is only moved after the user confirms; `null` means the
+   * user kept the existing binding.
+   */
+  const openSelectedRemoteWorkspaceRecord = useCallback(async (
+    remoteWs: RemoteWorkspace
+  ): Promise<WorkspaceInfo | null> => {
+    try {
+      return await workspaceManager.openRemoteWorkspace(remoteWs);
+    } catch (error) {
+      if (!isRemoteWorkspaceConnectionConflictError(error)) {
+        throw error;
+      }
+      const ownerId = remoteWorkspaceConnectionConflictOwner(error);
+      const savedConnections = await sshApi.listSavedConnections().catch(() => []);
+      const owner = savedConnections.find(connection => connection.id === ownerId)?.name || ownerId || '';
+      const confirmed = await confirmWarning(
+        t('ssh.remote.connectionConflictTitle'),
+        t('ssh.remote.connectionConflictMessage', {
+          path: remoteWs.remotePath,
+          owner,
+          connection: remoteWs.connectionName,
+        }),
+        { confirmText: t('ssh.remote.connectionConflictConfirm') }
+      );
+      if (!confirmed) {
+        log.info('Kept remote workspace bound to its existing connection', {
+          connectionId: remoteWs.connectionId,
+          remotePath: remoteWs.remotePath,
+          owner: ownerId,
+        });
+        return null;
+      }
+      return workspaceManager.openRemoteWorkspace(remoteWs, { rebindConnection: true });
+    }
+  }, [t]);
+
+  const openWorkspace = useCallback(async (pingPath: string): Promise<boolean> => {
     if (!connectionId) {
       throw new Error('Not connected');
     }
     const connName = connectionConfig?.name || 'Remote';
     const remotePath = normalizeRemoteWorkspacePath(pingPath);
-    await sshApi.openWorkspace(connectionId, remotePath);
     const remoteWs: RemoteWorkspace = {
       connectionId,
       connectionName: connName,
       remotePath,
       sshHost: connectionConfig?.host?.trim() || undefined,
     };
+    const previousRemoteWorkspace = remoteWorkspaceRef.current;
     setRemoteWorkspace(remoteWs);
     setShowFileBrowser(false);
     setWorkspaceStatus(connectionId, 'connected');
 
-    const record = await workspaceManager.openRemoteWorkspace(remoteWs);
+    // The record is opened before the active remote pointer moves, so keeping
+    // an existing binding leaves no host-side state behind.
+    const record = await openSelectedRemoteWorkspaceRecord(remoteWs);
+    if (!record) {
+      setRemoteWorkspace(previousRemoteWorkspace);
+      setShowFileBrowser(true);
+      return false;
+    }
+    await sshApi.openWorkspace(connectionId, remotePath);
     // The opened record is the identity; keep it on the provider state so
     // close/disconnect can name the exact workspace instead of its connection.
     setRemoteWorkspace(current =>
       current && sameRemoteWorkspace(current, remoteWs) ? { ...current, workspaceId: record.id } : current
     );
-  }, [connectionId, connectionConfig, setWorkspaceStatus]);
+    return true;
+  }, [connectionId, connectionConfig, openSelectedRemoteWorkspaceRecord, setWorkspaceStatus]);
 
   const closeWorkspace = useCallback(async () => {
     const currentRemoteWorkspace = remoteWorkspace;

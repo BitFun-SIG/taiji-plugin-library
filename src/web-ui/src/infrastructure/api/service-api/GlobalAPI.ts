@@ -89,6 +89,14 @@ export interface WorkspaceStartupStateSnapshot {
   legacyRemoteWorkspace?: RemoteWorkspaceSnapshot | null;
 }
 
+export interface OpenRemoteWorkspaceOptions {
+  /**
+   * The user confirmed moving an existing record owned by another saved SSH
+   * connection to this connection.
+   */
+  rebindConnection?: boolean;
+}
+
 export interface UpdateAppStatusRequest {
   status: AppStatus;
 }
@@ -212,7 +220,8 @@ export class GlobalAPI {
     remotePath: string,
     connectionId: string,
     connectionName: string,
-    sshHost?: string
+    sshHost?: string,
+    options: OpenRemoteWorkspaceOptions = {},
   ): Promise<WorkspaceInfo> {
     try {
       const h = sshHost?.trim();
@@ -222,6 +231,7 @@ export class GlobalAPI {
           connectionId,
           connectionName,
           ...(h ? { sshHost: h } : {}),
+          ...(options.rebindConnection ? { rebindConnection: true } : {}),
         },
       });
     } catch (error) {
@@ -230,6 +240,7 @@ export class GlobalAPI {
         connectionId,
         connectionName,
         sshHost,
+        rebindConnection: options.rebindConnection === true,
       });
     }
   }

@@ -25,6 +25,8 @@ import {
   type SurfaceScope,
 } from '@/infrastructure/peer-device/deviceSurface';
 import { routeSurfaceEvent } from '@/infrastructure/peer-device/deviceSurfaceRouting';
+import { isRemoteWorkspaceConnectionConflictError } from '@/infrastructure/api/errors/TauriCommandError';
+import type { OpenRemoteWorkspaceOptions } from '@/infrastructure/api/service-api/GlobalAPI';
 
 const log = createLogger('WorkspaceManager');
 
@@ -1068,7 +1070,7 @@ class WorkspaceManager {
     connectionName: string;
     remotePath: string;
     sshHost?: string;
-  }): Promise<WorkspaceInfo> {
+  }, options: OpenRemoteWorkspaceOptions = {}): Promise<WorkspaceInfo> {
     const surface = this.captureSurface();
     try {
       this.setLoading(true);
@@ -1083,6 +1085,7 @@ class WorkspaceManager {
         remoteWorkspace.connectionId,
         remoteWorkspace.connectionName,
         remoteWorkspace.sshHost,
+        options,
       );
 
       const [recentWorkspaces, openedWorkspaces] = await Promise.all([
@@ -1103,6 +1106,12 @@ class WorkspaceManager {
       return workspace;
     } catch (error) {
       if (!this.isSurfaceUnchanged(surface)) {
+        throw error;
+      }
+      if (isRemoteWorkspaceConnectionConflictError(error)) {
+        // The caller owns the decision; the record is unchanged on the host.
+        log.warn('Remote workspace is bound to another SSH connection', { remoteWorkspace });
+        this.setLoading(false);
         throw error;
       }
       log.error('Failed to open remote workspace', { remoteWorkspace, error });
