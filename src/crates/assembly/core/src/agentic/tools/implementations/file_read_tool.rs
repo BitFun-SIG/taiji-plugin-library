@@ -25,10 +25,12 @@ use std::time::Duration;
 use std::time::Instant;
 #[cfg(feature = "document-read")]
 use tool_runtime::fs::document::{
-    convert_document_to_markdown, DocumentConversionError, MAX_DOCUMENT_INPUT_BYTES,
-    MAX_DOCUMENT_MARKDOWN_BYTES,
+    convert_document_pages_to_markdown, DocumentConversionError, MAX_DOCUMENT_INPUT_BYTES,
+    MAX_DOCUMENT_MARKDOWN_BYTES, TEXT_CHUNK_CHARS,
 };
-use tool_runtime::fs::document::{is_supported_document_path, PdfTextCoverage};
+use tool_runtime::fs::document::{
+    is_supported_document_path, DocumentPageSelection, DocumentPagination, PdfTextCoverage,
+};
 use tool_runtime::fs::read_file::{
     build_read_file_presentation, read_file_from_reader, read_file_tail_from_reader, ReadFileResult,
 };
@@ -54,6 +56,7 @@ struct DocumentReadMetadata {
     source_format: &'static str,
     source_size_bytes: usize,
     pdf_coverage: Option<PdfTextCoverage>,
+    pagination: DocumentPagination,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -146,6 +149,30 @@ impl FileReadTool {
             .is_some_and(|extension| extension.eq_ignore_ascii_case("csv"))
     }
 
+    fn read_page_selection(input: &Value) -> Result<Option<DocumentPageSelection>, String> {
+        let Some(value) = input.get("pages") else {
+            return Ok(None);
+        };
+        #[cfg(not(feature = "document-read"))]
+        {
+            let _ = value;
+            Err("Document page selection is not available in this product build".to_string())
+        }
+        #[cfg(feature = "document-read")]
+        {
+            if Self::read_render_mode(input)? == ReadRenderMode::Source {
+                return Err(
+                    "pages selects extracted document units and cannot be used with render=source"
+                        .to_string(),
+                );
+            }
+            let value = value
+                .as_str()
+                .ok_or_else(|| "pages must be a string such as '1-3,7'".to_string())?;
+            DocumentPageSelection::parse(value).map(Some)
+        }
+    }
+
     fn optional_line_number(input: &Value, key: &str) -> Result<Option<usize>, String> {
         match input.get(key) {
             Some(value) => Self::line_number_from_value(value)
@@ -188,6 +215,7 @@ impl FileReadTool {
         start_line: usize,
         limit: usize,
         tail: bool,
+        pages: Option<DocumentPageSelection>,
         filesystem: &dyn crate::agentic::workspace::WorkspaceFileSystem,
         context: &ToolUseContext,
     ) -> OpenBitFunResult<(ReadFileResult, DocumentReadMetadata)> {
@@ -202,7 +230,7 @@ impl FileReadTool {
             })?
             .ok_or_else(|| {
                 OpenBitFunError::tool(format!(
-                    "Document {} is larger than the {} MiB Read limit. Use a smaller document or a specialized extraction workflow; offset/limit only change the returned text window.",
+                    "Document {} is larger than the {} MiB Read limit. Use a smaller document or a specialized extraction workflow; pages/offset/limit do not reduce source file transfer.",
                     logical_path,
                     MAX_DOCUMENT_INPUT_BYTES / (1024 * 1024)
                 ))
@@ -219,7 +247,7 @@ impl FileReadTool {
         );
         let conversion = tokio::time::timeout(
             DOCUMENT_CONVERSION_TIMEOUT,
-            convert_document_to_markdown(bytes, resolved_path.to_string()),
+            convert_document_pages_to_markdown(bytes, resolved_path.to_string(), pages),
         )
         .await
         .map_err(|_| {
@@ -280,6 +308,7 @@ impl FileReadTool {
                 source_format: converted.source_format,
                 source_size_bytes,
                 pdf_coverage: converted.pdf_coverage,
+                pagination: converted.pagination,
             },
         ))
     }
@@ -292,7 +321,7 @@ impl FileReadTool {
         let recovery = match error.code() {
             "encrypted" => " Use an unlocked copy of the document.",
             "unsupported" => " For a text file, use render=source; otherwise use a format-specific extraction tool.",
-            "resourceLimit" => " Use a smaller document or a specialized extraction workflow; offset/limit only change the returned text window.",
+            "resourceLimit" => " For an extracted-output limit, request fewer pages; this does not bypass source-size or parser limits. Otherwise use a smaller document or specialized extraction workflow.",
             _ => "",
         };
         OpenBitFunError::tool(format!(
@@ -316,8 +345,9 @@ impl Tool for FileReadTool {
         let document_guidance = format!(
             r#"
 Documents: Word, PowerPoint, Excel, OpenDocument, RTF, EPUB and PDF are extracted offline as Markdown. PDF page markers identify source pages; extraction status and missing-page warnings describe coverage. Use available text, and seek OCR or visual inspection only if missing pages matter to the task. Read itself does not perform OCR. Other embedded images/objects may be represented only by available text.
-For documents, line windows address extracted Markdown, not source pages or spreadsheet rows. Extracted text is not exact source for Edit. Input limit: {} MiB; extracted Markdown limit: {} MiB. Smaller line windows do not reduce conversion work.
+Use pages to select units after inspecting page_kind/page_count, especially when a large document is truncated. PDF units are original pages; PPTX slides and XLSX visible sheets follow source order. DOCX and other formats use {}-character text chunks, not printed pages. offset/limit/tail then address Markdown lines within that selection; keep the same pages when following next_offset. Extracted text is not exact source for Edit. Input limit: {} MiB; selected Markdown limit: {} MiB. Selection does not bypass source transfer limits; parsing may still process the full document.
 "#,
+            TEXT_CHUNK_CHARS,
             MAX_DOCUMENT_INPUT_BYTES / (1024 * 1024),
             MAX_DOCUMENT_MARKDOWN_BYTES / (1024 * 1024),
         );
@@ -370,6 +400,10 @@ Returns numbered lines (line number, tab, text). Choose the window needed for th
                 "type": "string",
                 "enum": ["auto", "source", "markdown"],
                 "description": "auto (default): extract known documents, preserve CSV source. source: read text without conversion. markdown: extract a document by content, including misnamed files, or convert CSV to a table."
+            });
+            schema["properties"]["pages"] = json!({
+                "type": "string",
+                "description": "Optional 1-based document units, e.g. '1-3,7', in source order. See returned page_kind and page_count. Omit for the full extraction. Requires document rendering; offset/limit/tail apply within the selected units."
             });
             schema
         };
@@ -434,6 +468,7 @@ Returns numbered lines (line number, tab, text). Choose the window needed for th
         if let Err(message) = Self::read_tail_mode(input)
             .and_then(|_| Self::read_window_start_line(input))
             .and_then(|_| Self::read_render_mode(input))
+            .and_then(|_| Self::read_page_selection(input))
         {
             return ValidationResult {
                 result: false,
@@ -591,6 +626,7 @@ Returns numbered lines (line number, tab, text). Choose the window needed for th
 
         let tail = Self::read_tail_mode(input).map_err(OpenBitFunError::tool)?;
         let render_mode = Self::read_render_mode(input).map_err(OpenBitFunError::tool)?;
+        let pages = Self::read_page_selection(input).map_err(OpenBitFunError::tool)?;
         let start_line = Self::read_window_start_line(input).map_err(OpenBitFunError::tool)?;
 
         let limit = input
@@ -602,6 +638,11 @@ Returns numbered lines (line number, tab, text). Choose the window needed for th
         context.enforce_path_operation(ToolPathOperation::Read, &resolved)?;
         #[cfg(feature = "tools-miniapp")]
         if is_virtual_context_path(context, &resolved) {
+            if pages.is_some() {
+                return Err(OpenBitFunError::tool(
+                    "pages cannot select a MiniApp text context; use offset/limit".to_string(),
+                ));
+            }
             let content = virtual_context_file(context, &resolved).ok_or_else(|| {
                 OpenBitFunError::tool(format!(
                     "MiniApp context file is unavailable: {}",
@@ -663,6 +704,9 @@ Returns numbered lines (line number, tab, text). Choose the window needed for th
             ReadRenderMode::Source => false,
             ReadRenderMode::Markdown => true,
         };
+        if pages.is_some() && !reads_document_representation {
+            return Err(OpenBitFunError::tool("pages requires a document. For a misnamed document or CSV use render=markdown; for ordinary text use offset/limit".to_string()));
+        }
         #[cfg(not(feature = "document-read"))]
         if reads_document_representation {
             return Err(OpenBitFunError::tool(format!(
@@ -694,6 +738,7 @@ Returns numbered lines (line number, tab, text). Choose the window needed for th
                     start_line,
                     limit,
                     tail,
+                    pages,
                     filesystem.as_ref(),
                     context,
                 )
@@ -788,6 +833,12 @@ Returns numbered lines (line number, tab, text). Choose the window needed for th
             data["representation"] = json!("extracted_markdown");
             data["source_format"] = json!(metadata.source_format);
             data["source_size_bytes"] = json!(metadata.source_size_bytes);
+            let pagination = metadata.pagination;
+            data["page_kind"] = json!(pagination.page_kind);
+            data["page_count"] = json!(pagination.page_count);
+            data["selected_pages"] = json!(pagination.selected_pages);
+            data["selected_page_count"] = json!(pagination.selected_page_count);
+            data["next_page"] = json!(pagination.next_page);
             let warnings = if let Some(coverage) = metadata.pdf_coverage {
                 data["conversion_engine"] = json!("pdf-inspector");
                 data["extraction_status"] = json!(coverage.status());
@@ -800,14 +851,14 @@ Returns numbered lines (line number, tab, text). Choose the window needed for th
                 ];
                 if !coverage.pages_needing_ocr.is_empty() {
                     warnings.push(format!(
-                        "{} of {} PDF pages have reliable text. Pages {} need OCR or visual inspection; their contents are missing from this extraction. Use the available text, and inspect missing pages if the task requires them. Repeating Read will not perform OCR.",
+                        "{} of {} PDF pages have reliable text in this selection. Pages {} need OCR or visual inspection; their contents are missing from this extraction. Use the available text, and inspect missing pages if the task requires them. Repeating Read will not perform OCR.",
                         coverage.extracted_pages.len(),
-                        coverage.page_count,
+                        pagination.selected_page_count,
                         coverage.ocr_page_ranges(MAX_PDF_OCR_PAGE_RANGES),
                     ));
                 }
                 result_for_assistant = format!(
-                    "PDF text extraction: {} ({} source pages). Page markers refer to the PDF; offset/limit refer to Markdown lines.\n{}\n{}",
+                    "PDF text extraction: {} for the selected pages ({} source pages total). Page markers refer to the PDF; offset/limit refer to Markdown lines.\n{}\n{}",
                     coverage.status(),
                     coverage.page_count,
                     warnings.join("\n"),
@@ -833,6 +884,28 @@ Returns numbered lines (line number, tab, text). Choose the window needed for th
                 warnings
             };
             data["extraction_warnings"] = json!(warnings);
+            let unit_hint = match pagination.page_kind {
+                "pdf_page" => "original PDF pages",
+                "slide" => "slides in presentation order",
+                "sheet" => {
+                    "visible sheets in workbook order; hidden sheets/rows/columns are not extracted"
+                }
+                _ => "text chunks, not printed pages",
+            };
+            let continuation = if let Some(next_offset) = presentation.next_offset {
+                let same_selection = if input.get("pages").is_some() {
+                    format!("keep pages=\"{}\"", pagination.selected_pages)
+                } else {
+                    "keep pages omitted".to_string()
+                };
+                format!("To continue this extraction, {same_selection} and use offset={next_offset}; or choose a narrower pages range starting at offset=1.")
+            } else {
+                "Choose another pages range if more context is needed.".to_string()
+            };
+            result_for_assistant = format!(
+                "Document pages: kind={}, count={}, selected=\"{}\" ({unit_hint}). Selection metadata does not mean every selected unit is in this line window. {continuation}\n{result_for_assistant}",
+                pagination.page_kind, pagination.page_count, pagination.selected_pages,
+            );
         }
 
         let result = ToolResult::Result {
@@ -1251,6 +1324,8 @@ mod tests {
             .expect("properties");
 
         assert_eq!(properties["render"]["enum"], json!(["auto", "source"]));
+        assert!(!properties.contains_key("pages"));
+        assert!(FileReadTool::read_page_selection(&json!({"pages":"1"})).is_err());
         assert!(!properties["render"]["description"]
             .as_str()
             .expect("render description")
@@ -1736,5 +1811,155 @@ mod tests {
         assert!(data["content"]
             .as_str()
             .is_some_and(|content| content.contains("Hello from remote RTF")));
+    }
+
+    #[cfg(feature = "document-read")]
+    #[tokio::test]
+    async fn pdf_page_selection_preserves_source_numbers_and_scopes_ocr_for_local_and_remote() {
+        let dir = tempfile::tempdir().unwrap();
+        let source = pdf_document(&[PDF_TEXT_PAGE, PDF_SCANNED_PAGE, PDF_TEXT_PAGE]);
+        fs::write(dir.path().join("document.pdf"), &source).unwrap();
+        let bounded_limit = Arc::new(AtomicUsize::new(0));
+        let contexts = [
+            local_context(dir.path().to_path_buf()),
+            remote_context(source, Arc::clone(&bounded_limit)),
+        ];
+        let tool = FileReadTool::new();
+        for context in contexts {
+            for (pages, status, extracted, missing) in [
+                ("3,1", "complete", json!([1, 3]), json!([])),
+                ("2", "needs_ocr", json!([]), json!([2])),
+                ("3", "complete", json!([3]), json!([])),
+            ] {
+                let results = tool
+                    .call_impl(
+                        &json!({"file_path":"document.pdf", "pages":pages}),
+                        &context,
+                    )
+                    .await
+                    .unwrap();
+                let ToolResult::Result {
+                    data,
+                    result_for_assistant,
+                    ..
+                } = &results[0]
+                else {
+                    panic!("result");
+                };
+                assert_eq!(data["page_kind"], "pdf_page");
+                assert_eq!(data["page_count"], 3);
+                assert_eq!(data["extraction_status"], status);
+                assert_eq!(data["extracted_pages"], extracted);
+                assert_eq!(data["pages_needing_ocr"], missing);
+                assert!(result_for_assistant
+                    .as_deref()
+                    .unwrap()
+                    .contains("for the selected pages"));
+                if pages == "3" {
+                    let content = data["content"].as_str().unwrap();
+                    assert!(content.contains("## PDF page 3"));
+                    assert!(!content.contains("## PDF page 1"));
+                    assert_eq!(data["selected_pages"], "3");
+                    assert_eq!(data["selected_page_count"], 1);
+                }
+            }
+            let error = tool
+                .call_impl(&json!({"file_path":"document.pdf", "pages":"4"}), &context)
+                .await
+                .unwrap_err();
+            assert!(
+                error.to_string().contains("has 3 selectable pages"),
+                "{error}"
+            );
+        }
+        assert_eq!(
+            bounded_limit.load(Ordering::Relaxed),
+            MAX_DOCUMENT_INPUT_BYTES
+        );
+    }
+
+    #[cfg(feature = "document-read")]
+    #[tokio::test]
+    async fn document_chunk_windows_continue_with_the_same_selection_and_recover_long_lines() {
+        let source = format!("{{\\rtf1\\ansi {}Final paragraph}}", "x".repeat(4000)).into_bytes();
+        let context = remote_context(source, Arc::new(AtomicUsize::new(0)));
+        let tool = FileReadTool::new();
+        let initial = tool
+            .call_impl(&json!({"file_path":"report.rtf"}), &context)
+            .await
+            .unwrap();
+        let ToolResult::Result { data, .. } = &initial[0] else {
+            panic!("result");
+        };
+        assert_eq!(data["page_kind"], "text_chunk");
+        assert_eq!(data["page_count"], 3);
+        assert!(!data["truncated_lines"].as_array().unwrap().is_empty());
+        let selected = tool
+            .call_impl(
+                &json!({"file_path":"report.rtf", "pages":"3", "limit":2}),
+                &context,
+            )
+            .await
+            .unwrap();
+        let ToolResult::Result {
+            data,
+            result_for_assistant,
+            ..
+        } = &selected[0]
+        else {
+            panic!("result");
+        };
+        assert_eq!(data["next_offset"], 3);
+        assert!(result_for_assistant
+            .as_deref()
+            .unwrap()
+            .contains("keep pages=\"3\""));
+        let continued = tool
+            .call_impl(
+                &json!({"file_path":"report.rtf", "pages":"3", "offset":data["next_offset"]}),
+                &context,
+            )
+            .await
+            .unwrap();
+        let ToolResult::Result { data, .. } = &continued[0] else {
+            panic!("result");
+        };
+        assert!(data["content"]
+            .as_str()
+            .unwrap()
+            .contains("Final paragraph"));
+        assert_eq!(data["truncated_lines"], json!([]));
+        let tail = tool
+            .call_impl(
+                &json!({"file_path":"report.rtf", "pages":"3", "tail":true, "limit":2}),
+                &context,
+            )
+            .await
+            .unwrap();
+        let ToolResult::Result { data, .. } = &tail[0] else {
+            panic!("result");
+        };
+        assert!(data["content"]
+            .as_str()
+            .unwrap()
+            .contains("Final paragraph"));
+    }
+
+    #[cfg(feature = "document-read")]
+    #[tokio::test]
+    async fn page_arguments_fail_explicitly_instead_of_falling_back_to_text() {
+        let context = remote_context(b"plain text".to_vec(), Arc::new(AtomicUsize::new(0)));
+        let tool = FileReadTool::new();
+        for input in [
+            json!({"file_path":"report.pdf", "pages":3}),
+            json!({"file_path":"report.pdf", "pages":"0"}),
+            json!({"file_path":"report.pdf", "pages":"3-1"}),
+            json!({"file_path":"report.pdf", "pages":"1", "render":"source"}),
+            json!({"file_path":"plain.txt", "pages":"1"}),
+        ] {
+            let error = tool.call_impl(&input, &context).await.unwrap_err();
+            assert!(error.to_string().contains("pages"), "{error}");
+        }
+        assert_eq!(tool.input_schema()["properties"]["pages"]["type"], "string");
     }
 }

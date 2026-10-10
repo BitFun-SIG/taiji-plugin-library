@@ -11334,6 +11334,7 @@ dependencies = [
  "pdf-inspector",
  "readability-js",
  "regex",
+ "roxmltree",
  "serde",
  "serde_json",
  "sha2",
@@ -11341,6 +11342,7 @@ dependencies = [
  "tokio-util",
  "vte",
  "windows 0.61.3",
+ "zip 4.6.1",
 ]
 
 [[package]]
