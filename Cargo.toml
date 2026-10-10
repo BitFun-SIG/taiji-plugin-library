@@ -100,7 +100,9 @@ jsonrepair-rs = { version = "0.2.6", default-features = false }
 serde_yaml = "0.9"
 
 # Document conversion
-anydoc = "=0.1.6"
+anydoc = "=0.2.4"
+pdf-inspector = { version = "1.17.0", default-features = false }
+roxmltree = { version = "0.21.1", default-features = false }
 
 # TypeScript binding generation (schema-first; gated by per-crate `ts` features)
 ts-rs = { version = "12", features = ["serde-json-impl", "no-serde-warnings"] }
