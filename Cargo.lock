@@ -6368,6 +6368,7 @@ dependencies = [
  "axum",
  "base64 0.22.1",
  "bitflags 2.11.1",
+ "block2 0.6.2",
  "brotli-decompressor",
  "bzip2 0.5.2",
  "cc",
@@ -10402,8 +10403,6 @@ dependencies = [
 [[package]]
 name = "tao"
 version = "0.36.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e9fa4618f999c4249db1681cba0a19b890718f274de7fa93c445d46bd3a8a999"
 dependencies = [
  "bitflags 2.11.1",
  "block2 0.6.2",
