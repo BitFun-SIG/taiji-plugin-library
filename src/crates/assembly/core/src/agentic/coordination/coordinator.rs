@@ -82,8 +82,8 @@ use crate::service::session::{
     ToolItemIdentityExt, TurnStatus,
 };
 use crate::service::workspace::{
-    get_global_workspace_service, WorkspaceActivityMode, WorkspaceInfo, WorkspaceKind,
-    WorkspaceService,
+    get_global_workspace_service, RemoteConnectionRebind, WorkspaceActivityMode, WorkspaceInfo,
+    WorkspaceKind, WorkspaceService,
 };
 use crate::service_agent_runtime::CoreServiceAgentRuntime;
 use crate::util::errors::{OpenBitFunError, OpenBitFunResult};
@@ -2364,6 +2364,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         path: &str,
         connection_id: &str,
         ssh_host: Option<&str>,
+        remote_connection_rebind: RemoteConnectionRebind,
     ) -> OpenBitFunResult<WorkspaceInfo> {
         let workspace = workspace_service
             .prepare_remote_workspace(path, connection_id, ssh_host)
@@ -2377,7 +2378,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 .and_then(|host| host.as_str()),
         )?;
         workspace_service
-            .open_known_remote_workspace(&workspace)
+            .open_known_remote_workspace_with_rebind(&workspace, remote_connection_rebind)
             .await
     }
 

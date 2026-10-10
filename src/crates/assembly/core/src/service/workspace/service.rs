@@ -3,9 +3,10 @@
 //! Provides comprehensive workspace management functionality.
 
 use super::manager::{
-    PrimaryAssistantKey, RelatedPath, ScanOptions, WorkspaceIdentity, WorkspaceInfo, WorkspaceKind,
-    WorkspaceManager, WorkspaceManagerConfig, WorkspaceManagerStatistics, WorkspaceOpenOptions,
-    WorkspaceStatus, WorkspaceSummary, WorkspaceType, WorkspaceWorktreeInfo,
+    remote_connection_ids_equivalent, PrimaryAssistantKey, RelatedPath, RemoteConnectionRebind,
+    ScanOptions, WorkspaceIdentity, WorkspaceInfo, WorkspaceKind, WorkspaceManager,
+    WorkspaceManagerConfig, WorkspaceManagerStatistics, WorkspaceOpenOptions, WorkspaceStatus,
+    WorkspaceSummary, WorkspaceType, WorkspaceWorktreeInfo,
 };
 use super::manager::{WorkspaceIdentityRuntimeExt, WorkspaceInfoRuntimeExt};
 use super::persistence::{
@@ -44,6 +45,12 @@ use tokio::sync::RwLock;
 
 const MAX_WORKSPACE_NAME_CHARS: usize = 80;
 
+fn remote_connection_owner_missing(owner: &str, saved_connection_ids: &[String]) -> bool {
+    !saved_connection_ids
+        .iter()
+        .any(|saved| remote_connection_ids_equivalent(saved, owner))
+}
+
 /// Workspace service.
 pub struct WorkspaceService {
     manager: Arc<RwLock<WorkspaceManager>>,
@@ -71,6 +78,8 @@ pub struct WorkspaceCreateOptions {
     pub remote_ssh_host: Option<String>,
     /// Deterministic id for [`WorkspaceKind::Remote`] (host + remote path hash).
     pub stable_workspace_id: Option<String>,
+    /// See [`crate::service::workspace::manager::RemoteConnectionRebind`].
+    pub remote_connection_rebind: RemoteConnectionRebind,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -93,6 +102,7 @@ impl Default for WorkspaceCreateOptions {
             remote_connection_id: None,
             remote_ssh_host: None,
             stable_workspace_id: None,
+            remote_connection_rebind: RemoteConnectionRebind::Reject,
         }
     }
 }
@@ -407,6 +417,7 @@ impl WorkspaceService {
                 "Remote workspace support is not compiled into this product profile",
             ));
         }
+        let options = self.resolve_remote_connection_rebind(&path, options).await;
         let worktree = if options.workspace_kind == WorkspaceKind::Remote {
             None
         } else {
@@ -530,9 +541,87 @@ impl WorkspaceService {
         }
     }
 
+    /// Upgrades the rebind policy when the record's previous owner is gone.
+    ///
+    /// A connection that is no longer saved can never reopen its record, so
+    /// moving the record to the requested connection loses no routing. A saved
+    /// owner keeps the record until the user explicitly confirms the move.
+    async fn resolve_remote_connection_rebind(
+        &self,
+        path: &Path,
+        mut options: WorkspaceCreateOptions,
+    ) -> WorkspaceCreateOptions {
+        if options.remote_connection_rebind != RemoteConnectionRebind::Reject {
+            return options;
+        }
+        let Some(owner) = self
+            .conflicting_remote_connection_owner(path, &options)
+            .await
+        else {
+            return options;
+        };
+        if let Some(saved) = Self::saved_ssh_connection_ids().await {
+            if remote_connection_owner_missing(&owner, &saved) {
+                options.remote_connection_rebind = RemoteConnectionRebind::PreviousOwnerMissing;
+            }
+        }
+        options
+    }
+
+    /// Connection that owns the record `options` would reuse, when it is not
+    /// the requested connection.
+    async fn conflicting_remote_connection_owner(
+        &self,
+        path: &Path,
+        options: &WorkspaceCreateOptions,
+    ) -> Option<String> {
+        if options.workspace_kind != WorkspaceKind::Remote {
+            return None;
+        }
+        let requested = options
+            .remote_connection_id
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())?;
+        let manager = self.manager.read().await;
+        let owner = manager
+            .existing_remote_workspace(path, &Self::to_manager_open_options(options))?
+            .remote_ssh_connection_id()?;
+        (!remote_connection_ids_equivalent(owner, requested)).then(|| owner.to_string())
+    }
+
+    /// Saved SSH connection ids, or `None` when the host cannot prove which
+    /// connections exist.
+    async fn saved_ssh_connection_ids() -> Option<Vec<String>> {
+        #[cfg(feature = "ssh-remote")]
+        {
+            let ssh = get_remote_workspace_manager()?.get_ssh_manager().await?;
+            Some(
+                ssh.get_saved_connections()
+                    .await
+                    .into_iter()
+                    .map(|profile| profile.id)
+                    .collect(),
+            )
+        }
+        #[cfg(not(feature = "ssh-remote"))]
+        {
+            None
+        }
+    }
+
     pub(crate) async fn open_known_remote_workspace(
         &self,
         known: &WorkspaceInfo,
+    ) -> OpenBitFunResult<WorkspaceInfo> {
+        self.open_known_remote_workspace_with_rebind(known, RemoteConnectionRebind::Reject)
+            .await
+    }
+
+    pub(crate) async fn open_known_remote_workspace_with_rebind(
+        &self,
+        known: &WorkspaceInfo,
+        remote_connection_rebind: RemoteConnectionRebind,
     ) -> OpenBitFunResult<WorkspaceInfo> {
         let connection_id = known.remote_ssh_connection_id().ok_or_else(|| {
             OpenBitFunError::service(format!(
@@ -560,6 +649,7 @@ impl WorkspaceService {
             remote_connection_id: Some(connection_id.to_string()),
             remote_ssh_host: Some(ssh_host.to_string()),
             stable_workspace_id: Some(known.id.clone()),
+            remote_connection_rebind,
             ..Default::default()
         };
 
@@ -1030,14 +1120,11 @@ impl WorkspaceService {
         if workspace_id.trim().is_empty() {
             return Err(OpenBitFunError::service("Workspace ID is required"));
         }
-        let manager = self.manager.read().await;
-        let workspace = manager.get_workspace(workspace_id).ok_or_else(|| {
+        self.get_workspace(workspace_id).await.ok_or_else(|| {
             OpenBitFunError::service(format!(
                 "Workspace ID is unavailable on this host: {workspace_id}"
             ))
-        })?;
-        manager.validate_remote_storage_owner(workspace)?;
-        Ok(workspace.clone())
+        })
     }
 
     /// Returns all currently opened workspaces.
@@ -1294,6 +1381,7 @@ impl WorkspaceService {
                     .filter(|s| !s.is_empty())
                     .map(|s| s.to_string()),
                 stable_workspace_id: None,
+                remote_connection_rebind: RemoteConnectionRebind::Reject,
             },
         )
         .await?;
@@ -1958,6 +2046,7 @@ impl WorkspaceService {
             remote_connection_id: options.remote_connection_id.clone(),
             remote_ssh_host: options.remote_ssh_host.clone(),
             stable_workspace_id: options.stable_workspace_id.clone(),
+            remote_connection_rebind: options.remote_connection_rebind,
         }
     }
 
@@ -2883,7 +2972,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn imported_remote_storage_conflicts_preserve_both_records_and_reject_activation() {
+    async fn imported_remote_profiles_sharing_a_mirror_stay_activatable_and_round_trip() {
         let env = TestEnvironment::new();
         let service = build_test_workspace_service(env.path_manager.clone()).await;
         let first = WorkspaceInfo::new_without_worktree(
@@ -2911,25 +3000,133 @@ mod tests {
         });
         let imported: WorkspaceExport = serde_json::from_value(old_payload).unwrap();
         service.import_workspaces(imported, true).await.unwrap();
-        for id in [&first.id, &second.id] {
-            let error = service.require_workspace(id).await.unwrap_err();
-            assert!(error
-                .to_string()
-                .contains("remote_workspace_storage_conflict"));
-            assert!(service.get_workspace(id).await.is_some());
-            assert!(service.open_workspace_by_id(id).await.is_err());
+        // Session identity verification separates the two profiles; workspace
+        // activation must keep both records usable.
+        for (id, connection_id) in [
+            (&first.id, "first-endpoint"),
+            (&second.id, "second-endpoint"),
+        ] {
+            let opened = service.open_workspace_by_id(id).await.unwrap();
+            assert_eq!(opened.remote_ssh_connection_id(), Some(connection_id));
+            assert_eq!(
+                service.require_workspace(id).await.unwrap().id.as_str(),
+                id.as_str()
+            );
         }
-        // The legacy open path must reject before refreshing either record or
-        // registering a competing remote runtime owner.
-        assert!(service.open_known_remote_workspace(&first).await.is_err());
         let exported = service.export_workspaces().await.unwrap();
         let round_trip: WorkspaceExport =
             serde_json::from_slice(&serde_json::to_vec(&exported).unwrap()).unwrap();
-        assert_eq!(round_trip.workspaces.len(), 2);
-        assert!(round_trip
-            .workspaces
-            .iter()
-            .any(|workspace| workspace.id == second.id));
+        for (id, connection_id) in [
+            (&first.id, "first-endpoint"),
+            (&second.id, "second-endpoint"),
+        ] {
+            let workspace = round_trip
+                .workspaces
+                .iter()
+                .find(|workspace| &workspace.id == id)
+                .unwrap();
+            assert_eq!(workspace.remote_ssh_connection_id(), Some(connection_id));
+        }
+    }
+
+    #[tokio::test]
+    async fn reopening_remote_record_detects_owner_conflicts_and_honors_confirmation() {
+        let env = TestEnvironment::new();
+        let service = build_test_workspace_service(env.path_manager.clone()).await;
+        let options = WorkspaceCreateOptions {
+            workspace_kind: WorkspaceKind::Remote,
+            remote_connection_id: Some("ssh-root@remote.example".into()),
+            remote_ssh_host: Some("remote.example".into()),
+            ..Default::default()
+        };
+        let original = service
+            .open_workspace_with_options("/srv/shared".into(), options.clone())
+            .await
+            .unwrap();
+        let reopen = |connection_id: &str| WorkspaceCreateOptions {
+            remote_connection_id: Some(connection_id.into()),
+            ..options.clone()
+        };
+        let path = Path::new("/srv/shared");
+        assert_eq!(
+            service
+                .conflicting_remote_connection_owner(path, &reopen("ssh-deploy@remote.example"))
+                .await
+                .as_deref(),
+            Some("ssh-root@remote.example")
+        );
+        for equivalent in ["ssh-root@remote.example", "ssh-root@remote.example:22"] {
+            assert_eq!(
+                service
+                    .conflicting_remote_connection_owner(path, &reopen(equivalent))
+                    .await,
+                None
+            );
+        }
+        let other_root = WorkspaceCreateOptions {
+            remote_connection_id: Some("ssh-deploy@remote.example".into()),
+            ..options.clone()
+        };
+        assert_eq!(
+            service
+                .conflicting_remote_connection_owner(Path::new("/srv/other"), &other_root)
+                .await,
+            None
+        );
+        assert_eq!(
+            service
+                .require_workspace(&original.id)
+                .await
+                .unwrap()
+                .remote_ssh_connection_id(),
+            Some("ssh-root@remote.example")
+        );
+        let rebound = service
+            .open_workspace_with_options(
+                "/srv/shared".into(),
+                WorkspaceCreateOptions {
+                    remote_connection_id: Some("ssh-deploy@remote.example".into()),
+                    remote_connection_rebind: RemoteConnectionRebind::UserConfirmed,
+                    ..options
+                },
+            )
+            .await
+            .unwrap();
+        assert_eq!(rebound.id, original.id);
+        assert_eq!(
+            rebound.remote_ssh_connection_id(),
+            Some("ssh-deploy@remote.example")
+        );
+    }
+
+    #[test]
+    fn remote_connection_owner_is_missing_only_when_no_equivalent_profile_is_saved() {
+        let saved = vec![
+            "ssh-root@remote.example".to_string(),
+            "c3f1c0de-profile".to_string(),
+        ];
+        assert!(!remote_connection_owner_missing(
+            "ssh-root@remote.example",
+            &saved
+        ));
+        assert!(!remote_connection_owner_missing(
+            "ssh-root@remote.example:22",
+            &saved
+        ));
+        assert!(!remote_connection_owner_missing("c3f1c0de-profile", &saved));
+        assert!(remote_connection_owner_missing(
+            "ssh-deploy@remote.example",
+            &saved
+        ));
+        assert!(remote_connection_owner_missing("anything", &[]));
+
+        // Current ids for bare IPv6 hosts end in `:digits` without a port.
+        let ipv6 = vec!["ssh-root@fe80::1".to_string()];
+        assert!(!remote_connection_owner_missing(
+            "ssh-root@fe80::1:22",
+            &ipv6
+        ));
+        assert!(remote_connection_owner_missing("ssh-root@fe80::2", &ipv6));
     }
 
     #[tokio::test]
