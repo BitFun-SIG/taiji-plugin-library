@@ -38,6 +38,53 @@ pub const SUPPORTED_DOCUMENT_EXTENSIONS: &[&str] = &[
 pub struct ConvertedDocument {
     pub markdown: Arc<str>,
     pub source_format: &'static str,
+    pub pdf_coverage: Option<PdfTextCoverage>,
+}
+
+/// Source-page coverage, independent of the line window returned from the extracted Markdown.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PdfTextCoverage {
+    pub page_count: usize,
+    pub extracted_pages: Vec<u32>,
+    pub pages_needing_ocr: Vec<u32>,
+}
+
+impl PdfTextCoverage {
+    pub fn status(&self) -> &'static str {
+        if self.extracted_pages.is_empty() {
+            "needs_ocr"
+        } else if self.pages_needing_ocr.is_empty() {
+            "complete"
+        } else {
+            "partial"
+        }
+    }
+
+    /// Bound the model-facing summary while retaining all page IDs in the coverage metadata.
+    pub fn ocr_page_ranges(&self, max_ranges: usize) -> String {
+        let mut ranges = Vec::new();
+        let mut pages = self.pages_needing_ocr.iter().copied().peekable();
+        while let Some(start) = pages.peek().copied() {
+            if ranges.len() == max_ranges {
+                ranges.push(format!("... ({} more pages)", pages.len()));
+                break;
+            }
+            pages.next();
+            let mut end = start;
+            while pages
+                .peek()
+                .is_some_and(|page| Some(*page) == end.checked_add(1))
+            {
+                end = pages.next().expect("consecutive page");
+            }
+            ranges.push(if end == start {
+                start.to_string()
+            } else {
+                format!("{start}-{end}")
+            });
+        }
+        ranges.join(", ")
+    }
 }
 
 #[cfg(feature = "document-read")]
@@ -212,8 +259,14 @@ fn convert_document_to_markdown_sync(
     }
 
     let source_format = format_name(format);
-    let markdown = anydoc::to_markdown_bytes(bytes, format)
-        .map_err(|error| DocumentConversionError::new(error.code(), error.to_string()))?;
+    let (markdown, pdf_coverage) = if format == Format::Pdf {
+        let (markdown, coverage) = extract_pdf_text(bytes)?;
+        (markdown, Some(coverage))
+    } else {
+        let markdown = anydoc::to_markdown_bytes(bytes, format)
+            .map_err(|error| DocumentConversionError::new(error.code(), error.to_string()))?;
+        (markdown, None)
+    };
     if markdown.len() > MAX_DOCUMENT_MARKDOWN_BYTES {
         return Err(DocumentConversionError::new(
             "resourceLimit",
@@ -227,12 +280,60 @@ fn convert_document_to_markdown_sync(
     let document = ConvertedDocument {
         markdown: Arc::from(markdown),
         source_format,
+        pdf_coverage,
     };
     document_cache()
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner())
         .insert(cache_key, document.clone());
     Ok(document)
+}
+
+/// anydoc's PDF convenience API rejects the whole document when any page needs OCR.
+/// Use the same parser's page API to retain reliable text and explicitly mark gaps.
+#[cfg(feature = "document-read")]
+fn extract_pdf_text(bytes: &[u8]) -> Result<(String, PdfTextCoverage), DocumentConversionError> {
+    let extraction = pdf_inspector::extract_pages_markdown_mem(bytes, None).map_err(|error| {
+        let code = match &error {
+            pdf_inspector::PdfError::Encrypted => "encrypted",
+            pdf_inspector::PdfError::Io(_) => "io",
+            _ => "malformed",
+        };
+        DocumentConversionError::new(code, error.to_string())
+    })?;
+    if extraction.pages.is_empty() {
+        return Err(DocumentConversionError::new(
+            "malformed",
+            "PDF contains no pages",
+        ));
+    }
+    let mut coverage = PdfTextCoverage {
+        page_count: extraction.pages.len(),
+        extracted_pages: Vec::new(),
+        pages_needing_ocr: Vec::new(),
+    };
+    let mut markdown = String::new();
+    for page in extraction.pages {
+        let number = page.page + 1;
+        markdown.push_str(&format!("## PDF page {number}\n\n"));
+        if page.needs_ocr || page.markdown.trim().is_empty() {
+            coverage.pages_needing_ocr.push(number);
+            markdown.push_str(
+                "[No reliable text extracted. This page needs OCR or visual inspection.]\n\n",
+            );
+        } else {
+            coverage.extracted_pages.push(number);
+            markdown.push_str(page.markdown.trim_end());
+            markdown.push_str("\n\n");
+        }
+        if markdown.len() > MAX_DOCUMENT_MARKDOWN_BYTES {
+            return Err(DocumentConversionError::new(
+                "resourceLimit",
+                "extracted PDF Markdown exceeds the Read output budget",
+            ));
+        }
+    }
+    Ok((markdown, coverage))
 }
 
 #[cfg(feature = "document-read")]
@@ -262,6 +363,27 @@ fn format_name(format: Format) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn pdf_gap_summary_is_bounded_without_losing_page_metadata() {
+        let coverage = PdfTextCoverage {
+            page_count: 5000,
+            extracted_pages: (1..5000).step_by(2).collect(),
+            pages_needing_ocr: (2..=5000).step_by(2).collect(),
+        };
+        let summary = coverage.ocr_page_ranges(8);
+        assert_eq!(summary, "2, 4, 6, 8, 10, 12, 14, 16, ... (2492 more pages)");
+        assert_eq!(coverage.pages_needing_ocr.len(), 2500);
+        assert_eq!(coverage.status(), "partial");
+
+        let coverage = PdfTextCoverage {
+            page_count: 5,
+            extracted_pages: vec![3],
+            pages_needing_ocr: vec![1, 2, 4, 5],
+        };
+        assert_eq!(coverage.ocr_page_ranges(1), "1-2, ... (2 more pages)");
+        assert_eq!(coverage.ocr_page_ranges(2), "1-2, 4-5");
+    }
 
     #[test]
     fn recognizes_all_supported_extension_families() {
@@ -316,6 +438,27 @@ mod tests {
         assert_eq!(converted.source_format, "csv");
         assert!(converted.markdown.contains("| name | value |"));
         assert!(converted.markdown.contains("| alpha | 1 |"));
+    }
+
+    #[cfg(feature = "document-read")]
+    #[test]
+    fn rtf_math_is_preserved_as_latex_without_escaping_plain_prices() {
+        let converted = convert_document_to_markdown_sync(
+            br"{\rtf1\ansi Formula: {\mmath{\*\moMath{\mf{\mnum{\mr x}}{\mden{\mr y}}}}}\par Price: $20.00\par}",
+            "formula.rtf",
+        )
+        .expect("RTF formula should convert");
+
+        assert!(
+            converted.markdown.contains(r"$\frac{x}{y}$"),
+            "{}",
+            converted.markdown
+        );
+        assert!(
+            converted.markdown.contains("Price: $20.00"),
+            "{}",
+            converted.markdown
+        );
     }
 
     #[cfg(feature = "document-read")]

@@ -32,6 +32,12 @@ agent-facing tool surface.
 - Glob and ignore matching compile POSIX patterns to byte regexes without host
   path normalization. The shared `regex` dependency belongs to the baseline
   search utilities; HTML extractors remain optional under `web-readable`.
+- `document-read` owns offline byte-to-Markdown extraction. Non-PDF formats use
+  anydoc; PDFs use its existing pdf-inspector backend's page API so readable
+  pages survive alongside explicit OCR gaps. Keep source-page coverage separate
+  from Markdown line-window truncation. This dependency remains optional, with
+  OCR/network features disabled; workspace byte IO and model-facing guidance
+  stay with their existing providers and Core tool owner.
 - Background exec-output and ExecCommand presentation helpers may own retained
   output buffers, cursors, lifecycle metadata, assistant response text, and
   provider-neutral completion shapes; concrete local/remote process managers
@@ -59,7 +65,7 @@ cargo test -p tool-runtime --no-default-features --test tool_io_contracts
 cargo test -p openbitfun-core --no-default-features --features agent-runtime,git --lib grep_tool::tests::workspace_io
 cargo test -p openbitfun-core --no-default-features --features agent-runtime,git --lib glob_tool::tests
 cargo test -p openbitfun-core --no-default-features --features agent-runtime,git --lib ls_tool::tests
-cargo test -p tool-runtime --features document-read fs::document
+cargo test -p tool-runtime --features document-read --lib fs::document
 cargo test -p tool-runtime --features web-readable web
 node scripts/check-core-boundaries.mjs
 ```
