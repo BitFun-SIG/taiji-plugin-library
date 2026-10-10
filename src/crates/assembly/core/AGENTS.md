@@ -221,16 +221,21 @@ are not the default Core precheck. For documentation-only changes, run
 For assistant discovery, opened-state persistence, and reopening by workspace ID:
 `cargo test --locked -p openbitfun-core --no-default-features --features agent-runtime,git --lib service::workspace::service::tests::assistant_`.
 
-For local/SSH workspace identity collisions, committed session storage, legacy
-path compatibility, and queue admission, use the matching owner filter:
+For local/SSH workspace identity collisions, SSH connection rebinding, committed
+session storage, legacy path compatibility, and queue admission, use the matching
+owner filter:
 
 ```bash
 cargo test --locked -p openbitfun-core --no-default-features --features agent-runtime,git,remote-workspace --lib service::workspace::
 cargo test --locked -p openbitfun-core --no-default-features --features agent-runtime,git,remote-workspace --lib agentic::session::
-cargo test --locked -p openbitfun-core --no-default-features --features agent-runtime,git,remote-workspace --lib agentic::coordination::scheduler::tests
+cargo test --locked -p openbitfun-core --no-default-features --features agent-runtime,git,remote-workspace --lib agentic::coordination::
 ```
 
-These catalog and storage fixtures do not require or validate a live SSH connection.
+The coordination filter includes the scheduler admission tests. These catalog and
+storage fixtures do not require or validate a live SSH connection. CI also runs
+them under `product-full`. `PathManager::with_user_root_for_tests` derives product
+home from the user root's parent, so a fixture that relocates managed paths must
+place its user root below the directory it means to exercise.
 
 For disk-backed history paging and legacy sessions without a catalog:
 `cargo test --locked -p openbitfun-core --no-default-features --features remote-connect,git --lib history_page_`.

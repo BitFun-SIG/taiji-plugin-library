@@ -114,6 +114,14 @@ listener alone recovers an interaction emitted before attachment.
    scope before each subsequent host operation. Service error wrappers preserve
    `SurfaceChangedError`, and pending-operation dedup includes the activation
    epoch so A → B → A never reuses abandoned work from A's earlier activation.
+   ESLint rejects `await` inside `api.invoke(...)` arguments. Controller-local
+   commands (`PEER_CONTROLLER_LOCAL_COMMANDS`) skip the activation check in
+   `invokePrepared`, as they do in `ApiClient`.
+
+   Settled caches and in-flight maps key by the rendered surface as well as the
+   workspace ID: two devices with the same local path produce the same
+   workspace ID. A user answer collected on one device (for example a Git trust
+   prompt) is re-checked against the current activation before it is applied.
 
 6. **Config / mode HostInvokes are high priority** during peer hydrate
    (`get_config`, `get_configs`, `get_available_modes`,
