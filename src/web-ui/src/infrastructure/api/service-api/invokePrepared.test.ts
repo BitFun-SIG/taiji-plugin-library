@@ -38,6 +38,16 @@ describe('prepared command device ownership', () => {
     expect(invoke).not.toHaveBeenCalled();
   });
 
+  it('keeps controller-local commands authoritative across a device switch', async () => {
+    let prepare!: (args: Record<string, unknown>) => void;
+    invoke.mockResolvedValue({ ok: true });
+    const pending = invokePrepared('account_github_info', () => new Promise(resolve => { prepare = resolve; }));
+    activateSurface('peer-b');
+    prepare({ request: {} });
+    await expect(pending).resolves.toEqual({ ok: true });
+    expect(invoke).toHaveBeenCalledWith('account_github_info', { request: {} });
+  });
+
   it('passes prepared arguments and transport options unchanged on the current device', async () => {
     const args = { request: { workspaceId: 'opaque-id' } };
     const config = { timeout: 2000 };

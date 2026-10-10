@@ -5,7 +5,7 @@ import { workspaceScopedRequest } from './legacyWorkspaceCompatibility';
 import { api } from './ApiClient';
 import { workspaceIdRequest, workspaceSearchRequest, workspaceWatchRequest } from './legacyWorkspaceCompatibility';
 import { globalEventBus } from '@/infrastructure/event-bus';
-import { getActiveSurfaceId, getActiveSurfaceScope, isSurfaceChangedError, SurfaceChangedError } from '@/infrastructure/peer-device/deviceSurface';
+import { getActiveSurfaceId, getActiveSurfaceScope, SurfaceChangedError } from '@/infrastructure/peer-device/deviceSurface';
 import type { FileResourceRenamedEvent } from '@/shared/types/contentResource';
 import { createTauriCommandError } from '../errors/TauriCommandError';
 import type {
@@ -224,20 +224,15 @@ export class WorkspaceAPI {
 
    
   async readWorkspaceFile(workspaceId: string, filePath: string, encoding?: string): Promise<string> {
-    const surface = getActiveSurfaceScope();
-    const reference = await workspaceIdRequest(workspaceId, 'workspacePath');
-    surface.assertCurrent('read workspace file');
-    const content = await api.invoke<string>('read_file_content', { request: { ...reference, filePath, encoding } });
-    surface.assertCurrent('read workspace file');
-    return content;
+    return invokePrepared<string>('read_file_content', async () => ({
+      request: { ...await workspaceIdRequest(workspaceId, 'workspacePath'), filePath, encoding },
+    }));
   }
 
   async writeWorkspaceFile(workspaceId: string, filePath: string, content: string): Promise<void> {
-    const surface = getActiveSurfaceScope();
-    const reference = await workspaceIdRequest(workspaceId, 'workspacePath');
-    surface.assertCurrent('write workspace file');
-    await api.invoke('write_file_content', { request: { ...reference, filePath, content } });
-    surface.assertCurrent('write workspace file');
+    await invokePrepared('write_file_content', async () => ({
+      request: { ...await workspaceIdRequest(workspaceId, 'workspacePath'), filePath, content },
+    }));
   }
 
   /**
@@ -247,67 +242,52 @@ export class WorkspaceAPI {
    */
   private async invokeWorkspaceFileCommand<T>(
     command: string,
-    action: string,
     workspaceId: string,
     request: Record<string, unknown>,
   ): Promise<T> {
-    const surface = getActiveSurfaceScope();
-    const reference = await workspaceIdRequest(workspaceId, 'workspacePath');
-    surface.assertCurrent(action);
     try {
-      const result = await api.invoke<T>(command, { request: { ...reference, ...request } });
-      surface.assertCurrent(action);
-      return result;
+      return await invokePrepared<T>(command, async () => ({
+        request: { ...await workspaceIdRequest(workspaceId, 'workspacePath'), ...request },
+      }));
     } catch (error) {
-      if (isSurfaceChangedError(error)) throw error;
       throw createTauriCommandError(command, error, { workspaceId, ...request });
     }
   }
 
   async createWorkspaceFile(workspaceId: string, path: string): Promise<void> {
-    await this.invokeWorkspaceFileCommand<void>('create_file', 'create workspace file', workspaceId, { path });
+    await this.invokeWorkspaceFileCommand<void>('create_file', workspaceId, { path });
   }
 
   async deleteWorkspaceFile(workspaceId: string, path: string): Promise<void> {
-    await this.invokeWorkspaceFileCommand<void>('delete_file', 'delete workspace file', workspaceId, { path });
+    await this.invokeWorkspaceFileCommand<void>('delete_file', workspaceId, { path });
   }
 
   async createWorkspaceDirectory(workspaceId: string, path: string): Promise<void> {
-    await this.invokeWorkspaceFileCommand<void>(
-      'create_directory', 'create workspace directory', workspaceId, { path },
-    );
+    await this.invokeWorkspaceFileCommand<void>('create_directory', workspaceId, { path });
   }
 
   async deleteWorkspaceDirectory(workspaceId: string, path: string, recursive: boolean = true): Promise<void> {
-    await this.invokeWorkspaceFileCommand<void>(
-      'delete_directory', 'delete workspace directory', workspaceId, { path, recursive },
-    );
+    await this.invokeWorkspaceFileCommand<void>('delete_directory', workspaceId, { path, recursive });
   }
 
   async renameWorkspaceFile(workspaceId: string, oldPath: string, newPath: string): Promise<void> {
     const surfaceId = getActiveSurfaceId();
-    await this.invokeWorkspaceFileCommand<void>(
-      'rename_file', 'rename workspace file', workspaceId, { oldPath, newPath },
-    );
+    await this.invokeWorkspaceFileCommand<void>('rename_file', workspaceId, { oldPath, newPath });
     globalEventBus.emit<FileResourceRenamedEvent>('workspace:file-renamed', { surfaceId, workspaceId, oldPath, newPath });
   }
 
   async compressWorkspacePath(workspaceId: string, path: string): Promise<string> {
-    return this.invokeWorkspaceFileCommand<string>('compress_path', 'compress workspace path', workspaceId, { path });
+    return this.invokeWorkspaceFileCommand<string>('compress_path', workspaceId, { path });
   }
 
   async decompressWorkspacePath(workspaceId: string, path: string): Promise<string> {
-    return this.invokeWorkspaceFileCommand<string>(
-      'decompress_path', 'decompress workspace path', workspaceId, { path },
-    );
+    return this.invokeWorkspaceFileCommand<string>('decompress_path', workspaceId, { path });
   }
 
   async getWorkspaceFileMetadata(workspaceId: string, path: string): Promise<FileMetadata> {
-    const surface = getActiveSurfaceScope();
-    const reference = await workspaceIdRequest(workspaceId, 'workspacePath');
-    surface.assertCurrent('read workspace file metadata');
-    const raw = await api.invoke<Record<string, unknown>>('get_file_metadata', { request: { ...reference, path } });
-    surface.assertCurrent('read workspace file metadata');
+    const raw = await invokePrepared<Record<string, unknown>>('get_file_metadata', async () => ({
+      request: { ...await workspaceIdRequest(workspaceId, 'workspacePath'), path },
+    }));
     return this.fileMetadataFromRaw(raw, path);
   }
 
@@ -419,12 +399,9 @@ export class WorkspaceAPI {
    
   async getFileTree(workspaceId: string, path: string, maxDepth?: number): Promise<ExplorerNodeDto[]> {
     try {
-      const surface = getActiveSurfaceScope();
-      const scope = await workspaceIdRequest(workspaceId, 'workspacePath');
-      surface.assertCurrent('access workspace files');
-      return await api.invoke('get_file_tree', {
-        request: { ...scope, path, maxDepth }
-      });
+      return await invokePrepared<ExplorerNodeDto[]>('get_file_tree', async () => ({
+        request: { ...await workspaceIdRequest(workspaceId, 'workspacePath'), path, maxDepth },
+      }));
     } catch (error) {
       throw createTauriCommandError('get_file_tree', error, { path, maxDepth });
     }
@@ -456,12 +433,9 @@ export class WorkspaceAPI {
     limit: number = 100
   ): Promise<ExplorerChildrenPageDto> {
     try {
-      const surface = getActiveSurfaceScope();
-      const scope = await workspaceIdRequest(workspaceId, 'workspacePath');
-      surface.assertCurrent('access workspace files');
-      return await api.invoke('get_directory_children_paginated', {
-        request: { ...scope, path, offset, limit }
-      });
+      return await invokePrepared<ExplorerChildrenPageDto>('get_directory_children_paginated', async () => ({
+        request: { ...await workspaceIdRequest(workspaceId, 'workspacePath'), path, offset, limit },
+      }));
     } catch (error) {
       throw createTauriCommandError('get_directory_children_paginated', error, { path, offset, limit });
     }
@@ -470,12 +444,9 @@ export class WorkspaceAPI {
   async explorerGetChildren(workspaceId: string, path: string): Promise<ExplorerNodeDto[]> {
     if (!workspaceId) throw new Error('A workspace ID is required to browse workspace files');
     try {
-      const surface = getActiveSurfaceScope();
-      const scope = await workspaceIdRequest(workspaceId, 'workspacePath');
-      surface.assertCurrent('access workspace files');
-      return await api.invoke('explorer_get_children', {
-        request: { ...scope, path }
-      });
+      return await invokePrepared<ExplorerNodeDto[]>('explorer_get_children', async () => ({
+        request: { ...await workspaceIdRequest(workspaceId, 'workspacePath'), path },
+      }));
     } catch (error) {
       throw createTauriCommandError('explorer_get_children', error, { workspaceId, path });
     }

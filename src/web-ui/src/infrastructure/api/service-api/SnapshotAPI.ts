@@ -30,12 +30,8 @@ const requireSessionSnapshotScope = (
 
 const snapshotScopeKey = (scope: SnapshotSessionScope): string => scope.workspaceId;
 
-async function snapshotWorkspaceRequest(workspaceId: string) {
-  const surface = getActiveSurfaceScope();
-  const request = await workspaceIdRequest(workspaceId, 'workspacePath');
-  surface.assertCurrent('resolve snapshot workspace');
-  return request;
-}
+/** Only call inside an invokePrepared preparation, which owns the device scope. */
+const snapshotWorkspaceRequest = (workspaceId: string) => workspaceIdRequest(workspaceId, 'workspacePath');
 
 
 
