@@ -1,3 +1,4 @@
+import { invokePrepared } from './invokePrepared';
 import { getActiveSurfaceScope, isLocalSurface } from '@/infrastructure/peer-device/deviceSurface';
  
 
@@ -194,7 +195,7 @@ export class GlobalAPI {
 
    
   async openWorkspaceById(workspaceId: string): Promise<WorkspaceInfo> {
-    return api.invoke('open_workspace', { request: await workspaceIdRequest(workspaceId, 'path') });
+    return invokePrepared('open_workspace', async () => ({ request: await workspaceIdRequest(workspaceId, 'path') }));
   }
 
   async createLocalWorkspace(path: string): Promise<WorkspaceInfo> {
@@ -394,9 +395,9 @@ export class GlobalAPI {
    
   async scanWorkspaceInfo(workspaceId: string): Promise<WorkspaceInfo | null> {
     try {
-      return await api.invoke('scan_workspace_info', { 
+      return await invokePrepared('scan_workspace_info', async () => ({
         request: await workspaceIdRequest(workspaceId, 'workspacePath')
-      });
+      }));
     } catch (error) {
       throw createTauriCommandError('scan_workspace_info', error, { workspaceId });
     }

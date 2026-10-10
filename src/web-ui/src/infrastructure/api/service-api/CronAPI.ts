@@ -128,7 +128,9 @@ export class CronAPI {
     try {
       // Tauri listener registration is async. Wait for listeners already issued
       // by FlowChat before allowing cron to emit startup events.
+      const scope = getActiveSurfaceScope();
       await api.waitForListenerRegistrations();
+      scope.assertCurrent('notify cron host ready');
       await api.invoke<void>('notify_cron_host_ready');
     } catch (error) {
       throw createTauriCommandError('notify_cron_host_ready', error);

@@ -1,3 +1,4 @@
+import { invokePrepared } from './invokePrepared';
 import { getActiveSurfaceScope } from '@/infrastructure/peer-device/deviceSurface';
 import { workspaceHistoryRequest, workspaceIdRequest } from './legacyWorkspaceCompatibility';
 import { translateAgentIdentityFields } from '../../../../../shared/agent-harness/wire';
@@ -1050,9 +1051,9 @@ export class AgentAPI {
     workspaceId: string
   ): Promise<void> {
     try {
-      await api.invoke<void>('delete_session', { 
+      await invokePrepared<void>('delete_session', async () => ({
         request: { sessionId, ...await workspaceIdRequest(workspaceId, 'workspacePath') }
-      });
+      }));
     } catch (error) {
       throw createTauriCommandError('delete_session', error, { sessionId, workspaceId });
     }
@@ -1173,9 +1174,9 @@ export class AgentAPI {
   ): Promise<RollbackSessionToTurnOutcome> {
     try {
       const { workspaceId, ...mutation } = request;
-      const outcome = await api.invoke<RollbackSessionToTurnWireOutcome>('rollback_session_to_turn', {
+      const outcome = await invokePrepared<RollbackSessionToTurnWireOutcome>('rollback_session_to_turn', async () => ({
         request: { ...mutation, ...await workspaceHistoryRequest(workspaceId) },
-      });
+      }));
       if (outcome.status === 'completed') {
         return {
           ...outcome,
@@ -1713,8 +1714,9 @@ export class AgentAPI {
   async getAvailableModes(request: { workspaceId?: string } = {}): Promise<ModeInfo[]> {
     try {
       if (request.workspaceId !== undefined && !request.workspaceId.trim()) throw new Error('Workspace identity is unresolved');
-      const wire = request.workspaceId !== undefined ? await workspaceIdRequest(request.workspaceId, 'workspacePath') : {};
-      return translateAgentIdentityFields(await api.invoke<ModeInfo[]>('get_available_modes', { request: wire }), 'canonical');
+      return translateAgentIdentityFields(await invokePrepared<ModeInfo[]>('get_available_modes', async () => ({
+        request: request.workspaceId !== undefined ? await workspaceIdRequest(request.workspaceId, 'workspacePath') : {},
+      })), 'canonical');
     } catch (error) {
       throw createTauriCommandError('get_available_modes', error);
     }

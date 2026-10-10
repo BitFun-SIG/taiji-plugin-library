@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  createTauriCommandError,
   gitRepositoryUntrustedPath,
   isGitRepositoryNotFoundError,
   isGitRepositoryUntrustedError,
@@ -8,6 +9,12 @@ import {
   isSessionInUseError,
   TauriCommandError,
 } from './TauriCommandError';
+import { SurfaceChangedError } from '@/infrastructure/peer-device/deviceSurface';
+
+it('preserves device cancellation through command error translation', () => {
+  const cancellation = new SurfaceChangedError('peer', 4, 'list_sessions');
+  expect(createTauriCommandError('list_sessions', cancellation)).toBe(cancellation);
+});
 
 describe('isGitRepositoryNotFoundError', () => {
   const legacyError = "Failed to get Git status: Repository not found: could not find repository at '/workspace'; class=Repository (6); code=NotFound (-3)";

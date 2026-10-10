@@ -901,6 +901,26 @@ impl WorkspaceManager {
         };
 
         if let Some(workspace_id) = existing_workspace_id {
+            if is_remote {
+                let existing = self
+                    .workspaces
+                    .get(&workspace_id)
+                    .expect("workspace selected");
+                self.validate_remote_storage_owner(existing)?;
+                if let (Some(current), Some(requested)) = (
+                    existing.remote_ssh_connection_id(),
+                    options.remote_connection_id.as_deref().map(str::trim),
+                ) {
+                    if current != requested {
+                        // The supported on-disk layout is host + root. A second
+                        // endpoint with that projection cannot take ownership
+                        // of the first endpoint's history and execution routing.
+                        return Err(OpenBitFunError::service(format!(
+                            "remote_workspace_storage_conflict: Workspace {workspace_id} is owned by SSH connection {current}; connection {requested} would share its history directory. Select the original connection or a distinct SSH host identity."
+                        )));
+                    }
+                }
+            }
             if let Some(workspace) = self.workspaces.get_mut(&workspace_id) {
                 workspace.workspace_kind = options.workspace_kind.clone();
                 workspace.assistant_id = if options.workspace_kind == WorkspaceKind::Assistant {
@@ -966,6 +986,7 @@ impl WorkspaceManager {
             }
             None => WorkspaceInfo::new(path, options.clone()).await?,
         };
+        self.validate_remote_storage_owner(&workspace)?;
         let workspace_id = workspace.id.clone();
 
         self.workspaces
@@ -1053,12 +1074,10 @@ impl WorkspaceManager {
         workspace_id: String,
         add_to_recent: bool,
     ) -> OpenBitFunResult<()> {
-        if !self.workspaces.contains_key(&workspace_id) {
-            return Err(OpenBitFunError::service(format!(
-                "Workspace not found: {}",
-                workspace_id
-            )));
-        }
+        let workspace = self.workspaces.get(&workspace_id).ok_or_else(|| {
+            OpenBitFunError::service(format!("Workspace not found: {}", workspace_id))
+        })?;
+        self.validate_remote_storage_owner(workspace)?;
 
         self.ensure_workspace_open(&workspace_id);
 
@@ -1096,6 +1115,45 @@ impl WorkspaceManager {
     /// Gets a workspace by id.
     pub fn get_workspace(&self, workspace_id: &str) -> Option<&WorkspaceInfo> {
         self.workspaces.get(workspace_id)
+    }
+
+    /// Imported catalogs keep their opaque IDs, but the supported remote
+    /// storage projection must still have exactly one connection owner.
+    pub(crate) fn validate_remote_storage_owner(
+        &self,
+        workspace: &WorkspaceInfo,
+    ) -> OpenBitFunResult<()> {
+        use openbitfun_services_core::workspace_identity::remote_workspace_runtime_key;
+        if workspace.workspace_kind != WorkspaceKind::Remote {
+            return Ok(());
+        }
+        let storage_key = |record: &WorkspaceInfo| {
+            record
+                .metadata
+                .get("sshHost")
+                .and_then(serde_json::Value::as_str)
+                .map(|host| {
+                    remote_workspace_runtime_key(
+                        host,
+                        &normalize_remote_workspace_path(&record.root_path.to_string_lossy()),
+                    )
+                })
+        };
+        let Some(key) = storage_key(workspace) else {
+            return Ok(());
+        };
+        if let Some(other) = self.workspaces.values().find(|other| {
+            other.id != workspace.id
+                && other.workspace_kind == WorkspaceKind::Remote
+                && storage_key(other).as_ref() == Some(&key)
+                && other.remote_ssh_connection_id() != workspace.remote_ssh_connection_id()
+        }) {
+            return Err(OpenBitFunError::service(format!(
+                "remote_workspace_storage_conflict: Workspaces {} and {} belong to different SSH connections but share a history directory; restore distinct SSH host identities before activation",
+                workspace.id, other.id
+            )));
+        }
+        Ok(())
     }
 
     /// Gets all opened workspaces.
@@ -1296,19 +1354,20 @@ impl WorkspaceManager {
     }
 
     fn find_next_workspace_id_after_close(&self, preferred_kind: &WorkspaceKind) -> Option<String> {
-        let same_kind = self
-            .opened_workspace_ids
-            .iter()
-            .find(|id| {
-                self.workspaces
-                    .get(id.as_str())
-                    .map(|workspace| &workspace.workspace_kind == preferred_kind)
-                    .unwrap_or(false)
-            })
-            .cloned();
-
-        if same_kind.is_some() {
-            return same_kind;
+        let mut fallback = None;
+        for id in &self.opened_workspace_ids {
+            let Some(workspace) = self.workspaces.get(id) else {
+                continue;
+            };
+            // Preserve conflicting imported records, but do not let automatic
+            // selection fail after the current workspace has already closed.
+            if self.validate_remote_storage_owner(workspace).is_err() {
+                continue;
+            }
+            if &workspace.workspace_kind == preferred_kind {
+                return Some(id.clone());
+            }
+            fallback.get_or_insert(id);
         }
 
         // Closing the last remote workspace (e.g. SSH password session could not auto-reconnect)
@@ -1318,7 +1377,7 @@ impl WorkspaceManager {
             return None;
         }
 
-        self.opened_workspace_ids.first().cloned()
+        fallback.cloned()
     }
 
     /// Ensures a workspace stays in the opened list.
@@ -1454,6 +1513,125 @@ pub struct WorkspaceManagerStatistics {
 #[cfg(test)]
 mod tests {
     use super::{WorkspaceIdentity, WorkspaceIdentityRuntimeExt};
+
+    #[tokio::test]
+    async fn closing_remote_workspace_skips_conflicting_imported_candidates() {
+        use super::{
+            WorkspaceInfo, WorkspaceInfoRuntimeExt, WorkspaceKind, WorkspaceManager,
+            WorkspaceManagerConfig, WorkspaceOpenOptions, WorkspaceStatus,
+        };
+
+        for with_fallback in [false, true] {
+            let mut manager = WorkspaceManager::new(WorkspaceManagerConfig::default());
+            let options = WorkspaceOpenOptions {
+                workspace_kind: WorkspaceKind::Remote,
+                remote_connection_id: Some("ssh-first".into()),
+                remote_ssh_host: Some("remote.example".into()),
+                ..Default::default()
+            };
+            let active = manager
+                .open_workspace_with_options("/srv/active".into(), options.clone())
+                .await
+                .unwrap();
+            let mut conflicting = WorkspaceInfo::new_without_worktree(
+                "/srv/shared".into(),
+                WorkspaceOpenOptions {
+                    auto_set_current: false,
+                    ..options.clone()
+                },
+            )
+            .await
+            .unwrap();
+            let first_id = conflicting.id.clone();
+            manager
+                .workspaces
+                .insert(first_id.clone(), conflicting.clone());
+            conflicting.id = "imported-conflicting-id".into();
+            conflicting.metadata.insert(
+                "connectionId".into(),
+                serde_json::Value::String("ssh-second".into()),
+            );
+            let second_id = conflicting.id.clone();
+            manager.workspaces.insert(second_id.clone(), conflicting);
+            manager.opened_workspace_ids =
+                vec![first_id.clone(), second_id.clone(), active.id.clone()];
+
+            let fallback_id = if with_fallback {
+                let fallback = WorkspaceInfo::new_without_worktree(
+                    "/srv/fallback".into(),
+                    WorkspaceOpenOptions {
+                        auto_set_current: false,
+                        ..options
+                    },
+                )
+                .await
+                .unwrap();
+                manager.opened_workspace_ids.push(fallback.id.clone());
+                let id = fallback.id.clone();
+                manager.workspaces.insert(id.clone(), fallback);
+                Some(id)
+            } else {
+                None
+            };
+
+            manager.close_workspace(&active.id).unwrap();
+
+            assert_eq!(manager.current_workspace_id, fallback_id);
+            assert_eq!(
+                manager.get_workspace(&active.id).unwrap().status,
+                WorkspaceStatus::Inactive
+            );
+            assert!(!manager.opened_workspace_ids.contains(&active.id));
+            for id in [first_id, second_id] {
+                assert!(manager.opened_workspace_ids.contains(&id));
+                assert_eq!(
+                    manager.get_workspace(&id).unwrap().status,
+                    WorkspaceStatus::Inactive
+                );
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn remote_workspace_reopen_cannot_replace_a_different_connection() {
+        use super::{
+            WorkspaceKind, WorkspaceManager, WorkspaceManagerConfig, WorkspaceOpenOptions,
+        };
+        let mut manager = WorkspaceManager::new(WorkspaceManagerConfig::default());
+        let options = WorkspaceOpenOptions {
+            workspace_kind: WorkspaceKind::Remote,
+            remote_connection_id: Some("ssh-first".into()),
+            remote_ssh_host: Some("localhost".into()),
+            ..Default::default()
+        };
+        let original = manager
+            .open_workspace_with_options("/srv/shared".into(), options.clone())
+            .await
+            .unwrap();
+        let error = manager
+            .open_workspace_with_options(
+                "/srv/shared".into(),
+                WorkspaceOpenOptions {
+                    remote_connection_id: Some("ssh-second".into()),
+                    ..options.clone()
+                },
+            )
+            .await
+            .unwrap_err();
+        assert!(error
+            .to_string()
+            .contains("remote_workspace_storage_conflict"));
+        let retained = manager.get_workspace(&original.id).unwrap();
+        assert_eq!(retained.remote_ssh_connection_id(), Some("ssh-first"));
+        assert_eq!(
+            manager
+                .open_workspace_with_options("/srv/shared".into(), options)
+                .await
+                .unwrap()
+                .id,
+            original.id
+        );
+    }
 
     #[test]
     fn workspace_identity_reads_optional_avatar_without_requiring_it() {

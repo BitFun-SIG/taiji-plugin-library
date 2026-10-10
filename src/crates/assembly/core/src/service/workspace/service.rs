@@ -1030,11 +1030,14 @@ impl WorkspaceService {
         if workspace_id.trim().is_empty() {
             return Err(OpenBitFunError::service("Workspace ID is required"));
         }
-        self.get_workspace(workspace_id).await.ok_or_else(|| {
+        let manager = self.manager.read().await;
+        let workspace = manager.get_workspace(workspace_id).ok_or_else(|| {
             OpenBitFunError::service(format!(
                 "Workspace ID is unavailable on this host: {workspace_id}"
             ))
-        })
+        })?;
+        manager.validate_remote_storage_owner(workspace)?;
+        Ok(workspace.clone())
     }
 
     /// Returns all currently opened workspaces.
@@ -2877,6 +2880,56 @@ mod tests {
                 .root_path,
             workspace.root_path
         );
+    }
+
+    #[tokio::test]
+    async fn imported_remote_storage_conflicts_preserve_both_records_and_reject_activation() {
+        let env = TestEnvironment::new();
+        let service = build_test_workspace_service(env.path_manager.clone()).await;
+        let first = WorkspaceInfo::new_without_worktree(
+            "/srv/shared".into(),
+            WorkspaceOpenOptions {
+                workspace_kind: WorkspaceKind::Remote,
+                remote_connection_id: Some("first-endpoint".into()),
+                remote_ssh_host: Some("same-host".into()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        let mut second = first.clone();
+        second.id = "opaque-imported-workspace".into();
+        second
+            .metadata
+            .insert("connectionId".into(), serde_json::json!("second-endpoint"));
+        let old_payload = serde_json::json!({
+            "workspaces": [first, second],
+            "current_workspace_id": null,
+            "recent_workspaces": [],
+            "export_timestamp": "2026-01-01T00:00:00Z",
+            "version": "1.0.0"
+        });
+        let imported: WorkspaceExport = serde_json::from_value(old_payload).unwrap();
+        service.import_workspaces(imported, true).await.unwrap();
+        for id in [&first.id, &second.id] {
+            let error = service.require_workspace(id).await.unwrap_err();
+            assert!(error
+                .to_string()
+                .contains("remote_workspace_storage_conflict"));
+            assert!(service.get_workspace(id).await.is_some());
+            assert!(service.open_workspace_by_id(id).await.is_err());
+        }
+        // The legacy open path must reject before refreshing either record or
+        // registering a competing remote runtime owner.
+        assert!(service.open_known_remote_workspace(&first).await.is_err());
+        let exported = service.export_workspaces().await.unwrap();
+        let round_trip: WorkspaceExport =
+            serde_json::from_slice(&serde_json::to_vec(&exported).unwrap()).unwrap();
+        assert_eq!(round_trip.workspaces.len(), 2);
+        assert!(round_trip
+            .workspaces
+            .iter()
+            .any(|workspace| workspace.id == second.id));
     }
 
     #[tokio::test]
