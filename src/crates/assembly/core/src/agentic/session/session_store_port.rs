@@ -392,7 +392,11 @@ mod tests {
         let alias = root.path().join("alias");
         std::fs::create_dir_all(&physical).unwrap();
         std::os::unix::fs::symlink(&physical, &alias).unwrap();
-        let path_manager = Arc::new(PathManager::with_user_root_for_tests(alias));
+        // Product home is derived from the user root's parent, so the user
+        // root must sit below the alias for managed paths to use it.
+        let user_root = alias.join("user");
+        std::fs::create_dir_all(&user_root).unwrap();
+        let path_manager = Arc::new(PathManager::with_user_root_for_tests(user_root));
         let port = CoreSessionStorePort::with_path_manager_for_tests(path_manager.clone());
         let projected = path_manager
             .projects_root()
