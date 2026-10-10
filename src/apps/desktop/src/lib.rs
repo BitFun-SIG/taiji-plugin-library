@@ -29,6 +29,8 @@ mod embedded_relay_host;
 pub mod frontend_workbench;
 pub mod logging;
 pub mod macos_menubar;
+#[cfg(target_os = "macos")]
+mod macos_window_chrome;
 mod openbitfun_control_host;
 pub mod runtime;
 pub mod sleep_prevention;

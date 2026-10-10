@@ -48,11 +48,15 @@ function repositoryPath(root, path) {
   return result;
 }
 
-// This crates.io source is patched only to select the product TLS provider.
-// It is an external dependency, not an OpenBitFun runtime owner. Resolved
-// feature checks below still include it and its full dependency closure.
+// Reviewed crates.io copies remain external dependencies, not product owners.
+// Resolved feature checks still include them and their full dependency closure.
+const VENDORED_EXTERNAL_PACKAGES = new Map([
+  ['third_party/eioc/Cargo.toml', { name: 'eioc', version: '0.5.0' }],
+  ['third_party/tao/Cargo.toml', { name: 'tao', version: '0.36.0' }],
+]);
+
 function isVendoredExternalManifest(root, manifestPath) {
-  return repositoryPath(root, manifestPath) === 'third_party/eioc/Cargo.toml';
+  return VENDORED_EXTERNAL_PACKAGES.has(repositoryPath(root, manifestPath));
 }
 
 function layerForManifest(manifestPath, { root, crateLayoutRules }) {
@@ -2667,8 +2671,9 @@ export function collectCargoMetadataGraph({
         continue;
       }
       const packageManifestKey = normalizedPath(pkg.manifest_path);
-      if (isVendoredExternalManifest(root, pkg.manifest_path)
-        && pkg.name === 'eioc' && pkg.version === '0.5.0' && !workspaceMemberIds.has(pkg.id)) {
+      const vendor = VENDORED_EXTERNAL_PACKAGES.get(repositoryPath(root, pkg.manifest_path));
+      if (vendor && pkg.name === vendor.name && pkg.version === vendor.version
+        && !workspaceMemberIds.has(pkg.id)) {
         continue;
       }
       if (workspaceMemberIds.has(pkg.id)) {
