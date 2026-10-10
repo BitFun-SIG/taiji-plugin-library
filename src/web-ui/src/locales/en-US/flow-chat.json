@@ -1116,6 +1116,7 @@
     "emptyDirectory": "Empty directory",
     "rootDirectory": "Root",
     "goBack": "Go back",
+    "openDirectory": "Open folder",
     "navHint": "Navigate",
     "enterHint": "Enter",
     "backHint": "Back",

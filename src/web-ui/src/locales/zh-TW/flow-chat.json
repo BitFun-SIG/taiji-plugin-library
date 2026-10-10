@@ -1116,6 +1116,7 @@
     "emptyDirectory": "空目錄",
     "rootDirectory": "根目錄",
     "goBack": "返回上一級",
+    "openDirectory": "進入目錄",
     "navHint": "導航",
     "enterHint": "進入",
     "backHint": "返回",
