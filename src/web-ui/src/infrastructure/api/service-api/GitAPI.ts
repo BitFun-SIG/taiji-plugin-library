@@ -268,7 +268,9 @@ export class GitAPI {
         throw createTauriCommandError('git_is_repository', error, { workspace });
       })
       .finally(() => {
-        this.repositoryProbeInFlight.delete(inFlightKey);
+        if (this.repositoryProbeInFlight.get(inFlightKey) === probe) {
+          this.repositoryProbeInFlight.delete(inFlightKey);
+        }
       });
 
     this.repositoryProbeInFlight.set(inFlightKey, probe);
