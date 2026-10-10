@@ -1864,7 +1864,11 @@
       "downloadDialogTitle": "Save file as",
       "transferFailed": "Transfer failed",
       "transferNeedsDesktop": "Upload and download require the desktop app.",
-      "transferring": "Transferring..."
+      "transferring": "Transferring...",
+      "connectionConflictTitle": "Workspace bound to another connection",
+      "connectionConflictMessage": "The remote workspace {{path}} is bound to SSH connection {{owner}}. Rebind it to {{connection}}? Its files, terminals, and sessions will then run through {{connection}}.",
+      "connectionConflictConfirm": "Rebind",
+      "connectionConflictRestoreDeferred": "Remote workspace was kept because it is bound to another SSH connection. Open it again from the remote connection dialog to choose a connection: {{path}}"
     },
     "portForward": {
       "menuEntry": "Forward a Port",

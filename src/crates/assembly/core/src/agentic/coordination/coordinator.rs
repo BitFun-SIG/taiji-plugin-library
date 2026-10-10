@@ -82,8 +82,8 @@ use crate::service::session::{
     ToolItemIdentityExt, TurnStatus,
 };
 use crate::service::workspace::{
-    get_global_workspace_service, WorkspaceActivityMode, WorkspaceInfo, WorkspaceKind,
-    WorkspaceService,
+    get_global_workspace_service, RemoteConnectionRebind, WorkspaceActivityMode, WorkspaceInfo,
+    WorkspaceKind, WorkspaceService,
 };
 use crate::service_agent_runtime::CoreServiceAgentRuntime;
 use crate::util::errors::{OpenBitFunError, OpenBitFunResult};
@@ -1885,31 +1885,9 @@ impl ConversationCoordinator {
         &self,
         session_id: &str,
     ) -> OpenBitFunResult<PathBuf> {
-        if let Some(binding) = self
-            .session_manager
-            .resolve_session_workspace_binding(session_id)
+        self.session_manager
+            .require_session_storage_path(session_id)
             .await
-        {
-            return Ok(binding.session_storage_dir());
-        }
-
-        let session = self
-            .session_manager
-            .get_session(session_id)
-            .ok_or_else(|| {
-                OpenBitFunError::NotFound(format!("Session not found: {}", session_id))
-            })?;
-        session
-            .config
-            .workspace_path
-            .as_deref()
-            .map(PathBuf::from)
-            .ok_or_else(|| {
-                OpenBitFunError::Validation(format!(
-                    "workspace_path is required when restoring session: {}",
-                    session_id
-                ))
-            })
     }
 
     async fn is_chinese_locale() -> bool {
@@ -2386,6 +2364,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         path: &str,
         connection_id: &str,
         ssh_host: Option<&str>,
+        remote_connection_rebind: RemoteConnectionRebind,
     ) -> OpenBitFunResult<WorkspaceInfo> {
         let workspace = workspace_service
             .prepare_remote_workspace(path, connection_id, ssh_host)
@@ -2399,7 +2378,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 .and_then(|host| host.as_str()),
         )?;
         workspace_service
-            .open_known_remote_workspace(&workspace)
+            .open_known_remote_workspace_with_rebind(&workspace, remote_connection_rebind)
             .await
     }
 
@@ -4178,8 +4157,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 || (context_messages.len() == 1 && !session.dialog_turn_ids.is_empty()))
                 && !session.dialog_turn_ids.is_empty()
             {
-                let restore_path =
-                    Self::resolve_session_restore_path(&project_workspace_path, None, None).await?;
+                let restore_path = self.restore_path_for_existing_session(&session_id).await?;
                 self.restore_session_from_storage_path(&restore_path, &session_id)
                     .await?;
                 session = self
@@ -4816,6 +4794,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
     }
 
     async fn resolve_session_restore_scope(
+        &self,
         workspace_path: &str,
         remote_connection_id: Option<&str>,
         remote_ssh_host: Option<&str>,
@@ -4826,18 +4805,19 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             remote_ssh_host: remote_ssh_host.map(ToOwned::to_owned),
         };
 
-        CoreSessionStorePort::default()
+        CoreSessionStorePort::with_path_manager(self.session_manager.path_manager())
             .resolve_session_storage_path(request)
             .await
             .map_err(|error| OpenBitFunError::Session(error.to_string()))
     }
 
     async fn resolve_session_restore_path(
+        &self,
         workspace_path: &str,
         remote_connection_id: Option<&str>,
         remote_ssh_host: Option<&str>,
     ) -> OpenBitFunResult<PathBuf> {
-        Self::resolve_session_restore_scope(workspace_path, remote_connection_id, remote_ssh_host)
+        self.resolve_session_restore_scope(workspace_path, remote_connection_id, remote_ssh_host)
             .await
             .map(|resolution| resolution.effective_storage_path)
     }
@@ -6162,7 +6142,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         );
         let requested_restore = match storage_workspace_path.as_deref() {
             Some(workspace_path) => Some(
-                Self::resolve_session_restore_scope(
+                self.resolve_session_restore_scope(
                     workspace_path,
                     remote_connection_id.as_deref(),
                     remote_ssh_host.as_deref(),
@@ -6408,32 +6388,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 "Starting session history restore: session_id={}",
                 session_id
             );
-            let restore_workspace_path = session
-                .config
-                .project_workspace_path
-                .as_deref()
-                .or(session.config.workspace_path.as_deref())
-                .or(storage_workspace_path.as_deref())
-                .ok_or_else(|| {
-                    OpenBitFunError::Validation(format!(
-                        "workspace_path is required when restoring session: {}",
-                        session_id
-                    ))
-                })?;
-            let restore_path = Self::resolve_session_restore_path(
-                restore_workspace_path,
-                session
-                    .config
-                    .remote_connection_id
-                    .as_deref()
-                    .or(remote_connection_id.as_deref()),
-                session
-                    .config
-                    .remote_ssh_host
-                    .as_deref()
-                    .or(remote_ssh_host.as_deref()),
-            )
-            .await?;
+            let restore_path = self.restore_path_for_existing_session(&session_id).await?;
             match self
                 .restore_session_from_storage_path(&restore_path, &session_id)
                 .await
@@ -8354,7 +8309,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         let session_storage_path = self
             .session_manager
             .resolve_storage_path_for_workspace_path(workspace_path)
-            .await;
+            .await?;
         let has_revert_state = self
             .session_manager
             .persistence_manager()
@@ -15040,7 +14995,7 @@ impl openbitfun_runtime_ports::AgentThreadGoalManagementPort for ConversationCoo
                 .await
                 .map_err(runtime_port_error_preserving_message)?
         } else {
-            Self::resolve_session_restore_path(
+            self.resolve_session_restore_path(
                 &request.workspace_path,
                 request.remote_connection_id.as_deref(),
                 request.remote_ssh_host.as_deref(),
@@ -20300,13 +20255,14 @@ mod tests {
                 ssh_host,
             )
             .await;
-            let storage_path = ConversationCoordinator::resolve_session_restore_path(
-                logical_workspace_path,
-                Some(connection_id),
-                Some(ssh_host),
-            )
-            .await
-            .expect("remote storage path should resolve");
+            let storage_path = coordinator
+                .resolve_session_restore_path(
+                    logical_workspace_path,
+                    Some(connection_id),
+                    Some(ssh_host),
+                )
+                .await
+                .expect("remote storage path should resolve");
             let goal = ThreadGoal {
                 goal_id: format!("goal-{index}"),
                 session_id: session_id.clone(),

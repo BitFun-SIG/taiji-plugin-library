@@ -1864,7 +1864,11 @@
       "downloadDialogTitle": "儲存檔案",
       "transferFailed": "傳輸失敗",
       "transferNeedsDesktop": "上傳與下載僅適用於桌面版應用。",
-      "transferring": "正在傳輸…"
+      "transferring": "正在傳輸…",
+      "connectionConflictTitle": "工作區已綁定其他連線",
+      "connectionConflictMessage": "遠端工作區 {{path}} 已綁定到 SSH 連線 {{owner}}。是否改為綁定到 {{connection}}？之後它的檔案、終端機和工作階段都將透過 {{connection}} 執行。",
+      "connectionConflictConfirm": "改為綁定",
+      "connectionConflictRestoreDeferred": "遠端工作區已保留，因為它綁定的是另一個 SSH 連線。請從遠端連線對話框重新開啟它並選擇連線：{{path}}"
     },
     "portForward": {
       "menuEntry": "連接埠對應",

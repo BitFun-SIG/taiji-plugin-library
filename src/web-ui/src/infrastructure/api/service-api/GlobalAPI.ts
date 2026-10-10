@@ -1,3 +1,4 @@
+import { invokePrepared } from './invokePrepared';
 import { getActiveSurfaceScope, isLocalSurface } from '@/infrastructure/peer-device/deviceSurface';
  
 
@@ -86,6 +87,14 @@ export interface WorkspaceStartupStateSnapshot {
   assistantWorkspaces?: WorkspaceInfo[];
   primaryAssistantWorkspaceId?: string | null;
   legacyRemoteWorkspace?: RemoteWorkspaceSnapshot | null;
+}
+
+export interface OpenRemoteWorkspaceOptions {
+  /**
+   * The user confirmed moving an existing record owned by another saved SSH
+   * connection to this connection.
+   */
+  rebindConnection?: boolean;
 }
 
 export interface UpdateAppStatusRequest {
@@ -194,7 +203,7 @@ export class GlobalAPI {
 
    
   async openWorkspaceById(workspaceId: string): Promise<WorkspaceInfo> {
-    return api.invoke('open_workspace', { request: await workspaceIdRequest(workspaceId, 'path') });
+    return invokePrepared('open_workspace', async () => ({ request: await workspaceIdRequest(workspaceId, 'path') }));
   }
 
   async createLocalWorkspace(path: string): Promise<WorkspaceInfo> {
@@ -211,7 +220,8 @@ export class GlobalAPI {
     remotePath: string,
     connectionId: string,
     connectionName: string,
-    sshHost?: string
+    sshHost?: string,
+    options: OpenRemoteWorkspaceOptions = {},
   ): Promise<WorkspaceInfo> {
     try {
       const h = sshHost?.trim();
@@ -221,6 +231,7 @@ export class GlobalAPI {
           connectionId,
           connectionName,
           ...(h ? { sshHost: h } : {}),
+          ...(options.rebindConnection ? { rebindConnection: true } : {}),
         },
       });
     } catch (error) {
@@ -229,6 +240,7 @@ export class GlobalAPI {
         connectionId,
         connectionName,
         sshHost,
+        rebindConnection: options.rebindConnection === true,
       });
     }
   }
@@ -394,9 +406,9 @@ export class GlobalAPI {
    
   async scanWorkspaceInfo(workspaceId: string): Promise<WorkspaceInfo | null> {
     try {
-      return await api.invoke('scan_workspace_info', { 
+      return await invokePrepared('scan_workspace_info', async () => ({
         request: await workspaceIdRequest(workspaceId, 'workspacePath')
-      });
+      }));
     } catch (error) {
       throw createTauriCommandError('scan_workspace_info', error, { workspaceId });
     }
