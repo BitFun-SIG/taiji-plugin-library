@@ -1,0 +1,30 @@
+{
+  "context_user_info": "{\"uid\":\"test-uid-0001\",\"encrypt_user_info\":\"enc-test\",\"key\":\"key-test\"}",
+  "request": {
+    "authMode": "auth",
+    "body": null,
+    "headers": {
+      "Accept": "application/json",
+      "Accept-Encoding": "identity",
+      "Authorization": "Bearer COSY.eyJ2ZXJzaW9uIjoidjEiLCJyZXF1ZXN0SWQiOiJhZmJkZDJkMS1jMWI4LTQxMzMtYmE3YS01YmZlNjI4MjRjYmEiLCJpbmZvIjoiZW5jLXRlc3QiLCJjb3N5VmVyc2lvbiI6IjEuMS41NyIsImlkZVZlcnNpb24iOiIifQ==.2c3b950ff67c7689c2fdad68f64cd8c9",
+      "Content-Type": "application/json",
+      "Cosy-Business-Product": "cli",
+      "Cosy-Business-Type": "agent",
+      "Cosy-ClientIp": "<machine_id>",
+      "Cosy-ClientType": "5",
+      "Cosy-Data-Policy": "disagree",
+      "Cosy-Date": "1789791969",
+      "Cosy-Key": "key-test",
+      "Cosy-MachineId": "<machine_id>",
+      "Cosy-MachineToken": "<machine_id>",
+      "Cosy-MachineType": "5",
+      "Cosy-Scene": "assistant",
+      "Cosy-User": "test-uid-0001",
+      "Cosy-Version": "1.1.57",
+      "Login-Version": "v2"
+    },
+    "method": "GET",
+    "path": "/api/v2/model/list?Encode=1",
+    "url": "https://gateway.qoder.com.cn/algo/api/v2/model/list?Encode=1"
+  }
+}

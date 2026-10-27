@@ -54,6 +54,8 @@ members = [
     "src/crates/contracts/config-contracts",
     "src/crates/contracts/events",
     "src/crates/contracts/runtime-ports",
+    "src/crates/seams/codebuddy-adapter",
+    "src/crates/seams/qoder-adapter",
 ]
 
 exclude = [

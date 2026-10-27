@@ -716,6 +716,7 @@ pub(crate) async fn send_stream(
         &url,
         &request_body,
         max_tries,
+        None,
         ttft_timeout,
         trace,
         || {

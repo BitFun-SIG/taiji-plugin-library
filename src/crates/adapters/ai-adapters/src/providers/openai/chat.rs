@@ -389,21 +389,61 @@ pub(crate) async fn send_stream(
 
     let compatibility = crate::providers::opencode::FreeTools::prepare(client, &mut request_body)?;
 
+    let request_body_text = request_body.to_string();
+    // Qoder CN seam: returns the signed URL plus the encrypted body, or `None`
+    // for every other provider (both left untouched).
+    let qoder_seam = taiji_qoder_adapter::qoder_body_override(&client.config, &url, &request_body_text);
+    let (url, raw_body) = match qoder_seam.as_ref() {
+        Some((signed_url, encrypted)) => (
+            signed_url.as_str(),
+            Some(encrypted.as_bytes().to_vec()),
+        ),
+        None => (url.as_str(), None),
+    };
+
     execute_sse_request_with_http_fallback(
         Some(client),
         "OpenAI Streaming API",
-        &url,
+        url,
         &request_body,
+        raw_body,
         max_tries,
         ttft_timeout,
         trace,
         || {
+            // Qoder seam header policy (rationale in the seam's
+            // `inject_qoder_headers`): the signed family is the whole header set.
+            if qoder_seam.is_some() {
+                return taiji_qoder_adapter::inject_qoder_headers(
+                    client.client.post(url),
+                    url,
+                    &client.config,
+                    &request_body_text,
+                    qoder_seam
+                        .as_ref()
+                        .map(|(_, encrypted)| encrypted.as_str()),
+                );
+            }
             let builder = shared::apply_affinity_headers(
                 client,
-                common::apply_headers(client, client.client.post(&url)),
-                &url,
+                common::apply_headers(client, client.client.post(url)),
+                url,
                 request_context.as_ref(),
             );
+            if !taiji_codebuddy_adapter::is_codebuddy_url(url) {
+                return builder;
+            }
+            let mut builder = builder;
+            let turn_request_id =
+                taiji_codebuddy_adapter::codebuddy_turn_request_id(&request_body_text);
+            for (name, value) in taiji_codebuddy_adapter::codebuddy_request_headers(
+                &client.config,
+                url,
+                Some(turn_request_id.as_str()),
+                &request_body_text,
+            ) {
+                builder = builder.header(name, value);
+            }
             builder
         },
         move |response, tx, tx_raw, remaining_ttft_timeout| {

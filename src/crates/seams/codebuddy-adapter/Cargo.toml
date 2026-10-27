@@ -1,0 +1,19 @@
+[package]
+name = "taiji-codebuddy-adapter"
+version = "0.3.0"
+authors = ["CWing"]
+edition = "2024"
+rust-version = "1.97"
+description = "User-side stream adapter: repairs empty finish_reason frames (CodeBuddy protocol deviation)"
+
+# In-tree seam face. Its dependency edge points at this same workspace's crates,
+# so the library needs no external directory to build.
+
+[lib]
+name = "taiji_codebuddy_adapter"
+crate-type = ["rlib"]
+
+[dependencies]
+openbitfun-agent-stream = { path = "../../execution/agent-stream" }
+openbitfun-core-types = { path = "../../contracts/core-types" }
+serde_json = { workspace = true }

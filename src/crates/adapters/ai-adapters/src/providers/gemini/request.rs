@@ -549,6 +549,7 @@ pub(crate) async fn send_stream(
         &url,
         &request_body,
         max_tries,
+        None,
         ttft_timeout,
         trace,
         || apply_headers(client, client.client.post(&url), &url),

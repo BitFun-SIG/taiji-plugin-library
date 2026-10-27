@@ -769,6 +769,7 @@ async fn send_code_assist_stream(
             url,
             request_body,
             max_tries,
+            None,
             client.stream_options.ttft_timeout,
             trace.clone(),
             || apply_headers(client, client.client.post(url)),

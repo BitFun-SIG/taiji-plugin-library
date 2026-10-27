@@ -42,6 +42,10 @@ tokio-stream = { workspace = true }
 tokio-util = { workspace = true }
 urlencoding = { workspace = true }
 uuid = { workspace = true, optional = true }
+# User-side seals for the CodeBuddy and Qoder gateways. These two crates are
+# the whole customisation surface this file carries.
+taiji-codebuddy-adapter = { path = "../../seams/codebuddy-adapter" }
+taiji-qoder-adapter = { path = "../../seams/qoder-adapter", features = ["subscription-auth"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 keyring-core = { workspace = true, optional = true }
