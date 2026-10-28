@@ -1,0 +1,13 @@
+[package]
+name = "lnfu-host-seam"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.97"
+license = "MIT"
+publish = false
+description = "LNFU host-side capability entrance: the minimal pure-function face an accessed software calls to hand a capability result back to LNFU."
+
+# In-tree seam face. Its dependency edge points at this same workspace's crates,
+# so the library needs no external directory to build.
+[dependencies]
+lnfu-seam-contracts-standalone = { path = "../lnfu-seam-contracts-standalone" }

@@ -4887,6 +4887,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "92daf443525c4cce67b150400bc2316076100ce0b3686209eb8cf3c31612e6f0"
 
 [[package]]
+name = "lnfu-host-seam"
+version = "0.1.0"
+dependencies = [
+ "lnfu-seam-contracts-standalone",
+]
+
+[[package]]
+name = "lnfu-seam-contracts-standalone"
+version = "0.1.0"
+dependencies = [
+ "indexmap 2.14.0",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "local-ip-address"
 version = "0.6.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6529,6 +6545,23 @@ dependencies = [
  "tempfile",
  "tokio",
  "uuid",
+]
+
+[[package]]
+name = "openbitfun-lnfu-adapter"
+version = "0.3.0"
+dependencies = [
+ "async-trait",
+ "dirs 6.0.0",
+ "hex",
+ "openbitfun-product-domains",
+ "openbitfun-runtime-ports",
+ "openbitfun-static-hook-support",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "tokio",
+ "toml 0.9.12+spec-1.1.0",
 ]
 
 [[package]]
@@ -11243,6 +11276,14 @@ name = "tinyvec_macros"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
+
+[[package]]
+name = "token-shaper"
+version = "0.1.0"
+dependencies = [
+ "openbitfun-agent-runtime",
+ "serde_json",
+]
 
 [[package]]
 name = "tokio"

@@ -1,0 +1,21 @@
+[package]
+name = "lnfu-seam-contracts-standalone"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.97"
+license = "MIT"
+description = "LNFU capability seam service definitions (ports) for the eight first-phase seams."
+publish = false
+
+# S-40: this contracts crate is the accessed-software-side twin of
+# `LNFU/crates/seam/contracts`. It exists so the seam body `../host` compiles on
+# its own, outside the LNFU workspace. The two copies must stay byte-identical in
+# `src/**`; only the package fields and dependency specs are expanded to literal
+# values here (an independent tree has no workspace to inherit from).
+# The `-standalone` package suffix propagates to the default crate name, which is
+# what the dependent seam body `../host` imports. The twin test file lives outside
+# the byte-identical `src/**` scope and is adjusted to match.
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+indexmap = { version = "2", features = ["serde"] }
