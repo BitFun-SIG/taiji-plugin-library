@@ -371,16 +371,15 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
     void orderingRevision;
     return new Set([...flowChatState.sessions.keys()].filter(sessionNavStatusService.isRunning));
   }, [flowChatState.sessions, orderingRevision]);
-  const catalogQueryJson = useMemo(() => {
-    void orderingRevision;
-    return JSON.stringify(workspaceSessionCatalogQuery(workspaceId, sessionOrdering, sessionShow,
-      sessionFilters, sourceAgent, flowChatState.sessions.values(), sessionNavStatusService.getSortTimestamp) ?? null);
-  }, [workspaceId, sessionOrdering, sessionShow, sessionFilters, sourceAgent, flowChatState.sessions, orderingRevision]);
+  const catalogQueryJson = useMemo(() => JSON.stringify(workspaceSessionCatalogQuery(
+    workspaceId, sessionOrdering, sessionShow, sessionFilters, sourceAgent,
+  ) ?? null), [workspaceId, sessionOrdering, sessionShow, sessionFilters, sourceAgent]);
   const captureCatalogQuery = useCallback((query: SessionCatalogQuery) => captureWorkspaceSessionCatalogQuery(
     query, flowChatStore.getState().sessions.values(), sessionNavStatusService.getSortTimestamp,
   ), []);
-  // Capture the view's observed order only when beginning a catalog. Hydration
-  // and streaming must not restart it; a refresh or device switch must rebind it.
+  // Capture the view's observed order only when beginning a catalog. Hydration,
+  // streaming and run starts must not restart it; a refresh or device switch
+  // must rebind it.
   const catalogQuery = useMemo(() => {
     void catalogRefreshVersion;
     void initialMetadataKey;
