@@ -56,6 +56,10 @@ members = [
     "src/crates/contracts/runtime-ports",
     "src/crates/seams/codebuddy-adapter",
     "src/crates/seams/qoder-adapter",
+    "src/crates/seams/obf-adapter",
+    "src/crates/seams/lnfu-host-seam",
+    "src/crates/seams/lnfu-seam-contracts-standalone",
+    "src/crates/seams/token-shaper",
 ]
 
 exclude = [
