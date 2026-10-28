@@ -72,6 +72,7 @@ fn signed_inference_reaches_the_gateway() {
                 format: "openai".to_string(),
                 context_window: 200000,
                 max_tokens: None,
+                max_images_per_request: None,
                 temperature: None,
                 top_p: None,
                 inline_think_in_text: false,

@@ -30,6 +30,7 @@ fn host_config(pat: &str, model: &str, context_window: u32) -> AIConfig {
         format: "openai".to_string(),
         context_window,
         max_tokens: None,
+        max_images_per_request: None,
         temperature: None,
         top_p: None,
         inline_think_in_text: false,
