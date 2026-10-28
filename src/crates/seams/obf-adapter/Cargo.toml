@@ -1,0 +1,30 @@
+[package]
+name = "openbitfun-lnfu-adapter"
+version = "0.3.0"
+authors = ["CWing"]
+edition = "2024"
+rust-version = "1.97"
+description = "Runtime-free LNFU strategy asset source discovery for OpenBitFun"
+
+# In-tree seam face. Its dependency edge points at this same workspace's crates,
+# so the library needs no external directory to build.
+
+[lib]
+name = "openbitfun_lnfu_adapter"
+crate-type = ["rlib"]
+
+[dependencies]
+openbitfun-product-domains = { path = "../../contracts/product-domains", features = ["external-sources"] }
+openbitfun-static-hook-support = { path = "../../adapters/static-hook-support" }
+dirs = { workspace = true }
+serde_json = { workspace = true }
+toml = { workspace = true }
+hex = { workspace = true }
+sha2 = { workspace = true }
+openbitfun-runtime-ports = { path = "../../contracts/runtime-ports", features = ["hook-function-runtime"] }
+async-trait = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt"] }
+openbitfun-runtime-ports = { path = "../../contracts/runtime-ports", features = ["hook-function-runtime"] }

@@ -1,0 +1,117 @@
+//! Compares the model key the host passes against what the gateway accepts.
+//!
+//! The host signs with `config.model`, which for a Qoder account is the user's
+//! chosen model name (`Qwen3.8-Flash`). The CLI signs with `auto` for its default
+//! route. A key the gateway does not know is answered with 400, so this probe
+//! drives a real signed round trip for each key and prints the status.
+//!
+//! Ignored by default (network + live credential). Run explicitly:
+//!
+//! ```text
+//! $env:BITFUN_QODER_PAT = "<pt-...>"
+//! cargo test --features subscription-auth --test model_key_e2e -- --ignored --nocapture
+//! ```
+
+#![cfg(feature = "subscription-auth")]
+
+use openbitfun_core_types::AIConfig;
+use taiji_qoder_adapter::{inject_qoder_headers, qoder_body_override};
+
+const GATEWAY_URL: &str = "https://gateway.qoder.com.cn";
+const REQUEST_URL: &str = "https://gateway.qoder.com.cn/chat/completions";
+
+fn host_config(pat: &str, model: &str) -> AIConfig {
+    AIConfig {
+        name: "qoder".to_string(),
+        base_url: GATEWAY_URL.to_string(),
+        request_url: REQUEST_URL.to_string(),
+        api_key: pat.to_string(),
+        model: model.to_string(),
+        format: "openai".to_string(),
+        context_window: 0,
+        max_tokens: None,
+        temperature: None,
+        top_p: None,
+        inline_think_in_text: false,
+        custom_headers: None,
+        custom_headers_mode: None,
+        skip_ssl_verify: false,
+        custom_request_body: None,
+        custom_request_body_mode: None,
+    }
+}
+
+#[test]
+#[ignore = "live network + credential; run with --ignored"]
+fn which_model_key_the_gateway_accepts() {
+    let pat = std::env::var("BITFUN_QODER_PAT").expect("BITFUN_QODER_PAT must be set");
+    assert!(
+        pat.starts_with("pt-"),
+        "probe needs a personal access token"
+    );
+
+    let _ = rustls::crypto::ring::default_provider().install_default();
+    let client = reqwest::Client::builder().build().expect("client builds");
+
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .expect("probe runtime builds");
+
+    for model_key in [
+        "auto",
+        "qfmodel",
+        "qmodel_38max",
+        "qmodel_latest",
+        "Qwen3.8-Flash",
+    ] {
+        let model_key = model_key.to_string();
+        let pat = pat.clone();
+        let client = client.clone();
+
+        let outcome = runtime.block_on(async move {
+            let key_for_sign = model_key.clone();
+            let signed = tokio::task::spawn_blocking(move || {
+                let config = host_config(&pat, &key_for_sign);
+                // A realistic body: the host sends its full OpenAI envelope.
+                let body = serde_json::json!({
+                    "model": key_for_sign,
+                    "messages": [{ "role": "user", "content": "Reply with exactly: PONG" }],
+                    "stream": true,
+                })
+                .to_string();
+                qoder_body_override(&config, REQUEST_URL, &body).map(|s| (config, s))
+            })
+            .await
+            .expect("signing task joins");
+
+            let Some((config, (signed_url, encrypted))) = signed else {
+                return format!("model_key={model_key} => SEAM RETURNED NONE (unsigned fallback)");
+            };
+
+            let body = serde_json::json!({
+                "model": model_key,
+                "messages": [{ "role": "user", "content": "Reply with exactly: PONG" }],
+                "stream": true,
+            })
+            .to_string();
+            let builder = client
+                .post(&signed_url)
+                .header("Accept", "text/event-stream")
+                .body(encrypted.clone());
+            let builder =
+                inject_qoder_headers(builder, REQUEST_URL, &config, &body, Some(&encrypted));
+            match builder.send().await {
+                Ok(response) => {
+                    let status = response.status();
+                    let text = response.text().await.unwrap_or_default();
+                    let head: String = text.chars().take(200).collect();
+                    format!("model_key={model_key} => {status} :: {head}")
+                }
+                Err(error) => format!("model_key={model_key} => TRANSPORT ERROR {error}"),
+            }
+        });
+
+        println!("[model-key] {outcome}");
+    }
+}

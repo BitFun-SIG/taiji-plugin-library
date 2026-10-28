@@ -1,0 +1,49 @@
+[package]
+name = "taiji-qoder-adapter"
+version = "0.3.0"
+authors = ["CWing"]
+edition = "2024"
+rust-version = "1.97"
+description = "User-side adapter: WASM-signed Qoder gateway requests (sign + decrypt only)"
+
+# In-tree seam face. Its dependency edge points at this same workspace's crates,
+# so the library needs no external directory to build.
+
+[lib]
+name = "taiji_qoder_adapter"
+crate-type = ["rlib"]
+
+[dependencies]
+openbitfun-core-types = { path = "../../contracts/core-types" }
+anyhow = { workspace = true }
+serde_json = { workspace = true }
+# The host's header seam hands a reqwest builder across the boundary, so the
+# type must come from the same crate version the host builds against. The login
+# path (PAT -> job token) also performs live HTTPS IO.
+reqwest = { workspace = true, features = ["json", "rustls-no-provider"] }
+rustls = { workspace = true, features = ["ring"] }
+# The signature path is synchronous, so the lazy PAT exchange drives a private
+# current-thread runtime rather than requiring an async caller.
+tokio = { workspace = true, features = ["rt", "time"] }
+wasmi = { version = "0.31.2", optional = true }
+getrandom = { version = "0.2", optional = true }
+
+[dev-dependencies]
+# Live end-to-end probe: drives a real gateway round trip and reads the SSE
+# response incrementally (stops at `[DONE]` instead of waiting for keep-alive).
+reqwest = { workspace = true, features = ["json", "rustls-no-provider", "stream"] }
+rustls = { workspace = true, features = ["ring"] }
+tokio = { workspace = true, features = ["time", "macros", "rt", "rt-multi-thread"] }
+futures-util = { workspace = true }
+
+[features]
+# On by default. The host reaches this crate through the wrapper's `--extern`
+# mechanism, which carries an artifact path and no feature selection at all, so
+# a non-default feature is never enabled on that edge: the seam bodies would
+# compile to their empty fallbacks and the signed path would silently vanish.
+#
+# Removing this was tried and made things worse, not better: the crate then
+# built twice (a 7.5 MB real artifact and a 147 KB stub) and the wrapper
+# refused the ambiguous extern outright, failing the host build.
+default = ["subscription-auth"]
+subscription-auth = ["dep:wasmi", "dep:getrandom"]

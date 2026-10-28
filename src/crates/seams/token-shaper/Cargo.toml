@@ -1,0 +1,25 @@
+[package]
+name = "token-shaper"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.97"
+license = "Apache-2.0"
+publish = false
+description = "Provider-agnostic prompt-prefix stability guard for a fork of the upstream agent runtime. Keeps already-sent prefixes byte-identical so provider prefix caches keep hitting."
+
+# Type-A pure-function import seam (value -> value, no state, no side effects).
+#
+# In-tree seam face. Its dependency edge points at this same workspace's crates,
+# so the library needs no external directory to build.
+#
+# `agent-runtime` is the feature that gates `pub mod context_profile` and
+# `pub mod compression_prefetch` in `openbitfun-agent-runtime`; without it both
+# modules are compiled out. The edge is a plain `[dependencies]` edge: the
+# consumed items are used by this crate's own production surface
+# (`classify_context`), so a `dev-dependencies` edge would not be visible here.
+[dependencies]
+serde_json.workspace = true
+openbitfun-agent-runtime = { path = "../../execution/agent-runtime", features = ["agent-runtime"] }
+
+[lib]
+path = "src/lib.rs"
