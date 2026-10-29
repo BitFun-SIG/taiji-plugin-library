@@ -3322,6 +3322,7 @@
     }
   },
   "welcome": {
+    "openingWorkspace": "想在 <workspace>{{workspace}}</workspace> 裡做點什麼？",
     "openingMorning": "早安，今天由你開場。",
     "openingAfternoon": "下午好，給今天加點意思。",
     "openingEvening": "晚上好，按你的節奏來。",

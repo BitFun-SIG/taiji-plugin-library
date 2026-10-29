@@ -8,8 +8,8 @@ import { Icon, iconNames, canonicalIconNames, iconAliases } from "../dist/index.
 import { Network } from "lucide-react";
 
 test("Icon exposes the complete named catalog without duplicate names", () => {
-  assert.equal(iconNames.length, 101);
-  assert.equal(canonicalIconNames.length, 98);
+  assert.equal(iconNames.length, 102);
+  assert.equal(canonicalIconNames.length, 99);
   assert.deepEqual(Object.keys(iconAliases).sort(), ["circle", "download"]);
   for (const name of ["thinking", "git", "duplicate", "chevron-left", "selected", "delete", "waitlist-message", "creative", "ultimate", "standard", "minimal", "arrow-down", "unselected"]) {
     assert.ok(canonicalIconNames.includes(name), name);

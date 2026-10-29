@@ -3,6 +3,7 @@
  */
 
 .welcome-panel {
+  --_welcome-mode-size: calc(var(--openbitfun-space-10) * 2);
   width: 100%;
   height: 100%;
   padding: var(--openbitfun-space-8) var(--openbitfun-space-6);
@@ -28,7 +29,145 @@
   grid-row: 2;
   display: flex;
   flex-direction: column;
-  gap: var(--openbitfun-control-flow-chat-inline-gap);
+  gap: var(--openbitfun-space-4);
+}
+
+.welcome-panel__mode-choices {
+  --_welcome-mode-gap: var(--openbitfun-space-6);
+  align-self: center;
+  display: inline-flex;
+  column-gap: 0;
+  block-size: var(--_welcome-mode-size);
+  max-inline-size: 100%;
+  transition:
+    column-gap var(--openbitfun-motion-duration-content-swap) var(--openbitfun-motion-easing-standard),
+    block-size var(--openbitfun-motion-duration-content-swap) var(--openbitfun-motion-easing-standard);
+}
+
+.welcome-panel__mode-choices[data-expanded='true'] {
+  column-gap: var(--_welcome-mode-gap);
+  block-size: calc(var(--_welcome-mode-size) + var(--openbitfun-space-2) + var(--openbitfun-space-6));
+}
+
+.welcome-panel__mode-slot {
+  flex: none;
+  inline-size: 0;
+  overflow: hidden;
+  opacity: 0;
+  transform: translateY(var(--openbitfun-space-2)) scale(0.92);
+  transition:
+    inline-size var(--openbitfun-motion-duration-content-swap) var(--openbitfun-motion-easing-standard),
+    opacity var(--openbitfun-motion-duration-normal) var(--openbitfun-motion-easing-standard),
+    transform var(--openbitfun-motion-duration-content-swap) var(--openbitfun-motion-easing-standard);
+}
+
+.welcome-panel__mode-slot[data-current='true'],
+.welcome-panel__mode-choices[data-expanded='true'] > .welcome-panel__mode-slot {
+  inline-size: var(--_welcome-mode-size);
+  opacity: 1;
+  transform: none;
+}
+
+.welcome-panel__mode-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  inline-size: var(--_welcome-mode-size);
+  block-size: 100%;
+  gap: var(--openbitfun-space-2);
+  padding: 0;
+  border: 0;
+  border-radius: var(--openbitfun-radius-lg);
+  background: transparent;
+  color: var(--openbitfun-color-content-secondary);
+  font: inherit;
+  cursor: pointer;
+  transition: background-color var(--openbitfun-motion-duration-normal) var(--openbitfun-motion-easing-standard);
+}
+
+.welcome-panel__mode-option:disabled {
+  cursor: default;
+}
+
+.welcome-panel__mode-option:focus-visible {
+  outline: 2px solid var(--openbitfun-color-accent-default);
+  outline-offset: -2px;
+}
+
+.welcome-panel__mode-option:hover:not(:disabled),
+.welcome-panel__mode-option:focus-visible {
+  background: var(--openbitfun-color-action-quiet-hover);
+}
+
+.welcome-panel__mode-name {
+  flex: none;
+  color: inherit;
+  font-family: var(--openbitfun-type-label-sm-font-family);
+  font-size: var(--openbitfun-type-label-sm-font-size);
+  font-weight: var(--openbitfun-type-label-sm-font-weight);
+  line-height: var(--openbitfun-type-label-sm-line-height);
+  letter-spacing: var(--openbitfun-type-label-sm-letter-spacing);
+  white-space: nowrap;
+  opacity: 0;
+  transform: translateY(calc(var(--openbitfun-space-1) * -1));
+  transition:
+    opacity var(--openbitfun-motion-duration-normal) var(--openbitfun-motion-easing-standard),
+    transform var(--openbitfun-motion-duration-content-swap) var(--openbitfun-motion-easing-standard);
+}
+
+.welcome-panel__mode-choices[data-expanded='true'] .welcome-panel__mode-name {
+  opacity: 1;
+  transform: none;
+}
+
+.welcome-panel__mode-slot[data-current='true'] .welcome-panel__mode-name {
+  font-weight: var(--openbitfun-type-label-selected-font-weight);
+}
+
+.welcome-panel__mode-mark {
+  flex: none;
+  align-self: center;
+  display: inline-flex;
+  color: var(--openbitfun-color-content-secondary);
+}
+
+.welcome-panel__mode-mark > [data-openbitfun-component='icon'] {
+  inline-size: var(--_welcome-mode-size);
+  block-size: var(--_welcome-mode-size);
+}
+
+.welcome-panel__mode-mark[data-harness-profile='Minimal'],
+.welcome-panel__mode-option[data-harness-profile='Minimal'] {
+  color: var(--openbitfun-color-identity-harness-minimal);
+}
+
+.welcome-panel__mode-mark[data-harness-profile='Standard'],
+.welcome-panel__mode-option[data-harness-profile='Standard'] {
+  color: var(--openbitfun-color-identity-harness-standard);
+}
+
+.welcome-panel__mode-mark[data-harness-profile='Ultimate'],
+.welcome-panel__mode-option[data-harness-profile='Ultimate'] {
+  color: var(--openbitfun-color-identity-harness-ultimate);
+}
+
+.welcome-panel__mode-mark[data-harness-profile='Creative'],
+.welcome-panel__mode-option[data-harness-profile='Creative'] {
+  color: var(--openbitfun-color-identity-harness-creative);
+}
+
+.welcome-panel__workspace-name {
+  block-size: auto;
+  padding: 0;
+  font: inherit;
+  color: var(--openbitfun-color-content-secondary);
+  letter-spacing: inherit;
+  white-space: normal;
+  vertical-align: baseline;
+}
+
+.welcome-panel__workspace-name:disabled {
+  opacity: 1;
 }
 
 .welcome-panel__details {
@@ -45,6 +184,7 @@
 
 .welcome-panel__tagline {
   margin: 0;
+  text-align: center;
   color: var(--openbitfun-color-content-primary);
   font-family: var(--openbitfun-type-page-intro-font-family);
   font-size: var(--openbitfun-type-page-intro-font-size);
@@ -71,19 +211,6 @@
   font-size: var(--openbitfun-type-flow-lead-font-size);
   line-height: var(--openbitfun-type-flow-body-line-height);
   color: var(--openbitfun-color-content-muted);
-}
-
-/* Lead text, chips, and trail text share one typographic line (baseline-aligned) */
-.welcome-panel__narrative-sentence {
-  display: inline-flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  column-gap: 0.35em;
-  row-gap: 0.25em;
-}
-
-.welcome-panel__narrative-sentence__text {
-  line-height: inherit;
 }
 
 .welcome-panel__inline-btn {
@@ -114,19 +241,6 @@
 
 .welcome-panel__inline-btn > [data-openbitfun-part='content'] { gap: inherit; }
 
-.welcome-panel__inline-btn [data-openbitfun-part='leading-icon'] {
-  --openbitfun-opacity-icon-artwork: inherit;
-  inline-size: 13px;
-  block-size: 13px;
-}
-
-.welcome-panel__inline-btn [data-openbitfun-part='trailing-icon'] {
-  --openbitfun-opacity-icon-artwork: inherit;
-  inline-size: 11px;
-  block-size: 11px;
-  opacity: 1;
-}
-
 .welcome-panel__inline-btn--interactive {
   cursor: pointer;
 }
@@ -140,72 +254,9 @@
   outline-offset: 1px;
 }
 
-.welcome-panel__inline-btn--active {
-  background: var(--openbitfun-color-surface-subtle);
-}
-
 .welcome-panel__inline-btn:disabled {
   opacity: 0.5;
   cursor: default;
-}
-
-.welcome-panel__inline-icon {
-  flex-shrink: 0;
-  display: block;
-}
-
-.welcome-panel__inline-chevron {
-  opacity: 0.5;
-  transition: transform 0.2s ease;
-  flex-shrink: 0;
-  display: block;
-}
-
-.welcome-panel__inline-chevron--open {
-  transform: rotate(180deg);
-}
-
-.welcome-panel__narrative-clean {
-  color: var(--openbitfun-color-content-secondary);
-}
-
-/* ── Context row: workspace + branch always on the same line ── */
-
-.welcome-panel__context-row {
-  display: inline-flex;
-  align-items: baseline;
-  flex-wrap: nowrap;
-  margin: 0 1px;
-}
-
-.welcome-panel__context-sep {
-  padding: 0 2px;
-  line-height: inherit;
-  color: var(--openbitfun-color-content-muted);
-  opacity: 0.4;
-  font-weight: var(--openbitfun-type-body-sm-font-weight);
-  user-select: none;
-}
-
-/* ── Workspace anchor (inline position reference for dropdown) ── */
-
-.welcome-panel__workspace-anchor {
-  position: relative;
-  display: inline-flex;
-  align-items: baseline;
-}
-
-/* Git status line: tight follow-up under workspace sentence (avoid <br> full line-gap) */
-.welcome-panel__narrative-git {
-  display: block;
-  margin-top: 0.28em;
-}
-
-/* ── Dropdown ── */
-
-.welcome-panel__dropdown {
-  position: fixed;
-  z-index: 360;
 }
 
 /* ── Cowork ── */
@@ -224,6 +275,11 @@
 /* ── Responsive ── */
 
 @media (max-width: 480px) {
+  .welcome-panel__mode-choices {
+    --_welcome-mode-size: calc(var(--openbitfun-space-8) * 2);
+    --_welcome-mode-gap: var(--openbitfun-space-2);
+  }
+
   .welcome-panel {
     padding: var(--openbitfun-space-5) var(--openbitfun-space-4);
   }
@@ -236,7 +292,11 @@
   }
 
   .welcome-panel__inline-btn,
-  .welcome-panel__inline-chevron {
+  .welcome-panel__mode-choices,
+  .welcome-panel__mode-slot,
+  .welcome-panel__mode-option,
+  .welcome-panel__mode-mark,
+  .welcome-panel__mode-name {
     transition-duration: 0ms;
   }
 }

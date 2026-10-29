@@ -3322,6 +3322,7 @@
     }
   },
   "welcome": {
+    "openingWorkspace": "What would you like to do in <workspace>{{workspace}}</workspace>?",
     "openingMorning": "Good morning. The day starts with you.",
     "openingAfternoon": "Good afternoon. Let's make today a little more interesting.",
     "openingEvening": "Good evening. Set your own pace.",
