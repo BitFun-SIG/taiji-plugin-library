@@ -31,6 +31,8 @@ const workspaceMocks = vi.hoisted(() => ({
   currentWorkspace: { id: 'workspace-1', name: 'OpenBitFun', rootPath: 'D:/workspace/OpenBitFun', workspaceKind: 'normal' },
   openedWorkspaces: new Map<string, WorkspaceInfo>(),
   selectDraftWorkspace: vi.fn(),
+  createChatDraft: vi.fn(),
+  openMainSession: vi.fn(),
   openWorkspace: vi.fn(),
   switchWorkspace: vi.fn(),
   switchLeftPanelTab: vi.fn(),
@@ -39,6 +41,11 @@ const workspaceMocks = vi.hoisted(() => ({
 
 vi.mock('../services/FlowChatManager', () => ({
   FlowChatManager: { getInstance: () => workspaceMocks },
+}));
+
+vi.mock('../services/sessionActivation', () => ({
+  openMainSession: workspaceMocks.openMainSession,
+  activateMainSession: vi.fn(),
 }));
 
 vi.mock('react-i18next', async importOriginal => {
@@ -160,6 +167,8 @@ describe('WelcomePanel empty session presentation', () => {
     vi.clearAllMocks();
     workspaceMocks.hasWorkspace = true;
     workspaceMocks.selectDraftWorkspace.mockReset();
+    workspaceMocks.createChatDraft.mockResolvedValue('selected-workspace-draft');
+    workspaceMocks.openMainSession.mockReset();
     workspaceMocks.gitScopes.length = 0;
     workspaceMocks.openedWorkspaces = new Map([
       ['workspace-1', workspaceMocks.currentWorkspace as WorkspaceInfo],
@@ -180,6 +189,38 @@ describe('WelcomePanel empty session presentation', () => {
     document.documentElement.removeAttribute('data-openbitfun-appearance-revision');
     container.remove();
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  it('keeps the caption measured and mounted while inline modes expand and the pane resizes', async () => {
+    let captionWidth = 248;
+    let notifyResize = () => {};
+    const originalRect = HTMLElement.prototype.getBoundingClientRect;
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      return this.classList.contains('welcome-panel__caption-content')
+        ? new DOMRect(0, 0, captionWidth, 32) : originalRect.call(this);
+    });
+    vi.stubGlobal('ResizeObserver', class {
+      constructor(callback: () => void) { notifyResize = callback; }
+      observe() {}
+      disconnect() {}
+    });
+    await act(async () => root.render(<WelcomePanel session={newDraft()} />));
+    const caption = container.querySelector<HTMLElement>('[data-openbitfun-product-part="caption"]')!;
+    const workspaceTrigger = container.querySelector('[data-openbitfun-product-part="workspaceAction"]');
+    expect(caption.style.getPropertyValue('--_welcome-caption-width')).toBe('248px');
+    const mode = container.querySelector<HTMLButtonElement>('[data-openbitfun-product-part="modeOption"][aria-pressed="true"]')!;
+    await act(async () => mode.click());
+    expect(caption.getAttribute('aria-hidden')).toBe('true');
+    captionWidth = 180;
+    act(() => notifyResize());
+    expect(caption.style.getPropertyValue('--_welcome-caption-width')).toBe('180px');
+    await act(async () => {
+      mode.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    });
+    expect(caption.getAttribute('aria-hidden')).toBe('false');
+    expect(container.querySelector('[data-openbitfun-product-part="caption"]')).toBe(caption);
+    expect(container.querySelector('[data-openbitfun-product-part="workspaceAction"]')).toBe(workspaceTrigger);
   });
 
   it('expands four named modes and gathers the same icons around the new selection', async () => {
@@ -247,12 +288,18 @@ describe('WelcomePanel empty session presentation', () => {
       strategy: 'follow_last', fixedModeId: null, lastModeId: 'Ultimate',
     });
     await act(async () => root.render(<SessionSurface />));
+    const caption = container.querySelector('[data-openbitfun-product-part="caption"]')!;
     const buttons = [...container.querySelectorAll<HTMLButtonElement>('[data-openbitfun-product-part="modeOption"]')];
     await act(async () => buttons[1].click());
+    expect(caption.getAttribute('aria-hidden')).toBe('true');
+    expect(container.querySelector('[data-openbitfun-product-part="greeting"]')?.getAttribute('data-mode-expanded')).toBe('true');
+    expect(container.querySelector<HTMLButtonElement>('[data-openbitfun-product-part="workspaceAction"]')?.disabled).toBe(true);
     await act(async () => buttons[2].click());
     expect(update).toHaveBeenCalledWith('draft-session', 'Ultimate');
     expect(remember).toHaveBeenCalledWith('Ultimate');
     expect(container.querySelector('[data-expanded="true"]')).toBeNull();
+    expect(container.querySelector('[data-openbitfun-product-part="caption"]')).toBe(caption);
+    expect(caption.getAttribute('aria-hidden')).toBe('false');
     if (draft) {
       expect(hostUpdate).not.toHaveBeenCalled();
     } else {
@@ -281,7 +328,7 @@ describe('WelcomePanel empty session presentation', () => {
       root.render(<WelcomePanel sessionMode="Standard" />);
     });
 
-    expect(container.querySelector('[data-openbitfun-product-part="heading"]')?.textContent).toBe('想在 OpenBitFun 里做点什么？');
+    expect(container.querySelector('[data-openbitfun-product-part="heading"]')?.textContent).toBe('在 OpenBitFun，开工。');
     expect(container.querySelector('[data-openbitfun-product-part="narrative"]')).toBeNull();
     expect(container.querySelector('[data-openbitfun-product-part="divider"]')).toBeNull();
     expect(container.querySelector('.welcome-panel__details')).toBeNull();
@@ -318,7 +365,7 @@ describe('WelcomePanel empty session presentation', () => {
     await act(async () => otherProject.click());
 
     expect(stripTrigger().textContent).toContain('Other project');
-    expect(container.querySelector('[data-openbitfun-product-part="heading"]')?.textContent).toBe('想在 Other project 里做点什么？');
+    expect(container.querySelector('[data-openbitfun-product-part="heading"]')?.textContent).toBe('在 Other project，开工。');
     expect(container.querySelector('[data-openbitfun-product-part="narrative"]')).toBeNull();
     expect(workspaceMocks.gitScopes).toEqual([]);
     expect(container.querySelector('[data-testid="canonical-workspace"]')?.textContent).toBe('workspace-1');
@@ -346,15 +393,32 @@ describe('WelcomePanel empty session presentation', () => {
     expect(workspaceMocks.gitScopes).toEqual([]);
   });
 
-  it('keeps an existing empty session free of the workspace summary', async () => {
+  it('allows an existing empty session to enter another workspace without changing its owner', async () => {
     const session = { ...newDraft(), draft: undefined, workspaceId: 'workspace-2' };
+    workspaceMocks.openMainSession.mockImplementation(async (_id, options) => {
+      await options.activateWorkspace(options.workspaceId);
+    });
     await act(async () => root.render(<WelcomePanel session={session} />));
 
     expect(container.querySelector('[data-openbitfun-product-part="narrative"]')).toBeNull();
-    expect(container.querySelector('[data-openbitfun-product-part="heading"]')?.textContent).toBe('想在 Other project 里做点什么？');
-    expect(container.querySelector<HTMLButtonElement>('[data-openbitfun-product-part="workspaceAction"]')?.disabled).toBe(true);
+    expect(container.querySelector('[data-openbitfun-product-part="heading"]')?.textContent).toBe('在 Other project，开工。');
+    const trigger = container.querySelector<HTMLButtonElement>('[data-openbitfun-product-part="workspaceAction"]')!;
+    expect(trigger.disabled).toBe(false);
+    await act(async () => trigger.click());
+    const menu = document.querySelector('[data-openbitfun-product-part="workspaceMenu"]')!;
+    const option = [...menu.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]')]
+      .find(item => item.textContent?.includes('OpenBitFun'))!;
+    await act(async () => option.click());
+    expect(workspaceMocks.createChatDraft).toHaveBeenCalledWith({
+      workspaceId: 'workspace-1', workspacePath: 'D:/workspace/OpenBitFun',
+    }, 'Standard');
+    expect(workspaceMocks.openMainSession).toHaveBeenCalledWith('selected-workspace-draft', {
+      workspaceId: 'workspace-1', activateWorkspace: expect.any(Function), isCurrent: expect.any(Function),
+    });
+    expect(workspaceMocks.switchWorkspace).toHaveBeenCalledWith(workspaceMocks.currentWorkspace);
+    expect(workspaceMocks.selectDraftWorkspace).not.toHaveBeenCalled();
+    expect(session.workspaceId).toBe('workspace-2');
     expect(workspaceMocks.gitScopes).toEqual([]);
-    expect(workspaceMocks.switchWorkspace).not.toHaveBeenCalled();
   });
 
   it('opens the shared project directory flow for other local or remote sources', async () => {

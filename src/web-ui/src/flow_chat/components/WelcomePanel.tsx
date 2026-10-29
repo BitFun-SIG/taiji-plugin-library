@@ -3,7 +3,7 @@
  * The heading is centered above the floating composer; supporting content follows below.
  */
 
-import React, { useState, useCallback, useEffect, useId, useMemo, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 import { Button, Icon, MenuPopover, PageHeader, type MenuEntry } from '@openbitfun/ui';
 import { createLogger } from '@/shared/utils/logger';
@@ -14,11 +14,14 @@ import { HARNESS_PRESENTATION } from '@/shared/agents/harnessPresentation';
 import { notificationService } from '@/shared/notification-system';
 import { getActiveSurfaceScope } from '@/infrastructure/peer-device/deviceSurface';
 import CoworkExampleCards from './CoworkExampleCards';
+import { AssistantAvatar } from '@/app/components/AssistantAvatar';
 import { useAgentIdentityDocument } from '@/app/scenes/my-agent/useAgentIdentityDocument';
+import { flowChatSessionConfigForWorkspace } from '@/app/utils/projectSessionWorkspace';
 import { useSessionWorkspaceSelection } from '../hooks/useSessionWorkspaceSelection';
 import { useSessionModeSelection } from '../hooks/useSessionModeSelection';
 import { FlowChatStore } from '../store/FlowChatStore';
 import { chatInputModePreferenceService } from '../services/ChatInputModePreferenceService';
+import { FlowChatManager } from '../services/FlowChatManager';
 import { resolveChatInputExecutionLevelPolicy } from '../utils/chatInputExecutionLevelPolicy';
 import { isSessionBindingLocked } from '../utils/sessionLifecycle';
 import { acpAgentTypeFromSession } from '../utils/acpSession';
@@ -31,11 +34,12 @@ import './WelcomePanel.css';
 const log = createLogger('WelcomePanel');
 
 /** Keep all four marks mounted so interrupted expansion and selection reverse smoothly. */
-export function WelcomeModeSelector({ profile, disabled, pending, onSelect }: {
+export function WelcomeModeSelector({ profile, disabled, pending, onSelect, onExpandedChange }: {
   profile: HarnessId;
   disabled: boolean;
   pending: boolean;
   onSelect: (profile: HarnessId) => void;
+  onExpandedChange?: (expanded: boolean) => void;
 }) {
   const { t } = useTranslation('flow-chat');
   const [expanded, setExpanded] = useState(false);
@@ -44,6 +48,10 @@ export function WelcomeModeSelector({ profile, disabled, pending, onSelect }: {
   const buttonsRef = useRef<Partial<Record<HarnessId, HTMLButtonElement | null>>>({});
   const choicesId = useId();
   const name = (id: HarnessId) => agentName({ id, name: id }, t);
+
+  useLayoutEffect(() => {
+    onExpandedChange?.(expanded);
+  }, [expanded, onExpandedChange]);
 
   useEffect(() => {
     setExpanded(false);
@@ -178,7 +186,10 @@ export const WelcomePanel: React.FC<WelcomePanelProps> = ({
   const inputOverlayInsetPx = computeFlowChatInputOverlayInsetPx(inputHeight);
   const [isSelectingWorkspace, setIsSelectingWorkspace] = useState(false);
   const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
+  const [modeSelectorExpanded, setModeSelectorExpanded] = useState(false);
   const workspaceTriggerRef = useRef<HTMLButtonElement>(null);
+  const captionRef = useRef<HTMLDivElement>(null);
+  const captionContentRef = useRef<HTMLDivElement>(null);
 
   const {
     hasWorkspace: hasActiveWorkspace,
@@ -199,9 +210,10 @@ export const WelcomePanel: React.FC<WelcomePanelProps> = ({
   const isCoworkSession = sessionModeLower === 'cowork';
   const isClawSession = sessionModeLower === 'claw';
   const harnessProfile = canonicalHarnessId(sessionMode || 'Standard');
+  const isModeExpanded = Boolean(harnessProfile && modeSelectorExpanded);
   const workspaceName = hasWorkspace ? workspace?.name.trim() : undefined;
   const showWorkspaceHeading = !isCoworkSession && !isClawSession && Boolean(workspaceName);
-  const canSelectWorkspace = !session || !workspaceControl.locked;
+  const canSelectWorkspace = !isSelectingWorkspace && (!session?.draft || session.draft.phase === 'editing');
   const surface = getActiveSurfaceScope();
   const executionPolicy = resolveChatInputExecutionLevelPolicy({
     isAssistantWorkspace: workspace?.workspaceKind === WorkspaceKind.Assistant,
@@ -247,21 +259,42 @@ export const WelcomePanel: React.FC<WelcomePanelProps> = ({
 
   useEffect(() => {
     setWorkspaceMenuOpen(false);
-  }, [session?.sessionId, workspaceId, canSelectWorkspace]);
+  }, [session?.sessionId, workspaceId, canSelectWorkspace, isModeExpanded]);
 
   const handleSelectWorkspace = useCallback(async (target: WorkspaceInfo) => {
     setWorkspaceMenuOpen(false);
-    if (session) {
+    if (!surface.isCurrent() || !canSelectWorkspace || target.id === workspaceId) return;
+    if (session && !workspaceControl.locked) {
       workspaceControl.onSelect(target.id);
       return;
     }
+    setIsSelectingWorkspace(true);
     try {
-      await switchWorkspace(target);
+      if (session) {
+        // A persisted session keeps its owner. Enter the selected workspace
+        // through the same fresh-draft/navigation path as the sidebar.
+        const nextSessionId = await FlowChatManager.getInstance().createChatDraft(
+          flowChatSessionConfigForWorkspace(target), harnessProfile ?? undefined,
+        );
+        surface.assertCurrent('open selected workspace conversation');
+        const { openMainSession } = await import('../services/sessionActivation');
+        surface.assertCurrent('navigate selected workspace conversation');
+        await openMainSession(nextSessionId, {
+          workspaceId: target.id,
+          activateWorkspace: () => switchWorkspace(target),
+          isCurrent: () => surface.isCurrent(),
+        });
+      } else {
+        await switchWorkspace(target);
+      }
     } catch (error) {
+      if (!surface.isCurrent()) return;
       log.warn('Failed to switch workspace', error);
       notificationService.error(t('workspaceStrip.unavailable'));
+    } finally {
+      if (surface.isCurrent()) setIsSelectingWorkspace(false);
     }
-  }, [session, workspaceControl, switchWorkspace, t]);
+  }, [session, workspaceControl, switchWorkspace, t, surface, canSelectWorkspace, workspaceId, harnessProfile]);
 
   const workspaceMenuItems = useMemo<MenuEntry[]>(() => {
     const options = session ? workspaceControl.options : [...openedWorkspaces.values()]
@@ -295,29 +328,49 @@ export const WelcomePanel: React.FC<WelcomePanelProps> = ({
 
   const greeting = useMemo(() => {
     const hour = new Date().getHours();
-    const s = isCoworkSession ? 'Cowork' : isClawSession ? 'Claw' : '';
+    const showGreeting = isCoworkSession || isClawSession;
     if (hour >= 5 && hour < 12) return {
-      title: s ? t('welcome.greetingMorning') : t('welcome.openingMorning'),
-      subtitle: s ? t(`welcome.subtitleMorning${s}`) : undefined,
+      title: showGreeting ? t('welcome.greetingMorning') : t('welcome.openingMorning'),
+      subtitle: isCoworkSession ? t('welcome.subtitleMorningCowork') : undefined,
     };
     if (hour >= 12 && hour < 18) return {
-      title: s ? t('welcome.greetingAfternoon') : t('welcome.openingAfternoon'),
-      subtitle: s ? t(`welcome.subtitleAfternoon${s}`) : undefined,
+      title: showGreeting ? t('welcome.greetingAfternoon') : t('welcome.openingAfternoon'),
+      subtitle: isCoworkSession ? t('welcome.subtitleAfternoonCowork') : undefined,
     };
     if (hour >= 18 && hour < 23) return {
-      title: s ? t('welcome.greetingEvening') : t('welcome.openingEvening'),
-      subtitle: s ? t(`welcome.subtitleEvening${s}`) : undefined,
+      title: showGreeting ? t('welcome.greetingEvening') : t('welcome.openingEvening'),
+      subtitle: isCoworkSession ? t('welcome.subtitleEveningCowork') : undefined,
     };
     return {
-      title: s ? t('welcome.greetingNight') : t('welcome.openingNight'),
-      subtitle: s ? t(`welcome.subtitleNight${s}`) : undefined,
+      title: showGreeting ? t('welcome.greetingNight') : t('welcome.openingNight'),
+      subtitle: isCoworkSession ? t('welcome.subtitleNightCowork') : undefined,
     };
   }, [t, isCoworkSession, isClawSession]);
 
-  const showNarrative = isClawSession || !hasWorkspace;
+  const showNarrative = !isClawSession && !hasWorkspace;
   const showDetails = Boolean(greeting.subtitle) || showNarrative || isCoworkSession;
 
   const aiPartnerKey = isCoworkSession ? 'welcome.aiPartnerCowork' : isClawSession ? 'welcome.aiPartnerClaw' : null;
+
+  // Measure the caption independently of its animated shell, so it can give
+  // the mode choices its exact space without wrapping or jumping mid-motion.
+  useLayoutEffect(() => {
+    const shell = captionRef.current;
+    const content = captionContentRef.current;
+    if (!shell || !content) return;
+    const measure = () => {
+      const width = content.getBoundingClientRect().width;
+      if (width > 0) shell.style.setProperty('--_welcome-caption-width', `${width}px`);
+    };
+    measure();
+    const observer = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(measure);
+    observer?.observe(content);
+    window.addEventListener('resize', measure);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener('resize', measure);
+    };
+  }, [greeting.title, workspaceName, aiPartnerKey, assistantName, t]);
 
   const handleOpenOtherFolder = useCallback(async () => {
     try {
@@ -345,10 +398,12 @@ export const WelcomePanel: React.FC<WelcomePanelProps> = ({
       style={{ height: `max(0px, calc(100% - ${inputOverlayInsetPx}px))` }}>
       <div data-openbitfun-product-component="welcome-panel" data-openbitfun-product-part="content" className="welcome-panel__content">
         {/* Greeting */}
-        <div data-openbitfun-product-component="welcome-panel" data-openbitfun-product-part="greeting" className="welcome-panel__greeting">
+        <div data-openbitfun-product-component="welcome-panel" data-openbitfun-product-part="greeting"
+          className="welcome-panel__greeting" data-mode-expanded={isModeExpanded}>
           {harnessProfile ? (
             <WelcomeModeSelector profile={harnessProfile} disabled={!canSelectMode}
-              pending={isModeChangePending} onSelect={handleSelectMode} />
+              pending={isModeChangePending} onSelect={handleSelectMode}
+              onExpandedChange={setModeSelectorExpanded} />
           ) : <span
             className="welcome-panel__mode-mark"
             data-openbitfun-product-component="welcome-panel"
@@ -356,48 +411,54 @@ export const WelcomePanel: React.FC<WelcomePanelProps> = ({
             data-harness-profile={harnessProfile ?? 'other'}
             aria-hidden
           >
-            <Icon name="user" size="lg" />
+            {isClawSession
+              ? <AssistantAvatar size="lg" className="welcome-panel__assistant-avatar" />
+              : <Icon name="user" size="lg" />}
           </span>}
-          <PageHeader
-            align="center"
-            size="display"
-            title={<span data-openbitfun-product-component="welcome-panel" data-openbitfun-product-part="heading">
-              {showWorkspaceHeading ? (
-                <Trans
-                  i18nKey="welcome.openingWorkspace"
-                  t={t}
-                  values={{ workspace: workspaceName }}
-                  components={{
-                    workspace: (
-                      <Button
-                        ref={workspaceTriggerRef}
-                        labelBehavior="static"
-                        variant="text"
-                        className="welcome-panel__workspace-name"
-                        data-openbitfun-product-component="welcome-panel"
-                        data-openbitfun-product-part="workspaceAction"
-                        data-openbitfun-state={workspaceMenuOpen ? 'open' : undefined}
-                        onClick={() => setWorkspaceMenuOpen(open => !open)}
-                        disabled={!canSelectWorkspace}
-                        aria-haspopup="menu"
-                        aria-expanded={workspaceMenuOpen && canSelectWorkspace}
-                        title={tCommon('header.selectProjectDirectory')}
-                      >
-                        {workspaceName}
-                      </Button>
-                    ),
-                  }}
-                />
-              ) : greeting.title}
-              {aiPartnerKey && <>，{t(aiPartnerKey)}{isClawSession && assistantName ? `，${assistantName}` : ''}</>}
-            </span>}
-          />
+          <div ref={captionRef} className="welcome-panel__caption" aria-hidden={isModeExpanded}
+            data-openbitfun-product-component="welcome-panel" data-openbitfun-product-part="caption">
+            <PageHeader
+              ref={captionContentRef}
+              className="welcome-panel__caption-content"
+              align="start"
+              size="display"
+              title={<span data-openbitfun-product-component="welcome-panel" data-openbitfun-product-part="heading">
+                {showWorkspaceHeading ? (
+                  <Trans
+                    i18nKey="welcome.openingWorkspace"
+                    t={t}
+                    values={{ workspace: workspaceName }}
+                    components={{
+                      workspace: (
+                        <button
+                          ref={workspaceTriggerRef}
+                          type="button"
+                          className="welcome-panel__workspace-name"
+                          data-openbitfun-product-component="welcome-panel"
+                          data-openbitfun-product-part="workspaceAction"
+                          data-openbitfun-state={workspaceMenuOpen ? 'open' : undefined}
+                          onClick={() => setWorkspaceMenuOpen(open => !open)}
+                          disabled={!canSelectWorkspace || isModeExpanded}
+                          aria-haspopup="menu"
+                          aria-expanded={workspaceMenuOpen && canSelectWorkspace}
+                          title={tCommon('header.selectProjectDirectory')}
+                        >
+                          {workspaceName}
+                        </button>
+                      ),
+                    }}
+                  />
+                ) : greeting.title}
+                {aiPartnerKey && <>，{t(aiPartnerKey)}{isClawSession && assistantName ? `，${assistantName}` : ''}</>}
+              </span>}
+            />
+          </div>
         </div>
 
         <MenuPopover
           anchorRef={workspaceTriggerRef}
           items={workspaceMenuItems}
-          open={workspaceMenuOpen && showWorkspaceHeading && canSelectWorkspace}
+          open={workspaceMenuOpen && showWorkspaceHeading && canSelectWorkspace && !isModeExpanded}
           onClose={() => setWorkspaceMenuOpen(false)}
           placement="bottom"
           aria-label={tCommon('header.selectProjectDirectory')}
@@ -415,22 +476,18 @@ export const WelcomePanel: React.FC<WelcomePanelProps> = ({
             {showNarrative && (
               <div data-openbitfun-product-component="welcome-panel" data-openbitfun-product-part="narrative" className="welcome-panel__narrative">
                 <p className="welcome-panel__narrative-text">
-                  {isClawSession ? t('welcome.narrativeClaw') : (
-                    <>
-                      {t('welcome.noWorkspaceHint')}
-                      <Button labelBehavior="static" variant="text"
-                        type="button"
-                        data-openbitfun-product-component="welcome-panel"
-                        data-openbitfun-product-part="openWorkspaceAction"
-                        className="welcome-panel__inline-btn welcome-panel__inline-btn--interactive"
-                        onClick={() => { void handleOpenOtherFolder(); }}
-                        disabled={isSelectingWorkspace}
-                      >
-                        {t('welcome.openOne')}
-                      </Button>
-                      {' '}{t('welcome.toStart')}
-                    </>
-                  )}
+                  {t('welcome.noWorkspaceHint')}
+                  <Button labelBehavior="static" variant="text"
+                    type="button"
+                    data-openbitfun-product-component="welcome-panel"
+                    data-openbitfun-product-part="openWorkspaceAction"
+                    className="welcome-panel__inline-btn welcome-panel__inline-btn--interactive"
+                    onClick={() => { void handleOpenOtherFolder(); }}
+                    disabled={isSelectingWorkspace}
+                  >
+                    {t('welcome.openOne')}
+                  </Button>
+                  {' '}{t('welcome.toStart')}
                 </p>
               </div>
             )}
