@@ -192,6 +192,15 @@ Narrower local guides already exist for some subtrees:
 
 ## Verification
 
+For Agent name references, enabled-catalog admission, and prompt catalog names:
+
+```bash
+cargo test --locked -p openbitfun-core --no-default-features --features agent-runtime,git --lib agentic::tools::implementations::task::tests
+```
+
+These fixtures cover prompt name mappings and simulated workspace policies;
+they do not establish live SSH, relay, Peer, or Detached Dispatch behavior.
+
 For smart routing, unchanged subagent model policy and resumed subagent choices:
 
 ```bash

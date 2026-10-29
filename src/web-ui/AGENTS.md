@@ -108,6 +108,15 @@ deliberate layout transitions or animate virtualized content. Rely on CI for
 full lint, build, and broad test coverage unless the local change specifically
 needs it.
 
+For Agent creation, hidden internal IDs, editing, and surface-switch draft fences:
+
+```bash
+pnpm --dir src/web-ui run test:run src/app/scenes/agents/components/CreateAgentDialog.test.tsx src/app/scenes/agents/components/suggestAgentId.test.ts src/app/scenes/agents/components/CreateAgentPage.presentation.test.ts src/app/scenes/agents/AgentsScene.test.tsx src/app/scenes/personal-overview/PersonalOverviewScene.actions.test.tsx
+```
+
+These DOM fixtures cover local forms and simulated Peer surface switches;
+they do not establish native rendering or live remote behavior.
+
 For navigation-divider dragging, elastic feedback, cancellation, and keyboard resizing:
 
 ```bash
@@ -172,6 +181,15 @@ also run the focused state contracts:
 pnpm --dir src/web-ui run test:run src/app/services/sessionSceneLifecycle.test.ts src/flow_chat/services/sessionActivation.test.ts src/flow_chat/services/storeSync.test.ts src/app/stores/sceneStore.test.ts
 ```
 
+For top workspace tab recent-session disclosure, selection and reconciliation:
+
+```bash
+pnpm --dir src/web-ui run test:run src/app/components/SceneBar/SceneBar.test.tsx src/app/stores/sceneStore.test.ts src/app/services/sessionSceneLifecycle.test.ts src/app/hooks/useSessionTabLabels.test.tsx src/shared/ui/MenuPopover.test.tsx src/shared/ui/MenuComposition.contract.test.ts
+```
+
+These local DOM/store fixtures cover bounded history, legacy tabs and simulated
+SSH/Peer identities; they do not establish native rendering or live remote behavior.
+
 For composer mode restoration, passive synchronization, or explicit mode selection:
 
 ```bash
@@ -217,6 +235,15 @@ pnpm --dir src/web-ui run test:run src/app/components/NavPanel/components/Worksp
 ```
 
 These DOM and store fixtures do not establish native rendering or live remote behavior.
+
+For assistant history disclosure and default-session selection:
+
+```bash
+pnpm --dir src/web-ui run test:run src/app/components/NavPanel/sections/workspaces/WorkspaceListSectionLayout.test.ts src/app/components/NavPanel/sections/workspaces/AssistantSessionHistory.test.tsx src/app/components/NavPanel/sections/workspaces/assistantSessionPreferences.test.ts
+```
+
+These local fixtures cover inline disclosure and legacy-host preference gating;
+they do not establish native rendering or live remote behavior.
 
 For application update discovery, skip persistence, notification timing, and
 download/install transitions, run the focused behavior tests (these do not

@@ -2709,7 +2709,6 @@ const ModelSettingsPage: React.FC = () => {
       <ConfigPageLayout className="openbitfun-model-settings" data-openbitfun-component="model-settings" data-openbitfun-part="root" data-openbitfun-view="selection">
         <ConfigPageHeader
           title={t('providerSelection.title')}
-          subtitle={t('providerSelection.subtitle')}
         />
 
         <ConfigPageContent className="openbitfun-model-settings__content openbitfun-model-settings__content--selection">
@@ -3896,9 +3895,6 @@ const ModelSettingsPage: React.FC = () => {
             {isProviderScopedEditing && (
               <ConfigPageSection
                 title={t('editProviderSettingsTitle')}
-                description={t(authIsSubscription
-                  ? 'subscriptionAuth.editorDescription'
-                  : providerIdentityLocked ? 'editConfiguredProviderSubtitle' : 'editProviderSubtitle')}
                 className="openbitfun-model-settings__edit-section openbitfun-model-settings__connection-section"
                 fieldSurface="default"
               >
@@ -4656,7 +4652,6 @@ const ModelSettingsPage: React.FC = () => {
     <ConfigPageLayout className="openbitfun-model-settings" data-openbitfun-component="model-settings" data-openbitfun-part="root" data-openbitfun-view="settings">
       <ConfigPageHeader
         title={t('title')}
-        subtitle={t('subtitle')}
       />
 
       <ConfigPageContent className="openbitfun-model-settings__content">
@@ -4890,7 +4885,6 @@ const ModelSettingsPage: React.FC = () => {
           <div className="openbitfun-model-settings__advanced-sections">
             <ConfigPageSection
               title={t('streamIdleTimeout.title')}
-              description={t('streamIdleTimeout.effectiveNextRound')}
             >
               <ConfigPageRow
                 label={streamTtftTimeoutLabel}
@@ -4937,7 +4931,6 @@ const ModelSettingsPage: React.FC = () => {
 
             <ConfigPageSection
               title={tDefault('sections.proxy')}
-              description={t('proxy.enableHint')}
             >
               <ConfigPageRow label={t('proxy.enable')} align="center">
                 {proxyLoadState === 'ready' ? <Switch
@@ -5032,7 +5025,6 @@ const ModelSettingsPage: React.FC = () => {
             className="openbitfun-model-settings__models-section"
             bodySurface={false}
             title={tDefault('sections.providers')}
-            description={t('providersDescription')}
             extra={(
               <Tooltip content={t('actions.addProvider')}>
                 <IconButton

@@ -1687,6 +1687,7 @@
     "panelView": "Panel View"
   },
   "sceneBar": {
+    "recentSessions": "Recently opened sessions",
     "tabsLabel": "Scene tabs",
     "scrollPrevious": "Scroll tabs left",
     "scrollNext": "Scroll tabs right",

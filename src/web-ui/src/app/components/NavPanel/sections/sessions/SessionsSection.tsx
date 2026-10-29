@@ -1619,6 +1619,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
             <div
               className={[
                 'openbitfun-nav-panel__inline-item',
+                sessionWorkspaceScope && !isChildSession && 'has-workspace-name',
                 showAssistantIdentity && 'is-assistant-session',
                 level === 1 && 'is-child',
                 isChildSession && 'is-btw-child',
