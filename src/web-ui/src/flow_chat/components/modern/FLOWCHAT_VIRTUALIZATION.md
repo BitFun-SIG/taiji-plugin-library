@@ -416,12 +416,21 @@ embedded transcripts without a rail keep their own layout. The scroller remains
 full width.
 The shared content-padding token defaults to 0.75rem on wide and narrow surfaces,
 keeping the reading column compact while leaving room for decoration and targets.
-The borderless bubble extends into that gutter by its corner radius, and its inner
-padding matches that radius so user text, timestamps, reply prose, and completion
-metadata keep the same content axis. Content-fit bubbles have an 8rem minimum that
-is capped by the 72% message-width limit on narrow surfaces. Content below that
-minimum stays shrink-wrapped and centered; content that reaches the available line
-width retains leading text alignment and wraps normally.
+The borderless bubble ends at the reading column's trailing content edge, with
+inner padding matching its corner radius. Bubbles fit their content without a
+minimum width. Collapsed previews are capped at 28rem and the shared message-width
+limit (72% of the column, up to 48rem by default). Text after the third explicit
+line break is kept in a span outside layout while collapsed, so hidden long lines
+do not contribute to intrinsic width. The visible prefix sizes the bubble; CSS
+still clamps wrapped text to three visual lines. A generated ellipsis marks the
+hidden suffix without changing the rendered-text coordinate sequence. Reference
+capsules stay intact, and copy/edit continue to use the full source.
+Expanding restores the suffix and removes the preview cap: the bubble grows
+leftward as needed from the same trailing edge and downward up to its existing
+60vh scroll limit. Editing retains the full reading-column width. Narrow columns
+remain bounded by the shared width limit.
+These changes use normal layout and the existing resize measurement path, with
+no layout animation or viewport writes.
 Both metadata rows align the last icon frame with the content's trailing edge,
 retaining 28px hit targets and the same compact action gap. Each action cluster
 wraps as a whole when space is limited. A half-space-1 gap groups user metadata
