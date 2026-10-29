@@ -130,6 +130,7 @@ export type StartTurnResult = 'completed' | 'detached' | 'queued';
 /** Localized strings the usage-report flow surfaces; supplied by the caller. */
 export interface UsageReportUiParams {
   isProcessing: boolean;
+  reportTitle?: string;
   busyMessage: string;
   noWorkspaceMessage: string;
   failedTitle: string;

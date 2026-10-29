@@ -1,4 +1,12 @@
 {
+  "contentWidth": {
+    "title": "对话内容宽度",
+    "label": "偏好宽度",
+    "description": "最小 {{min}} px。显示宽度会根据面板自动收窄，并保留两侧间距。也可拖拽内容边界调整，设置会在当前设备记忆。",
+    "reset": "恢复默认",
+    "decrease": "缩小对话内容宽度",
+    "increase": "增大对话内容宽度"
+  },
   "title": "外观",
   "subtitle": "调整主题与字体大小",
   "sessionPanel": {

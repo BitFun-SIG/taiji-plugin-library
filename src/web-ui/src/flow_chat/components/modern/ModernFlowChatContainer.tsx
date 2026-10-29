@@ -130,6 +130,8 @@ interface ModernFlowChatContainerProps {
   isViewportActive?: boolean;
   /** The hosting pane is being resized; width-derived measurement waits for it to settle. */
   resizeSuspended?: boolean;
+  /** Preferred reading-column width; invalidates cached row heights on change. */
+  contentWidth?: number;
   /** Whether the host-owned session right panel is open. */
   isRightPanelOpen?: boolean;
   /** Toggle the host-owned session right panel. */
@@ -302,6 +304,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
   className = '',
   isViewportActive = true,
   resizeSuspended = false,
+  contentWidth,
   isRightPanelOpen = false,
   onToggleRightPanel,
   emptyState,
@@ -2809,6 +2812,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
                   latestTurnId={latestTurnId}
                   isViewportActive={isViewportActive}
                   measurementSuspended={resizeSuspended}
+                  contentWidth={contentWidth}
                   presentationMode={isRenderingHistoryProjection ? 'history-window' : 'tail'}
                   viewportMode={isViewportDetachedFromLiveTail ? 'history-reading' : 'live-tail'}
                   historyWindow={isShowingHistoryPresentation ? activeHistoryPresentation?.range ?? null : null}

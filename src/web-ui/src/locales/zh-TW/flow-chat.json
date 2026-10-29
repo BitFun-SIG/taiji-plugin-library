@@ -1,4 +1,8 @@
 {
+  "contentWidth": {
+    "resizeLeft": "從左側調整對話內容寬度",
+    "resizeRight": "從右側調整對話內容寬度"
+  },
   "externalHistory": {
     "removed": "來源對話已從 OpenBitFun 移除，目前分支保留獨立歷史。",
     "restoreSource": "重新新增來源對話",
@@ -198,6 +202,79 @@
     "retry": "重試"
   },
   "usage": {
+    "toolDefinitions": {
+      "required": "必填",
+      "optional": "可選",
+      "anyValue": "允許任意值。",
+      "noValue": "不接受任何值。",
+      "items": "陣列元素",
+      "prefixItems": "元組元素",
+      "oneOf": "符合其中一項",
+      "anyOf": "符合一項或多項",
+      "allOf": "符合所有條件",
+      "definitions": "參照定義",
+      "enum": "可選值",
+      "default": "預設值",
+      "constraints": {
+        "const": "固定值",
+        "minimum": "最小值",
+        "maximum": "最大值",
+        "exclusiveMinimum": "大於",
+        "exclusiveMaximum": "小於",
+        "minLength": "最短長度",
+        "maxLength": "最長長度",
+        "minItems": "最少項數",
+        "maxItems": "最多項數",
+        "pattern": "比對模式",
+        "format": "格式",
+        "additionalProperties": "額外參數",
+        "reference": "參照"
+      },
+      "search": "搜尋工具或參數",
+      "clearSearch": "清除搜尋",
+      "unavailable": "無法讀取這些工具定義。",
+      "noMatches": "沒有符合的工具",
+      "empty": "此請求沒有工具定義",
+      "parameters": "參數",
+      "noParameters": "不接受參數。",
+      "anyParameters": "未限制參數。",
+      "notes": "工具呼叫說明"
+    },
+    "context": {
+      "title": "上下文組成",
+      "estimated": "估算",
+      "estimatedTokens": "估算 Token",
+      "estimateHelp": "依據最近一次已記錄的模型請求估算。規則包含專案及使用者指令，技能與子代理包含其定義清單；分類數量並非模型提供方回報的精確值。",
+      "unavailable": "尚未記錄上下文分類資料",
+      "previewCategory": "預覽{{category}}",
+      "previewEmpty": "最近一次請求中，此分類沒有內容。",
+      "previewUnavailable": "目前工作階段或執行主機未提供此分類的內容預覽。",
+      "previewFailed": "內容載入失敗，請重試。",
+      "categories": {
+        "systemPrompt": "系統提示詞",
+        "toolDefinitions": "工具定義",
+        "rules": "規則",
+        "skills": "技能",
+        "mcpTools": "MCP 與動態工具",
+        "subagentDefinitions": "子代理定義",
+        "summarizedConversation": "壓縮後的對話摘要",
+        "conversation": "對話內容"
+      }
+    },
+    "tokens": {
+      "title": "Token 用量",
+      "uncachedInput": "輸入（未命中快取）",
+      "cacheHit": "KV Cache 命中",
+      "hitRate": "快取命中率 {{value}}",
+      "hitRateDetail": "快取命中率 {{rate}}（{{cached}} / {{input}} 輸入 Token）",
+      "cacheHitDetail": "（快取命中 {{rate}}）",
+      "minimumRate": "≥{{rate}}",
+      "recordedCacheHits": "已記錄快取命中",
+      "remainingInput": "其餘輸入",
+      "inputShareDetail": "{{tokens}} / {{input}} 輸入 Token（占輸入 {{share}}）",
+      "partialCacheHelp": "僅部分呼叫回報了快取用量。圖中顯示已記錄的快取命中，其餘輸入包含未回報部分；命中百分比表示相對於全部輸入的下限。",
+      "cacheUnavailable": "（快取無法取得）"
+    },
     "title": "工作階段用量",
     "unavailable": "不可用",
     "redacted": "已遮蔽",
@@ -217,8 +294,6 @@
       "copied": "已複製",
       "openDetails": "開啟詳情",
       "openFileDiff": "開啟 diff",
-      "copySessionId": "複製工作階段 ID",
-      "copyWorkspacePath": "複製專案路徑",
       "openSectionDetails": "開啟{{section}}詳情",
       "jumpToTurn": "跳轉到該回合",
       "viewDetails": "詳情",
@@ -320,7 +395,7 @@
     "runtime": {
       "open": "產生工作階段用量",
       "button": "用量",
-      "tooltip": "在目前聊天中產生用量報告"
+      "tooltip": "在側面板中開啟工作階段用量報告"
     },
     "panel": {
       "tabsLabel": "用量報告分區",
@@ -332,7 +407,13 @@
       "toolErrors": "工具錯誤",
       "modelErrors": "模型錯誤",
       "errorScope": "錯誤範圍",
-      "metadataLabel": "用量報告中繼資訊"
+      "report": "工作階段用量報告",
+      "workspace": "專案",
+      "totalTokens": "累計 Token",
+      "explorer": "用量明細",
+      "cachedSubset": "快取 Token 已包含在輸入 Token 中，不會重複計入總量。",
+      "distributionUnavailable": "未記錄完整且一致的輸入與輸出數量，暫時無法顯示 Token 分布。",
+      "failed": "無法產生工作階段用量報告"
     },
     "privacy": {
       "title": "隱私安全報告",

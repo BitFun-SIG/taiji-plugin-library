@@ -9,7 +9,7 @@ import { markdownAppearanceDescriptor } from '@/infrastructure/markdown/appearan
 import { chatInputAppearanceDescriptor } from '@/flow_chat/components/ChatInput.appearance';
 import { harnessProfileSelectorAppearanceDescriptor } from '@/flow_chat/components/HarnessProfileSelector.appearance';
 import { composerVoiceInputAppearanceDescriptor } from '@/flow_chat/components/voice/ComposerVoiceInputButton.appearance';
-import { sessionUsagePanelAppearanceDescriptor } from '@/flow_chat/components/usage/appearance';
+import { sessionUsagePanelAppearanceDescriptor, toolDefinitionsPreviewAppearanceDescriptor } from '@/flow_chat/components/usage/appearance';
 import { richTextInputAppearanceDescriptor } from '@/flow_chat/components/RichTextInput.appearance';
 import { modelRoundItemAppearanceDescriptor } from '@/flow_chat/components/modern/ModelRoundItem.appearance';
 import { deepReviewActionBarAppearanceDescriptor } from '@/flow_chat/deep-review/action-bar/appearance';
@@ -44,7 +44,6 @@ import { exportImageAppearanceDescriptor } from '@/flow_chat/components/modern/E
 import { userMessageItemAppearanceDescriptor } from '@/flow_chat/components/modern/UserMessageItem.appearance';
 import { externalHistoryNoticeAppearanceDescriptor } from '@/flow_chat/components/ExternalHistoryNotice.appearance';
 import { sessionUsageReportCardAppearanceDescriptor } from '@/flow_chat/components/usage/SessionUsageReportCard.appearance';
-import { sessionUsageModalAppearanceDescriptor } from '@/flow_chat/components/usage/SessionUsageModal.appearance';
 import { createPlanDisplayAppearanceDescriptor } from '@/flow_chat/tool-cards/CreatePlanDisplay.appearance';
 import { editorConfigAppearanceDescriptor } from '@/app/scenes/settings/pages/development/EditorSettingsPage.appearance';
 import { appearanceSettingsAppearanceDescriptor } from '@/app/scenes/settings/pages/application/AppearanceSettingsPage.appearance';
@@ -273,6 +272,7 @@ export function createDefaultAppearanceRegistry(): AppearanceRegistry {
     .registerComponent(harnessProfileSelectorAppearanceDescriptor)
     .registerComponent(composerVoiceInputAppearanceDescriptor)
     .registerComponent(sessionUsagePanelAppearanceDescriptor)
+    .registerComponent(toolDefinitionsPreviewAppearanceDescriptor)
     .registerComponent(richTextInputAppearanceDescriptor)
     .registerComponent(modelRoundItemAppearanceDescriptor)
     .registerComponent(deepReviewActionBarAppearanceDescriptor)
@@ -308,7 +308,6 @@ export function createDefaultAppearanceRegistry(): AppearanceRegistry {
     .registerComponent(userMessageItemAppearanceDescriptor)
     .registerComponent(externalHistoryNoticeAppearanceDescriptor)
     .registerComponent(sessionUsageReportCardAppearanceDescriptor)
-    .registerComponent(sessionUsageModalAppearanceDescriptor)
     .registerComponent(createPlanDisplayAppearanceDescriptor)
     .registerComponent(editorConfigAppearanceDescriptor)
     .registerComponent(appearanceSettingsAppearanceDescriptor)

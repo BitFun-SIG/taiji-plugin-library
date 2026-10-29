@@ -88,6 +88,7 @@ export const SETTINGS_PAGE_MANIFESTS: readonly SettingsPageManifest[] = [
       'theme', 'font', 'size', 'motion', 'animation',
       'appearance pack', 'skin', 'import',
       'session', 'panel', 'layout', 'overlay',
+      'chat', 'content', 'width', 'resize',
     ],
     namespaces: ['settings/appearance', 'settings/application'],
     searchPhrases: [
@@ -100,6 +101,8 @@ export const SETTINGS_PAGE_MANIFESTS: readonly SettingsPageManifest[] = [
       phrase('settings/appearance', 'sessionPanel.displayMode'),
       phrase('settings/appearance', 'sessionPanel.split'),
       phrase('settings/appearance', 'sessionPanel.overlay'),
+      phrase('settings/appearance', 'contentWidth.title'),
+      phrase('settings/appearance', 'contentWidth.label'),
     ],
     load: () => import('./pages/application/AppearanceSettingsPage'),
   }),

@@ -1,3 +1,13 @@
+For numeric context composition, category provenance, latest-request report projection,
+and attempt-ledger persistence, use:
+
+```bash
+cargo test --locked -p openbitfun-core --no-default-features --features agent-runtime,git --lib -- context_composition account_attempt_ledger_keeps_failed_usage_actual_accounts_and_idempotent_events
+```
+
+These fixtures exercise typed runtime sources, persisted attempts, and simulated
+SSH report selection; they do not establish live remote transport behavior.
+
 For `stream_processor.rs` changes, run the portable stream suite and the Core
 compatibility tests, plus the relevant round-executor tests below:
 
