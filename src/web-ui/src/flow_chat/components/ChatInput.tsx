@@ -6350,7 +6350,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           } : undefined}
       workspaceId={executionWorkspaceId ?? ''}
       repositoryPath={chatStripRepositoryPath}
-      workspaceLabel={chatStripWorkspaceLabel}
+      workspaceLabel={isAssistantWorkspace || chatInputModePolicy.fixedModeId === 'Claw'
+        ? '' : chatStripWorkspaceLabel}
       executionTarget={effectiveTargetSession?.config.executionTarget}
       dispatchControl={dispatchControl}
       worktreeControl={worktreeControl}

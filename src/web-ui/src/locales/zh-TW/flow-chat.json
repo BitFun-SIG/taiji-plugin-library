@@ -315,8 +315,7 @@
       "errorsDescription": "本次報告沒有記錄到可顯示的工具或模型錯誤範例。",
       "slowest": "無慢耗時記錄",
       "slowestDescription": "沒有記錄到帶耗時的回合、模型呼叫或工具片段。",
-      "session": "還沒有工作階段活動",
-      "sessionDescription": "在此工作階段中傳送一則訊息即可開始。執行後，這裡會顯示模型用量、工具呼叫和耗時。"
+      "session": "還沒有工作階段活動"
     },
     "runtime": {
       "open": "產生工作階段用量",
@@ -849,6 +848,7 @@
       }
     },
     "harness": {
+      "modeLabel": "{{name}}模式",
       "selectorTooltip": "目前執行：{{name}}",
       "fixedTooltip": "本工作階段使用 {{name}}，開始後已固定。",
       "compatibilityShort": "相容模式",
@@ -3322,6 +3322,7 @@
     }
   },
   "welcome": {
+    "openingWorkspace": "在 <workspace>{{workspace}}</workspace>，開工。",
     "openingMorning": "早安，今天由你開場。",
     "openingAfternoon": "下午好，給今天加點意思。",
     "openingEvening": "晚上好，按你的節奏來。",

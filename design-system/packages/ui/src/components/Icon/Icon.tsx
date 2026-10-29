@@ -93,6 +93,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { classNames } from "../../internal/classNames";
+import { CloudGit } from './cloudGit';
 import { Galaxy } from './galaxy';
 import { LayersPlus } from './layersPlus';
 import { PlayingCardsFan } from './playingCardsFan';
@@ -136,6 +137,7 @@ export const iconNames = [
   "circle",
   "circle-arrow-right",
   "clock",
+  "cloud-git",
   "code",
   "command-mac",
   "commit",
@@ -267,6 +269,7 @@ const lineGlyphs = {
   "circle": Circle,
   "circle-arrow-right": CircleArrowRight,
   "clock": Clock,
+  "cloud-git": CloudGit,
   "git-pull-request": GitPullRequest,
   "history": History,
   "target": Target,
