@@ -54,4 +54,30 @@ describe('user message preview', () => {
     expect(overflow?.segments).toEqual([{ kind: 'text', text: '\n' }, context]);
     expect(JSON.stringify(source)).toBe(original);
   });
+
+  it('treats a Windows line ending split across text segments as one break', () => {
+    const source: ComposerPresentation = {
+      version: 1,
+      segments: ['One\r', '', '\nTwo\r', '\nThree\r', '\nFour'].map(text => ({ kind: 'text', text })),
+    };
+    const { preview, overflow } = splitUserMessagePreview(source);
+    const text = (presentation: ComposerPresentation | null) => presentation?.segments.map(
+      segment => segment.kind === 'text' ? segment.text : '',
+    ).join('');
+    expect(text(preview)).toBe('One\r\nTwo\r\nThree');
+    expect(text(overflow)).toBe('\r\nFour');
+  });
+
+  it('keeps line breaks separated by a capsule distinct', () => {
+    const skill = { kind: 'inline-token', token: '[$pdf]', tokenType: 'skill', label: 'pdf' } as const;
+    const source: ComposerPresentation = {
+      version: 1,
+      segments: [{ kind: 'text', text: 'One\r' }, skill, { kind: 'text', text: '\nThree\nFour' }],
+    };
+    const { preview, overflow } = splitUserMessagePreview(source);
+    expect(preview.segments).toEqual([
+      { kind: 'text', text: 'One\r' }, skill, { kind: 'text', text: '\nThree' },
+    ]);
+    expect(overflow).toEqual(textPresentation('\nFour'));
+  });
 });
