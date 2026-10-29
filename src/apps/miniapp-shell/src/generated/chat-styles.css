@@ -2101,6 +2101,10 @@
   position: relative;
 }
 
+.user-message-item:not(.user-message-item--expanded):not(.user-message-item--editing) {
+  max-width: min(28rem, var(--openbitfun-control-flow-chat-user-message-max-width));
+}
+
 .user-message-item__surface {
   position: absolute;
   inset: 0;
@@ -2274,6 +2278,22 @@
   max-height: 4.75em; /* Collapsed: up to 3 compact lines. */
   user-select: text;
   transition: none;
+}
+
+.user-message-item__content-preview::after {
+  content: "…";
+}
+
+.user-message-item__content-overflow {
+  display: none;
+}
+
+.user-message-item--expanded .user-message-item__content-preview::after {
+  content: none;
+}
+
+.user-message-item--expanded .user-message-item__content-overflow {
+  display: contents;
 }
 
 .user-message-item--expanded {

@@ -31,7 +31,7 @@ each missing what the other had.
 | `../../selection/conversationExcerptEditing.test.ts` | draft/visible/queue edit and delete ownership, preserved prompt context and attachments, legacy payload handling, sending guards and sent snapshots with no mutation capability |
 | `../../services/flow-chat-manager/PendingQueueModule.test.ts` | persisted payload edits preserve queue order/identity, images and device isolation; sending entries reject edits |
 | `../../../infrastructure/markdown/useStreamingTextReveal.test.tsx` | appended-glyph-only fading, independent batch clocks and renderers, history/remount stability, stream completion and reduced motion |
-| `UserMessageItem.test.tsx` | sent and reloaded MCP references, mixed reference capsules, failed-message presentation, shared edit/rollback menu, Escape focus return, disabled reasons, and existing message action flows; local DOM fixtures, not remote transport evidence |
+| `UserMessageItem.test.tsx`, `userMessagePreview.test.ts` | preview-only layout with complete text/line endings/reference capsules preserved, expansion/collapse and full-message copy, sent and reloaded MCP references, failed-message presentation, shared edit/rollback menu, Escape focus return, disabled reasons, and existing message action flows; local DOM/CSS fixtures, not native width or remote transport evidence |
 | `UserMessageItemActions.test.ts` | metadata visibility, bubble outsets from the shared reading column, and normal-flow action layout |
 | `../../services/submittedMessagePresentation.test.ts` | explicit-send receipts, one-shot claims, expiry, device activation isolation, and initial status paint delay |
 | `useSubmittedMessageMotion.test.tsx` | submission clock, remount stability, StrictMode, reduced motion, focus, and surface-change cancellation; lifecycle only, not visual acceptance |
@@ -133,6 +133,15 @@ group does not renumber the others.
    not enter host suspension or move to the tail.
 
 ### Submitting and revealing
+
+For user-message disclosure, compare a short message with a long message whose
+first lines are short and later lines are wide. The collapsed preview stays
+compact; expanding grows leftward only as needed and downward, keeping its right
+edge aligned. Collapse restores the compact width. Repeat with images, reference
+capsules, failed messages, editing and a narrow main/side pane. Verify long
+expanded text still scrolls within its height limit. Local, remote-workspace,
+Peer Device and detached-dispatch observer views require separate real-host
+checks; mobile Remote Control uses its own message renderer.
 
 1. A newly submitted Turn performs one physical-bottom placement, exposing the
    full resident spacer while leaving at least one quarter of the transcript
