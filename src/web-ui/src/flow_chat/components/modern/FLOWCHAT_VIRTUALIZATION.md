@@ -77,7 +77,11 @@ The small brand/date header and muted attribution footer use semantic typography
 spacing and divider tokens, without an assistant slogan or subtitle.
 The image capture copies resolved CSS properties, including browser-prefixed
 paint properties, but excludes inherited custom properties from the cloned SVG.
-The staging DOM still receives the active theme variables for layout. Repeating
+The staging DOM receives the initiating transcript column's measured width and
+inherited theme variables, including local font settings. It keeps the shared
+reading-column maximum as a fallback when the source row is no longer mounted;
+the full pane width is never used as the text width. Exported text uses the live
+renderer styles without extra inline padding or export-only link no-wrap rules. Repeating
 the full theme catalog on every cloned node makes long transcripts expensive to
 serialize and rasterize. Capture validates the canvas before adding the logo:
 uniform or transparent output is a failure even when PNG encoding would succeed.

@@ -24,6 +24,7 @@ import { ModelThinkingDisplay } from '../../tool-cards/ModelThinkingDisplay';
 import { hasComposerPresentationReferences, parseComposerPresentation } from '../../utils/composerPresentation';
 import { UserMessagePresentationContent, UserMessageTextContent } from './UserMessagePresentationContent';
 import { captureExportCanvas } from '../../utils/exportImageCapture';
+import { readExportImageLayout } from './exportImageLayout';
 import './ExportImageButton.scss';
 
 const log = createLogger('ExportImageButton');
@@ -36,26 +37,6 @@ const PER_ROUND_WAIT_MS = 80;
 
 /** Maximum total render wait time (ms). */
 const MAX_RENDER_WAIT_MS = 2_000;
-
-/** Collect ALL CSS custom properties from document :root so the offscreen
- *  render inherits the full appearance (fonts, radii, shadows, spacing, etc.).
- *  modern-screenshot resolves var() by cloning computed styles, but
- *  variables used inside the captured subtree must still be available on
- *  the wrapper element for correct initial layout. */
-function collectAllCssVariables(): Record<string, string> {
-  const vars: Record<string, string> = {};
-  const computedStyle = getComputedStyle(document.documentElement);
-  for (let i = 0; i < computedStyle.length; i++) {
-    const prop = computedStyle[i];
-    if (prop.startsWith('--')) {
-      const value = computedStyle.getPropertyValue(prop).trim();
-      if (value) {
-        vars[prop] = value;
-      }
-    }
-  }
-  return vars;
-}
 
 interface ExportImageButtonProps {
   turnId: string;
@@ -285,6 +266,7 @@ export const ExportImageButton: React.FC<ExportImageButtonProps> = ({
       }
       
       const { turn: dialogTurn, sessionTitle } = result;
+      const layout = readExportImageLayout(turnId, (triggerRef ?? buttonRef).current);
       
       // Read the resolved appearance background color.
       const computedStyle = getComputedStyle(document.documentElement);
@@ -323,11 +305,6 @@ export const ExportImageButton: React.FC<ExportImageButtonProps> = ({
       wrapper.id = 'export-image-wrapper';
       wrapper.className = 'export-image-wrapper';
 
-      // Measure the actual chat pane width so the exported image uses the
-      // exact same text-wrap width as the live chat. Fallback to 1200px.
-      const chatPane = document.querySelector('.openbitfun-chat-pane__content');
-      const chatWidth = chatPane?.getBoundingClientRect().width || 1200;
-
       wrapper.style.cssText = `
         position: absolute;
         left: -9999px;
@@ -337,12 +314,12 @@ export const ExportImageButton: React.FC<ExportImageButtonProps> = ({
         visibility: visible;
         opacity: 1;
         overflow: visible;
-        width: ${chatWidth}px;
       `;
+      if (layout.width) wrapper.style.width = `${layout.width}px`;
       
-      // Copy ALL CSS variables for consistent styling.
-      const allVars = collectAllCssVariables();
-      for (const [varName, value] of Object.entries(allVars)) {
+      // Preserve the column's appearance for layout. Capture serializes only
+      // resolved properties, so inherited variables do not bloat the SVG.
+      for (const [varName, value] of Object.entries(layout.variables)) {
         wrapper.style.setProperty(varName, value);
       }
       
@@ -367,11 +344,6 @@ export const ExportImageButton: React.FC<ExportImageButtonProps> = ({
         throw new Error(i18nService.t('flow-chat:exportImage.containerNotFound'));
       }
 
-      // Match the export width exactly to the live chat pane so text wrapping
-      // is identical. SCSS sets a fixed width; override it here dynamically.
-      container.style.width = `${chatWidth}px`;
-      container.style.maxWidth = 'none';
-      
       // Yield to the main thread so the browser can finish layout/paint.
       await new Promise(resolve => setTimeout(resolve, 0));
 
@@ -513,7 +485,7 @@ export const ExportImageButton: React.FC<ExportImageButtonProps> = ({
       isExportingRef.current = false;
       setIsExporting(false);
     }
-  }, [getDialogTurn]);
+  }, [getDialogTurn, triggerRef, turnId]);
 
   return (
     <>
