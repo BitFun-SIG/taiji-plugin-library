@@ -75,6 +75,15 @@ live message's content renderer. Compact output omits thinking items entirely,
 including their icons; the other output renders expanded thinking in item order.
 The small brand/date header and muted attribution footer use semantic typography,
 spacing and divider tokens, without an assistant slogan or subtitle.
+The image capture copies resolved CSS properties, including browser-prefixed
+paint properties, but excludes inherited custom properties from the cloned SVG.
+The staging DOM still receives the active theme variables for layout. Repeating
+the full theme catalog on every cloned node makes long transcripts expensive to
+serialize and rasterize. Capture validates the canvas before adding the logo:
+uniform or transparent output is a failure even when PNG encoding would succeed.
+A failed raster retries at reduced scale; a timeout stops the export. Logo
+compositing reuses the validated canvas and its actual scale, avoiding a second
+full-size bitmap and keeping reduced-resolution exports aligned.
 Each number has its own hover/focus/click capsule and details card. Clicking
 opens immediately and keeps the card open until another trigger click, an outside
 press, Escape, or scrolling; native button triggers also support keyboard activation. `FlowChatMetric`

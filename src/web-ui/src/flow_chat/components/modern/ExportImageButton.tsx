@@ -23,15 +23,10 @@ import { writeFile } from '@tauri-apps/plugin-fs';
 import { ModelThinkingDisplay } from '../../tool-cards/ModelThinkingDisplay';
 import { hasComposerPresentationReferences, parseComposerPresentation } from '../../utils/composerPresentation';
 import { UserMessagePresentationContent, UserMessageTextContent } from './UserMessagePresentationContent';
+import { captureExportCanvas } from './exportImageCapture';
 import './ExportImageButton.scss';
 
 const log = createLogger('ExportImageButton');
-
-// Lazy-load modern-screenshot.
-const loadModernScreenshot = () => import('modern-screenshot');
-
-/** Maximum time to wait for capture before aborting (ms). */
-const CAPTURE_TIMEOUT_MS = 15_000;
 
 /** Minimum time to wait for React render before capture (ms). */
 const MIN_RENDER_WAIT_MS = 300;
@@ -60,13 +55,6 @@ function collectAllCssVariables(): Record<string, string> {
     }
   }
   return vars;
-}
-
-/** Validate that a data-URL is not blank/corrupt. */
-function validateDataUrl(dataUrl: string): void {
-  if (!dataUrl || dataUrl === 'data:,' || dataUrl.length < 100) {
-    throw new Error('Capture returned empty or corrupt image data');
-  }
 }
 
 interface ExportImageButtonProps {
@@ -330,7 +318,7 @@ export const ExportImageButton: React.FC<ExportImageButtonProps> = ({
       }
       
       // Create hidden wrapper for rendering.
-      // Use left: -9999px (not z-index: -9999) so elements remain visible to capture.
+      // Keep the staging tree laid out without covering the conversation.
       wrapper = document.createElement('div');
       wrapper.id = 'export-image-wrapper';
       wrapper.className = 'export-image-wrapper';
@@ -344,7 +332,6 @@ export const ExportImageButton: React.FC<ExportImageButtonProps> = ({
         position: absolute;
         left: -9999px;
         top: 0;
-        z-index: -9999;
         pointer-events: none;
         background: ${bgColor};
         visibility: visible;
@@ -374,16 +361,16 @@ export const ExportImageButton: React.FC<ExportImageButtonProps> = ({
       await new Promise(resolve => setTimeout(resolve, renderWait));
       
       // Find rendered container.
-      const container = wrapper.querySelector('.export-content') as HTMLElement;
+      const container = wrapper.querySelector<HTMLElement>('.export-content');
+
+      if (!container) {
+        throw new Error(i18nService.t('flow-chat:exportImage.containerNotFound'));
+      }
 
       // Match the export width exactly to the live chat pane so text wrapping
       // is identical. SCSS sets a fixed width; override it here dynamically.
       container.style.width = `${chatWidth}px`;
       container.style.maxWidth = 'none';
-      
-      if (!container) {
-        throw new Error(i18nService.t('flow-chat:exportImage.containerNotFound'));
-      }
       
       // Yield to the main thread so the browser can finish layout/paint.
       await new Promise(resolve => setTimeout(resolve, 0));
@@ -407,13 +394,6 @@ export const ExportImageButton: React.FC<ExportImageButtonProps> = ({
         };
       }
 
-      // Generate image via modern-screenshot with timeout guard.
-      const modernScreenshot = await loadModernScreenshot();
-      
-      // Yield again before capture.
-      await new Promise(resolve => setTimeout(resolve, 0));
-      
-      const pixelRatio = 2;
       const captureFilter = (node: Node) => {
         // Filter out action buttons and other non-export elements.
         if (node instanceof HTMLElement) {
@@ -430,131 +410,42 @@ export const ExportImageButton: React.FC<ExportImageButtonProps> = ({
         return true;
       };
 
-      const captureOptions = {
-        quality: 1,
-        scale: pixelRatio,
-        backgroundColor: bgColor,
-        fetch: {
-          bypassingCache: true,
-        } as const,
-        filter: captureFilter,
-        // Disable font embedding to avoid cross-origin stylesheet issues;
-        // the offscreen DOM already has system fonts available.
-        font: false as const,
-        features: {
-          removeControlCharacter: true,
-          fixSvgXmlDecode: true,
-        } as const,
-      };
-
-      let baseDataUrl: string;
-
-      // Strategy 1: domToPng (primary)
-      try {
-        baseDataUrl = await withTimeout(
-          modernScreenshot.domToPng(container, captureOptions),
-          CAPTURE_TIMEOUT_MS,
-          'domToPng capture',
-          cleanupDom,
-        );
-        validateDataUrl(baseDataUrl);
-      } catch (e1) {
-        log.warn('domToPng failed, trying domToBlob fallback', e1);
-        // Ensure DOM is still alive for fallback.
-        if (!wrapper || !wrapper.parentNode) {
-          throw new Error('DOM was cleaned up before fallback could run');
-        }
-
-        // Strategy 2: domToBlob (fallback)
-        try {
-          const fallbackBlob = await withTimeout(
-            modernScreenshot.domToBlob(container, { ...captureOptions, type: 'image/png' }),
-            CAPTURE_TIMEOUT_MS,
-            'domToBlob capture',
-            cleanupDom,
-          );
-          if (!fallbackBlob) throw new Error(i18nService.t('flow-chat:exportImage.generateFailed'));
-          baseDataUrl = await new Promise<string>((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = () => resolve(reader.result as string);
-            reader.onerror = reject;
-            reader.readAsDataURL(fallbackBlob);
-          });
-          validateDataUrl(baseDataUrl);
-        } catch (e2) {
-          log.warn('domToBlob fallback also failed, trying reduced scale', e2);
-          // Ensure DOM is still alive for second fallback.
-          if (!wrapper || !wrapper.parentNode) {
-            throw new Error('DOM was cleaned up before reduced-scale fallback could run');
-          }
-
-          // Strategy 3: domToPng with scale=1 (reduced memory for large DOMs)
-          const reducedOptions = { ...captureOptions, scale: 1 };
-          baseDataUrl = await withTimeout(
-            modernScreenshot.domToPng(container, reducedOptions),
-            CAPTURE_TIMEOUT_MS,
-            'domToPng reduced-scale capture',
-            cleanupDom,
-          );
-          validateDataUrl(baseDataUrl);
-        }
-      }
-
-      // Cleanup the offscreen DOM as soon as we have the base capture.
+      const canvas = await captureExportCanvas(container, bgColor, captureFilter);
       cleanupDom();
 
-      // Composite the logo onto the captured image so it always appears,
-      // regardless of capture library behavior with <img> elements.
-      const blob: Blob | null = await new Promise<Blob | null>((resolve, reject) => {
-        const baseImg = new window.Image();
-        baseImg.onload = () => {
-          try {
-            const canvas = document.createElement('canvas');
-            canvas.width = baseImg.naturalWidth;
-            canvas.height = baseImg.naturalHeight;
-            const ctx = canvas.getContext('2d');
-            if (!ctx) { reject(new Error('no canvas ctx for compositing')); return; }
-            ctx.drawImage(baseImg, 0, 0);
-
-            if (logoImage && logoBox) {
-              const dx = logoBox.x * pixelRatio;
-              const dy = logoBox.y * pixelRatio;
-              const dw = logoBox.w * pixelRatio;
-              const dh = logoBox.h * pixelRatio;
-              const dr = logoBox.radius * pixelRatio;
-
-              ctx.save();
-              if (dr > 0) {
-                const path = new Path2D();
-                const r = Math.min(dr, dw / 2, dh / 2);
-                path.moveTo(dx + r, dy);
-                path.lineTo(dx + dw - r, dy);
-                path.quadraticCurveTo(dx + dw, dy, dx + dw, dy + r);
-                path.lineTo(dx + dw, dy + dh - r);
-                path.quadraticCurveTo(dx + dw, dy + dh, dx + dw - r, dy + dh);
-                path.lineTo(dx + r, dy + dh);
-                path.quadraticCurveTo(dx, dy + dh, dx, dy + dh - r);
-                path.lineTo(dx, dy + r);
-                path.quadraticCurveTo(dx, dy, dx + r, dy);
-                path.closePath();
-                ctx.clip(path);
-              }
-              ctx.imageSmoothingEnabled = true;
-              ctx.imageSmoothingQuality = 'high';
-              ctx.drawImage(logoImage, dx, dy, dw, dh);
-              ctx.restore();
-            } else {
-              log.warn('Logo overlay skipped', { hasLogo: !!logoImage, hasBox: !!logoBox });
-            }
-
-            canvas.toBlob((b) => resolve(b), 'image/png');
-          } catch (err) {
-            reject(err);
-          }
-        };
-        baseImg.onerror = reject;
-        baseImg.src = baseDataUrl;
-      });
+      // Reuse the verified raster instead of PNG -> Image -> second canvas.
+      // The actual dimensions also keep the logo aligned after a scale fallback.
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('No canvas context for compositing');
+      if (logoImage && logoBox) {
+        const scaleX = canvas.width / containerRect.width;
+        const scaleY = canvas.height / containerRect.height;
+        ctx.save();
+        ctx.scale(scaleX, scaleY);
+        const { x, y, w, h, radius } = logoBox;
+        if (radius > 0) {
+          const path = new Path2D();
+          const r = Math.min(radius, w / 2, h / 2);
+          path.moveTo(x + r, y);
+          path.lineTo(x + w - r, y);
+          path.quadraticCurveTo(x + w, y, x + w, y + r);
+          path.lineTo(x + w, y + h - r);
+          path.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+          path.lineTo(x + r, y + h);
+          path.quadraticCurveTo(x, y + h, x, y + h - r);
+          path.lineTo(x, y + r);
+          path.quadraticCurveTo(x, y, x + r, y);
+          path.closePath();
+          ctx.clip(path);
+        }
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(logoImage, x, y, w, h);
+        ctx.restore();
+      } else {
+        log.warn('Logo overlay skipped', { hasLogo: !!logoImage, hasBox: !!logoBox });
+      }
+      const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/png'));
 
       if (!blob) {
         throw new Error(i18nService.t('flow-chat:exportImage.generateFailed'));
