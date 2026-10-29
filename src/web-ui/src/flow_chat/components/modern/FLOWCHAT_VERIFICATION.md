@@ -20,6 +20,8 @@ each missing what the other had.
 | `../../timeline/hostQueueProjection.test.ts`, `../../timeline/useHostQueueTimeline.test.tsx`, `../HostPendingQueuePanel.test.tsx` | host-accepted preview, canonical handoff/event ordering, stable keys, blocked recovery, old-host fallback, history-window visibility and device lease cleanup; fixtures only, no live remote transport evidence |
 | `TurnFooter.test.tsx`, `modelRoundItemMemo.test.ts` | latest-turn identity, hover/focus across virtual rows, lease cleanup, no projection churn and the existing completion reveal gate; behavior only, not visual proof |
 | `MessageExportControls.test.tsx` | flat copy/export menu, illustrated checkbox-card selection by pointer and keyboard, complete user text/reference rendering, omission or expansion of thinking, minimal branding, confirmation, pending/error feedback, cancel/Escape/outside dismissal and resident-trigger focus restoration; local DOM behavior, not image fidelity or remote-host validation |
+| `exportImageLayout.test.ts` | initiating reading-column width and font settings across wide/narrow panes, hidden sibling sessions, and unmounted source rows; measured DOM fixtures, not native visual or remote-host validation |
+| `../../utils/exportImageCapture.test.ts`, `../../utils/captureElementToDownloadsPng.test.tsx` | resolved-style selection without duplicated theme variables, opaque/transparent blank-raster rejection before logo compositing, bounded pixel reads, reduced-scale recovery, font readiness/embedding, timeout cleanup, and widget export save/error handling; rasterizer fixtures, not native WebView or remote-host validation |
 | `../../../shared/ui/Tooltip.test.tsx` | shared metric click opening, immediate scroll dismissal, delayed-open cancellation, viewport-exit observer cleanup and no automatic reopening; DOM/observer behavior only, not native scrolling or visual proof |
 | `../../utils/turnUsageMetrics.test.ts`, `TurnUsageMetrics.test.tsx`, `../../store/modernFlowChatStore.test.ts`, `../../../features/dispatch/DispatchJobObserver.test.ts` | separate request TTFT, effective-output rate excluding waiting and tools, complete multi-round timing, controller setup-row exclusion, legacy/missing/zero telemetry, speed boundaries and projection |
 | `../../services/flow-chat-manager/EventHandlerModule.test.ts`, `../../services/flow-chat-manager/PersistenceModule.test.ts`, `../../store/FlowChatStore.test.ts` | live cache aggregation, optional-field persistence and legacy/current hydration; no remote-host claim |
@@ -30,7 +32,7 @@ each missing what the other had.
 | `../../selection/conversationExcerptEditing.test.ts` | draft/visible/queue edit and delete ownership, preserved prompt context and attachments, legacy payload handling, sending guards and sent snapshots with no mutation capability |
 | `../../services/flow-chat-manager/PendingQueueModule.test.ts` | persisted payload edits preserve queue order/identity, images and device isolation; sending entries reject edits |
 | `../../../infrastructure/markdown/useStreamingTextReveal.test.tsx` | appended-glyph-only fading, independent batch clocks and renderers, history/remount stability, stream completion and reduced motion |
-| `UserMessageItem.test.tsx` | sent and reloaded MCP references, mixed reference capsules, failed-message presentation, shared edit/rollback menu, Escape focus return, disabled reasons, and existing message action flows; local DOM fixtures, not remote transport evidence |
+| `UserMessageItem.test.tsx`, `userMessagePreview.test.ts` | preview-only layout with complete text/line endings/reference capsules preserved, expansion/collapse and full-message copy, sent and reloaded MCP references, failed-message presentation, shared edit/rollback menu, Escape focus return, disabled reasons, and existing message action flows; local DOM/CSS fixtures, not native width or remote transport evidence |
 | `UserMessageItemActions.test.ts` | metadata visibility, bubble outsets from the shared reading column, and normal-flow action layout |
 | `../../services/submittedMessagePresentation.test.ts` | explicit-send receipts, one-shot claims, expiry, device activation isolation, and initial status paint delay |
 | `useSubmittedMessageMotion.test.tsx` | submission clock, remount stability, StrictMode, reduced motion, focus, and surface-change cancellation; lifecycle only, not visual acceptance |
@@ -110,7 +112,10 @@ without changing size or selection; only the checkbox indicates the selected
 output. Check reduced motion and touch input separately. Check the captured image's
 user bubble against the live message, full long text/reference labels, minimal
 brand/date header and attribution footer, and absence of all thinking items/icons
-in compact output. The same presentation
+in compact output. Verify that many model rounds retain their inter-item gaps
+without accumulating empty space above the footer, and that long tool summaries
+respect the horizontal inset. Exercise both system and bundled font profiles on
+macOS, Windows, and Linux. The same presentation
 on remote-workspace and peer-host sessions remains a real-host check.
 
 **Agents must not perform UI interaction verification.** Report these as pending
@@ -137,6 +142,15 @@ group does not renumber the others.
    not enter host suspension or move to the tail.
 
 ### Submitting and revealing
+
+For user-message disclosure, compare a short message with a long message whose
+first lines are short and later lines are wide. The collapsed preview stays
+compact; expanding grows leftward only as needed and downward, keeping its right
+edge aligned. Collapse restores the compact width. Repeat with images, reference
+capsules, failed messages, editing and a narrow main/side pane. Verify long
+expanded text still scrolls within its height limit. Local, remote-workspace,
+Peer Device and detached-dispatch observer views require separate real-host
+checks; mobile Remote Control uses its own message renderer.
 
 1. A newly submitted Turn performs one physical-bottom placement, exposing the
    full resident spacer while leaving at least one quarter of the transcript
