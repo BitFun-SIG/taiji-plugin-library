@@ -320,10 +320,12 @@ For alternate dev-server ports and preview startup URL changes, run
 `cargo test -p openbitfun-desktop --no-default-features --lib appearance::development_frontend_tests`.
 For launcher-only development storage mode changes, run
 `node --test scripts/dev-startup.test.mjs`; no native app launch is required.
-By default (or with `--isolated-data`), both desktop development launchers set `OPENBITFUN_USER_ROOT` and
-`OPENBITFUN_HOME` before spawning children, defaulting to the checkout-local
-`.openbitfun/desktop-dev/{user,home}` directories. `--shared-data` leaves storage
-selection to the app; the two flags are mutually exclusive. Preserve explicit
+By default (or with `--shared-data`), both desktop development launchers leave
+storage selection to the app so existing settings, workspaces and sessions are
+visible. Only `--isolated-data` sets `OPENBITFUN_USER_ROOT` and `OPENBITFUN_HOME`
+before spawning children, defaulting to the checkout-local
+`.openbitfun/desktop-dev/{user,home}` directories. Keep existing isolated data in
+place; switching modes must not move, merge or delete it. The two flags are mutually exclusive. Preserve explicit
 overrides and the legacy E2E aliases in both modes. Development launchers set
 `OPENBITFUN_DESKTOP_HOST_CHANNEL=development`: its MiniApp lease, discovery and
 launch records are separate even when product storage is shared. Keep per-session
