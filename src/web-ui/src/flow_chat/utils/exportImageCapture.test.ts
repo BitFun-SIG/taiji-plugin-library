@@ -43,6 +43,15 @@ describe('conversation image raster validation', () => {
     expect(() => assertExportCanvasHasContent(raster(0, true, 65, true).canvas)).toThrow('blank image');
   });
 
+  it('accepts monochrome artwork with a transparent background', () => {
+    const { canvas } = raster(255);
+    const context = canvas.getContext('2d')!;
+    vi.mocked(context.getImageData).mockReturnValue({
+      data: new Uint8ClampedArray([255, 255, 255, 0, 255, 255, 255, 255]),
+    } as ImageData);
+    expect(() => assertExportCanvasHasContent(canvas)).not.toThrow();
+  });
+
   it.each([0, 28, 255])('finds text contrast without reading a full long-image buffer (%s)', background => {
     const { canvas, getImageData } = raster(background, true);
     expect(() => assertExportCanvasHasContent(canvas)).not.toThrow();
@@ -98,11 +107,16 @@ describe('conversation image capture', () => {
 
   it('does not start a concurrent retry after the capture times out', async () => {
     vi.useFakeTimers();
-    domToCanvas.mockReturnValue(new Promise(() => {}));
+    let finishCapture!: (canvas: HTMLCanvasElement) => void;
+    domToCanvas.mockReturnValue(new Promise<HTMLCanvasElement>(resolve => { finishCapture = resolve; }));
     const capture = captureExportCanvas(document.createElement('div'), 'white', () => true);
     const rejection = expect(capture).rejects.toThrow('timed out');
     await vi.advanceTimersByTimeAsync(15_000);
     await rejection;
     expect(domToCanvas).toHaveBeenCalledTimes(1);
+    const lateCanvas = raster(255, true).canvas;
+    finishCapture(lateCanvas);
+    await vi.advanceTimersByTimeAsync(0);
+    expect([lateCanvas.width, lateCanvas.height]).toEqual([0, 0]);
   });
 });

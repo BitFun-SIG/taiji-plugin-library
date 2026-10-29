@@ -84,6 +84,9 @@ uniform or transparent output is a failure even when PNG encoding would succeed.
 A failed raster retries at reduced scale; a timeout stops the export. Logo
 compositing reuses the validated canvas and its actual scale, avoiding a second
 full-size bitmap and keeping reduced-resolution exports aligned.
+Generative UI card PNG exports use the same capture helper, including blank-image
+rejection and reduced-scale recovery. Encoding failures must not write files or
+show success. Timed-out captures release any raster that completes late.
 Each number has its own hover/focus/click capsule and details card. Clicking
 opens immediately and keeps the card open until another trigger click, an outside
 press, Escape, or scrolling; native button triggers also support keyboard activation. `FlowChatMetric`

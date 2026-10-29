@@ -26,10 +26,16 @@ export function assertExportCanvasHasContent(canvas: HTMLCanvasElement): void {
   for (let y = 0; y < canvas.height; y += 32) {
     const { data } = context.getImageData(0, y, canvas.width, Math.min(32, canvas.height - y));
     for (let i = 0; i < data.length; i += 4) {
-      if (data[i + 3] === 0) continue;
       if (!reference) {
-        reference = [data[i], data[i + 1], data[i + 2]];
-      } else if (reference.some((channel, index) => Math.abs(channel - data[i + index]) > 2)) {
+        reference = [data[i], data[i + 1], data[i + 2], data[i + 3]];
+      } else if (
+        Math.abs(reference[3] - data[i + 3]) > 2
+        || (reference[3] > 0 && data[i + 3] > 0 && (
+          Math.abs(reference[0] - data[i]) > 2
+          || Math.abs(reference[1] - data[i + 1]) > 2
+          || Math.abs(reference[2] - data[i + 2]) > 2
+        ))
+      ) {
         return;
       }
     }
@@ -40,7 +46,7 @@ export function assertExportCanvasHasContent(canvas: HTMLCanvasElement): void {
 export async function captureExportCanvas(
   container: HTMLElement,
   backgroundColor: string,
-  filter: NonNullable<Options['filter']>,
+  filter?: NonNullable<Options['filter']>,
 ): Promise<HTMLCanvasElement> {
   const { domToCanvas } = await import('modern-screenshot');
   const options: Options = {
@@ -58,8 +64,14 @@ export async function captureExportCanvas(
     let timedOut = false;
     let canvas: HTMLCanvasElement | undefined;
     try {
-      canvas = await withTimeout(
-        domToCanvas(container, { ...options, scale }),
+      canvas = await withTimeout<HTMLCanvasElement>(
+        domToCanvas(container, { ...options, scale }).then(result => {
+          if (timedOut) {
+            result.width = 0;
+            result.height = 0;
+          }
+          return result;
+        }),
         CAPTURE_TIMEOUT_MS,
         'Conversation image capture',
         () => { timedOut = true; },

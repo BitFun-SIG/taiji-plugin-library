@@ -23,7 +23,7 @@ import { writeFile } from '@tauri-apps/plugin-fs';
 import { ModelThinkingDisplay } from '../../tool-cards/ModelThinkingDisplay';
 import { hasComposerPresentationReferences, parseComposerPresentation } from '../../utils/composerPresentation';
 import { UserMessagePresentationContent, UserMessageTextContent } from './UserMessagePresentationContent';
-import { captureExportCanvas } from './exportImageCapture';
+import { captureExportCanvas } from '../../utils/exportImageCapture';
 import './ExportImageButton.scss';
 
 const log = createLogger('ExportImageButton');
