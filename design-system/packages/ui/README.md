@@ -467,6 +467,9 @@ except for error tone. Use `showIcon={false}` for text-only notices.
 uncontrolled open state, trigger/region accessibility wiring, focus exclusion
 while collapsed, reduced-motion behavior, and independent header actions.
 Product copy and the revealed content remain consumer-owned.
+Use `headerClassName` to style the default header surface while retaining its
+trigger, actions, and focus behavior. `triggerClassName` and `contentInnerClassName`
+allow consumers to align the indicator and revealed content without replacing the trigger.
 
 Use `Disclosure presentation="native"` when the browser must own the existing
 `details`/`summary` behavior. This mode renders a real details element, a direct

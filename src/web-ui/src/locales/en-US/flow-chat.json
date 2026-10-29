@@ -1,4 +1,8 @@
 {
+  "contentWidth": {
+    "resizeLeft": "Resize conversation from the left edge",
+    "resizeRight": "Resize conversation from the right edge"
+  },
   "externalHistory": {
     "removed": "The source session was removed from OpenBitFun. This branch keeps its own history.",
     "restoreSource": "Add source again",
@@ -198,6 +202,79 @@
     "retry": "Retry"
   },
   "usage": {
+    "toolDefinitions": {
+      "required": "Required",
+      "optional": "Optional",
+      "anyValue": "Any value is allowed.",
+      "noValue": "No value is allowed.",
+      "items": "Array items",
+      "prefixItems": "Tuple items",
+      "oneOf": "Exactly one option",
+      "anyOf": "One or more options",
+      "allOf": "All conditions",
+      "definitions": "Referenced definitions",
+      "enum": "Allowed values",
+      "default": "Default",
+      "constraints": {
+        "const": "Fixed value",
+        "minimum": "Minimum",
+        "maximum": "Maximum",
+        "exclusiveMinimum": "Greater than",
+        "exclusiveMaximum": "Less than",
+        "minLength": "Min. length",
+        "maxLength": "Max. length",
+        "minItems": "Min. items",
+        "maxItems": "Max. items",
+        "pattern": "Pattern",
+        "format": "Format",
+        "additionalProperties": "Additional properties",
+        "reference": "Reference"
+      },
+      "search": "Search tools or parameters",
+      "clearSearch": "Clear search",
+      "unavailable": "These tool definitions could not be read.",
+      "noMatches": "No matching tools",
+      "empty": "No tool definitions in this request",
+      "parameters": "Parameters",
+      "noParameters": "No parameters accepted.",
+      "anyParameters": "Parameters are not restricted.",
+      "notes": "Tool calling instructions"
+    },
+    "context": {
+      "title": "Context composition",
+      "estimated": "Estimated",
+      "estimatedTokens": "Estimated tokens",
+      "estimateHelp": "Estimated from the latest recorded model request. Rules include workspace and user instructions; Skills and subagents include their listings. These are not provider-reported token counts.",
+      "unavailable": "No context breakdown recorded",
+      "previewCategory": "Preview {{category}}",
+      "previewEmpty": "This category has no content in the latest request.",
+      "previewUnavailable": "This session or host has no preview available for this category.",
+      "previewFailed": "Unable to load the preview. Please try again.",
+      "categories": {
+        "systemPrompt": "System prompt",
+        "toolDefinitions": "Tool definitions",
+        "rules": "Rules",
+        "skills": "Skills",
+        "mcpTools": "MCP & dynamic tools",
+        "subagentDefinitions": "Subagent definitions",
+        "summarizedConversation": "Summarized conversation",
+        "conversation": "Conversation"
+      }
+    },
+    "tokens": {
+      "title": "Token usage",
+      "uncachedInput": "Input (uncached)",
+      "cacheHit": "KV Cache hits",
+      "hitRate": "Cache hit rate {{value}}",
+      "hitRateDetail": "Cache hit rate {{rate}} ({{cached}} / {{input}} input tokens)",
+      "cacheHitDetail": "(cache hit {{rate}})",
+      "minimumRate": "≥{{rate}}",
+      "recordedCacheHits": "Recorded cache hits",
+      "remainingInput": "Remaining input",
+      "inputShareDetail": "{{tokens}} / {{input}} input tokens ({{share}} of input)",
+      "partialCacheHelp": "Only some calls reported cache usage. The chart shows recorded cache hits; remaining input includes unreported usage. The hit percentage is a lower bound over all input tokens.",
+      "cacheUnavailable": "(cache unavailable)"
+    },
     "title": "Session Usage",
     "unavailable": "Unavailable",
     "redacted": "Redacted",
@@ -215,8 +292,6 @@
     "actions": {
       "copyMarkdown": "Copy Markdown",
       "copied": "Copied",
-      "copySessionId": "Copy session ID",
-      "copyWorkspacePath": "Copy project path",
       "openDetails": "Open details",
       "openFileDiff": "Open diff",
       "openSectionDetails": "Open {{section}} details",
@@ -355,11 +430,10 @@
     "runtime": {
       "open": "Generate session usage",
       "button": "Usage",
-      "tooltip": "Generate a usage report in this chat"
+      "tooltip": "Open the session usage report in the side panel"
     },
     "panel": {
       "tabsLabel": "Usage report sections",
-      "metadataLabel": "Usage report metadata",
       "accounting": "Accounting",
       "turnScope": "Scope",
       "cacheCoverage": "Cache reporting",
@@ -367,7 +441,14 @@
       "fileScope": "File scope",
       "toolErrors": "Tool errors",
       "modelErrors": "Model errors",
-      "errorScope": "Error scope"
+      "errorScope": "Error scope",
+      "report": "Session usage report",
+      "workspace": "Project",
+      "totalTokens": "Total tokens",
+      "explorer": "Usage explorer",
+      "cachedSubset": "Cached tokens are included in input tokens, not added to the total again.",
+      "distributionUnavailable": "A token breakdown is unavailable because complete, consistent input and output counts were not reported.",
+      "failed": "Could not generate the usage report"
     },
     "privacy": {
       "title": "Privacy-safe report",

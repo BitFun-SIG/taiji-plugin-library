@@ -16,6 +16,7 @@ each missing what the other had.
 
 | Test | Contract it holds |
 |---|---|
+| `../FlowChatWidthBoundary.test.tsx`, `../../../infrastructure/appearance/preferences/flowChatWidthStore.test.ts`, `../../../app/scenes/settings/pages/application/FlowChatWidthSettingsSection.test.tsx` | symmetric pointer/keyboard column resizing, token-derived bounds, cancellation/cleanup, narrow-pane restoration, persisted preference compatibility and settings/reset synchronization; supplied DOM geometry, not visual or live remote evidence |
 | `../../timeline/hostQueueProjection.test.ts`, `../../timeline/useHostQueueTimeline.test.tsx`, `../HostPendingQueuePanel.test.tsx` | host-accepted preview, canonical handoff/event ordering, stable keys, blocked recovery, old-host fallback, history-window visibility and device lease cleanup; fixtures only, no live remote transport evidence |
 | `TurnFooter.test.tsx`, `modelRoundItemMemo.test.ts` | latest-turn identity, hover/focus across virtual rows, lease cleanup, no projection churn and the existing completion reveal gate; behavior only, not visual proof |
 | `MessageExportControls.test.tsx` | flat copy/export menu, illustrated checkbox-card selection by pointer and keyboard, complete user text/reference rendering, omission or expansion of thinking, minimal branding, confirmation, pending/error feedback, cancel/Escape/outside dismissal and resident-trigger focus restoration; local DOM behavior, not image fidelity or remote-host validation |
@@ -48,6 +49,7 @@ each missing what the other had.
 | `flowChatViewportAnchor.test.ts` | anchor geometry and the DOM contract |
 | `useFlowChatViewportAnchor.test.tsx` | capture, restore, carry, the settle window |
 | `VirtualMessageList.session-boundary.test.tsx` | prepend compensation, consecutive paging with/without queued input, passive scroll suppression, navigation-target current Turn with gesture/follow/session handoff, and search placement only outside the readable viewport |
+| `flowChatScrollbarMask.test.ts`, `VirtualMessageList.session-boundary.test.tsx` | idle gutter masking with symmetric, one-sided and overlay scrollbars; overflow restoration and content/viewport resizing without scroll writes; supplied DOM geometry, not native rendering or live remote evidence |
 | `FlowChatOpeningBoundary.test.tsx` | opening-only activation/scroll isolation, bidirectional focus skipping, programmatic focus return, and reveal cleanup; DOM contracts only |
 | `ModernFlowChatContainer.history-state.test.tsx` | history presentation and the submission event |
 | `flowChatViewportOwnership.test.ts` | the priority order, preemption, expiry |
@@ -72,6 +74,13 @@ each missing what the other had.
 | `../../services/deleteSessionTreeBranch.test.ts` | Unloaded descendant deletion in child-first order, remote location forwarding, failure retention, and device surface guards |
 
 ## Manual
+
+For content-width resizing, check both edge hit areas, subtle hover/focus paint,
+composer/transcript alignment, rail and scrollbar gaps, minimum/maximum widths,
+light/dark and reduced motion, long virtualized history, and restart persistence.
+Local, remote-workspace and peer transcripts share controller-local appearance;
+live SSH/Peer, mobile Remote Control and Detached Dispatch were not exercised by
+the DOM fixtures and need separate scenario acceptance where applicable.
 
 For text selection, check the floating toolbar and right-click actions in the
 native WebView; keyboard selection, Tab, Escape, and Ctrl/Cmd+Alt+B; both main

@@ -57,6 +57,7 @@ import { FlowChatScrollIntent, FlowChatTouchIntent, flowChatKeyScrollDirection, 
 import { findRenderedTurnAnchorElement } from './flowChatViewportAnchor';
 import { useFlowChatViewportAnchor } from './useFlowChatViewportAnchor';
 import { useFlowChatLeadingExtent } from './useFlowChatLeadingExtent';
+import { syncFlowChatScrollbarMask } from './flowChatScrollbarMask';
 import {
   contentEndScrollTop,
   FLOWCHAT_AT_CONTENT_END_THRESHOLD_PX as AT_CONTENT_END_THRESHOLD_PX,
@@ -224,6 +225,8 @@ export interface VirtualMessageListProps {
   isViewportActive?: boolean;
   /** The hosting pane is being resized; width-derived measurement waits for it to settle. */
   measurementSuspended?: boolean;
+  /** A column can reflow without changing the full-width scroller's box. */
+  contentWidth?: number;
   presentationMode?: 'tail' | 'history-window';
   viewportMode?: 'live-tail' | 'history-reading';
   historyWindow?: ActiveTurnRenderRange | null;
@@ -383,6 +386,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
   latestTurnId,
   isViewportActive = true,
   measurementSuspended = false,
+  contentWidth,
   presentationMode = 'tail',
   viewportMode = presentationMode === 'history-window' ? 'history-reading' : 'live-tail',
   historyWindow = null,
@@ -526,14 +530,17 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     ? new Set([...interactionKeys, submissionKey]) : interactionKeys, [interactionKeys, submissionKey]);
   // A quiet stream re-renders this list on every flush; collator-sorting the
   // disclosure map is only worth paying when the map itself changed.
+  const availableWidthPx = contentWidth === undefined
+    ? viewportWidthPx
+    : Math.min(viewportWidthPx || contentWidth, contentWidth);
   const estimateContextRevision = useMemo(() => [
-    viewportWidthPx,
+    availableWidthPx,
     activeSession?.isHistorical === true ? 'historical' : 'live',
     [...(exploreGroupStates?.entries() ?? [])]
       .sort(([left], [right]) => left.localeCompare(right))
       .map(([groupId, expanded]) => `${groupId}:${expanded ? 1 : 0}`)
       .join(','),
-  ].join('|'), [viewportWidthPx, activeSession?.isHistorical, exploreGroupStates]);
+  ].join('|'), [availableWidthPx, activeSession?.isHistorical, exploreGroupStates]);
   const virtualizer = useFlowChatVirtualizer({
     pinnedKeys,
     items: virtualItems,
@@ -545,7 +552,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     estimateItemHeightPx: estimateVirtualMessageItemHeightWithContext,
     getKnownItemHeightPx: getKnownVirtualItemHeightPx,
     estimateContext: {
-      availableWidthPx: viewportWidthPx > 0 ? viewportWidthPx : scrollerElement?.clientWidth,
+      availableWidthPx: availableWidthPx > 0 ? availableWidthPx : scrollerElement?.clientWidth,
       isHistorical: activeSession?.isHistorical === true,
       exploreGroupStates,
     } satisfies VirtualItemHeightEstimateContext,
@@ -1302,6 +1309,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     const scroller = scrollerElementRef.current;
     if (!scroller) return;
     const contentEnd = readContentEndScrollTop(scroller);
+    syncFlowChatScrollbarMask(scroller, contentEnd > 0);
     /*
      * A follow still travelling counts as being at the end.
      *
@@ -2187,13 +2195,14 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
         height: scroller.clientHeight,
       };
       if (isUsableFlowChatViewportRect(initialViewportBox)) {
+        syncFlowChatScrollbarMask(scroller, readContentEndScrollTop(scroller) > 0);
         setViewportHeightPx(initialViewportBox.height);
         setViewportWidthPx(initialViewportBox.width);
         // Seed the box so the observer's first callback is not read as a resize.
         observedViewportBoxRef.current = initialViewportBox;
       }
     }
-  }, [updateIsAtScrollStart]);
+  }, [readContentEndScrollTop, updateIsAtScrollStart]);
 
   const scrollToPhysicalBottom = useCallback(() => {
     historyPager.reset();

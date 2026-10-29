@@ -1,11 +1,7 @@
 import { sessionAPI } from '@/infrastructure/api/service-api/SessionAPI';
 import type { SessionUsageReport } from '@/infrastructure/api/service-api/SessionAPI';
 import { notificationService } from '@/shared/notification-system';
-import {
-  closeSessionUsageModal,
-  openSessionUsageModal,
-  showSessionUsageModalReport,
-} from '../components/usage/sessionUsageModalState';
+import { beginSessionUsagePanel } from './openSessionUsageReport';
 import type { Session } from '../types/flow-chat';
 import { requireSessionOwningWorkspaceId } from '../utils/sessionOrdering';
 import { i18nService } from '@/infrastructure/i18n';
@@ -22,6 +18,7 @@ type UsageModelIdentitySource = NonNullable<SessionUsageReport['models'][number]
 export interface UsageReportCommandParams {
   session: Session;
   isProcessing: boolean;
+  reportTitle?: string;
   busyMessage: string;
   noWorkspaceMessage: string;
   failedTitle: string;
@@ -45,7 +42,7 @@ export interface UsageReportCommandResult {
  *
  * The report is not written into the transcript. It is a report *about* the
  * session rather than an event in it, and the synthetic Turn it used to be read
- * as a Turn arriving to everything downstream — see `sessionUsageModalState`.
+ * as a Turn arriving to everything downstream. The side panel owns presentation.
  */
 export async function runUsageReportCommand(
   params: UsageReportCommandParams
@@ -65,9 +62,12 @@ export async function runUsageReportCommand(
     notificationService.error(params.noWorkspaceMessage);
     return { shown: false, reason: 'missing_workspace' };
   }
-  openSessionUsageModal({
+  const panel = beginSessionUsagePanel({
     sessionId: params.session.sessionId,
+    sessionTitle: params.session.title,
+    workspaceId,
     workspacePath: params.session.workspacePath,
+    title: params.reportTitle ?? 'Session Usage',
   });
 
   try {
@@ -79,15 +79,11 @@ export async function runUsageReportCommand(
         includeHiddenSubagents: true,
       });
     const report = enrichUsageReportModelIdentity(rawReport, params.session);
-    showSessionUsageModalReport({
-      sessionId: params.session.sessionId,
-      report,
-      markdown: renderUsageReportMarkdown(report),
-    });
-
-    return { shown: true, report };
+    const shown = panel.complete(report, renderUsageReportMarkdown(report));
+    return { shown, report };
   } catch (error) {
-    closeSessionUsageModal();
+    if (!panel.isCurrent()) return { shown: false };
+    panel.fail(error instanceof Error ? error.message : params.unknownErrorMessage);
     notificationService.error(
       error instanceof Error ? error.message : params.unknownErrorMessage,
       {

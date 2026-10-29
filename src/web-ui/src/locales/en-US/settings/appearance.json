@@ -1,4 +1,12 @@
 {
+  "contentWidth": {
+    "title": "Conversation content width",
+    "label": "Preferred width",
+    "description": "Minimum {{min}} px. The displayed width fits the panel with space at both edges. Drag either content edge to adjust; your preference is remembered on this device.",
+    "reset": "Reset to default",
+    "decrease": "Decrease conversation width",
+    "increase": "Increase conversation width"
+  },
   "title": "Appearance",
   "subtitle": "Adjust themes and font size",
   "sessionPanel": {

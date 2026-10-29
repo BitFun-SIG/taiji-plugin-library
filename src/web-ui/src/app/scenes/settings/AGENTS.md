@@ -43,6 +43,14 @@ pnpm --dir src/web-ui run test:run src/infrastructure/config/components/common/S
 ```
 
 Follow the parent guide for `check:web`, i18n, and Appearance registration checks.
+For the independent Appearance conversation-width setting and shared drag preference:
+
+```bash
+pnpm --dir src/web-ui run test:run src/app/scenes/settings/pages/application/FlowChatWidthSettingsSection.test.tsx src/flow_chat/components/FlowChatWidthBoundary.test.tsx src/infrastructure/appearance/preferences/flowChatWidthStore.test.ts
+```
+
+These local DOM/storage fixtures do not establish rendered visuals or live remote behavior.
+
 For model-pool strategy selection, member search/multi-selection, nested-dialog
 dismissal, preserved records and device-switch isolation, run:
 

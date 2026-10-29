@@ -227,6 +227,14 @@ export const PANEL_CONTENT_CONFIGS: Record<PanelContentType, PanelContentConfig>
     supportsDownload: false,
     showHeader: false
   },
+  'tool-definitions': {
+    type: 'tool-definitions',
+    displayName: 'Tool Definitions',
+    icon: { glyph: Code },
+    supportsCopy: false,
+    supportsDownload: false,
+    showHeader: false
+  },
   'background-command-output': {
     type: 'background-command-output',
     displayName: 'Command Output',

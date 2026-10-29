@@ -1,4 +1,8 @@
 {
+  "contentWidth": {
+    "resizeLeft": "从左侧调整对话内容宽度",
+    "resizeRight": "从右侧调整对话内容宽度"
+  },
   "externalHistory": {
     "removed": "源会话已从 OpenBitFun 移除，当前分支保留独立历史。",
     "restoreSource": "重新添加源会话",
@@ -198,6 +202,79 @@
     "retry": "重试"
   },
   "usage": {
+    "toolDefinitions": {
+      "required": "必填",
+      "optional": "可选",
+      "anyValue": "允许任意值。",
+      "noValue": "不接受任何值。",
+      "items": "数组元素",
+      "prefixItems": "元组元素",
+      "oneOf": "满足其中一项",
+      "anyOf": "满足一项或多项",
+      "allOf": "满足所有条件",
+      "definitions": "引用定义",
+      "enum": "可选值",
+      "default": "默认值",
+      "constraints": {
+        "const": "固定值",
+        "minimum": "最小值",
+        "maximum": "最大值",
+        "exclusiveMinimum": "大于",
+        "exclusiveMaximum": "小于",
+        "minLength": "最短长度",
+        "maxLength": "最长长度",
+        "minItems": "最少项数",
+        "maxItems": "最多项数",
+        "pattern": "匹配模式",
+        "format": "格式",
+        "additionalProperties": "额外参数",
+        "reference": "引用"
+      },
+      "search": "搜索工具或参数",
+      "clearSearch": "清除搜索",
+      "unavailable": "无法读取这些工具定义。",
+      "noMatches": "没有匹配的工具",
+      "empty": "此请求没有工具定义",
+      "parameters": "参数",
+      "noParameters": "不接受参数。",
+      "anyParameters": "未限制参数。",
+      "notes": "工具调用说明"
+    },
+    "context": {
+      "title": "上下文构成",
+      "estimated": "估算",
+      "estimatedTokens": "估算 Token",
+      "estimateHelp": "基于最近一次已记录的模型请求估算。规则包含项目及用户指令，技能和子代理包含其定义列表；分类数量并非模型提供方上报的精确值。",
+      "unavailable": "尚未记录上下文分类数据",
+      "previewCategory": "预览{{category}}",
+      "previewEmpty": "最近一次请求中，此分类没有内容。",
+      "previewUnavailable": "当前会话或执行主机未提供此分类的内容预览。",
+      "previewFailed": "内容加载失败，请重试。",
+      "categories": {
+        "systemPrompt": "系统提示词",
+        "toolDefinitions": "工具定义",
+        "rules": "规则",
+        "skills": "技能",
+        "mcpTools": "MCP 与动态工具",
+        "subagentDefinitions": "子代理定义",
+        "summarizedConversation": "压缩后的对话摘要",
+        "conversation": "对话内容"
+      }
+    },
+    "tokens": {
+      "title": "Token 用量",
+      "uncachedInput": "输入（未命中缓存）",
+      "cacheHit": "KV Cache 命中",
+      "hitRate": "缓存命中率 {{value}}",
+      "hitRateDetail": "缓存命中率 {{rate}}（{{cached}} / {{input}} 输入 Token）",
+      "cacheHitDetail": "（缓存命中 {{rate}}）",
+      "minimumRate": "≥{{rate}}",
+      "recordedCacheHits": "已记录缓存命中",
+      "remainingInput": "其余输入",
+      "inputShareDetail": "{{tokens}} / {{input}} 输入 Token（占输入 {{share}}）",
+      "partialCacheHelp": "仅部分调用上报了缓存用量。图中显示已记录的缓存命中，其余输入包含未上报部分；命中百分比表示相对于全部输入的下限。",
+      "cacheUnavailable": "（缓存不可用）"
+    },
     "title": "会话用量",
     "unavailable": "不可用",
     "redacted": "已脱敏",
@@ -217,8 +294,6 @@
       "copied": "已复制",
       "openDetails": "打开详情",
       "openFileDiff": "打开 diff",
-      "copySessionId": "复制会话 ID",
-      "copyWorkspacePath": "复制项目路径",
       "openSectionDetails": "打开{{section}}详情",
       "jumpToTurn": "跳转到该轮次",
       "viewDetails": "详情",
@@ -320,7 +395,7 @@
     "runtime": {
       "open": "生成会话用量",
       "button": "用量",
-      "tooltip": "在当前聊天中生成用量报告"
+      "tooltip": "在侧面板中打开会话用量报告"
     },
     "panel": {
       "tabsLabel": "用量报告分区",
@@ -332,7 +407,13 @@
       "toolErrors": "工具错误",
       "modelErrors": "模型错误",
       "errorScope": "错误范围",
-      "metadataLabel": "用量报告元信息"
+      "report": "会话用量报告",
+      "workspace": "项目",
+      "totalTokens": "累计 Token",
+      "explorer": "用量明细",
+      "cachedSubset": "缓存 Token 已包含在输入 Token 中，不会重复计入总量。",
+      "distributionUnavailable": "未记录完整且一致的输入与输出数量，暂时无法展示 Token 分布。",
+      "failed": "无法生成会话用量报告"
     },
     "privacy": {
       "title": "隐私安全报告",

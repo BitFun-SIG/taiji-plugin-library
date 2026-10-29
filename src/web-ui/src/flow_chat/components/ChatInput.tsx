@@ -3782,6 +3782,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         effectiveTargetSessionId,
         {
           isProcessing: !!derivedState?.isProcessing,
+          reportTitle: t('usage.title'),
           busyMessage: t('chatInput.usageBusy'),
           noWorkspaceMessage: t('chatInput.usageNoWorkspace'),
           failedTitle: t('chatInput.usageFailed'),

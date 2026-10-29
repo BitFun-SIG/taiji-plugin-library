@@ -41,6 +41,8 @@ const mocks = vi.hoisted(() => ({
   scheduleFollowToLatest: vi.fn(),
   startAtTailOnMount: true,
   virtualizerStartsAtTail: false,
+  estimateWidth: undefined as number | undefined,
+  estimateRevision: '',
   reconcileOpeningMeasurement: null as null | (() => boolean),
   placeSubmittedMessage: null as null | ((intent: SubmittedMessageScrollIntent) => number | null),
   readLayoutTarget: null as null | (() => number),
@@ -139,8 +141,12 @@ vi.mock('./useFlowChatVirtualizer', async () => {
       scrollerRef: { current: HTMLElement | null };
       startAtTailOnMount?: boolean;
       reconcileOpeningMeasurement?: () => boolean;
+      estimateContext?: { availableWidthPx?: number };
+      estimateContextRevision?: string;
     }) => {
       mocks.virtualizerStartsAtTail = options.startAtTailOnMount === true;
+      mocks.estimateWidth = options.estimateContext?.availableWidthPx;
+      mocks.estimateRevision = options.estimateContextRevision ?? '';
       mocks.reconcileOpeningMeasurement = options.reconcileOpeningMeasurement ?? null;
       const rows = options.items.map((item, index) => ({
         index,
@@ -420,6 +426,18 @@ describe('VirtualMessageList natural scroll contract', () => {
     if (!canSynchronize) expect(onBoundaryIntent).not.toHaveBeenCalled();
   });
 
+  it('invalidates width-derived row estimates when only the content column changes', () => {
+    fakeLayout({ clientWidth: 1400, clientHeight: 800, scrollHeight: 2000, turnTopFromScrollerTop: 0 });
+    act(() => root.render(<VirtualMessageList contentWidth={900} />));
+    expect(mocks.estimateWidth).toBe(900);
+    const originalRevision = mocks.estimateRevision;
+    act(() => root.render(<VirtualMessageList contentWidth={600} />));
+    expect(mocks.estimateWidth).toBe(600);
+    expect(mocks.estimateRevision).not.toBe(originalRevision);
+    act(() => root.render(<VirtualMessageList contentWidth={1600} />));
+    expect(mocks.estimateWidth).toBe(1400);
+  });
+
   it('reconciles opening measurements only while follow owns the active viewport', () => {
     act(() => root.render(<VirtualMessageList />));
     expect(mocks.reconcileOpeningMeasurement?.()).toBe(false);
@@ -433,6 +451,56 @@ describe('VirtualMessageList natural scroll contract', () => {
     expect(mocks.scheduleFollowToLatest).toHaveBeenCalledTimes(1);
     act(() => root.render(<VirtualMessageList isViewportActive={false} />));
     expect(mocks.reconcileOpeningMeasurement?.()).toBe(false);
+  });
+
+  it('crops only idle gutter paint across content and viewport resizing without moving the reader', () => {
+    const layout = { clientWidth: 986, clientHeight: 800, scrollHeight: 800, turnTopFromScrollerTop: 0 };
+    const restoreLayout = fakeLayout({ ...layout, scrollHeight: () => layout.scrollHeight });
+    try {
+      act(() => root.render(<VirtualMessageList />));
+      const scroller = container.querySelector<HTMLElement>('[data-flowchat-scroller]')!;
+      expect(scroller.style.maskSize).toBe('986px 100%');
+      // Supply the reserved leading gutter; jsdom does not lay out scrollbars.
+      Object.defineProperty(scroller, 'clientLeft', { value: 7 });
+      const observer = resizeObservers.find(candidate => candidate.targets.has(scroller))!;
+      act(() => observer.notify());
+      expect(scroller.style.maskSize).toBe('986px 100%');
+      expect(scroller.style.maskPosition).toBe('7px 0px');
+
+      layout.scrollHeight = 1600;
+      scroller.scrollTop = 100;
+      act(() => observer.notify());
+      expect(scroller.style.maskSize).toBe('');
+      expect(scroller.style.maskPosition).toBe('');
+      expect(scroller.scrollTop).toBe(100);
+      expect(mocks.scrollToOffset).not.toHaveBeenCalled();
+      expect(mocks.scrollItemIntoView).not.toHaveBeenCalled();
+
+      layout.scrollHeight = 800;
+      scroller.scrollTop = 0; // Native clamping when the content fits again.
+      act(() => observer.notify());
+      expect(scroller.style.maskSize).toBe('986px 100%');
+
+      Object.defineProperty(scroller, 'clientWidth', { configurable: true, value: 786 });
+      act(() => observer.notify());
+      expect(scroller.style.maskSize).toBe('786px 100%');
+      expect(scroller.style.maskPosition).toBe('7px 0px');
+      expect(scroller.scrollTop).toBe(0);
+      expect(mocks.scrollToOffset).not.toHaveBeenCalled();
+      expect(mocks.scrollItemIntoView).not.toHaveBeenCalled();
+
+      Object.defineProperty(scroller, 'clientHeight', { configurable: true, value: 600 });
+      act(() => observer.notify());
+      expect(scroller.style.maskSize).toBe('');
+      Object.defineProperty(scroller, 'clientHeight', { configurable: true, value: 800 });
+      act(() => observer.notify());
+      expect(scroller.style.maskSize).toBe('786px 100%');
+      expect(scroller.scrollTop).toBe(0);
+      expect(mocks.scrollToOffset).not.toHaveBeenCalled();
+      expect(mocks.scrollItemIntoView).not.toHaveBeenCalled();
+    } finally {
+      restoreLayout();
+    }
   });
 
   it('isolates the opening transcript at its boundary until reveal', async () => {
