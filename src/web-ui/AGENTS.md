@@ -86,6 +86,9 @@ For icon changes, also run `pnpm --dir src/web-ui run icons:check` and the focus
 form decorations are generated from Lucide by `pnpm --dir src/web-ui run icons:generate`.
 General-purpose icons use Lucide; the four harness modes, Git branch, brand logos,
 mascots, and device overview artwork retain their authored assets.
+External-product identities reuse `src/shared/ui/ProductBrandIcon.tsx` and its
+`productBrandIcons.ts` asset catalog across import, sign-in, and account views;
+keep product assets and light/dark rendering out of page-local mappings.
 
 Choose the smallest matching check:
 
@@ -244,6 +247,17 @@ pnpm --dir src/web-ui run test:run src/app/components/NavPanel/sections/workspac
 
 These local fixtures cover inline disclosure and legacy-host preference gating;
 they do not establish native rendering or live remote behavior.
+
+For session grouping/list motion, scroll anchoring, interruption and retained project disclosure:
+
+```bash
+pnpm --dir src/web-ui run test:run src/app/components/NavPanel/sections/workspaces/SessionViewTransition.test.tsx src/app/components/NavPanel/sections/workspaces/WorkspaceListSection.test.tsx src/app/components/NavPanel/sections/workspaces/WorkspaceListSectionLayout.test.ts src/app/components/NavPanel/components/WorkspaceSessionGroupingToggle.test.tsx
+pnpm run motion:audit
+```
+
+These DOM fixtures use measured-layout and animation stubs, including simulated
+Peer surface switches; they do not establish native animation fidelity or live
+SSH, Remote Control, Peer Device or Detached Dispatch behavior.
 
 For application update discovery, skip persistence, notification timing, and
 download/install transitions, run the focused behavior tests (these do not

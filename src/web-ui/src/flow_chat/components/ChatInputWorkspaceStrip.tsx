@@ -598,6 +598,7 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
       return (
         <Tooltip content={workspaceTooltipContent} placement="top">
           <span data-openbitfun-component="chat-input-workspace-strip" data-openbitfun-part="workspace" className="openbitfun-chat-input-workspace-strip__workspace">
+            <Icon name="folder-open" size="xs" aria-hidden />
             <span className="openbitfun-chat-input-workspace-strip__workspace-name"><OverflowText>{label}</OverflowText></span>
           </span>
         </Tooltip>
@@ -621,6 +622,7 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
               setWorkspaceMenuOpen(open => !open);
             }}
           >
+            <Icon name="folder-open" size="xs" aria-hidden />
             <span className="openbitfun-chat-input-workspace-strip__workspace-name"><OverflowText>{label}</OverflowText></span>
           </button>
         </Tooltip>

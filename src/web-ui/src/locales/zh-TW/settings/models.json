@@ -53,6 +53,9 @@
     "rescan": "重新整理狀態",
     "import": "匯入使用",
     "login": "登入",
+    "loginTitle": "{{provider}} 登入",
+    "backToProviders": "返回服務商清單",
+    "cancelAndBack": "取消登入並返回",
     "browserLogin": "瀏覽器登入",
     "deviceLogin": "裝置碼登入",
     "cancel": "取消",
@@ -88,18 +91,22 @@
       "zcode": "ZCode"
     },
     "details": {
-      "codex": "ChatGPT 訂閱",
-      "antigravity": "Google 訂閱",
-      "opencode": "Console · Zen",
-      "grok": "SuperGrok 訂閱",
-      "hermes": "Nous Portal 訂閱",
+      "codex": "ChatGPT",
+      "antigravity": "Google",
+      "opencode": "Zen",
+      "grok": "SuperGrok",
+      "hermes": "Nous Portal",
       "workbuddy": "已下線 · 廠商不再支援訂閱授權",
       "workbuddy_ai": "已下線 · 國際版",
-      "zcode": "GLM Coding Plan"
+      "zcode": "GLM Coding"
     },
     "regions": {
-      "zai": "Z.ai",
-      "bigmodel": "智譜"
+      "zai": "Z.ai（國際版）",
+      "bigmodel": "智譜 BigModel（中國版）"
+    },
+    "regionsShort": {
+      "zai": "國際",
+      "bigmodel": "國內"
     },
     "options": {
       "opencode": "OpenCode",
@@ -245,6 +252,14 @@
       "urlOptions": {
         "default": "Anthropic格式",
         "openai": "OpenAI兼容格式-默認"
+      }
+    },
+    "openai": {
+      "name": "OpenAI",
+      "description": "OpenAI GPT 與推理模型",
+      "urlOptions": {
+        "default": "Responses API（預設）",
+        "chatCompletions": "Chat Completions API"
       }
     },
     "gemini": {
@@ -739,10 +754,12 @@
     "subscriptions": "訂閱服務",
     "importedSummary": "已匯入 {{providers}} 個服務，共 {{models}} 個模型",
     "noneImported": "尚未匯入訂閱服務",
-    "import": "匯入",
+    "addSubscription": "新增訂閱",
     "importTitle": "匯入訂閱服務",
     "loadFailed": "無法讀取訂閱服務，請重試；既有模型設定仍會保留",
-    "noServices": "目前主機沒有可匯入的訂閱服務"
+    "noServices": "目前主機沒有可匯入的訂閱服務",
+    "more": "更多",
+    "noSignedInAccounts": "暫無已登入帳號"
   },
   "selectionModes": {
     "unavailable": "暫未開放",

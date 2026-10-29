@@ -53,6 +53,9 @@
     "rescan": "Refresh status",
     "import": "Use as model",
     "login": "Sign in",
+    "loginTitle": "{{provider}} sign-in",
+    "backToProviders": "Back to providers",
+    "cancelAndBack": "Cancel sign-in and go back",
     "browserLogin": "Browser sign-in",
     "deviceLogin": "Device-code sign-in",
     "cancel": "Cancel",
@@ -88,18 +91,22 @@
       "zcode": "ZCode"
     },
     "details": {
-      "codex": "ChatGPT subscription",
-      "antigravity": "Google subscription",
-      "opencode": "Console · Zen",
-      "grok": "SuperGrok subscription",
-      "hermes": "Nous Portal subscription",
+      "codex": "ChatGPT",
+      "antigravity": "Google",
+      "opencode": "Zen",
+      "grok": "SuperGrok",
+      "hermes": "Nous Portal",
       "workbuddy": "Removed · vendor no longer supports sign-in",
       "workbuddy_ai": "Removed · international",
-      "zcode": "GLM Coding Plan"
+      "zcode": "GLM Coding"
     },
     "regions": {
-      "zai": "Z.ai",
+      "zai": "Z.ai (International)",
       "bigmodel": "BigModel (China)"
+    },
+    "regionsShort": {
+      "zai": "Global",
+      "bigmodel": "China"
     },
     "options": {
       "opencode": "OpenCode",
@@ -245,6 +252,14 @@
       "urlOptions": {
         "default": "Anthropic Format",
         "openai": "OpenAI Compatible Format - Default"
+      }
+    },
+    "openai": {
+      "name": "OpenAI",
+      "description": "OpenAI GPT and reasoning models",
+      "urlOptions": {
+        "default": "Responses API - Default",
+        "chatCompletions": "Chat Completions API"
       }
     },
     "gemini": {
@@ -739,10 +754,12 @@
     "subscriptions": "Subscriptions",
     "importedSummary": "{{models}} models imported from {{providers}} services",
     "noneImported": "No subscriptions imported yet",
-    "import": "Import",
+    "addSubscription": "Add subscription",
     "importTitle": "Import subscriptions",
     "loadFailed": "Could not load subscriptions. Retry to refresh; existing model configurations are retained.",
-    "noServices": "No subscriptions are available to import on this host"
+    "noServices": "No subscriptions are available to import on this host",
+    "more": "More",
+    "noSignedInAccounts": "No signed-in accounts"
   },
   "selectionModes": {
     "unavailable": "Not available yet",

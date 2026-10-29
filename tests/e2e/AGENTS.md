@@ -166,5 +166,9 @@ The native browser fixture uses isolated product storage and completed binary /
 frontend snapshots. It verifies nested build output with root-relative CSS,
 relative JavaScript modules and dynamic imports, parent-relative styles, images,
 encoded filenames, and reloading one preview after opening another. Inspect its
-`result.json`; this is native local browser coverage. The services-integrations
+`result.json`. It also opens a nested site index at `/`, follows a real page link,
+reloads a history route, loads a deep link with a query, and verifies images/modules
+plus a true 404 for a missing image. Views are shown and an image entrance
+animation must finish, so decoding in a hidden view cannot satisfy the check.
+This is native local browser coverage. The services-integrations
 OpenSSH fixture separately covers the SSH/SFTP resource provider.

@@ -68,13 +68,37 @@ keys select an output without starting capture. Export requires confirmation. Ca
 transcript untouched and restore focus to the resident trigger. The trigger shows
 export progress and stays disabled until capture finishes; the exporter stays
 mounted when the menu and Dialog close. There is no separate image action in the footer.
-The capture uses the same transcript inset and user-bubble tokens as the live
-message, with right alignment, borderless quiet fill and complete text rather
+The capture keeps the live transcript column width and typography, with a
+standalone image inset that grows from space-4 to space-8. It uses the live
+user-bubble tokens, with right alignment, borderless quiet fill and complete text rather
 than the live view's three-line clamp. Persisted reference capsules reuse the
 live message's content renderer. Compact output omits thinking items entirely,
 including their icons; the other output renders expanded thinking in item order.
 The small brand/date header and muted attribution footer use semantic typography,
 spacing and divider tokens, without an assistant slogan or subtitle.
+Round wrappers contain their child margins with `flow-root`: the rasterizer
+freezes computed heights, so collapsing those margins outside a round before
+cloning loses each inter-round gap in the SVG and leaves their sum above the
+footer. Tool summaries remain inside the image inset.
+The image capture copies resolved CSS properties, including browser-prefixed
+paint properties, but excludes inherited custom properties from the cloned SVG.
+The staging DOM receives the initiating transcript column's measured width and
+inherited theme variables, including local font settings. It keeps the shared
+reading-column maximum as a fallback when the source row is no longer mounted;
+the full pane width is never used as the text width. Exported text uses the live
+renderer styles without extra inline padding or export-only link no-wrap rules. Repeating
+the full theme catalog on every cloned node makes long transcripts expensive to
+serialize and rasterize. Capture validates the canvas before adding the logo:
+uniform or transparent output is a failure even when PNG encoding would succeed.
+A failed raster retries at reduced scale; a timeout stops the export. Logo
+compositing reuses the validated canvas and its actual scale, avoiding a second
+full-size bitmap and keeping reduced-resolution exports aligned.
+Capture waits for web fonts before measurement and embeds used faces, preserving
+the bundled HarmonyOS/Fira metrics on Windows/Linux as well as system fonts on
+macOS. Logo geometry is read after fonts settle, before staging DOM cleanup.
+Generative UI card PNG exports use the same capture helper, including blank-image
+rejection and reduced-scale recovery. Encoding failures must not write files or
+show success. Timed-out captures release any raster that completes late.
 Each number has its own hover/focus/click capsule and details card. Clicking
 opens immediately and keeps the card open until another trigger click, an outside
 press, Escape, or scrolling; native button triggers also support keyboard activation. `FlowChatMetric`

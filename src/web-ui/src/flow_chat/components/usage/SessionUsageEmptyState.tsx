@@ -8,7 +8,6 @@ export function SessionUsageEmptyState() {
       data-testid="session-usage-empty"
       role="status"
       title={t('usage.empty.session')}
-      description={t('usage.empty.sessionDescription')}
     />
   );
 }

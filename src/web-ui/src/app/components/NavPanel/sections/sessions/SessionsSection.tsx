@@ -47,6 +47,7 @@ import {
   DEFAULT_WORKSPACE_SESSION_FILTERS,
   hasWorkspaceSessionFilters,
   matchesWorkspaceSessionView,
+  matchesWorkspaceExternalDiscovery,
   matchesWorkspaceSourceAgent,
   sessionSourceAgentLabel,
   useWorkspaceSessionViewStore,
@@ -300,6 +301,9 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
     onDiscoveryCompleted,
   );
   const observeDiscovery = discovery.observe;
+  const matchesExternalDiscovery = useCallback((session: Session) => matchesWorkspaceExternalDiscovery(
+    session, discovery.enabledSources,
+  ), [discovery.enabledSources]);
   useEffect(() => {
     // The same host scan is observed by the active workspace row and, in some
     // layouts, by an aggregate or assistant-history row. Show one toast per
@@ -371,11 +375,15 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
     void orderingRevision;
     return new Set([...flowChatState.sessions.keys()].filter(sessionNavStatusService.isRunning));
   }, [flowChatState.sessions, orderingRevision]);
+  const discoveryEnabledSources = discovery.enabledSources;
+  const discoveryFilterActive = discoveryEnabledSources !== undefined
+    && Object.keys(EXTERNAL_SESSION_NAMES).some(source => !discoveryEnabledSources.has(source));
   const catalogQueryJson = useMemo(() => {
     void orderingRevision;
+    if (discoveryFilterActive) return JSON.stringify(null);
     return JSON.stringify(workspaceSessionCatalogQuery(workspaceId, sessionOrdering, sessionShow,
       sessionFilters, sourceAgent, flowChatState.sessions.values(), sessionNavStatusService.getSortTimestamp) ?? null);
-  }, [workspaceId, sessionOrdering, sessionShow, sessionFilters, sourceAgent, flowChatState.sessions, orderingRevision]);
+  }, [discoveryFilterActive, workspaceId, sessionOrdering, sessionShow, sessionFilters, sourceAgent, flowChatState.sessions, orderingRevision]);
   const captureCatalogQuery = useCallback((query: SessionCatalogQuery) => captureWorkspaceSessionCatalogQuery(
     query, flowChatStore.getState().sessions.values(), sessionNavStatusService.getSortTimestamp,
   ), []);
@@ -796,21 +804,23 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
   }, [flowChatState.sessions, orderingRevision, runningSessionIds, sessionOrdering, workspaceId, workspaceScopes]);
 
   const topLevelSessions = useMemo(
-    () => allTopLevelSessions.filter(session => matchesSourceAgent(session) && matchesWorkspaceSessionView(
+    () => allTopLevelSessions.filter(session => matchesExternalDiscovery(session)
+      && matchesSourceAgent(session) && matchesWorkspaceSessionView(
       session,
       sessionShow,
       sessionFilters,
       runningSessionIds.has(session.sessionId),
     )),
-    [allTopLevelSessions, matchesSourceAgent, runningSessionIds, sessionFilters, sessionShow],
+    [allTopLevelSessions, matchesExternalDiscovery, matchesSourceAgent, runningSessionIds, sessionFilters, sessionShow],
   );
 
   const visibleChildrenByParent = useMemo(() => {
-    if (!hasActiveSessionFilter) return childrenByParent;
+    if (!hasActiveSessionFilter && discoveryEnabledSources === undefined) return childrenByParent;
 
     const filtered = new Map<string, Session[]>();
     for (const [parentId, children] of childrenByParent) {
-      filtered.set(parentId, children.filter(session => matchesSourceAgent(session) && matchesWorkspaceSessionView(
+      filtered.set(parentId, children.filter(session => matchesExternalDiscovery(session)
+        && matchesSourceAgent(session) && matchesWorkspaceSessionView(
         session,
         sessionShow,
         sessionFilters,
@@ -818,7 +828,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
       )));
     }
     return filtered;
-  }, [childrenByParent, hasActiveSessionFilter, matchesSourceAgent, runningSessionIds, sessionFilters, sessionShow]);
+  }, [childrenByParent, discoveryEnabledSources, hasActiveSessionFilter, matchesExternalDiscovery, matchesSourceAgent, runningSessionIds, sessionFilters, sessionShow]);
 
   const sessionDisplayLimit = useMemo(() => {
     return getSessionDisplayLimit({

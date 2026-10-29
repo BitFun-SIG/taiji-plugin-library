@@ -264,7 +264,7 @@ export function ModelRouterSettings({ models, onClose, onSaved, onManageModels, 
     } finally { if (isCurrent()) setBusy(false); }
   };
   const saving = busy && !currentChecks;
-  return <Dialog open size="md" closeOnEscape={!saving} closeOnPointerOutside={false} onOpenChange={open => { if (!open && !saving) onClose(); }}>
+  return <Dialog open preset="panel" closeOnEscape={!saving} closeOnPointerOutside={false} onOpenChange={open => { if (!open && !saving) onClose(); }}>
     <DialogHeader><DialogHeading><DialogTitle>{t('router.title')}</DialogTitle></DialogHeading><DialogClose disabled={saving} /></DialogHeader>
     <DialogBody>
       <div className="model-router-settings" data-openbitfun-component="model-router-settings" data-openbitfun-part="root">
@@ -298,7 +298,7 @@ export function ModelRouterSettings({ models, onClose, onSaved, onManageModels, 
         {onManageModels && <Button size="sm" variant="text" disabled={busy} onClick={onManageModels}>{t('router.manageModels')}</Button>}
       </div>
     </DialogBody>
-    <DialogFooter separator>
+    <DialogFooter appearance="floating">
       <Button size="sm" variant="outline" disabled={!available || busy || !draft || !roleDraft} onClick={() => void save(true)}>{t('router.test')}</Button>
       <Button size="sm" variant="primary" loading={busy} disabled={!available || !draft || !roleDraft} onClick={() => void save(false)}>{t('router.save')}</Button>
     </DialogFooter>

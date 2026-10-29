@@ -99,6 +99,8 @@ interface WorkspaceItemProps {
   isDragging?: boolean;
   onDragStart?: React.DragEventHandler<HTMLDivElement>;
   onDragEnd?: React.DragEventHandler<HTMLDivElement>;
+  sessionsCollapsed?: boolean;
+  onSessionsCollapsedChange?: (collapsed: boolean) => void;
 }
 
 const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
@@ -110,6 +112,8 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
   isDragging = false,
   onDragStart,
   onDragEnd,
+  sessionsCollapsed: controlledSessionsCollapsed,
+  onSessionsCollapsedChange,
 }) => {
   const { t } = useI18n('common');
   const { t: tFiles } = useTranslation('panels/files');
@@ -143,7 +147,8 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
   const [portForwardDialogOpen, setPortForwardDialogOpen] = useState(false);
   const [isDeletingAssistant, setIsDeletingAssistant] = useState(false);
   const [isResettingWorkspace, setIsResettingWorkspace] = useState(false);
-  const [sessionsCollapsed, setSessionsCollapsed] = useState(false);
+  const [localSessionsCollapsed, setSessionsCollapsed] = useState(false);
+  const sessionsCollapsed = controlledSessionsCollapsed ?? localSessionsCollapsed;
   const [assistantHistoryOpen, setAssistantHistoryOpen] = useState(false);
   const assistantHistoryId = useId();
   const openingAssistantRef = useRef(false);
@@ -535,8 +540,9 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
   }, [menuOpen, workspace]);
 
   const handleCollapseToggle = useCallback(() => {
-    setSessionsCollapsed(prev => !prev);
-  }, []);
+    if (onSessionsCollapsedChange) onSessionsCollapsedChange(!sessionsCollapsed);
+    else setSessionsCollapsed(prev => !prev);
+  }, [onSessionsCollapsedChange, sessionsCollapsed]);
 
   const handleCloseWorkspace = useCallback(async () => {
     setMenuOpen(false);
