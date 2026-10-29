@@ -347,25 +347,6 @@ export const ExportImageButton: React.FC<ExportImageButtonProps> = ({
       // Yield to the main thread so the browser can finish layout/paint.
       await new Promise(resolve => setTimeout(resolve, 0));
 
-      // Capture the logo placeholder position (relative to the container)
-      // BEFORE the DOM is torn down, so we can composite the logo precisely
-      // onto the final image.
-      const containerRect = container.getBoundingClientRect();
-      const placeholderEl = container.querySelector(`.${LOGO_PLACEHOLDER_CLASS}`) as HTMLElement | null;
-      let logoBox: { x: number; y: number; w: number; h: number; radius: number } | null = null;
-      if (placeholderEl) {
-        const r = placeholderEl.getBoundingClientRect();
-        const radiusStr = getComputedStyle(placeholderEl).getPropertyValue('border-radius');
-        const radius = parseFloat(radiusStr) || 0;
-        logoBox = {
-          x: r.left - containerRect.left,
-          y: r.top - containerRect.top,
-          w: r.width,
-          h: r.height,
-          radius,
-        };
-      }
-
       const captureFilter = (node: Node) => {
         // Filter out action buttons and other non-export elements.
         if (node instanceof HTMLElement) {
@@ -383,6 +364,25 @@ export const ExportImageButton: React.FC<ExportImageButtonProps> = ({
       };
 
       const canvas = await captureExportCanvas(container, bgColor, captureFilter);
+
+      // Capture has settled fonts. Measure the logo against that same layout
+      // before removing the staging DOM.
+      const containerRect = container.getBoundingClientRect();
+      const placeholderEl = container.querySelector(`.${LOGO_PLACEHOLDER_CLASS}`) as HTMLElement | null;
+      let logoBox: { x: number; y: number; w: number; h: number; radius: number } | null = null;
+      if (placeholderEl) {
+        const r = placeholderEl.getBoundingClientRect();
+        const radiusStr = getComputedStyle(placeholderEl).getPropertyValue('border-radius');
+        const radius = parseFloat(radiusStr) || 0;
+        logoBox = {
+          x: r.left - containerRect.left,
+          y: r.top - containerRect.top,
+          w: r.width,
+          h: r.height,
+          radius,
+        };
+      }
+
       cleanupDom();
 
       // Reuse the verified raster instead of PNG -> Image -> second canvas.

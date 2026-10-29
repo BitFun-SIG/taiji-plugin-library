@@ -20,7 +20,7 @@ each missing what the other had.
 | `TurnFooter.test.tsx`, `modelRoundItemMemo.test.ts` | latest-turn identity, hover/focus across virtual rows, lease cleanup, no projection churn and the existing completion reveal gate; behavior only, not visual proof |
 | `MessageExportControls.test.tsx` | flat copy/export menu, illustrated checkbox-card selection by pointer and keyboard, complete user text/reference rendering, omission or expansion of thinking, minimal branding, confirmation, pending/error feedback, cancel/Escape/outside dismissal and resident-trigger focus restoration; local DOM behavior, not image fidelity or remote-host validation |
 | `exportImageLayout.test.ts` | initiating reading-column width and font settings across wide/narrow panes, hidden sibling sessions, and unmounted source rows; measured DOM fixtures, not native visual or remote-host validation |
-| `../../utils/exportImageCapture.test.ts`, `../../utils/captureElementToDownloadsPng.test.tsx` | resolved-style selection without duplicated theme variables, opaque/transparent blank-raster rejection before logo compositing, bounded pixel reads, reduced-scale recovery, timeout cleanup, and widget export save/error handling; rasterizer fixtures, not native WebView or remote-host validation |
+| `../../utils/exportImageCapture.test.ts`, `../../utils/captureElementToDownloadsPng.test.tsx` | resolved-style selection without duplicated theme variables, opaque/transparent blank-raster rejection before logo compositing, bounded pixel reads, reduced-scale recovery, font readiness/embedding, timeout cleanup, and widget export save/error handling; rasterizer fixtures, not native WebView or remote-host validation |
 | `../../../shared/ui/Tooltip.test.tsx` | shared metric click opening, immediate scroll dismissal, delayed-open cancellation, viewport-exit observer cleanup and no automatic reopening; DOM/observer behavior only, not native scrolling or visual proof |
 | `../../utils/turnUsageMetrics.test.ts`, `TurnUsageMetrics.test.tsx`, `../../store/modernFlowChatStore.test.ts`, `../../../features/dispatch/DispatchJobObserver.test.ts` | separate request TTFT, effective-output rate excluding waiting and tools, complete multi-round timing, controller setup-row exclusion, legacy/missing/zero telemetry, speed boundaries and projection |
 | `../../services/flow-chat-manager/EventHandlerModule.test.ts`, `../../services/flow-chat-manager/PersistenceModule.test.ts`, `../../store/FlowChatStore.test.ts` | live cache aggregation, optional-field persistence and legacy/current hydration; no remote-host claim |
@@ -103,7 +103,10 @@ without changing size or selection; only the checkbox indicates the selected
 output. Check reduced motion and touch input separately. Check the captured image's
 user bubble against the live message, full long text/reference labels, minimal
 brand/date header and attribution footer, and absence of all thinking items/icons
-in compact output. The same presentation
+in compact output. Verify that many model rounds retain their inter-item gaps
+without accumulating empty space above the footer, and that long tool summaries
+respect the horizontal inset. Exercise both system and bundled font profiles on
+macOS, Windows, and Linux. The same presentation
 on remote-workspace and peer-host sessions remains a real-host check.
 
 **Agents must not perform UI interaction verification.** Report these as pending

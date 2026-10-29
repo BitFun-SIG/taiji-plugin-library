@@ -8,6 +8,7 @@ import {
 } from './exportImageCapture';
 
 const { domToCanvas } = vi.hoisted(() => ({ domToCanvas: vi.fn() }));
+const originalFonts = Object.getOwnPropertyDescriptor(document, 'fonts');
 vi.mock('modern-screenshot', () => ({ domToCanvas }));
 vi.mock('@/shared/utils/logger', () => ({ createLogger: () => ({ warn: vi.fn() }) }));
 
@@ -29,6 +30,8 @@ function raster(background: number, content = false, height = 65, transparent = 
 }
 
 afterEach(() => {
+  if (originalFonts) Object.defineProperty(document, 'fonts', originalFonts);
+  else Reflect.deleteProperty(document, 'fonts');
   vi.restoreAllMocks();
   domToCanvas.mockReset();
   vi.useRealTimers();
@@ -83,8 +86,36 @@ describe('conversation image capture', () => {
     const filter = vi.fn(() => true);
     expect(await captureExportCanvas(container, 'white', filter)).toBe(canvas);
     expect(domToCanvas).toHaveBeenCalledExactlyOnceWith(container, expect.objectContaining({
-      scale: 2, backgroundColor: 'white', filter, includeStyleProperties: expect.any(Array),
+      scale: 2, backgroundColor: 'white', filter, font: {}, includeStyleProperties: expect.any(Array),
     }));
+  });
+
+  it('waits for bundled fonts before the rasterizer measures and clones text', async () => {
+    let finishFonts!: () => void;
+    Object.defineProperty(document, 'fonts', {
+      configurable: true,
+      value: { ready: new Promise<void>(resolve => { finishFonts = resolve; }) },
+    });
+    const { canvas } = raster(255, true);
+    domToCanvas.mockResolvedValue(canvas);
+    const capture = captureExportCanvas(document.createElement('div'), 'white');
+    await Promise.resolve();
+    expect(domToCanvas).not.toHaveBeenCalled();
+    finishFonts();
+    expect(await capture).toBe(canvas);
+  });
+
+  it('reports stalled font loading without capturing fallback text', async () => {
+    vi.useFakeTimers();
+    Object.defineProperty(document, 'fonts', {
+      configurable: true,
+      value: { ready: new Promise(() => {}) },
+    });
+    const capture = captureExportCanvas(document.createElement('div'), 'white');
+    const rejection = expect(capture).rejects.toThrow('Image export fonts timed out');
+    await vi.advanceTimersByTimeAsync(15_000);
+    await rejection;
+    expect(domToCanvas).not.toHaveBeenCalled();
   });
 
   it.each(['blank', 'error'])('retries a %s capture at lower resolution', async failure => {

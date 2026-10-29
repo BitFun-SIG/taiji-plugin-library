@@ -48,13 +48,22 @@ export async function captureExportCanvas(
   backgroundColor: string,
   filter?: NonNullable<Options['filter']>,
 ): Promise<HTMLCanvasElement> {
+  // Measure after web fonts settle; otherwise the SVG can embed the right face
+  // into boxes that were sized with fallback glyphs.
+  await withTimeout(
+    container.ownerDocument.fonts?.ready ?? Promise.resolve(),
+    CAPTURE_TIMEOUT_MS,
+    'Image export fonts',
+  );
   const { domToCanvas } = await import('modern-screenshot');
   const options: Options = {
     backgroundColor,
     filter,
     includeStyleProperties: getExportCaptureStyleProperties(container),
     fetch: { bypassingCache: true },
-    font: false,
+    // Windows/Linux ship web fonts. Embed the used faces so the standalone SVG
+    // keeps the same glyph metrics instead of silently switching to a fallback.
+    font: {},
     features: { removeControlCharacter: true, fixSvgXmlDecode: true },
   };
 
