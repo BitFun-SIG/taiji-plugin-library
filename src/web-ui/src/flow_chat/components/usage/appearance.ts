@@ -1,5 +1,14 @@
 import type { AppearanceSurfaceDescriptor } from '@/infrastructure/appearance';
 
+export const contextUsagePopoverAppearanceDescriptor: AppearanceSurfaceDescriptor = {
+  id: 'context-usage-popover',
+  componentAttribute: 'data-openbitfun-product-component',
+  parts: [
+    { id: 'root' }, { id: 'header' }, { id: 'totals' }, { id: 'bar', propertyProfile: 'layout' },
+    { id: 'legend' }, { id: 'item' }, { id: 'status', propertyProfile: 'paint', visualRole: 'content' },
+  ],
+};
+
 export const toolDefinitionsPreviewAppearanceDescriptor: AppearanceSurfaceDescriptor = {
   id: 'tool-definitions-preview',
   componentAttribute: 'data-openbitfun-product-component',

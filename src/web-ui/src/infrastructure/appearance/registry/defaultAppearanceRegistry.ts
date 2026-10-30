@@ -9,7 +9,7 @@ import { markdownAppearanceDescriptor } from '@/infrastructure/markdown/appearan
 import { chatInputAppearanceDescriptor } from '@/flow_chat/components/ChatInput.appearance';
 import { harnessProfileSelectorAppearanceDescriptor } from '@/flow_chat/components/HarnessProfileSelector.appearance';
 import { composerVoiceInputAppearanceDescriptor } from '@/flow_chat/components/voice/ComposerVoiceInputButton.appearance';
-import { sessionUsagePanelAppearanceDescriptor, toolDefinitionsPreviewAppearanceDescriptor } from '@/flow_chat/components/usage/appearance';
+import { contextUsagePopoverAppearanceDescriptor, sessionUsagePanelAppearanceDescriptor, toolDefinitionsPreviewAppearanceDescriptor } from '@/flow_chat/components/usage/appearance';
 import { richTextInputAppearanceDescriptor } from '@/flow_chat/components/RichTextInput.appearance';
 import { modelRoundItemAppearanceDescriptor } from '@/flow_chat/components/modern/ModelRoundItem.appearance';
 import { deepReviewActionBarAppearanceDescriptor } from '@/flow_chat/deep-review/action-bar/appearance';
@@ -272,6 +272,7 @@ export function createDefaultAppearanceRegistry(): AppearanceRegistry {
     .registerComponent(harnessProfileSelectorAppearanceDescriptor)
     .registerComponent(composerVoiceInputAppearanceDescriptor)
     .registerComponent(sessionUsagePanelAppearanceDescriptor)
+    .registerComponent(contextUsagePopoverAppearanceDescriptor)
     .registerComponent(toolDefinitionsPreviewAppearanceDescriptor)
     .registerComponent(richTextInputAppearanceDescriptor)
     .registerComponent(modelRoundItemAppearanceDescriptor)

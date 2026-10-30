@@ -77,6 +77,21 @@ still wait for the current turn; Detached Dispatch sessions keep appending
 messages to the target task. In Peer Device Mode, the preference belongs to the
 active host, as do the other conversation settings.
 
+## MiniApp navigation shortcuts
+
+In **MiniApps → Installed**, open an app's **More actions** menu and choose
+**Add to left navigation**. The same action is available on installed-app detail
+pages. Shortcuts appear after **Task Board**, in the order added, and open the
+app in a tab. Each shortcut shows only the app icon and name. Its remove button
+appears on hover or keyboard focus within the same navigation row. Use that
+button or the app's navigation action to remove it without uninstalling the app.
+
+Shortcuts survive restarts and are saved separately for each selected device on
+this controller. Switching devices uses that device's installed catalog; failed
+catalog reads retain the saved shortcuts. Apps requiring workspace filesystem
+access remain disabled in unsupported remote workspaces. Launching an app that
+is already open in a native window uses the existing transfer confirmation.
+
 ## Floating conversations
 
 The bottom-right window opens the persistent OpenBitFun control conversation in

@@ -46,6 +46,13 @@ vi.mock('react-i18next', async (importOriginal) => ({
         'usage.tokens.partialCacheHelp': 'The chart shows recorded cache hits; remaining input includes unreported usage. The hit percentage is a lower bound over all input tokens.',
         'usage.tokens.cacheUnavailable': '(cache unavailable)',
         'usage.context.unavailable': 'No context breakdown recorded',
+        'usage.context.label': 'Context',
+        'usage.context.utilization': 'Context usage',
+        'usage.context.unused': 'Unused',
+        'usage.context.capacityUnavailable': 'Context capacity was not reported. Only recorded usage by category is shown.',
+        'usage.context.exceedsCapacity': 'Estimated context usage exceeds the reported capacity. Only recorded usage by category is shown.',
+        'usage.context.usageOfCapacity': '{{used}} / {{size}}',
+        'usage.context.approximateTokens': '~{{value}}',
         'usage.unavailable': 'Unavailable',
         'usage.redacted': 'Redacted',
         'usage.percent': '{{value}}%',
@@ -163,6 +170,10 @@ vi.mock('react-i18next', async (importOriginal) => ({
         'usage.runtime.button': 'Usage',
         'usage.runtime.tooltip': 'Generate a usage report in this chat',
         'usage.panel.tabsLabel': 'Usage report sections',
+        'usage.panel.report': 'Context Usage Report',
+        'usage.panel.workspace': 'Project',
+        'usage.panel.totalTokens': 'Total tokens',
+        'usage.panel.totalUsage': 'Total usage',
         'usage.panel.accounting': 'Accounting',
         'usage.panel.turnScope': 'Scope',
         'usage.panel.cacheCoverage': 'Cache reporting',
@@ -510,6 +521,17 @@ describe('Session usage report UI components', () => {
       root.render(element);
     });
   };
+
+  it.each([
+    { isLoading: true },
+    { error: 'Host offline' },
+    { markdown: '# Legacy report' },
+    { report: usageReport() },
+  ])('publishes the localized title for existing tabs in every report state: %j', props => {
+    const onTitleChange = vi.fn();
+    render(<SessionUsagePanel {...props} onTitleChange={onTitleChange} />);
+    expect(onTitleChange).toHaveBeenCalledExactlyOnceWith('Context Usage Report');
+  });
 
   it.each([undefined, null])('distinguishes a new session from missing telemetry with a %s file count', changedFiles => {
     const report = usageReport({
@@ -982,11 +1004,18 @@ describe('Session usage report UI components', () => {
     })} />);
     expect(container.querySelector('.session-usage-panel__title')?.textContent).toBe('Product video');
     expect(container.querySelector('[role="dialog"]')).toBeNull();
-    expect(container.querySelector('.session-usage-panel__donut-label strong')?.textContent).toBe('200');
-    expect(container.querySelectorAll('.session-usage-panel__donut-segment')).toHaveLength(8);
+    expect(container.querySelector('.session-usage-panel__donut-label strong')?.textContent).toBe('20%');
+    expect(container.querySelectorAll('.session-usage-panel__donut-segment')).toHaveLength(9);
     const contextShares = Array.from(container.querySelectorAll('.session-usage-panel__donut-segment'))
       .map(segment => Number(segment.getAttribute('stroke-dasharray')?.split(' ')[0]));
     expect(contextShares.reduce((sum, share) => sum + share, 0)).toBeCloseTo(100);
+    expect(contextShares.slice(0, -1).reduce((sum, share) => sum + share, 0)).toBeCloseTo(20);
+    const unused = container.querySelector('.session-usage-panel__donut-segment[data-usage-category="unused"]');
+    expect(unused?.classList.contains('session-usage-panel__series--unused')).toBe(true);
+    expect(unused?.getAttribute('stroke-dasharray')).toBe('80 20');
+    expect(unused?.getAttribute('stroke-dashoffset')).toBe('-20');
+    expect(container.querySelector('.session-usage-panel__context .session-usage-panel__legend-row[data-usage-category="unused"]')?.textContent)
+      .toBe('Unused80080%');
     const tokenSection = container.querySelector('.session-usage-panel__tokens');
     const tokenShares = Array.from(tokenSection!.querySelectorAll<HTMLElement>('.session-usage-panel__bar-segment'))
       .map(segment => Number(segment.style.flexGrow));
@@ -1010,6 +1039,59 @@ describe('Session usage report UI components', () => {
     expect(container.querySelector('.session-usage-panel__summary')).toBe(tokenSection);
   });
 
+  it.each([0, 1000])('plots %i used tokens against the full capacity, including empty and full usage', used => {
+    render(<SessionUsagePanel report={usageReport({
+      context: {
+        systemPrompt: 0, toolDefinitions: 0, rules: 0, skills: 0, mcpTools: 0,
+        subagentDefinitions: 0, summarizedConversation: 0, conversation: used, contextWindow: 1000,
+      },
+    })} />);
+
+    const segments = Array.from(container.querySelectorAll('.session-usage-panel__donut-segment'));
+    expect(segments).toHaveLength(1);
+    expect(segments[0].getAttribute('data-usage-category')).toBe(used === 0 ? 'unused' : 'conversation');
+    expect(segments[0].getAttribute('stroke-dasharray')).toBe('100 0');
+    expect(container.querySelector('.session-usage-panel__donut-label strong')?.textContent).toBe(used === 0 ? '0%' : '100%');
+    expect(container.querySelector('.session-usage-panel__donut-label span')?.textContent).toBe('Context usage');
+    const unusedLegend = container.querySelector('.session-usage-panel__legend-row[data-usage-category="unused"]')!;
+    expect(unusedLegend.querySelector('strong')?.textContent).toBe(used === 0 ? '1K' : '0');
+    expect(unusedLegend.querySelector('.session-usage-panel__legend-share')?.textContent).toBe(used === 0 ? '100%' : '0%');
+  });
+
+  it.each([undefined, 0, -1, Number.NaN, Infinity, 1000.5])('preserves recorded category details without inventing free capacity when capacity is %s', contextWindow => {
+    render(<SessionUsagePanel report={usageReport({
+      context: {
+        systemPrompt: 40, toolDefinitions: 20, rules: 20, skills: 10, mcpTools: 10,
+        subagentDefinitions: 10, summarizedConversation: 10, conversation: 80, contextWindow,
+      },
+    })} />);
+
+    const contextSection = container.querySelector('.session-usage-panel__context')!;
+    expect(contextSection.querySelector('.session-usage-panel__donut')).toBeNull();
+    expect(contextSection.textContent).toContain('Context capacity was not reported');
+    expect(contextSection.querySelectorAll('.session-usage-panel__legend-row')).toHaveLength(8);
+    expect(contextSection.querySelector('[data-usage-category="conversation"] strong')?.textContent).toBe('80');
+    expect(contextSection.querySelector('[data-usage-category="systemPrompt"] button')).not.toBeNull();
+    expect(contextSection.querySelector('[data-usage-category="unused"]')).toBeNull();
+    expect(contextSection.querySelector('.session-usage-panel__legend-share')).toBeNull();
+  });
+
+  it('explains estimates over capacity without normalizing them into a misleading capacity chart', () => {
+    render(<SessionUsagePanel report={usageReport({
+      context: {
+        systemPrompt: 40, toolDefinitions: 20, rules: 20, skills: 10, mcpTools: 10,
+        subagentDefinitions: 10, summarizedConversation: 10, conversation: 80, contextWindow: 100,
+      },
+    })} />);
+
+    const contextSection = container.querySelector('.session-usage-panel__context')!;
+    expect(contextSection.querySelector('.session-usage-panel__donut')).toBeNull();
+    expect(contextSection.textContent).toContain('Estimated context usage exceeds the reported capacity');
+    expect(contextSection.querySelector('[data-usage-category="conversation"] strong')?.textContent).toBe('80');
+    expect(contextSection.querySelector('[data-usage-category="unused"]')).toBeNull();
+    expect(contextSection.querySelector('.session-usage-panel__legend-share')).toBeNull();
+  });
+
   it('does not draw invented distribution segments for missing or inconsistent token counts', () => {
     for (const tokens of [
       { totalTokens: 100, outputTokens: 20 },
@@ -1030,7 +1112,7 @@ describe('Session usage report UI components', () => {
     promptPreviewMocks.open.mockReturnValue(new Promise(resolve => { finish = resolve; }));
     render(<SessionUsagePanel workspaceId="workspace-1" report={usageReport({
       context: { systemPrompt: 40, toolDefinitions: 20, rules: 20, skills: 10, mcpTools: 10,
-        subagentDefinitions: 10, summarizedConversation: 10, conversation: 80 },
+        subagentDefinitions: 10, summarizedConversation: 10, conversation: 80, contextWindow: 1000 },
     })} />);
     expect(promptPreviewMocks.open).not.toHaveBeenCalled();
     const button = container.querySelector<HTMLButtonElement>(`.session-usage-panel__legend-row[data-usage-category="${category}"] button`)!;
@@ -1052,12 +1134,14 @@ describe('Session usage report UI components', () => {
   it.each([
     ['context', 'donut-segment', 'systemPrompt'],
     ['context', 'legend-row', 'conversation'],
+    ['context', 'donut-segment', 'unused'],
+    ['context', 'legend-row', 'unused'],
     ['tokens', 'bar-group', 'input'],
     ['tokens', 'legend-row', 'output'],
   ])('links %s %s hover to its legend and restores peers on leave', (section, part, category) => {
     render(<SessionUsagePanel report={usageReport({
       context: { systemPrompt: 40, toolDefinitions: 20, rules: 20, skills: 10, mcpTools: 10,
-        subagentDefinitions: 10, summarizedConversation: 10, conversation: 80 },
+        subagentDefinitions: 10, summarizedConversation: 10, conversation: 80, contextWindow: 1000 },
       tokens: { source: 'token_usage_records', inputTokens: 80, outputTokens: 20, totalTokens: 100,
         cachedTokens: 60, cacheCoverage: 'available' },
     })} />);
@@ -1065,7 +1149,7 @@ describe('Session usage report UI components', () => {
     const target = chart.querySelector(`.session-usage-panel__${part}[data-usage-category="${category}"]`)!;
     const centerValue = container.querySelector('.session-usage-panel__donut-label strong')!;
     const centerLabel = container.querySelector('.session-usage-panel__donut-label span')!;
-    expect(centerValue.textContent).toBe('200');
+    expect(centerValue.textContent).toBe('20%');
 
     act(() => {
       target.dispatchEvent(new dom.window.MouseEvent('mouseover', { bubbles: true }));
@@ -1078,22 +1162,24 @@ describe('Session usage report UI components', () => {
     }
     const otherChart = container.querySelector(`.session-usage-panel__${section === 'context' ? 'tokens' : 'context'}`)!;
     expect(otherChart.querySelector('[data-usage-muted]')).toBeNull();
-    expect(centerValue.textContent).toBe(section === 'context' ? category === 'systemPrompt' ? '20%' : '40%' : '200');
-    expect(centerLabel.textContent).toBe(section === 'context' ? `usage.context.categories.${category}` : 'usage.context.estimatedTokens');
+    expect(centerValue.textContent).toBe(section === 'context'
+      ? category === 'systemPrompt' ? '4%' : category === 'unused' ? '80%' : '8%' : '20%');
+    expect(centerLabel.textContent).toBe(section === 'context'
+      ? category === 'unused' ? 'Unused' : `usage.context.categories.${category}` : 'Context usage');
 
     act(() => {
       target.dispatchEvent(new dom.window.MouseEvent('mouseout', { bubbles: true, relatedTarget: dom.window.document.body }));
     });
     expect(container.querySelector('[data-usage-muted]')).toBeNull();
     expect(container.querySelector('[data-usage-active]')).toBeNull();
-    expect(centerValue.textContent).toBe('200');
-    expect(centerLabel.textContent).toBe('usage.context.estimatedTokens');
+    expect(centerValue.textContent).toBe('20%');
+    expect(centerLabel.textContent).toBe('Context usage');
   });
 
   it('restores the focused legend highlight after hover and clears it on blur', () => {
     render(<SessionUsagePanel report={usageReport({
       context: { systemPrompt: 40, toolDefinitions: 20, rules: 20, skills: 10, mcpTools: 10,
-        subagentDefinitions: 10, summarizedConversation: 10, conversation: 80 },
+        subagentDefinitions: 10, summarizedConversation: 10, conversation: 80, contextWindow: 1000 },
       tokens: { source: 'token_usage_records', inputTokens: 80, outputTokens: 20, totalTokens: 100,
         cachedTokens: 60, cacheCoverage: 'available' },
     })} />);
@@ -1121,13 +1207,13 @@ describe('Session usage report UI components', () => {
     const systemSegment = container.querySelector('.session-usage-panel__donut-segment[data-usage-category="systemPrompt"]')!;
     const centerValue = container.querySelector('.session-usage-panel__donut-label strong')!;
     act(() => conversationLegend.focus());
-    expect(centerValue.textContent).toBe('40%');
+    expect(centerValue.textContent).toBe('8%');
     act(() => systemSegment.dispatchEvent(new dom.window.MouseEvent('mouseover', { bubbles: true })));
-    expect(centerValue.textContent).toBe('20%');
+    expect(centerValue.textContent).toBe('4%');
     act(() => systemSegment.dispatchEvent(new dom.window.MouseEvent('mouseout', { bubbles: true, relatedTarget: dom.window.document.body })));
-    expect(centerValue.textContent).toBe('40%');
+    expect(centerValue.textContent).toBe('8%');
     act(() => conversationLegend.blur());
-    expect(centerValue.textContent).toBe('200');
+    expect(centerValue.textContent).toBe('20%');
   });
 
   it('plots recorded cache hits with a lower bound for partial telemetry and leaves unknown cache unsplit', () => {
@@ -1347,7 +1433,7 @@ describe('Session usage report UI components', () => {
     expect(container.querySelector('.session-runtime-status-entry')).toBeNull();
   });
 
-  it('centers the session title and omits the timestamp and metadata section', () => {
+  it('shows a report label above the left-aligned session title and omits the metadata section', () => {
     const report = usageReport({
       models: [
         {
@@ -1380,7 +1466,8 @@ describe('Session usage report UI components', () => {
 
     const title = container.querySelector('.session-usage-panel__header h2');
     expect(title?.textContent).toBe('Usage report layout');
-    expect(container.querySelector('.session-usage-panel__header')?.getAttribute('data-align')).toBe('center');
+    expect(container.querySelector('.session-usage-panel__eyebrow')?.textContent).toBe('Context Usage Report');
+    expect(container.querySelector('.session-usage-panel__header')?.getAttribute('data-align')).toBe('start');
     expect(container.querySelectorAll('time')).toHaveLength(0);
     expect(container.querySelector('.session-usage-panel__metadata')).toBeNull();
     expect(container.querySelector('.session-usage-panel__meta-row')).toBeNull();
@@ -1390,6 +1477,57 @@ describe('Session usage report UI components', () => {
     const cacheCoverageHelp = Array.from(container.querySelectorAll('.session-usage-panel__legend-share [data-tooltip]'))
       .find(node => node.getAttribute('data-tooltip')?.includes('Total token counts are still shown'));
     expect(cacheCoverageHelp?.textContent).toContain('unavailable');
+  });
+
+  it('summarizes the latest context separately from cumulative provider usage for a remote workspace', () => {
+    render(<SessionUsagePanel report={usageReport({
+      workspace: { kind: 'remote_ssh', pathLabel: '/home/dev/OpenBitFun' },
+      context: {
+        systemPrompt: 1_000, toolDefinitions: 1_000, rules: 1_000, skills: 100,
+        mcpTools: 100, subagentDefinitions: 100, summarizedConversation: 30_000,
+        conversation: 100_000, contextWindow: 256_000,
+      },
+    })} />);
+
+    const facts = container.querySelector('.session-usage-panel__summary-facts')!;
+    expect(Array.from(facts.querySelectorAll('dt')).map(node => node.textContent))
+      .toEqual(['Project', 'Total usage', 'Context']);
+    expect(Array.from(facts.querySelectorAll('dd')).map(node => node.textContent))
+      .toEqual(['OpenBitFun', '1.5K', '~133.3K / 256K']);
+  });
+
+  it('keeps legacy context values unavailable and distinguishes a recorded empty context', () => {
+    render(<SessionUsagePanel report={usageReport()} />);
+    const factValues = () => Array.from(container.querySelectorAll('.session-usage-panel__summary-facts dd'))
+      .map(node => node.textContent);
+    expect(factValues()).toEqual(['openbitfun', '1.5K', 'Unavailable']);
+
+    const emptyContext = {
+      systemPrompt: 0, toolDefinitions: 0, rules: 0, skills: 0,
+      mcpTools: 0, subagentDefinitions: 0, summarizedConversation: 0, conversation: 0,
+    };
+    render(<SessionUsagePanel report={usageReport({ context: emptyContext })} />);
+    expect(factValues()).toEqual(['openbitfun', '1.5K', '~0 / Unavailable']);
+
+    render(<SessionUsagePanel report={usageReport({
+      context: { ...emptyContext, conversation: Number.NaN, contextWindow: 256_000 },
+    })} />);
+    expect(factValues()).toEqual(['openbitfun', '1.5K', 'Unavailable / 256K']);
+
+    for (const context of [
+      { ...emptyContext, conversation: -1, contextWindow: 0 },
+      { ...emptyContext, conversation: Number.NaN, contextWindow: -1 },
+      { ...emptyContext, conversation: Number.MAX_SAFE_INTEGER, systemPrompt: 1, contextWindow: Infinity },
+    ]) {
+      render(<SessionUsagePanel report={usageReport({ context })} />);
+      expect(factValues()).toEqual(['openbitfun', '1.5K', 'Unavailable']);
+    }
+
+    render(<SessionUsagePanel report={usageReport({
+      context: { ...emptyContext, contextWindow: 256_000 },
+      tokens: { source: 'unavailable', cacheCoverage: 'unavailable' },
+    })} />);
+    expect(factValues()).toEqual(['openbitfun', 'Unavailable', '~0 / 256K']);
   });
 
 });

@@ -1,9 +1,10 @@
-import { useState, type FocusEvent, type ReactNode } from 'react';
+import type { ReactNode } from 'react';
+import { useUsageSeriesHighlight } from './useUsageSeriesHighlight';
 import { Empty, Icon, IconButton, OverflowText, PageHeader, Tooltip } from '@openbitfun/ui';
 import { ChartPie, ExternalLink } from 'lucide-react';
 import { useI18n } from '@/infrastructure/i18n';
 import type { SessionUsageReport, UsageContextBreakdown, UsageContextCategory } from '@/infrastructure/api/service-api/SessionAPI';
-import { formatTokenCount, formatUsageNumber, formatUsagePercent } from './usageReportUtils';
+import { formatTokenCount, formatUsagePercent } from './usageReportUtils';
 
 const CONTEXT_CATEGORIES = [
   'systemPrompt', 'toolDefinitions', 'rules', 'skills', 'mcpTools',
@@ -25,35 +26,9 @@ interface UsageSeries {
   shareSuffix?: ReactNode;
 }
 
-function useSeriesHighlight(rows: UsageSeries[]) {
-  const [hoveredKey, setHoveredKey] = useState<string | null>(null);
-  const [focusedKey, setFocusedKey] = useState<string | null>(null);
-  const activeKey = [hoveredKey, focusedKey].find(key => (
-    rows.some(row => row.key === key && (row.share ?? 0) > 0)
-  ));
-  const activeRow = rows.find(row => row.key === activeKey);
-
-  const highlight = (row: UsageSeries) => {
-    const hasSegment = (row.share ?? 0) > 0;
-    const isActive = activeRow !== undefined && (activeKey === row.key
-      || row.parentKey === activeKey || activeRow.parentKey === row.key);
-    return {
-      'data-usage-active': isActive || undefined,
-      'data-usage-muted': activeRow !== undefined && !isActive || undefined,
-      onMouseEnter: hasSegment ? () => setHoveredKey(row.key) : undefined,
-      onMouseLeave: hasSegment ? () => setHoveredKey(null) : undefined,
-      onFocus: hasSegment ? () => setFocusedKey(row.key) : undefined,
-      onBlur: hasSegment ? (event: FocusEvent<Element>) => {
-        if (!event.currentTarget.contains(event.relatedTarget)) setFocusedKey(null);
-      } : undefined,
-    };
-  };
-  return { activeRow, highlight };
-}
-
 function UsageLegend({ rows, highlight, className = '', showShares = true }: {
   rows: UsageSeries[];
-  highlight: ReturnType<typeof useSeriesHighlight>['highlight'];
+  highlight: ReturnType<typeof useUsageSeriesHighlight<UsageSeries>>['highlight'];
   className?: string;
   showShares?: boolean;
 }) {
@@ -93,10 +68,13 @@ export function SessionUsageSummary({ report, workspaceName, onPreviewContext, p
   const context = report.context;
   const hasContext = !!context && CONTEXT_CATEGORIES.every(key => isCount(context[key]));
   const contextTotal = hasContext ? CONTEXT_CATEGORIES.reduce((sum, key) => sum + context[key], 0) : 0;
-  const hasContextDistribution = hasContext && Number.isSafeInteger(contextTotal) && contextTotal > 0;
+  const hasContextTotal = hasContext && Number.isSafeInteger(contextTotal);
+  const contextWindow = isCount(context?.contextWindow) && context.contextWindow > 0
+    ? context.contextWindow : undefined;
+  const hasContextDistribution = hasContextTotal && contextWindow !== undefined && contextTotal <= contextWindow;
   let offset = 0;
-  const contextRows = CONTEXT_CATEGORIES.map(key => {
-    const share = hasContextDistribution ? context![key] / contextTotal : undefined;
+  const contextRows: Array<UsageSeries & { offset: number }> = CONTEXT_CATEGORIES.map(key => {
+    const share = hasContextDistribution ? context![key] / contextWindow : undefined;
     const row = { key, label: t(`usage.context.categories.${key}`), value: hasContext ? context![key] : undefined, share, offset,
       action: key !== 'summarizedConversation' && key !== 'conversation' ? (
         <Tooltip content={t('usage.context.previewCategory', { category: t(`usage.context.categories.${key}`) })}>
@@ -109,6 +87,13 @@ export function SessionUsageSummary({ report, workspaceName, onPreviewContext, p
     offset += (share ?? 0) * 100;
     return row;
   });
+  if (hasContextDistribution) {
+    const unused = contextWindow - contextTotal;
+    contextRows.push({
+      key: 'unused', label: t('usage.context.unused'), value: unused,
+      share: unused / contextWindow, offset,
+    });
+  }
   const { inputTokens, outputTokens, totalTokens, cachedTokens, cacheCoverage } = report.tokens;
   const hasTokenDistribution = isCount(inputTokens) && isCount(outputTokens) && isCount(totalTokens)
     && inputTokens + outputTokens === totalTokens && totalTokens > 0;
@@ -155,8 +140,8 @@ export function SessionUsageSummary({ report, workspaceName, onPreviewContext, p
       </Tooltip>
     );
   }
-  const { activeRow: activeContext, highlight: highlightContext } = useSeriesHighlight(contextRows);
-  const { highlight: highlightTokens } = useSeriesHighlight([...tokenRows, ...cacheRows]);
+  const { activeRow: activeContext, highlight: highlightContext } = useUsageSeriesHighlight(contextRows);
+  const { highlight: highlightTokens } = useUsageSeriesHighlight([...tokenRows, ...cacheRows]);
 
   const tokenUsage = (
     <section className="session-usage-panel__summary session-usage-panel__tokens" data-openbitfun-product-component="session-usage-panel" data-openbitfun-product-part="section" aria-label={t('usage.tokens.title')}>
@@ -190,10 +175,23 @@ export function SessionUsageSummary({ report, workspaceName, onPreviewContext, p
           <dt>{t('usage.panel.workspace')}</dt><dd><OverflowText>{workspaceName}</OverflowText></dd>
         </div>
         <div className="session-usage-panel__summary-fact" data-openbitfun-product-component="session-usage-panel" data-openbitfun-product-part="summaryFact">
-          <dt>{t('usage.panel.totalTokens')}</dt><dd><OverflowText>{formatTokenCount(totalTokens, t)}</OverflowText></dd>
+          <dt>{t('usage.panel.totalUsage')}</dt>
+          <dd><OverflowText>{formatTokenCount(isCount(totalTokens) ? totalTokens : undefined, t)}</OverflowText></dd>
         </div>
         <div className="session-usage-panel__summary-fact" data-openbitfun-product-component="session-usage-panel" data-openbitfun-product-part="summaryFact">
-          <dt>{t('usage.table.turns')}</dt><dd><OverflowText>{formatUsageNumber(report.scope.turnCount, t)}</OverflowText></dd>
+          <dt>{t('usage.context.label')}</dt>
+          <dd>
+            <Tooltip content={t('usage.context.estimateHelp')}>
+              <OverflowText>{hasContextTotal || contextWindow !== undefined
+                ? t('usage.context.usageOfCapacity', {
+                  used: hasContextTotal
+                    ? t('usage.context.approximateTokens', { value: formatTokenCount(contextTotal, t) })
+                    : t('usage.unavailable'),
+                  size: formatTokenCount(contextWindow, t),
+                })
+                : t('usage.unavailable')}</OverflowText>
+            </Tooltip>
+          </dd>
         </div>
       </dl>
       {tokenUsage}
@@ -201,25 +199,29 @@ export function SessionUsageSummary({ report, workspaceName, onPreviewContext, p
         <PageHeader level={3} size="sm" title={t('usage.context.title')} action={
           <Tooltip content={t('usage.context.estimateHelp')}><span className="session-usage-panel__chart-meta">{t('usage.context.estimated')}</span></Tooltip>
         } />
-        {hasContextDistribution ? (
-          <div className="session-usage-panel__distribution">
-            <div className="session-usage-panel__donut">
-              <svg viewBox="0 0 200 200" aria-hidden="true" focusable="false">
-                <circle className="session-usage-panel__donut-track" cx="100" cy="100" r="82" />
-                {contextRows.map(row => row.share! > 0 && (
-                  <circle key={row.key} className={`session-usage-panel__donut-segment session-usage-panel__series--${row.key}`}
-                    {...highlightContext(row)}
-                    data-usage-category={row.key} cx="100" cy="100" r="82" pathLength="100"
-                    strokeDasharray={`${row.share! * 100} ${100 - row.share! * 100}`} strokeDashoffset={-row.offset} />
-                ))}
-              </svg>
-              <div className="session-usage-panel__donut-label">
-                <strong>{activeContext ? formatUsagePercent(activeContext.share! * 100, t) : formatTokenCount(contextTotal, t)}</strong>
-                <span>{activeContext ? activeContext.label : t('usage.context.estimatedTokens')}</span>
-              </div>
+        {hasContextTotal ? (
+          <>
+            {!hasContextDistribution && <p className="session-usage-panel__section-help">{t(contextWindow === undefined
+              ? 'usage.context.capacityUnavailable' : 'usage.context.exceedsCapacity')}</p>}
+            <div className="session-usage-panel__distribution">
+              {hasContextDistribution && <div className="session-usage-panel__donut">
+                <svg viewBox="0 0 200 200" aria-hidden="true" focusable="false">
+                  <circle className="session-usage-panel__donut-track" cx="100" cy="100" r="82" />
+                  {contextRows.map(row => row.share! > 0 && (
+                    <circle key={row.key} className={`session-usage-panel__donut-segment session-usage-panel__series--${row.key}`}
+                      {...highlightContext(row)}
+                      data-usage-category={row.key} cx="100" cy="100" r="82" pathLength="100"
+                      strokeDasharray={`${row.share! * 100} ${100 - row.share! * 100}`} strokeDashoffset={-row.offset} />
+                  ))}
+                </svg>
+                <div className="session-usage-panel__donut-label">
+                  <strong>{formatUsagePercent((activeContext?.share ?? contextTotal / contextWindow) * 100, t)}</strong>
+                  <span>{activeContext ? activeContext.label : t('usage.context.utilization')}</span>
+                </div>
+              </div>}
+              <UsageLegend rows={contextRows} highlight={highlightContext} />
             </div>
-            <UsageLegend rows={contextRows} highlight={highlightContext} />
-          </div>
+          </>
         ) : <Empty icon={<Icon glyph={ChartPie} />} title={t('usage.context.unavailable')} />}
       </section>
     </>

@@ -576,7 +576,7 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
           sessionId: currentSession?.sessionId ?? resolvedSessionId,
           workspacePath: currentSession?.workspacePath,
           initialTab,
-          title: t('usage.title'),
+          title: t('usage.panel.report'),
           expand: true,
         });
       });

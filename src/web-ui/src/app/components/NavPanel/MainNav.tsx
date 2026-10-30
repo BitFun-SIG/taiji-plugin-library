@@ -28,6 +28,7 @@ import SectionHeader from './components/SectionHeader';
 import StickySectionHeader from './components/StickySectionHeader';
 import WorkspaceSessionGroupingToggle from './components/WorkspaceSessionGroupingToggle';
 import WorkspaceSessionFilterMenu from './components/WorkspaceSessionFilterMenu';
+import { useMiniAppNavigation } from '@/app/scenes/miniapps/miniAppNavigationStore';
 import WorkspaceListSection from './sections/workspaces/WorkspaceListSection';
 import { useSceneStore } from '../../stores/sceneStore';
 import { useMiniAppCatalogSync } from '../../scenes/miniapps/hooks/useMiniAppCatalogSync';
@@ -61,6 +62,7 @@ const log = createLogger('MainNav');
 const NewProjectDialog = lazyWithRecovery(() =>
   import('../NewProjectDialog').then(module => ({ default: module.NewProjectDialog }))
 );
+const MiniAppShortcuts = lazyWithRecovery(() => import('./components/MiniAppShortcuts'));
 
 const MainNav: React.FC = () => {
   const sshRemote = useSSHRemoteContext();
@@ -73,9 +75,10 @@ const MainNav: React.FC = () => {
 
   const { openScene } = useSceneManager();
   const activeTabId = useSceneStore(s => s.activeTabId);
+  const { pinnedAppIds } = useMiniAppNavigation();
   const isOverviewActive = typeof activeTabId === 'string' && (
     ['personal-overview', 'assistant', 'profile', 'agents', 'skills', 'miniapps'].includes(activeTabId)
-    || activeTabId.startsWith('miniapp:')
+    || (activeTabId.startsWith('miniapp:') && !pinnedAppIds.includes(activeTabId.slice('miniapp:'.length)))
   );
   const { t } = useI18n('common');
   const searchShortcutLabel = useSyncExternalStore(
@@ -302,6 +305,7 @@ const MainNav: React.FC = () => {
               {taskBoardLabel}
             </NavigationPanelItem>
           </Tooltip>
+          {pinnedAppIds.length > 0 && <Suspense fallback={null}><MiniAppShortcuts /></Suspense>}
         </div>
 
         {/* Unified sessions */}

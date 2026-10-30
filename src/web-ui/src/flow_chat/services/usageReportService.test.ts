@@ -110,7 +110,7 @@ const usageReport = (overrides: Partial<SessionUsageReport> = {}): SessionUsageR
 
 const uiParams = {
   isProcessing: false,
-  reportTitle: 'Session Usage',
+  reportTitle: 'Context Usage Report',
   busyMessage: 'busy',
   noWorkspaceMessage: 'missing workspace',
   failedTitle: 'failed',
@@ -143,6 +143,52 @@ describe('runUsageReportCommand', () => {
     }));
   });
 
+  it('defaults newly generated report tabs to the context report title', async () => {
+    sessionApiMocks.getSessionUsageReport.mockResolvedValue(usageReport());
+    const { runUsageReportCommand } = await import('./usageReportService');
+    await runUsageReportCommand({ session: createSession(), ...uiParams, reportTitle: undefined });
+    expect(panelContent()?.title).toBe('Context Usage Report');
+  });
+
+  it('presents a read-only overview during a turn without creating a side-panel tab', async () => {
+    const report = usageReport();
+    sessionApiMocks.getSessionUsageReport.mockResolvedValue(report);
+    const presentReport = vi.fn(() => true);
+    const { runUsageReportCommand } = await import('./usageReportService');
+    const result = await runUsageReportCommand({ session: createSession(), ...uiParams, isProcessing: true, presentReport });
+    expect(result.shown).toBe(true);
+    expect(presentReport).toHaveBeenCalledWith(report);
+    expect(panelContent()).toBeUndefined();
+    expect(transcriptOf()).toEqual([]);
+  });
+
+  it('routes inline dispatch reports to the supplied source and discards an old peer response', async () => {
+    activateSurface('peer-a');
+    let resolve!: (report: SessionUsageReport) => void;
+    const fetchReport = vi.fn(() => new Promise<SessionUsageReport>(done => { resolve = done; }));
+    const presentReport = vi.fn(() => true);
+    const { runUsageReportCommand } = await import('./usageReportService');
+    const pending = runUsageReportCommand({ session: createSession(), ...uiParams, fetchReport, presentReport });
+    expect(panelContent()).toBeUndefined();
+    activateSurface('peer-b');
+    resolve(usageReport());
+    expect((await pending).shown).toBe(false);
+    expect(presentReport).not.toHaveBeenCalled();
+    expect(sessionApiMocks.getSessionUsageReport).not.toHaveBeenCalled();
+  });
+
+  it('opens a legacy report payload without a title and preserves its data through a round trip', async () => {
+    const { buildSessionUsagePanelContent } = await import('./openSessionUsageReport');
+    const legacy = JSON.parse(JSON.stringify({
+      report: usageReport(), markdown: '# Legacy report', sessionId: 'session-1',
+      workspacePath: 'D:/workspace/OpenBitFun', initialTab: 'overview',
+    }));
+    const content = buildSessionUsagePanelContent(legacy);
+    expect(content.title).toBe('Context Usage Report');
+    expect(content.metadata?.sessionId).toBe('session-1');
+    expect(JSON.parse(JSON.stringify(content)).data).toEqual(legacy);
+  });
+
   it('shows the waiting state immediately and replaces it with the report', async () => {
     let resolveReport: (report: SessionUsageReport) => void = () => {};
     sessionApiMocks.getSessionUsageReport.mockReturnValue(new Promise<SessionUsageReport>(resolve => {
@@ -159,6 +205,7 @@ describe('runUsageReportCommand', () => {
       sessionId: 'session-1',
     });
     expect(panelData().report).toBeUndefined();
+    expect(panelContent()?.title).toBe('Context Usage Report');
 
     resolveReport(usageReport());
     const result = await pending;
@@ -168,6 +215,7 @@ describe('runUsageReportCommand', () => {
     expect(state).toMatchObject({ isLoading: false });
     expect(state.report?.reportId).toBe('usage-report-1');
     expect(state.markdown).toContain('# Session Usage Report');
+    expect(panelContent()?.title).toBe('Context Usage Report');
     expect(state.markdown).toContain('Session span');
     expect(state.markdown).toContain('not reported');
     expect(state.markdown).not.toContain('Wall time');

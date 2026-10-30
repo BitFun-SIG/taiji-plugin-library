@@ -94,7 +94,7 @@ export function buildSessionUsagePanelContent(params: SessionUsagePanelData): Pa
     type: SESSION_USAGE_PANEL_TYPE,
     // Caller supplies the localized title so this panel helper does not eagerly
     // initialize the i18n singleton in message-rendering tests.
-    title: params.title ?? 'Session Usage',
+    title: params.title ?? 'Context Usage Report',
     data: params,
     metadata: {
       duplicateCheckKey: getSessionUsageDuplicateKey(params.report.reportId),
