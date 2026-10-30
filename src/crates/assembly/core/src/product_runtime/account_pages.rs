@@ -70,6 +70,32 @@ pub(crate) async fn manage(
     account: &AccountRuntime,
     request: PageManageRequest,
 ) -> Result<Value, String> {
+    if account.is_token_expired() {
+        return Err("Pages account session expired; sign in again".into());
+    }
+    let generation = account.account_context_generation();
+    let (session, relay_url) = account
+        .read_account_context_for_generation(generation)
+        .await
+        .map_err(|error| error.to_string())?;
+    manage_with_account_context(&relay_url, &session.token, request, || {
+        account.account_context_is_current(generation)
+    })
+    .await
+}
+
+/// Execute against one host-owned account snapshot. Desktop retains its own
+/// account lifecycle; CLI uses AccountRuntime. Both supply the same token/Relay
+/// pair and a fence that invalidates it when that host changes accounts.
+pub async fn manage_with_account_context(
+    relay_url: &str,
+    token: &str,
+    request: PageManageRequest,
+    is_current: impl Fn() -> bool + Send + Sync,
+) -> Result<Value, String> {
+    if !is_current() {
+        return Err("account context changed".into());
+    }
     let action = request.action();
     if let PageManageRequest::Publish {
         slug,
@@ -81,34 +107,30 @@ pub(crate) async fn manage(
         files,
     } = request
     {
-        let mut result = publish(
-            account,
-            PagePublishHostRequest {
-                slug,
-                visibility,
-                title,
-                note,
-                deploy,
-                directory,
-                files,
-            },
+        let result = publish_page_content_on_relay(
+            relay_url,
+            token,
+            &slug,
+            &visibility,
+            title.as_deref(),
+            note.as_deref(),
+            deploy,
+            directory.as_deref(),
+            files.as_ref(),
         )
-        .await?;
+        .await
+        .map_err(|error| error.to_string())?;
+        if !is_current() {
+            return Err("account context changed; publication outcome is unknown, inspect the original account before retrying".into());
+        }
+        let mut result = serde_json::to_value(result).map_err(|error| error.to_string())?;
         result["action"] = serde_json::json!(action);
         return Ok(result);
     }
-    if account.is_token_expired() {
-        return Err("Pages account session expired; sign in again".into());
-    }
-    let generation = account.account_context_generation();
-    let (session, relay_url) = account
-        .read_account_context_for_generation(generation)
+    let mut pages = list_pages_from_relay(relay_url, token)
         .await
         .map_err(|error| error.to_string())?;
-    let mut pages = list_pages_from_relay(&relay_url, &session.token)
-        .await
-        .map_err(|error| error.to_string())?;
-    if !account.account_context_is_current(generation) {
+    if !is_current() {
         return Err("account context changed".into());
     }
     if let PageManageRequest::List { published_only } = request {
@@ -126,7 +148,7 @@ pub(crate) async fn manage(
         });
         let pages = pages
             .into_iter()
-            .map(|page| page_value(&relay_url, page))
+            .map(|page| page_value(relay_url, page))
             .collect::<Result<Vec<_>, _>>()?;
         return Ok(serde_json::json!({"action": action, "pages": pages}));
     }
@@ -136,7 +158,6 @@ pub(crate) async fn manage(
         .find(|page| page.slug == slug)
         .ok_or("Page not found; use list with published_only=false before retrying")?;
     let readonly = request.is_readonly();
-    let token = &session.token;
     let mut result = match request {
         PageManageRequest::Update {
             title,
@@ -148,7 +169,7 @@ pub(crate) async fn manage(
         } => {
             if files.is_some() || directory.is_some() {
                 let result = update_page_content_on_relay(
-                    &relay_url,
+                    relay_url,
                     token,
                     &page,
                     title.as_deref(),
@@ -162,7 +183,7 @@ pub(crate) async fn manage(
                 serde_json::to_value(result).map_err(|error| error.to_string())?
             } else {
                 let info = update_page_on_relay(
-                    &relay_url,
+                    relay_url,
                     token,
                     &page.slug,
                     &page.generation,
@@ -171,12 +192,12 @@ pub(crate) async fn manage(
                 )
                 .await
                 .map_err(|error| error.to_string())?;
-                page_value(&relay_url, info)?
+                page_value(relay_url, info)?
             }
         }
         PageManageRequest::Permissions { visibility, .. } => {
             let info = update_page_on_relay(
-                &relay_url,
+                relay_url,
                 token,
                 &page.slug,
                 &page.generation,
@@ -185,13 +206,13 @@ pub(crate) async fn manage(
             )
             .await
             .map_err(|error| error.to_string())?;
-            page_value(&relay_url, info)?
+            page_value(relay_url, info)?
         }
         PageManageRequest::Delete { version_id, .. } => {
             match version_id.as_deref() {
                 Some(version) => {
                     delete_page_version_on_relay(
-                        &relay_url,
+                        relay_url,
                         token,
                         &page.slug,
                         version,
@@ -200,7 +221,7 @@ pub(crate) async fn manage(
                     .await
                 }
                 None => {
-                    delete_page_from_relay(&relay_url, token, &page.slug, &page.generation).await
+                    delete_page_from_relay(relay_url, token, &page.slug, &page.generation).await
                 }
             }
             .map_err(|error| error.to_string())?;
@@ -211,20 +232,20 @@ pub(crate) async fn manage(
             value
         }
         PageManageRequest::Unpublish { .. } => {
-            unpublish_page_from_relay(&relay_url, token, &page.slug, &page.generation)
+            unpublish_page_from_relay(relay_url, token, &page.slug, &page.generation)
                 .await
                 .map_err(|error| error.to_string())?;
             serde_json::json!({"slug": page.slug, "unpublished": true})
         }
         PageManageRequest::Versions { .. } => {
             let versions =
-                list_page_versions_from_relay(&relay_url, token, &page.slug, &page.generation)
+                list_page_versions_from_relay(relay_url, token, &page.slug, &page.generation)
                     .await
                     .map_err(|error| error.to_string())?;
             let versions = versions
                 .into_iter()
                 .map(|version| {
-                    let preview_url = join_relay_url(&relay_url, &version.preview_url_path);
+                    let preview_url = join_relay_url(relay_url, &version.preview_url_path);
                     let mut value =
                         serde_json::to_value(version).map_err(|error| error.to_string())?;
                     value["preview_url"] = serde_json::json!(preview_url);
@@ -235,7 +256,7 @@ pub(crate) async fn manage(
         }
         PageManageRequest::Deploy { version_id, .. } => {
             let info = deploy_page_version_on_relay(
-                &relay_url,
+                relay_url,
                 token,
                 &page.slug,
                 &version_id,
@@ -243,14 +264,14 @@ pub(crate) async fn manage(
             )
             .await
             .map_err(|error| error.to_string())?;
-            let mut value = page_value(&relay_url, info)?;
+            let mut value = page_value(relay_url, info)?;
             value["version_id"] = serde_json::json!(version_id);
             value["deployed"] = serde_json::json!(true);
             value
         }
         PageManageRequest::List { .. } | PageManageRequest::Publish { .. } => unreachable!(),
     };
-    if !account.account_context_is_current(generation) {
+    if !is_current() {
         return Err(if readonly { "account context changed" } else {
             "account context changed; Page operation outcome is unknown, inspect the original account before retrying"
         }.into());

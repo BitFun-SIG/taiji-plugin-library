@@ -105,6 +105,6 @@ pub fn set_page_manage_handler(handler: PageManageHandler) {
 pub async fn invoke_page_manage(request: PageManageRequest) -> Result<Value, String> {
     let handler = PAGE_MANAGE_HANDLER
         .get()
-        .ok_or("PageManage host is not available on this surface")?;
+        .ok_or("PageManage host handler is not registered; this is a host initialization error")?;
     handler(request).await
 }
