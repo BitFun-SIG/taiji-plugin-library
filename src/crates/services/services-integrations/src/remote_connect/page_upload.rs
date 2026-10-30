@@ -185,7 +185,7 @@ pub async fn save_page_version_to_relay(
 ) -> Result<PageSaveVersionResult> {
     let all_files = collect_page_files(Path::new(web_dir))?;
     save_page_version_from_collected_files(
-        relay_url, token, slug, visibility, title, note, all_files,
+        relay_url, token, slug, visibility, title, note, all_files, None,
     )
     .await
 }
@@ -202,7 +202,7 @@ pub async fn save_page_version_from_inline_files(
 ) -> Result<PageSaveVersionResult> {
     let all_files = collect_inline_page_files(files)?;
     save_page_version_from_collected_files(
-        relay_url, token, slug, visibility, title, note, all_files,
+        relay_url, token, slug, visibility, title, note, all_files, None,
     )
     .await
 }
@@ -239,6 +239,47 @@ pub async fn publish_page_content_on_relay(
         }
     };
 
+    finish_page_publication(relay_url, token, saved, deploy).await
+}
+
+/// Replace the content of the inspected Page without changing its access policy.
+/// Keep the inspected generation throughout upload/freeze so a concurrent delete
+/// and recreate cannot silently turn an update into creation or target a new Page.
+pub async fn update_page_content_on_relay(
+    relay_url: &str,
+    token: &str,
+    page: &PageInfo,
+    title: Option<&str>,
+    note: Option<&str>,
+    deploy: bool,
+    directory: Option<&str>,
+    files: Option<&HashMap<String, String>>,
+) -> Result<PageContentPublishResult> {
+    let all_files = match (directory, files) {
+        (Some(directory), None) => collect_page_files(Path::new(directory))?,
+        (None, Some(files)) => collect_inline_page_files(files)?,
+        _ => return Err(anyhow!("provide exactly one of directory or files")),
+    };
+    let saved = save_page_version_from_collected_files(
+        relay_url,
+        token,
+        &page.slug,
+        &page.visibility,
+        Some(title.unwrap_or(&page.title)),
+        note,
+        all_files,
+        Some(page),
+    )
+    .await?;
+    finish_page_publication(relay_url, token, saved, deploy).await
+}
+
+async fn finish_page_publication(
+    relay_url: &str,
+    token: &str,
+    saved: PageSaveVersionResult,
+    deploy: bool,
+) -> Result<PageContentPublishResult> {
     if !deploy {
         let preview_url = join_relay_url(relay_url, &saved.preview_url_path);
         return Ok(PageContentPublishResult {
@@ -323,6 +364,7 @@ async fn save_page_version_from_collected_files(
     title: Option<&str>,
     note: Option<&str>,
     all_files: Vec<CollectedPageFile>,
+    update_target: Option<&PageInfo>,
 ) -> Result<PageSaveVersionResult> {
     validate_slug(slug)?;
     validate_visibility(visibility)?;
@@ -359,10 +401,13 @@ async fn save_page_version_from_collected_files(
         })
         .collect();
     let upload_id = uuid::Uuid::new_v4().simple().to_string();
-    let existing_page = list_pages_from_relay(relay_url, token)
-        .await?
-        .into_iter()
-        .find(|page| page.slug == slug);
+    let existing_page = match update_target {
+        Some(page) => Some(page.clone()),
+        None => list_pages_from_relay(relay_url, token)
+            .await?
+            .into_iter()
+            .find(|page| page.slug == slug),
+    };
     let create = existing_page.is_none();
     let expected_generation = existing_page
         .as_ref()
