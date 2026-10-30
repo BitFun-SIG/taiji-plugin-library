@@ -14,6 +14,11 @@ const mocks = vi.hoisted(() => ({
   openLink: vi.fn(), openExternal: vi.fn(), list: vi.fn(), error: vi.fn(),
   sessions: new Map<string, { parentSessionId?: string; config: { dispatchJobId?: string } }>(),
   listeners: new Set<() => void>(),
+  peerActive: false,
+  hostKind: null as 'cli' | 'desktop' | null,
+}));
+vi.mock('@/infrastructure/peer-device/peerDeviceContextState', () => ({
+  usePeerDeviceModeOptional: () => ({ peerMode: { active: mocks.peerActive }, currentPeerCapabilities: { hostKind: mocks.hostKind } }),
 }));
 vi.mock('../store/FlowChatStore', () => ({ flowChatStore: {
   getState: () => ({ sessions: mocks.sessions }),
@@ -52,6 +57,8 @@ beforeEach(() => {
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
   vi.resetAllMocks();
   mocks.sessions.clear();
+  mocks.peerActive = false;
+  mocks.hostKind = null;
   activateSurface('local');
   container = document.createElement('div');
   document.body.appendChild(container);
@@ -100,6 +107,24 @@ describe.each([
       mocks.listeners.forEach(listener => listener());
     });
     expect(button().disabled).toBe(true);
+  });
+
+  it('gates CLI and unknown peers while retaining the Desktop peer path', async () => {
+    mocks.peerActive = true;
+    for (const hostKind of ['cli', null] as const) {
+      mocks.hostKind = hostKind;
+      render('deploy', result, true, Card);
+      expect(button().disabled).toBe(true);
+      expect(button().title).toContain('does not support opening Pages');
+      await act(async () => { button().click(); });
+    }
+    expect(mocks.openLink).not.toHaveBeenCalled();
+    mocks.hostKind = 'desktop';
+    mocks.openLink.mockResolvedValue({ open_url: 'https://relay.example/peer-access' });
+    render('deploy', result, true, Card);
+    expect(button().disabled).toBe(false);
+    await act(async () => { button().click(); });
+    expect(mocks.openExternal).toHaveBeenCalledWith('https://relay.example/peer-access');
   });
 
   it('abandons an old-result lookup after switching devices', async () => {
