@@ -410,6 +410,23 @@ function normalizeComparableString(value: string | undefined): string {
   return (value || '').trim();
 }
 
+// Only editable provider values belong in the baseline. Request URLs are derived,
+// and opening disclosures or reselecting a default must not create a draft.
+function providerEditorSnapshot(config: Partial<AIModelConfigType>): string {
+  return stableJson({
+    name: normalizeComparableString(config.name),
+    provider: config.provider || 'openai',
+    base_url: normalizeComparableString(config.base_url),
+    api_key: normalizeComparableString(config.api_key),
+    auth: config.auth || { type: 'api_key' },
+    ...getModelEditorRequestSettings(config),
+    custom_headers: config.custom_headers || {},
+    custom_headers_mode: config.custom_headers_mode || 'merge',
+    custom_request_body: normalizeComparableString(config.custom_request_body),
+    custom_request_body_mode: config.custom_request_body_mode || 'merge',
+  });
+}
+
 function modelDraftHasUnsavedChanges(
   draft: SelectedModelDraft,
   persistedModels: AIModelConfigType[],
@@ -505,6 +522,11 @@ const ModelSettingsPage: React.FC = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [isEditorSaving, setIsEditorSaving] = useState(false);
   const [editingConfig, setEditingConfig] = useState<Partial<AIModelConfigType> | null>(null);
+  const newProviderInitialSnapshotRef = React.useRef<string | null>(null);
+  const initializeNewProvider = useCallback((config: Partial<AIModelConfigType>) => {
+    newProviderInitialSnapshotRef.current = providerEditorSnapshot(config);
+    setEditingConfig(config);
+  }, []);
   const [editingTargetKey, setEditingTargetKey] = useState<string | null>(null);
   const [draftCloseConfirmOpen, setDraftCloseConfirmOpen] = useState(false);
   const [draftConflictConfirmOpen, setDraftConflictConfirmOpen] = useState(false);
@@ -1016,7 +1038,12 @@ const ModelSettingsPage: React.FC = () => {
     const persistedModels = editingConfig.id
       ? aiModels.filter(model => model.id === editingConfig.id)
       : aiModels.filter(model => editingProviderModelIds.has(model.id || ''));
-    if (persistedModels.length === 0) return true;
+    if (persistedModels.length === 0) {
+      // Missing persisted records remain dirty; only new editors have a baseline.
+      if (!editingTargetKey?.startsWith('new-provider:')) return true;
+      return selectedModelDrafts.length > 0
+        || providerEditorSnapshot(editingConfig) !== newProviderInitialSnapshotRef.current;
+    }
 
     const persisted = persistedModels[0];
     const comparableConfig = { ...persisted, ...editingConfig } as AIModelConfigType;
@@ -1029,7 +1056,7 @@ const ModelSettingsPage: React.FC = () => {
       || Array.from(persistedIds).some(id => !draftIds.has(id));
 
     return providerFieldsChanged || draftFieldsChanged || selectionChanged;
-  }, [aiModels, editingConfig, editingProviderModelIds, isAddingCustomModel, manualModelInput, selectedModelDrafts]);
+  }, [aiModels, editingConfig, editingProviderModelIds, editingTargetKey, isAddingCustomModel, manualModelInput, selectedModelDrafts]);
 
   const createDraftsFromConfigs = (configs: AIModelConfigType[]) => (
     configs.map(config => createModelDraft(config.model_name, config, {
@@ -1450,7 +1477,7 @@ const ModelSettingsPage: React.FC = () => {
       setShowApiKey(false);
       setSelectedProviderId(null);
       setEditingTargetKey(targetKey);
-      setEditingConfig({
+      initializeNewProvider({
         name: subscriptionConnectionName(account),
         provider: account.suggested_format,
         base_url: account.provider === 'opencode' ? 'https://opencode.ai/zen/v1' : account.suggested_base_url,
@@ -1478,7 +1505,7 @@ const ModelSettingsPage: React.FC = () => {
       setCreationMode('form');
       setIsEditing(true);
     });
-  }, [requestEditorOpen, resetRemoteModelDiscovery, subscriptionConnectionName]);
+  }, [initializeNewProvider, requestEditorOpen, resetRemoteModelDiscovery, subscriptionConnectionName]);
 
   const loginCoordinatorRef = React.useRef(new SubscriptionLoginCoordinator());
   const subscriptionLoginMountedRef = React.useRef(true);
@@ -1877,7 +1904,7 @@ const ModelSettingsPage: React.FC = () => {
     // Dynamically get translated name
     const providerName = t(`providers.${template.id}.name`);
 
-    setEditingConfig({
+    initializeNewProvider({
       name: providerName,
       base_url: template.baseUrl,
       request_url: '',
@@ -1907,10 +1934,10 @@ const ModelSettingsPage: React.FC = () => {
     setShowApiKey(false);
     setSelectedProviderId(null);
     setEditingTargetKey('new-provider:custom');
-    setEditingConfig({
+    initializeNewProvider({
       name: '',
-      base_url: 'https://open.bigmodel.cn/api/paas/v4',
-      request_url: resolveRequestUrl('https://open.bigmodel.cn/api/paas/v4', 'openai'),
+      base_url: '',
+      request_url: '',
       api_key: '',
       model_name: '',
       provider: 'openai',
@@ -2532,13 +2559,24 @@ const ModelSettingsPage: React.FC = () => {
     setIsEditing(false);
   };
 
+  const discardEditingDraftAndClose = () => {
+    const returnToProviderSelection = editingTargetKey?.startsWith('new-provider:')
+      && !editingTargetKey.startsWith('new-provider:subscription:');
+    closeEditingModal();
+    if (returnToProviderSelection) {
+      setCreationMode('selection');
+      setProviderQuery(providerQuery);
+      setShowAllProviders(showAllProviders);
+    }
+  };
+
   const requestCloseEditingModal = () => {
     if (editorSavingRef.current) return;
     if (editingModalHasUnsavedChanges) {
       setDraftCloseConfirmOpen(true);
       return;
     }
-    closeEditingModal();
+    discardEditingDraftAndClose();
   };
 
   const continueEditingCurrentDraft = () => {
@@ -3655,9 +3693,9 @@ const ModelSettingsPage: React.FC = () => {
         <FieldGroup
           data-testid="settings-model-editor"
           className="openbitfun-model-settings__single-model-fields"
-          appearance="subtle"
+          appearance="plain"
           dividers={false}
-          fieldSurface="default"
+          fieldSurface="filled"
         >
           <ConfigPageRow label={t('form.modelName')} required align="center">
             <Input
@@ -3698,7 +3736,7 @@ const ModelSettingsPage: React.FC = () => {
           onOpenChange={setShowAdvancedSettings}
         >
           {showAdvancedSettings && (
-            <FieldGroup appearance="subtle" dividers={false}>
+            <FieldGroup appearance="plain" dividers={false} fieldSurface="filled">
               {(editingConfig.provider === 'openai' || editingConfig.provider === 'anthropic') && (
                 <ConfigPageRow
                   label={t('advancedSettings.inlineThinkInText.label')}
@@ -3920,7 +3958,8 @@ const ModelSettingsPage: React.FC = () => {
               <ConfigPageSection
                 title={t('editProviderSettingsTitle')}
                 className="openbitfun-model-settings__edit-section openbitfun-model-settings__connection-section"
-                fieldSurface="default"
+                bodySurface={false}
+                fieldSurface="filled"
               >
                 <div className={[
                   'openbitfun-model-settings__connection-row',
@@ -4022,7 +4061,7 @@ const ModelSettingsPage: React.FC = () => {
                               }));
                             }}
                             onFocus={(e) => e.target.select()}
-                            placeholder={isFromTemplate ? currentTemplate?.baseUrl : 'https://open.bigmodel.cn/api/paas/v4/chat/completions'}
+                            placeholder={isFromTemplate ? currentTemplate?.baseUrl : t('form.baseUrlPlaceholder')}
                             size="sm"
                           />
                         </div>
@@ -4046,7 +4085,7 @@ const ModelSettingsPage: React.FC = () => {
                 title={t('title')}
                 className="openbitfun-model-settings__edit-section openbitfun-model-settings__model-section"
                 bodySurface={false}
-                fieldSurface="default"
+                fieldSurface="filled"
                 extra={(
                   <div className="openbitfun-model-settings__model-selection-actions">
                     <ModelDiscoveryPicker
@@ -4065,7 +4104,7 @@ const ModelSettingsPage: React.FC = () => {
                     <Button
                       ref={manualModelAddButtonRef}
                       data-testid="settings-model-add-custom-btn"
-                      variant="outline"
+                      variant="fill"
                       size="xs"
                       disabled={isEditorSaving || isAddingCustomModel}
                       onClick={startManualModelDraft}
@@ -4725,8 +4764,10 @@ const ModelSettingsPage: React.FC = () => {
     : undefined;
   const editorBrandId = editorProviderId === 'openai' ? 'codex'
     : editorProviderId === 'anthropic' ? 'claude-code' : editorProviderId;
-  const editorProviderName = editingConfig ? getProviderDisplayName(editingConfig) : t('newProvider');
   const editorUsesSubscription = !!editingConfig && !!subscriptionProviderOf(editingConfig.auth);
+  const editorProviderName = editingTargetKey === 'new-provider:custom' && !editorUsesSubscription
+    ? t('providerSelection.customTitle')
+    : editingConfig ? getProviderDisplayName(editingConfig) : t('newProvider');
 
   return (
     <ConfigPageLayout className="openbitfun-model-settings" data-openbitfun-component="model-settings" data-openbitfun-part="root" data-openbitfun-view="settings">
@@ -5402,7 +5443,8 @@ const ModelSettingsPage: React.FC = () => {
           }
         }}
         className="openbitfun-model-settings__editor-dialog"
-        preset="panel"
+        preset="default"
+        size="lg"
       >
         <DialogHeader>
           {(modelPanelDraft || managingSubscriptionProvider) && !reasoningPanelDraft && (
@@ -5491,7 +5533,7 @@ const ModelSettingsPage: React.FC = () => {
           ) : renderEditingForm()}
         </DialogBody>
         {!reasoningPanelDraft && (
-          <DialogFooter appearance="floating">
+          <DialogFooter>
             {managingSubscriptionProvider ? (
               <Button variant="primary" size="sm" onClick={finishSubscriptionManagement} disabled={!!loggingInProvider}>
                 {t('actions.done')}
@@ -5519,7 +5561,7 @@ const ModelSettingsPage: React.FC = () => {
                   onClick={() => modelPanelDraft ? finishModelPanel() : void handleSave()}
                   loading={isEditorSaving}
                 >
-                  {t(modelPanelDraft ? 'actions.done' : 'actions.save')}
+                  {t('actions.save')}
                 </Button>
               </>
             )}
@@ -5530,7 +5572,8 @@ const ModelSettingsPage: React.FC = () => {
         open={draftCloseConfirmOpen}
         onOpenChange={(open) => { if (!open) setDraftCloseConfirmOpen(false); }}
         onConfirm={preserveEditingDraftAndClose}
-        onSecondary={closeEditingModal}
+        onSecondary={discardEditingDraftAndClose}
+        secondaryActionPlacement="start"
         title={t('draftClose.title')}
         message={t('draftClose.message')}
         confirmText={t('draftClose.keepAndClose')}
