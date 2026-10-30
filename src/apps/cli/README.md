@@ -272,6 +272,12 @@ Both save a preview unless `deploy=true` is requested. `permissions` sets
 `unpublish` takes a Page offline without deleting versions. `delete` removes the
 whole Page, or only the supplied `version_id`.
 
+Content updates require a Relay that supports metadata preconditions. If another
+device changes the title or permissions during upload, the save is rejected;
+list the Page again before retrying. Older Relays return an unsupported state
+for content updates while retaining their existing publish and management paths.
+Do not replace a failed `update` with `publish`, which can change access settings.
+
 The tool appears only while the executing CLI Runtime has an
 account session. Existing tool permissions still apply; unattended `exec` and
 dispatch runs use their configured approval policy.

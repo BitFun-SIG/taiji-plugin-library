@@ -265,7 +265,7 @@ pub async fn update_page_content_on_relay(
         token,
         &page.slug,
         &page.visibility,
-        Some(title.unwrap_or(&page.title)),
+        title,
         note,
         all_files,
         Some(page),
@@ -376,7 +376,11 @@ async fn save_page_version_from_collected_files(
         ));
     }
 
+    let expected_title = update_target
+        .filter(|_| title.is_none())
+        .map(|page| page.title.as_str());
     let title = title
+        .or(expected_title)
         .map(str::trim)
         .filter(|t| !t.is_empty())
         .unwrap_or(slug)
@@ -446,12 +450,23 @@ async fn save_page_version_from_collected_files(
         .as_bool()
         .unwrap_or(false);
     let upload_mode = validate_upload_session_echo(&check_body, &upload_id)?;
+    let generation_bound = upload_mode == UploadSessionMode::ManifestBound
+        && validate_generation_intent_echo(&check_body, expected_generation.as_deref(), create)?;
+    if update_target.is_some()
+        && (upload_mode != UploadSessionMode::ManifestBound
+            || !generation_bound
+            || expected_generation.is_none()
+            || check_body["metadata_preconditions_supported"].as_bool() != Some(true))
+    {
+        return Err(anyhow!(
+            "This Relay does not support safe Page content updates; upgrade the Relay before retrying. Do not substitute publish because it can change access settings."
+        ));
+    }
     if upload_mode == UploadSessionMode::LegacyRelay {
         warn!(
             "Page relay does not support manifest-bound upload sessions; using the legacy upload flow"
         );
-    } else if !validate_generation_intent_echo(&check_body, expected_generation.as_deref(), create)?
-    {
+    } else if !generation_bound {
         warn!(
             "Page relay does not support generation-bound uploads; using its legacy generation flow"
         );
@@ -510,6 +525,8 @@ async fn save_page_version_from_collected_files(
             "create": create,
             "title": title,
             "note": note.unwrap_or(""),
+            "expected_visibility": update_target.map(|page| &page.visibility),
+            "expected_title": expected_title,
         }))
         .timeout(std::time::Duration::from_secs(30));
     let freeze_policy = if freeze_idempotency_supported {
@@ -522,6 +539,11 @@ async fn save_page_version_from_collected_files(
         .map_err(|e| anyhow!("freeze version failed: {e}"))?;
     if !freeze_resp.status().is_success() {
         let status = freeze_resp.status();
+        if update_target.is_some() && status == reqwest::StatusCode::CONFLICT {
+            return Err(anyhow!(
+                "Page changed while saving content; list the Page again and retry with its current title and permissions"
+            ));
+        }
         let body = freeze_resp.text().await.unwrap_or_default();
         return Err(anyhow!("freeze version failed: HTTP {status} — {body}"));
     }

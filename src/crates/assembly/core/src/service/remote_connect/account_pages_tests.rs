@@ -50,7 +50,7 @@ async fn relay_with_hook(
     let url = format!("http://{}", listener.local_addr().unwrap());
     let task = tokio::spawn(async move {
         let mut bodies = Vec::new();
-        for (index, (expected, response)) in responses.into_iter().enumerate() {
+        for (index, (expected, mut response)) in responses.into_iter().enumerate() {
             let (mut socket, _) = tokio::time::timeout(Duration::from_secs(10), listener.accept())
                 .await
                 .unwrap()
@@ -94,6 +94,9 @@ async fn relay_with_hook(
                 serde_json::from_slice(&data[header_end..header_end + length]).unwrap()
             });
             hook(index);
+            if response["upload_id"] == "$request" {
+                response["upload_id"] = bodies.last().unwrap()["upload_id"].clone();
+            }
             let body = response.to_string();
             let wire = format!("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}", body.len(), body);
             socket.write_all(wire.as_bytes()).await.unwrap();
@@ -385,14 +388,15 @@ async fn page_manage_routes_metadata_permissions_and_delete_with_generation() {
 
 #[tokio::test]
 async fn page_manage_content_update_keeps_name_visibility_and_inspected_generation() {
-    let mut existing = page();
-    existing["title"] = json!("Existing title");
-    existing["visibility"] = json!("relay");
-    let (url, server) = relay(vec![
+    for title in [None, Some("New title")] {
+        let mut existing = page();
+        existing["title"] = json!("Existing title");
+        existing["visibility"] = json!("relay");
+        let (url, server) = relay(vec![
         ("GET /api/pages ", json!([existing])),
         (
             "POST /api/pages/check-files ",
-            json!({"needed":["index.html"]}),
+            json!({"needed":["index.html"], "upload_id":"$request", "expected_generation":"generation-a", "create":false, "metadata_preconditions_supported":true}),
         ),
         ("POST /api/pages/upload-files ", json!({})),
         (
@@ -403,23 +407,61 @@ async fn page_manage_content_update_keeps_name_visibility_and_inspected_generati
         ),
     ])
     .await;
-    let runtime = logged_in(url.clone()).await;
-    let result = manage(
+        let runtime = logged_in(url.clone()).await;
+        let result = manage(
         &runtime,
-        manage_request(json!({"action":"update", "slug":"demo", "files":{"index.html":"Hello"}})),
+        manage_request(json!({"action":"update", "slug":"demo", "title":title, "files":{"index.html":"Hello"}})),
     )
     .await
     .unwrap();
-    assert_eq!(result["action"], "update");
-    assert_eq!(result["title"], "Existing title");
-    assert_eq!(result["visibility"], "relay");
-    assert_eq!(result["deployed"], false);
-    assert_eq!(result["preview_url"], format!("{url}/preview/demo/v2"));
-    let bodies = server.await.unwrap();
-    assert_eq!(bodies[1]["expected_generation"], "generation-a");
-    assert_eq!(bodies[1]["create"], false);
-    assert_eq!(bodies[2]["visibility"], "relay");
-    assert_eq!(bodies[2]["title"], "Existing title");
+        assert_eq!(result["action"], "update");
+        assert_eq!(result["title"], title.unwrap_or("Existing title"));
+        assert_eq!(result["visibility"], "relay");
+        assert_eq!(result["deployed"], false);
+        assert_eq!(result["preview_url"], format!("{url}/preview/demo/v2"));
+        let bodies = server.await.unwrap();
+        assert_eq!(bodies[1]["expected_generation"], "generation-a");
+        assert_eq!(bodies[1]["create"], false);
+        assert_eq!(bodies[2]["visibility"], "relay");
+        assert_eq!(bodies[2]["title"], title.unwrap_or("Existing title"));
+        assert_eq!(bodies[3]["expected_visibility"], "relay");
+        assert_eq!(
+            bodies[3]["expected_title"],
+            if title.is_none() {
+                json!("Existing title")
+            } else {
+                Value::Null
+            }
+        );
+    }
+}
+
+#[tokio::test]
+async fn page_manage_content_update_refuses_unnegotiated_metadata_protection() {
+    for check in [
+        json!({"needed":["index.html"]}),
+        json!({"needed":["index.html"], "upload_id":"$request",
+            "expected_generation":"generation-a", "create":false}),
+        json!({"needed":["index.html"], "metadata_preconditions_supported":true}),
+    ] {
+        let (url, server) = relay(vec![
+            ("GET /api/pages ", json!([page()])),
+            ("POST /api/pages/check-files ", check),
+        ])
+        .await;
+        let runtime = logged_in(url).await;
+        let error = manage(
+            &runtime,
+            manage_request(json!({
+                "action":"update", "slug":"demo", "files":{"index.html":"Hello"},
+            })),
+        )
+        .await
+        .unwrap_err();
+        assert!(error.contains("does not support safe Page content updates"));
+        // Neither an upload nor a freeze was issued to the older Relay.
+        assert_eq!(server.await.unwrap().len(), 2);
+    }
 }
 
 #[tokio::test]

@@ -119,7 +119,7 @@ impl Tool for PageManageTool {
     }
 
     async fn description(&self) -> OpenBitFunResult<String> {
-        Ok(r#"Manage OpenBitFun Pages on the executing host's account relay. Requires GitHub account login.
+        Ok(r#"Manage OpenBitFun Pages on the executing host's account relay. Requires OpenBitFun account login.
 
 Actions:
 - list: list published Pages by default, with name/title, slug, absolute url, visibility, updated_at (Unix seconds), generation and deployed_version_id. published_only=false also includes saved/unpublished Pages.
@@ -133,6 +133,7 @@ Actions:
 
 Prefer inline files (relative path -> UTF-8 content); include index.html and/or server/worker.js. Do not create workspace files solely to publish. directory is only for sources already on disk or explicitly requested local copies; remote workspaces must use files. Content updates replace the entire bundle, not a patch.
 Use the returned version_id to retry deployment after a saved-version/deploy failure. Do not upload again blindly.
+Content updates require Relay metadata precondition support. If unsupported, report it; do not substitute publish, which can change access settings. If metadata changes during an update, list the Page again before retrying.
 Public URLs can be shared directly. Private/relay URLs require authenticated access; open them through the Pages scene/tool card. Never describe raw restricted URLs as public share links.
 When the user requests an operation, call it directly. The permission system handles confirmation in Ask mode; Auto Approve and Full Access need no extra confirmation."#.into())
     }
@@ -278,7 +279,7 @@ When the user requests an operation, call it directly. The permission system han
         let request = parse_request(input, Some(context)).map_err(OpenBitFunError::tool)?;
         if !page_account_available().await {
             return Err(OpenBitFunError::tool(
-                "PageManage requires a logged-in GitHub account",
+                "PageManage requires a logged-in OpenBitFun account",
             ));
         }
         let result = invoke_page_manage(request)
