@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type RefObject } from 'react';
-import { Card, Icon, IconButton, OverflowText, Tooltip, createOverlayPortal, useDismissibleLayer } from '@openbitfun/ui';
+import { Card, Empty, Icon, IconButton, OverflowText, Tooltip, createOverlayPortal, useDismissibleLayer } from '@openbitfun/ui';
 import { ChartPie, ExternalLink, Minus } from 'lucide-react';
 import { useI18n } from '@/infrastructure/i18n';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
@@ -116,44 +116,49 @@ export function ContextUsagePopover({
           size: formatTokenCount(capacity, t),
         })}</span>
       </div>
-      {hasDistribution && <div className="context-usage-popover__bar" role="img"
-        data-openbitfun-product-component="context-usage-popover" data-openbitfun-product-part="bar"
-        aria-label={t('usage.context.full', { value: formatUsagePercent(percentage!, t) })}>
-        {series.filter(row => row.value > 0).map(row => (
-          <span key={row.key} className={`context-usage-popover__segment context-usage-popover__series--${row.key}`}
-            data-usage-category={row.key} style={{ flexGrow: row.value }} {...highlight(row)} />
-        ))}
-      </div>}
-      {hasTotal ? <>
-        <dl className="context-usage-popover__legend"
-          data-openbitfun-product-component="context-usage-popover" data-openbitfun-product-part="legend">
-          {rows.map(key => <div key={key} className="context-usage-popover__row" data-usage-category={key}
-            data-openbitfun-product-component="context-usage-popover" data-openbitfun-product-part="item"
-            tabIndex={0} {...highlight(series.find(row => row.key === key) ?? { key })}>
-            <dt><span aria-hidden="true" className={`context-usage-popover__swatch context-usage-popover__series--${key}`} />
-              <OverflowText>{t(`usage.context.categories.${key}`)}</OverflowText>
-              {previewSession && key !== 'summarizedConversation' && key !== 'conversation' && (
-                <Tooltip content={t('usage.context.previewCategory', { category: t(`usage.context.categories.${key}`) })}>
-                  <IconButton size="xs" className="context-usage-popover__preview" icon={<Icon glyph={ExternalLink} size="xs" />}
-                    aria-label={t('usage.context.previewCategory', { category: t(`usage.context.categories.${key}`) })}
-                    loading={previewLoading === key} disabled={previewLoading !== null && previewLoading !== key}
-                    onClick={() => { void previewContext(key); }} />
-                </Tooltip>
-              )}
-            </dt>
-            <dd>{formatTokenCount(context![key], t)}</dd>
-          </div>)}
-        </dl>
-        {!hasDistribution && <p className="context-usage-popover__status" role="status">
-          <span data-openbitfun-product-component="context-usage-popover" data-openbitfun-product-part="status">
-            {t(capacity === undefined ? 'usage.context.capacityUnavailable' : 'usage.context.exceedsCapacity')}
-          </span>
-        </p>}
-      </> : <p className="context-usage-popover__status" role="status" aria-live="polite">
-        <span data-openbitfun-product-component="context-usage-popover" data-openbitfun-product-part="status">
-          {t(status === 'loading' ? 'usage.context.loading' : status === 'error' ? 'usage.context.loadFailed' : 'usage.context.unavailable')}
-        </span>
-      </p>}
+      <div className="context-usage-popover__body"
+        data-openbitfun-product-component="context-usage-popover" data-openbitfun-product-part="body">
+        {hasDistribution && <div className="context-usage-popover__bar" role="img"
+          data-openbitfun-product-component="context-usage-popover" data-openbitfun-product-part="bar"
+          aria-label={t('usage.context.full', { value: formatUsagePercent(percentage!, t) })}>
+          {series.filter(row => row.value > 0).map(row => (
+            <span key={row.key} className={`context-usage-popover__segment context-usage-popover__series--${row.key}`}
+              data-usage-category={row.key} style={{ flexGrow: row.value }} {...highlight(row)} />
+          ))}
+        </div>}
+        {hasTotal ? <>
+          <dl className="context-usage-popover__legend"
+            data-openbitfun-product-component="context-usage-popover" data-openbitfun-product-part="legend">
+            {rows.map(key => <div key={key} className="context-usage-popover__row" data-usage-category={key}
+              data-openbitfun-product-component="context-usage-popover" data-openbitfun-product-part="item"
+              tabIndex={0} {...highlight(series.find(row => row.key === key) ?? { key })}>
+              <dt><span aria-hidden="true" className={`context-usage-popover__swatch context-usage-popover__series--${key}`} />
+                <OverflowText>{t(`usage.context.categories.${key}`)}</OverflowText>
+                {previewSession && key !== 'summarizedConversation' && key !== 'conversation' && (
+                  <Tooltip content={t('usage.context.previewCategory', { category: t(`usage.context.categories.${key}`) })}>
+                    <IconButton size="xs" className="context-usage-popover__preview" icon={<Icon glyph={ExternalLink} size="xs" />}
+                      aria-label={t('usage.context.previewCategory', { category: t(`usage.context.categories.${key}`) })}
+                      loading={previewLoading === key} disabled={previewLoading !== null && previewLoading !== key}
+                      onClick={() => { void previewContext(key); }} />
+                  </Tooltip>
+                )}
+              </dt>
+              <dd>{formatTokenCount(context![key], t)}</dd>
+            </div>)}
+          </dl>
+          {!hasDistribution && <p className="context-usage-popover__status" role="status">
+            <span data-openbitfun-product-component="context-usage-popover" data-openbitfun-product-part="status">
+              {t(capacity === undefined ? 'usage.context.capacityUnavailable' : 'usage.context.exceedsCapacity')}
+            </span>
+          </p>}
+        </> : <div className="context-usage-popover__empty" role="status" aria-live="polite" aria-busy={status === 'loading'}>
+          <Empty icon={<Icon glyph={ChartPie} />} imageSize="sm" title={
+            <span data-openbitfun-product-component="context-usage-popover" data-openbitfun-product-part="status">
+              {t(status === 'loading' ? 'usage.context.loading' : status === 'error' ? 'usage.context.loadFailed' : 'usage.context.unavailable')}
+            </span>
+          } />
+        </div>}
+      </div>
     </Card>,
     getAppearanceOverlayHost(), undefined, { ownerRef: triggerRef },
   );

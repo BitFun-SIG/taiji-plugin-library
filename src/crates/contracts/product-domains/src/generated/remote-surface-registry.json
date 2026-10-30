@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "digest": "fnv1a64:99d567cb0f1aa0ad",
+  "digest": "fnv1a64:96fc351cf4dd6568",
   "retiredCommandPrefixes": [
     {
       "prefix": "lsp_",
@@ -44,6 +44,7 @@
       "workspace_id_references_v1",
       "workspace_html_preview_v1",
       "whole_session_copy_v1",
+      "session_trajectory_v1",
       "user_question_response",
       "user_question_interaction_v1"
     ],
@@ -83,6 +84,7 @@
       "workspace_id_references_v1",
       "workspace_html_preview_v1",
       "whole_session_copy_v1",
+      "session_trajectory_v1",
       "user_question_response",
       "user_question_interaction_v1"
     ],
@@ -101,6 +103,7 @@
       "product_control_v1",
       "cancel_tool",
       "tool_catalog",
+      "session_trajectory_v1",
       "chat_mcp_catalog_v1",
       "workspace_id_references_v1",
       "workspace_html_preview_v1",
@@ -4588,6 +4591,17 @@
       "id": "load_session_event_backfill",
       "surface": "tauri_command",
       "remoteWorkspace": "WorkspaceAgnostic",
+      "peer": {
+        "kind": "proxied"
+      },
+      "cliPeer": {
+        "kind": "handled"
+      }
+    },
+    {
+      "id": "load_session_trajectory",
+      "surface": "tauri_command",
+      "remoteWorkspace": "RemoteRouted",
       "peer": {
         "kind": "proxied"
       },

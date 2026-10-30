@@ -176,5 +176,20 @@
       "allowedParts": "查看目前可用部件",
       "dismiss": "關閉問題詳情"
     }
+  },
+  "sidebar": {
+    "title": "左側導覽列",
+    "reset": "還原預設",
+    "alwaysVisible": "始終顯示",
+    "pinned": "已固定頁面",
+    "empty": "尚未固定其他頁面",
+    "available": "可新增頁面",
+    "moveUp": "上移{{name}}",
+    "moveDown": "下移{{name}}",
+    "remove": "取消固定{{name}}",
+    "addEntry": "固定{{name}}",
+    "noResults": "沒有其他可新增的頁面",
+    "saveFailed": "儲存失敗，仍使用先前的導覽配置，請重試。",
+    "readFailed": "目前版本無法讀取已儲存的導覽偏好，原資料已保留。可透過還原預設來替換。"
   }
 }

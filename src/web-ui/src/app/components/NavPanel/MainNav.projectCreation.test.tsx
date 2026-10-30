@@ -23,6 +23,7 @@ vi.mock('react-i18next', () => ({ useTranslation: () => ({ t }) }));
 vi.mock('@/infrastructure/i18n/hooks/useI18n', () => ({ useI18n: () => ({ t }) }));
 vi.mock('@/infrastructure/i18n', () => ({ useI18n: () => ({ t }) }));
 vi.mock('@/shared/utils/logger', () => ({ createLogger: () => ({ error: vi.fn() }) }));
+vi.mock('@/shared/notification-system', () => ({ notificationService: { error: vi.fn() } }));
 vi.mock('@/infrastructure/peer-device/pickWorkspaceDirectory', () => ({ pickWorkspaceDirectory: state.pickDirectory }));
 vi.mock('@/infrastructure/api', () => ({ globalAPI: {}, workspaceAPI: {} }));
 vi.mock('@/app/services/createProject', () => ({ createProject: state.createProject }));
@@ -72,6 +73,7 @@ vi.mock('@/features/ssh-remote', () => ({
 import MainNav from './MainNav';
 import { useWorkspaceSessionViewStore } from './workspaceSessionView';
 import { useMiniAppNavigationStore } from '@/app/scenes/miniapps/miniAppNavigationStore';
+import { sidebarPreferences } from '@/app/navigation/sidebarPreferences';
 
 describe('project creation entry points', () => {
   let root: Root;
@@ -111,6 +113,7 @@ describe('project creation entry points', () => {
     resetDeviceSurfaceForTest();
     useMiniAppNavigationStore.setState({ pinnedAppIdsBySurface: {} });
     state.activeTabId = 'personal-overview';
+    sidebarPreferences.setState({ pinnedIds: ['builtin.todos'], storageIssue: null });
     state.createProject.mockResolvedValue(true);
     state.options = {};
     for (const source of ['ssh', 'wsl', 'localDocker', 'remoteDocker']) {
@@ -146,6 +149,16 @@ describe('project creation entry points', () => {
     expect([...topActions.querySelectorAll('button')].map(button => button.getAttribute('data-testid')))
       .toEqual(['nav-personal-overview', 'nav-todos-btn', 'miniapp-shortcut']);
     expect(host.querySelector('[data-testid="nav-personal-overview"]')!.getAttribute('data-openbitfun-state')).toBe('');
+  });
+
+  it('highlights a pinned Home child instead of Home, and falls back after unpinning', async () => {
+    state.activeTabId = 'agents';
+    act(() => sidebarPreferences.getState().setPinned('builtin.agents', true));
+    await render();
+    expect(host.querySelector('[data-testid="nav-personal-overview"]')!.getAttribute('data-openbitfun-state')).toBe('');
+    expect(host.querySelector('[data-testid="nav-builtin.agents"]')!.getAttribute('data-openbitfun-state')).toBe('active');
+    act(() => sidebarPreferences.getState().setPinned('builtin.agents', false));
+    expect(host.querySelector('[data-testid="nav-personal-overview"]')!.getAttribute('data-openbitfun-state')).toBe('active');
   });
 
   it.each([true, false])('reveals project groups only after successful creation (success=%s)', async succeeded => {

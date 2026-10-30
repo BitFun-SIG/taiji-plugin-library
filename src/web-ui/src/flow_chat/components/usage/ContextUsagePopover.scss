@@ -3,6 +3,8 @@
 .context-usage-popover {
   @include surfaces.floating;
 
+  --_context-usage-row-height: calc(var(--openbitfun-control-icon-button-xs-size) + var(--openbitfun-space-1));
+
   position: fixed;
   display: flex;
   flex-direction: column;
@@ -56,6 +58,27 @@
     overflow: hidden;
   }
 
+  &__body {
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    gap: var(--openbitfun-space-2);
+    // Reserve the normal seven-category chart even before a host reports a breakdown.
+    min-block-size: calc(7 * var(--_context-usage-row-height) + 2 * var(--openbitfun-space-2));
+  }
+
+  &__empty {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    justify-content: center;
+
+    [data-openbitfun-component='empty'] [data-openbitfun-part='title'] {
+      font: inherit;
+      letter-spacing: inherit;
+    }
+  }
+
   &__segment {
     flex-basis: 0;
     min-inline-size: var(--openbitfun-border-width-default);
@@ -74,7 +97,7 @@
     align-items: center;
     justify-content: space-between;
     box-sizing: border-box;
-    min-block-size: calc(var(--openbitfun-control-icon-button-xs-size) + var(--openbitfun-space-1));
+    min-block-size: var(--_context-usage-row-height);
     gap: var(--openbitfun-space-3);
     padding: calc(var(--openbitfun-space-1) / 2) var(--openbitfun-space-1);
     border-radius: var(--openbitfun-radius-md);
