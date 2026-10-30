@@ -42,7 +42,6 @@ import { matchesImageModel } from '@/infrastructure/config/components/image-gene
 import ModelTagsField from '@/infrastructure/config/components/ModelTagsField';
 import {
   configsNeedingAutoTest,
-  providerConnectionChanged,
   stableJson,
 } from '@/infrastructure/config/components/modelConnectionTestPlan';
 import { ModelDiscoveryCoordinator } from '@/infrastructure/config/components/modelDiscoveryCoordinator';
@@ -410,6 +409,17 @@ function normalizeComparableString(value: string | undefined): string {
   return (value || '').trim();
 }
 
+// Normalize effective defaults only for comparison; retain the saved shape.
+function comparableRequestSettings(config: Partial<AIModelConfigType>): ModelEditorRequestSettings {
+  return {
+    ...getModelEditorRequestSettings(config),
+    custom_headers: config.custom_headers || {},
+    custom_headers_mode: config.custom_headers_mode || 'merge',
+    custom_request_body: normalizeComparableString(config.custom_request_body),
+    custom_request_body_mode: config.custom_request_body_mode || 'merge',
+  };
+}
+
 // Only editable provider values belong in the baseline. Request URLs are derived,
 // and opening disclosures or reselecting a default must not create a draft.
 function providerEditorSnapshot(config: Partial<AIModelConfigType>): string {
@@ -419,11 +429,7 @@ function providerEditorSnapshot(config: Partial<AIModelConfigType>): string {
     base_url: normalizeComparableString(config.base_url),
     api_key: normalizeComparableString(config.api_key),
     auth: config.auth || { type: 'api_key' },
-    ...getModelEditorRequestSettings(config),
-    custom_headers: config.custom_headers || {},
-    custom_headers_mode: config.custom_headers_mode || 'merge',
-    custom_request_body: normalizeComparableString(config.custom_request_body),
-    custom_request_body_mode: config.custom_request_body_mode || 'merge',
+    ...comparableRequestSettings(config),
   });
 }
 
@@ -445,7 +451,7 @@ function modelDraftHasUnsavedChanges(
     draft.maxTokens !== persisted.max_tokens ||
     stableJson(normalizeChannelRouting(draft.channelRouting)) !== stableJson(normalizeChannelRouting(persisted.channel_routing)) ||
     stableJson(draft.reasoning) !== stableJson(canonicalReasoningConfig(persisted)) ||
-    stableJson(draft.requestSettings) !== stableJson(getModelEditorRequestSettings(persisted)) ||
+    stableJson(comparableRequestSettings(draft.requestSettings)) !== stableJson(comparableRequestSettings(persisted)) ||
     (draft.userTags !== undefined && stableJson(draft.userTags) !== stableJson(getModelUserTags(persisted)))
   );
 }
@@ -550,6 +556,16 @@ const ModelSettingsPage: React.FC = () => {
   const [creationMode, setCreationMode] = useState<'selection' | 'form' | null>(null);
   const [providerQuery, setProviderQuery] = useState('');
   const [showAllProviders, setShowAllProviders] = useState(false);
+  const providerSelectionRef = React.useRef<HTMLDivElement | null>(null);
+  const returnProviderFocusIdRef = React.useRef<string | null>(null);
+  useEffect(() => {
+    if (creationMode !== 'selection' || !returnProviderFocusIdRef.current) return;
+    const providerId = returnProviderFocusIdRef.current;
+    const trigger = Array.from(providerSelectionRef.current?.querySelectorAll<HTMLButtonElement>('button[data-provider-id]') || [])
+      .find(button => button.dataset.providerId === providerId);
+    trigger?.focus();
+    returnProviderFocusIdRef.current = null;
+  }, [creationMode]);
 
   const [selectedProviderId, setSelectedProviderId] = useState<string | null>(null);
   const [proxyConfig, setProxyConfig] = useState<ProxyConfig>(initialProxy);
@@ -1047,8 +1063,8 @@ const ModelSettingsPage: React.FC = () => {
 
     const persisted = persistedModels[0];
     const comparableConfig = { ...persisted, ...editingConfig } as AIModelConfigType;
-    const providerFieldsChanged = providerConnectionChanged(persisted, comparableConfig)
-      || normalizeComparableString(editingConfig.name) !== normalizeComparableString(getProviderDisplayName(persisted));
+    const providerFieldsChanged = providerEditorSnapshot(comparableConfig)
+      !== providerEditorSnapshot({ ...persisted, name: getProviderDisplayName(persisted) });
     const draftFieldsChanged = selectedModelDrafts.some(draft => modelDraftHasUnsavedChanges(draft, aiModels));
     const persistedIds = new Set(persistedModels.map(model => model.id).filter(Boolean));
     const draftIds = new Set(selectedModelDrafts.map(draft => draft.configId).filter(Boolean));
@@ -2564,6 +2580,7 @@ const ModelSettingsPage: React.FC = () => {
       && !editingTargetKey.startsWith('new-provider:subscription:');
     closeEditingModal();
     if (returnToProviderSelection) {
+      returnProviderFocusIdRef.current = selectedProviderId || 'custom';
       setCreationMode('selection');
       setProviderQuery(providerQuery);
       setShowAllProviders(showAllProviders);
@@ -2764,7 +2781,7 @@ const ModelSettingsPage: React.FC = () => {
         />
 
         <ConfigPageContent className="openbitfun-model-settings__content openbitfun-model-settings__content--selection">
-          <div className="openbitfun-model-settings__provider-selection" data-openbitfun-component="model-settings" data-openbitfun-part="providerSelection">
+          <div ref={providerSelectionRef} className="openbitfun-model-settings__provider-selection" data-openbitfun-component="model-settings" data-openbitfun-part="providerSelection">
 
             <button
               type="button"

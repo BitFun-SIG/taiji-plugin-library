@@ -145,6 +145,7 @@ describe('ModelSettingsPage loading and provider actions', () => {
     expect(editor()).toBeNull();
     expect(editorDraft().dirty).toBe(false);
     expect(container.querySelector('[data-openbitfun-view="selection"]')).not.toBeNull();
+    expect(document.activeElement).toBe(container.querySelector('button[data-provider-id="custom"]'));
     await act(async () => button('actions.cancel').click());
     expect(container.querySelector('[data-openbitfun-view="settings"]')).not.toBeNull();
     expect(update).not.toHaveBeenCalled();
@@ -202,6 +203,7 @@ describe('ModelSettingsPage loading and provider actions', () => {
     expect(editorDraft().dirty).toBe(false);
     expect(container.querySelector('[data-openbitfun-view="selection"]')).not.toBeNull();
     expect(container.querySelectorAll('button[data-provider-id]')).toHaveLength(providerCount);
+    expect(document.activeElement).toBe(container.querySelector(`button[data-provider-id="${provider}"]`));
     expect(container.querySelector<HTMLInputElement>('[data-testid="settings-model-provider-search"]')!.value)
       .toBe(provider === 'custom' ? '' : provider);
     await act(async () => container.querySelector<HTMLButtonElement>(`button[data-provider-id="${provider}"]`)!.click());
@@ -222,6 +224,37 @@ describe('ModelSettingsPage loading and provider actions', () => {
     expect(editor()).toBeNull();
     expect(container.querySelector('[data-openbitfun-view="settings"]')).not.toBeNull();
     expect(container.querySelector('[data-openbitfun-view="selection"]')).toBeNull();
+  });
+
+  it.each(['provider', 'model'])('does not dirty an existing %s when reselecting or restoring default request modes', async target => {
+    const update = vi.spyOn(configManager, 'updateConfig');
+    await act(async () => root.render(<ModelSettingsPage />));
+    await act(async () => {
+      reads.get('ai.models')!.resolve([model]);
+      reads.get('ai.default_models')!.resolve({});
+    });
+    await act(async () => container.querySelector<HTMLButtonElement>(target === 'provider'
+      ? '.openbitfun-model-settings__source-pill'
+      : `[data-config-id="${model.id}"] button[aria-label="${copy('actions.edit')}"]`,
+    )!.click());
+    await act(async () => editor()!.querySelector<HTMLButtonElement>('[data-testid="settings-model-advanced-toggle"] button')!.click());
+    const mergeButtons = () => [...editor()!.querySelectorAll<HTMLButtonElement>('.openbitfun-model-settings__mode-button')]
+      .filter(element => element.textContent === copy('advancedSettings.customHeaders.modeMerge'));
+    expect(mergeButtons()).toHaveLength(2);
+    await act(async () => mergeButtons().forEach(element => element.click()));
+    expect(editorDraft().dirty).toBe(false);
+    await act(async () => editorButton('advancedSettings.customHeaders.modeReplace').click());
+    expect(editorDraft().dirty).toBe(true);
+    await act(async () => mergeButtons().forEach(element => element.click()));
+    expect(editorDraft().dirty).toBe(false);
+    await act(async () => editorButton('advancedSettings.customRequestBody.modeTrim').click());
+    expect(editorDraft().dirty).toBe(true);
+    await act(async () => mergeButtons().forEach(element => element.click()));
+    expect(editorDraft().dirty).toBe(false);
+    await act(async () => editorButton('actions.cancel').click());
+    expect(document.querySelector('[role="alertdialog"]')).toBeNull();
+    expect(editor()).toBeNull();
+    expect(update).not.toHaveBeenCalled();
   });
 
   it.each(['en-US', 'zh-CN', 'zh-TW'] as const)('saves nested model edits into the provider draft in %s', async locale => {
