@@ -2166,6 +2166,8 @@
       "untitled": "（未命名）",
       "publishFailed": "无法发布 OpenBitFun Page",
       "openFailed": "无法为该页面创建安全访问链接。",
+      "openOnExecutingDevice": "请在执行此任务的设备上，通过 Pages 打开此页面。",
+      "hostUnsupported": "此主机暂不支持从工具卡片打开 Pages。",
       "labelSlug": "slug",
       "labelVersion": "version",
       "labelPath": "url_path",
@@ -3414,6 +3416,24 @@
         "hidden": "已隐藏",
         "disabledNotice": "小卡片功能已在设置中关闭，这些卡片当前不会显示。"
       }
+    },
+    "pageManage": {
+      "title": "管理 Pages",
+      "list": "列出 Pages",
+      "publish": "发布页面",
+      "update": "更新页面",
+      "permissions": "访问权限",
+      "delete": "删除页面",
+      "versions": "页面版本",
+      "deploy": "部署页面",
+      "unpublish": "取消发布",
+      "private": "仅自己",
+      "relay": "Relay 登录用户",
+      "public": "公开",
+      "name": "名称",
+      "updated": "更新时间",
+      "empty": "暂无页面或版本",
+      "count": "{{count}} 项"
     }
   },
   "welcome": {
