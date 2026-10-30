@@ -678,6 +678,10 @@ the SearchField over that anchor.
 letting their shells reuse the grouped surface. The default field surface stays
 theme-owned, and portalled menus remain on the opaque panel surface.
 
+`FieldGroup fieldSurface="filled"` uses the theme's grouped field background with
+the standard resting, hover, focus, invalid, and forced-color borders. It applies to Input, Select, Combobox, Textarea, and NumberInput; nested
+groups can explicitly restore the default surface.
+
 `Menu` remains composable inline anatomy. `MenuPopover` composes it into a
 controlled anchored or coordinate popup. Pass `items`, `open`, `onClose` and
 either `anchorRef` or `position`. Entries can include `submenu`, `shortcut`,
