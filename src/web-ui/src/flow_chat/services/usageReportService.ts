@@ -2,6 +2,7 @@ import { sessionAPI } from '@/infrastructure/api/service-api/SessionAPI';
 import type { SessionUsageReport } from '@/infrastructure/api/service-api/SessionAPI';
 import { notificationService } from '@/shared/notification-system';
 import { beginSessionUsagePanel } from './openSessionUsageReport';
+import { getActiveSurfaceScope } from '@/infrastructure/peer-device/deviceSurface';
 import type { Session } from '../types/flow-chat';
 import { requireSessionOwningWorkspaceId } from '../utils/sessionOrdering';
 import { i18nService } from '@/infrastructure/i18n';
@@ -18,6 +19,7 @@ type UsageModelIdentitySource = NonNullable<SessionUsageReport['models'][number]
 export interface UsageReportCommandParams {
   session: Session;
   isProcessing: boolean;
+  presentReport?: (report: SessionUsageReport) => boolean;
   reportTitle?: string;
   busyMessage: string;
   noWorkspaceMessage: string;
@@ -47,7 +49,8 @@ export interface UsageReportCommandResult {
 export async function runUsageReportCommand(
   params: UsageReportCommandParams
 ): Promise<UsageReportCommandResult> {
-  if (params.isProcessing) {
+  // An inline overview only reads the latest recorded request and can be viewed during a turn.
+  if (params.isProcessing && !params.presentReport) {
     notificationService.warning(params.busyMessage);
     return { shown: false, reason: 'busy' };
   }
@@ -62,12 +65,13 @@ export async function runUsageReportCommand(
     notificationService.error(params.noWorkspaceMessage);
     return { shown: false, reason: 'missing_workspace' };
   }
-  const panel = beginSessionUsagePanel({
+  const surface = getActiveSurfaceScope();
+  const panel = params.presentReport ? undefined : beginSessionUsagePanel({
     sessionId: params.session.sessionId,
     sessionTitle: params.session.title,
     workspaceId,
     workspacePath: params.session.workspacePath,
-    title: params.reportTitle ?? 'Session Usage',
+    title: params.reportTitle ?? 'Context Usage Report',
   });
 
   try {
@@ -79,11 +83,14 @@ export async function runUsageReportCommand(
         includeHiddenSubagents: true,
       });
     const report = enrichUsageReportModelIdentity(rawReport, params.session);
-    const shown = panel.complete(report, renderUsageReportMarkdown(report));
+    if (!surface.isCurrent()) return { shown: false };
+    const shown = params.presentReport
+      ? params.presentReport(report)
+      : panel!.complete(report, renderUsageReportMarkdown(report));
     return { shown, report };
   } catch (error) {
-    if (!panel.isCurrent()) return { shown: false };
-    panel.fail(error instanceof Error ? error.message : params.unknownErrorMessage);
+    if (!surface.isCurrent()) return { shown: false };
+    panel?.fail(error instanceof Error ? error.message : params.unknownErrorMessage);
     notificationService.error(
       error instanceof Error ? error.message : params.unknownErrorMessage,
       {

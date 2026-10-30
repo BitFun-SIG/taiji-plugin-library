@@ -2994,6 +2994,38 @@ $_section-header-height: 22px;
 
 }
 
+// The shortcut owns one continuous hover/selection surface, including its action.
+.openbitfun-nav-panel__miniapp-shortcut {
+  gap: 0;
+  padding-inline-end: var(--openbitfun-space-1);
+  border-radius: var(--openbitfun-radius-base);
+
+  &:not(.is-active):not([data-disabled='true']):hover {
+    @include shell-surfaces.navigation-hover-feedback;
+  }
+
+  &.is-active {
+    @include shell-surfaces.navigation-selection-feedback;
+  }
+
+  > .openbitfun-nav-panel__top-action-btn,
+  > .openbitfun-nav-panel__top-action-btn:is(:hover, :active, .is-active) {
+    background: transparent;
+    padding-inline-end: var(--openbitfun-space-1);
+  }
+
+  .openbitfun-nav-panel__miniapp-shortcut-remove {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  &:hover .openbitfun-nav-panel__miniapp-shortcut-remove,
+  &:focus-within .openbitfun-nav-panel__miniapp-shortcut-remove {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
 .openbitfun-nav-panel__main-nav-header {
   padding: 0;
 }

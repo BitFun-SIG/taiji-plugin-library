@@ -903,6 +903,11 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
               workspaceId={content.data?.workspaceId ?? content.data?.report?.workspace?.workspaceId}
               workspacePath={content.data?.workspacePath || workspacePath}
               initialTab={content.data?.initialTab}
+              onTitleChange={title => {
+                if (content.title !== title) {
+                  onContentChange?.({ ...content, title, data: { ...content.data, title } });
+                }
+              }}
             />
           </React.Suspense>
         );

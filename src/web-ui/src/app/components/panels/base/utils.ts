@@ -221,7 +221,7 @@ export const PANEL_CONTENT_CONFIGS: Record<PanelContentType, PanelContentConfig>
   },
   'session-usage': {
     type: 'session-usage',
-    displayName: 'Session Usage',
+    displayName: 'Context Usage Report',
     icon: { glyph: Activity },
     supportsCopy: false,
     supportsDownload: false,
