@@ -1,12 +1,12 @@
 {
   "schemaVersion": 1,
   "generatedFrom": "src/shared/interactive-capabilities/catalog.json",
-  "catalogDigest": "cda0c1805851b3488a613c44f6848376dd9093cf08325257d88cd9ab16d85fae",
-  "count": 213,
+  "catalogDigest": "516e1cab17ad7c33ff1be2777de1c52bb8a47ef0292bed32928843b8d1ee72ae",
+  "count": 208,
   "reasonCounts": {
     "externalAuth": 4,
     "secretEntry": 5,
-    "unstructuredInteraction": 179,
+    "unstructuredInteraction": 174,
     "visualSelection": 25
   },
   "entries": [
@@ -2250,55 +2250,6 @@
     },
     {
       "capabilityId": "feature.pages",
-      "itemId": "pages-list",
-      "titleZh": "查看账户下的 Pages 与每个页面的当前发布状态",
-      "titleEn": "List account Pages and inspect each page's current publishing state",
-      "reasonCode": "unstructuredInteraction",
-      "reasonZh": "“查看账户下的 Pages 与每个页面的当前发布状态”由多个实时状态相关步骤组成，目前没有一个能确定完成整个流程的单一结构化 Command；智能体会打开精确入口，并把后续交互保留在用户可见界面。",
-      "reasonEn": "“List account Pages and inspect each page's current publishing state” spans multiple live-state-dependent steps and currently has no single structured Command that can deterministically complete the whole workflow; the Agent opens the exact entry and keeps the remaining interaction visible to the user.",
-      "presentationTarget": {
-        "kind": "scene",
-        "sceneId": "pages"
-      },
-      "evidence": [
-        "command:page_list"
-      ]
-    },
-    {
-      "capabilityId": "feature.pages",
-      "itemId": "immutable-versions",
-      "titleZh": "保存不可变页面版本并浏览版本历史",
-      "titleEn": "Save immutable page versions and browse version history",
-      "reasonCode": "unstructuredInteraction",
-      "reasonZh": "“保存不可变页面版本并浏览版本历史”由多个实时状态相关步骤组成，目前没有一个能确定完成整个流程的单一结构化 Command；智能体会打开精确入口，并把后续交互保留在用户可见界面。",
-      "reasonEn": "“Save immutable page versions and browse version history” spans multiple live-state-dependent steps and currently has no single structured Command that can deterministically complete the whole workflow; the Agent opens the exact entry and keeps the remaining interaction visible to the user.",
-      "presentationTarget": {
-        "kind": "scene",
-        "sceneId": "pages"
-      },
-      "evidence": [
-        "command:page_save_version",
-        "command:page_list_versions"
-      ]
-    },
-    {
-      "capabilityId": "feature.pages",
-      "itemId": "visibility",
-      "titleZh": "更新标题、公开/私有可见性和访问设置",
-      "titleEn": "Update titles, public/private visibility, and access settings",
-      "reasonCode": "unstructuredInteraction",
-      "reasonZh": "“更新标题、公开/私有可见性和访问设置”由多个实时状态相关步骤组成，目前没有一个能确定完成整个流程的单一结构化 Command；智能体会打开精确入口，并把后续交互保留在用户可见界面。",
-      "reasonEn": "“Update titles, public/private visibility, and access settings” spans multiple live-state-dependent steps and currently has no single structured Command that can deterministically complete the whole workflow; the Agent opens the exact entry and keeps the remaining interaction visible to the user.",
-      "presentationTarget": {
-        "kind": "scene",
-        "sceneId": "pages"
-      },
-      "evidence": [
-        "command:page_update"
-      ]
-    },
-    {
-      "capabilityId": "feature.pages",
       "itemId": "share-open",
       "titleZh": "创建可打开和分享的页面链接",
       "titleEn": "Create an openable, shareable link for a page",
@@ -2311,39 +2262,6 @@
       },
       "evidence": [
         "command:page_create_open_link"
-      ]
-    },
-    {
-      "capabilityId": "feature.pages",
-      "itemId": "unpublish",
-      "titleZh": "取消发布页面，同时保留可再次发布的版本",
-      "titleEn": "Unpublish a page while retaining versions for later publication",
-      "reasonCode": "unstructuredInteraction",
-      "reasonZh": "“取消发布页面，同时保留可再次发布的版本”由多个实时状态相关步骤组成，目前没有一个能确定完成整个流程的单一结构化 Command；智能体会打开精确入口，并把后续交互保留在用户可见界面。",
-      "reasonEn": "“Unpublish a page while retaining versions for later publication” spans multiple live-state-dependent steps and currently has no single structured Command that can deterministically complete the whole workflow; the Agent opens the exact entry and keeps the remaining interaction visible to the user.",
-      "presentationTarget": {
-        "kind": "scene",
-        "sceneId": "pages"
-      },
-      "evidence": [
-        "command:page_unpublish"
-      ]
-    },
-    {
-      "capabilityId": "feature.pages",
-      "itemId": "delete",
-      "titleZh": "删除单个版本或整个 Page",
-      "titleEn": "Delete an individual version or an entire Page",
-      "reasonCode": "unstructuredInteraction",
-      "reasonZh": "“删除单个版本或整个 Page”由多个实时状态相关步骤组成，目前没有一个能确定完成整个流程的单一结构化 Command；智能体会打开精确入口，并把后续交互保留在用户可见界面。",
-      "reasonEn": "“Delete an individual version or an entire Page” spans multiple live-state-dependent steps and currently has no single structured Command that can deterministically complete the whole workflow; the Agent opens the exact entry and keeps the remaining interaction visible to the user.",
-      "presentationTarget": {
-        "kind": "scene",
-        "sceneId": "pages"
-      },
-      "evidence": [
-        "command:page_delete_version",
-        "command:page_delete"
       ]
     },
     {

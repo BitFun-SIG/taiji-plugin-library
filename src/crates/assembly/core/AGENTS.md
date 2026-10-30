@@ -555,7 +555,7 @@ cargo test --locked -p openbitfun-core --no-default-features --features remote-c
 cargo test --locked -p openbitfun-core --no-default-features --features remote-connect --lib service::remote_connect::bot::weixin::tests
 ```
 
-Pages account publication and tool gates (including remote directory rejection):
+Pages account management and tool gates (including remote directory rejection):
 
 ```bash
 cargo test -p openbitfun-core --no-default-features --features remote-connect,tools-pages,git,ssh-remote --lib page_
@@ -564,6 +564,13 @@ cargo test -p openbitfun-core --no-default-features --features remote-connect,to
 `tools-pages` selects only the Pages tool group. Account host wiring additionally
 requires `remote-connect`; CLI and Desktop select both explicitly. Pages does
 not select MiniApp runtime or market dependencies.
+
+`PageManage` is the default Pages Agent tool. `PagePublish` and `PageDeploy`
+remain registered only for legacy explicit tool selections and existing calls;
+do not add them back to mode defaults. List/version reads have no mutation
+permission intent; writes retain fresh, account-scoped Ask-mode approval.
+The focused fixtures cover loopback Relay requests, old Relay payloads, account
+switches, and simulated remote workspace rejection, not live remote connections.
 
 Scheduled-job workspace identity and the temporary 1.0.0 target upgrade boundary:
 

@@ -192,6 +192,12 @@ For shared GitHub sign-in and token redaction, use
 For the matching cross-entry UI state, run
 `pnpm --dir src/web-ui run test:run src/infrastructure/account-identity/AccountIdentityService.test.ts src/features/market-account/AccountIdentityControls.test.tsx src/app/components/RemoteConnectDialog/ensureAccountSession.test.ts`.
 
+For Pages Agent startup registration and Desktop-owned account execution, run
+`cargo test --locked -p openbitfun-desktop --lib api::remote_connect_api::page_tool_tests`.
+This child-process fixture invokes the actual registered tool against a loopback
+Relay and covers account-switch fencing; it does not launch the native UI or
+exercise a live remote device.
+
 For side-question request compatibility, initial model selection, and optional
 message metadata, use
 `cargo test -p openbitfun-desktop --no-default-features --lib api::btw_api::tests`.

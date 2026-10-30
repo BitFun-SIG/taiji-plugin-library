@@ -2166,6 +2166,8 @@
       "untitled": "(unnamed)",
       "publishFailed": "Could not publish OpenBitFun Page",
       "openFailed": "Could not create a secure link for this Page.",
+      "openOnExecutingDevice": "Open this Page from Pages on the device that ran the task.",
+      "hostUnsupported": "This host does not support opening Pages from tool cards.",
       "labelSlug": "slug",
       "labelVersion": "version",
       "labelPath": "url_path",
@@ -3414,6 +3416,24 @@
         "hidden": "Hidden",
         "disabledNotice": "Desktop cards are turned off in settings, so these cards are not displayed."
       }
+    },
+    "pageManage": {
+      "title": "Manage Pages",
+      "list": "List Pages",
+      "publish": "Publish Page",
+      "update": "Update Page",
+      "permissions": "Page access",
+      "delete": "Delete Page",
+      "versions": "Page versions",
+      "deploy": "Deploy Page",
+      "unpublish": "Unpublish Page",
+      "private": "Owner only",
+      "relay": "Relay users",
+      "public": "Public",
+      "name": "Name",
+      "updated": "Updated",
+      "empty": "No Pages or versions found",
+      "count": "{{count}} items"
     }
   },
   "welcome": {

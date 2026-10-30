@@ -208,6 +208,16 @@
   },
   "agentToolExclusions": [
     {
+      "tool": "PagePublish",
+      "reasonZh": "旧版 Pages 工具兼容入口，仅为已有调用和显式工具配置保留；新功能统一通过 PageManage 提供。",
+      "reasonEn": "Legacy Pages compatibility entry retained for existing calls and explicit tool configurations; current functionality is exposed through PageManage."
+    },
+    {
+      "tool": "PageDeploy",
+      "reasonZh": "旧版 Pages 部署兼容入口，仅为已有调用和显式工具配置保留；新功能统一通过 PageManage 提供。",
+      "reasonEn": "Legacy Pages deployment compatibility entry retained for existing calls and explicit tool configurations; current functionality is exposed through PageManage."
+    },
+    {
       "tool": "Task",
       "reasonZh": "兼容性委派原语，仅为显式配置的旧版智能体保留，不是独立的用户功能。",
       "reasonEn": "Compatibility delegation primitive retained for explicitly configured legacy agents; it is not a standalone user feature."
@@ -4892,10 +4902,16 @@
           "titleZh": "查看账户下的 Pages 与每个页面的当前发布状态",
           "titleEn": "List account Pages and inspect each page's current publishing state",
           "control": {
-            "kind": "open",
-            "reasonCode": "unstructuredInteraction",
-            "reasonZh": "“查看账户下的 Pages 与每个页面的当前发布状态”由多个实时状态相关步骤组成，目前没有一个能确定完成整个流程的单一结构化 Command；智能体会打开精确入口，并把后续交互保留在用户可见界面。",
-            "reasonEn": "“List account Pages and inspect each page's current publishing state” spans multiple live-state-dependent steps and currently has no single structured Command that can deterministically complete the whole workflow; the Agent opens the exact entry and keeps the remaining interaction visible to the user."
+            "kind": "delegate",
+            "tools": [
+              "PageManage"
+            ],
+            "workflowZh": [
+              "使用 PageManage action=list 列出已发布页面的名称、URL、权限和更新时间；published_only=false 包含未发布页面"
+            ],
+            "workflowEn": [
+              "Use PageManage action=list for published Page names, URLs, visibility and update times; published_only=false includes unpublished Pages"
+            ]
           },
           "evidence": [
             "command:page_list"
@@ -4906,10 +4922,16 @@
           "titleZh": "保存不可变页面版本并浏览版本历史",
           "titleEn": "Save immutable page versions and browse version history",
           "control": {
-            "kind": "open",
-            "reasonCode": "unstructuredInteraction",
-            "reasonZh": "“保存不可变页面版本并浏览版本历史”由多个实时状态相关步骤组成，目前没有一个能确定完成整个流程的单一结构化 Command；智能体会打开精确入口，并把后续交互保留在用户可见界面。",
-            "reasonEn": "“Save immutable page versions and browse version history” spans multiple live-state-dependent steps and currently has no single structured Command that can deterministically complete the whole workflow; the Agent opens the exact entry and keeps the remaining interaction visible to the user."
+            "kind": "delegate",
+            "tools": [
+              "PageManage"
+            ],
+            "workflowZh": [
+              "使用 PageManage action=publish/update 保存完整内容为新版本，action=versions 查看版本历史"
+            ],
+            "workflowEn": [
+              "Use PageManage action=publish/update to save complete content as a new version, and action=versions for history"
+            ]
           },
           "evidence": [
             "command:page_save_version",
@@ -4923,16 +4945,13 @@
           "control": {
             "kind": "delegate",
             "tools": [
-              "PagePublish",
-              "PageDeploy"
+              "PageManage"
             ],
             "workflowZh": [
-              "新建内容或保存新版本时用 PagePublish；只有用户明确要求上线时才设置 deploy，并确认可见性",
-              "切换到已保存版本或回滚时用 PageDeploy；私有/relay 链接通过 Pages 场景或工具卡安全打开"
+              "使用 PageManage action=publish/update 保存内容；仅用户要求上线时设置 deploy=true；action=deploy 切换到已有版本"
             ],
             "workflowEn": [
-              "Use PagePublish for new content or a new saved version; set deploy only when the user explicitly asks to publish and confirm visibility",
-              "Use PageDeploy to promote or roll back to an existing saved version; open private/relay links safely through the Pages scene or tool card"
+              "Use PageManage action=publish/update to save content, set deploy=true only when requested, and action=deploy to promote an existing version"
             ]
           },
           "evidence": [
@@ -4945,10 +4964,16 @@
           "titleZh": "更新标题、公开/私有可见性和访问设置",
           "titleEn": "Update titles, public/private visibility, and access settings",
           "control": {
-            "kind": "open",
-            "reasonCode": "unstructuredInteraction",
-            "reasonZh": "“更新标题、公开/私有可见性和访问设置”由多个实时状态相关步骤组成，目前没有一个能确定完成整个流程的单一结构化 Command；智能体会打开精确入口，并把后续交互保留在用户可见界面。",
-            "reasonEn": "“Update titles, public/private visibility, and access settings” spans multiple live-state-dependent steps and currently has no single structured Command that can deterministically complete the whole workflow; the Agent opens the exact entry and keeps the remaining interaction visible to the user."
+            "kind": "delegate",
+            "tools": [
+              "PageManage"
+            ],
+            "workflowZh": [
+              "使用 PageManage action=update 修改标题，action=permissions 将访问权限设置为 private、relay 或 public"
+            ],
+            "workflowEn": [
+              "Use PageManage action=update for the title and action=permissions to set private, relay or public visibility"
+            ]
           },
           "evidence": [
             "command:page_update"
@@ -4973,10 +4998,16 @@
           "titleZh": "取消发布页面，同时保留可再次发布的版本",
           "titleEn": "Unpublish a page while retaining versions for later publication",
           "control": {
-            "kind": "open",
-            "reasonCode": "unstructuredInteraction",
-            "reasonZh": "“取消发布页面，同时保留可再次发布的版本”由多个实时状态相关步骤组成，目前没有一个能确定完成整个流程的单一结构化 Command；智能体会打开精确入口，并把后续交互保留在用户可见界面。",
-            "reasonEn": "“Unpublish a page while retaining versions for later publication” spans multiple live-state-dependent steps and currently has no single structured Command that can deterministically complete the whole workflow; the Agent opens the exact entry and keeps the remaining interaction visible to the user."
+            "kind": "delegate",
+            "tools": [
+              "PageManage"
+            ],
+            "workflowZh": [
+              "使用 PageManage action=unpublish 下线页面并保留已保存版本"
+            ],
+            "workflowEn": [
+              "Use PageManage action=unpublish to take a Page offline while retaining saved versions"
+            ]
           },
           "evidence": [
             "command:page_unpublish"
@@ -4987,10 +5018,16 @@
           "titleZh": "删除单个版本或整个 Page",
           "titleEn": "Delete an individual version or an entire Page",
           "control": {
-            "kind": "open",
-            "reasonCode": "unstructuredInteraction",
-            "reasonZh": "“删除单个版本或整个 Page”由多个实时状态相关步骤组成，目前没有一个能确定完成整个流程的单一结构化 Command；智能体会打开精确入口，并把后续交互保留在用户可见界面。",
-            "reasonEn": "“Delete an individual version or an entire Page” spans multiple live-state-dependent steps and currently has no single structured Command that can deterministically complete the whole workflow; the Agent opens the exact entry and keeps the remaining interaction visible to the user."
+            "kind": "delegate",
+            "tools": [
+              "PageManage"
+            ],
+            "workflowZh": [
+              "使用 PageManage action=delete 删除整个页面；提供 version_id 时仅删除该版本"
+            ],
+            "workflowEn": [
+              "Use PageManage action=delete to delete a Page, or supply version_id to delete only that version"
+            ]
           },
           "evidence": [
             "command:page_delete_version",
@@ -5009,12 +5046,14 @@
         "Choose a page and confirm publishing and visibility"
       ],
       "agentExamplesZh": [
-        "打开 Pages",
-        "带我管理已发布的页面"
+        "列出我已发布的 Pages",
+        "把这个页面改成私有",
+        "更新这个页面的内容并上线"
       ],
       "agentExamplesEn": [
-        "Open Pages",
-        "Take me to my published pages"
+        "List my published Pages",
+        "Make this Page private",
+        "Update this Page content and deploy it"
       ],
       "destination": {
         "kind": "scene",

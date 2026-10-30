@@ -4,7 +4,7 @@
   "title": "OpenBitFun Playbook",
   "origin": "https://playbook.openbitfun.com",
   "source": "src/shared/interactive-capabilities/catalog.json",
-  "digest": "cda0c1805851b3488a613c44f6848376dd9093cf08325257d88cd9ab16d85fae",
+  "digest": "516e1cab17ad7c33ff1be2777de1c52bb8a47ef0292bed32928843b8d1ee72ae",
   "ownerDigest": "f27c231da2e536e4f2123910f34f862b55d21feb0528bc915d4d13edbd528af9",
   "searchAcceptance": [
     {
@@ -178,8 +178,8 @@
     "documentedItems": 336,
     "controlCoverage": {
       "direct": 56,
-      "delegated": 67,
-      "interactive": 213,
+      "delegated": 72,
+      "interactive": 208,
       "unsupported": 0
     }
   },
@@ -9948,92 +9948,90 @@
       }
     },
     {
-      "id": "feature.pages:open:pages-list",
+      "id": "feature.pages:delegate:pages-list",
       "capabilityId": "feature.pages",
       "itemIds": [
         "pages-list"
       ],
-      "kind": "open",
-      "risk": "ui",
-      "executionHost": "presentationSurface",
+      "kind": "delegate",
+      "risk": "execute",
+      "executionHost": "workspaceHost",
       "availability": {
         "desktop": {
           "available": true
         },
         "cli": {
-          "available": false,
-          "reason": "This delivery profile has no live presentation surface"
+          "available": true
         },
         "peer": {
           "available": true,
           "requiredCapabilities": [
-            "product_control_v1",
-            "product_control_presentation_v1"
+            "product_control_v1"
           ]
         },
         "remoteControl": {
           "available": true
         },
         "detachedDispatch": {
-          "available": false,
-          "reason": "This delivery profile has no live presentation surface"
+          "available": true
         }
       },
       "inputSchema": {
         "type": "object",
-        "additionalProperties": false
+        "additionalProperties": true
       },
       "outputSchema": {
         "type": "object",
         "additionalProperties": true
       },
-      "openReason": "unstructuredInteraction",
+      "delegateTools": [
+        "PageManage"
+      ],
       "presentationTarget": {
         "kind": "scene",
         "sceneId": "pages"
       }
     },
     {
-      "id": "feature.pages:open:immutable-versions",
+      "id": "feature.pages:delegate:immutable-versions",
       "capabilityId": "feature.pages",
       "itemIds": [
         "immutable-versions"
       ],
-      "kind": "open",
-      "risk": "ui",
-      "executionHost": "presentationSurface",
+      "kind": "delegate",
+      "risk": "execute",
+      "executionHost": "workspaceHost",
       "availability": {
         "desktop": {
           "available": true
         },
         "cli": {
-          "available": false,
-          "reason": "This delivery profile has no live presentation surface"
+          "available": true
         },
         "peer": {
           "available": true,
           "requiredCapabilities": [
-            "product_control_v1",
-            "product_control_presentation_v1"
+            "product_control_v1"
           ]
         },
         "remoteControl": {
           "available": true
         },
         "detachedDispatch": {
-          "available": false,
-          "reason": "This delivery profile has no live presentation surface"
+          "available": true
         }
       },
       "inputSchema": {
         "type": "object",
-        "additionalProperties": false
+        "additionalProperties": true
       },
       "outputSchema": {
         "type": "object",
         "additionalProperties": true
       },
-      "openReason": "unstructuredInteraction",
+      "delegateTools": [
+        "PageManage"
+      ],
       "presentationTarget": {
         "kind": "scene",
         "sceneId": "pages"
@@ -10077,8 +10075,7 @@
         "additionalProperties": true
       },
       "delegateTools": [
-        "PagePublish",
-        "PageDeploy"
+        "PageManage"
       ],
       "presentationTarget": {
         "kind": "scene",
@@ -10086,46 +10083,45 @@
       }
     },
     {
-      "id": "feature.pages:open:visibility",
+      "id": "feature.pages:delegate:visibility",
       "capabilityId": "feature.pages",
       "itemIds": [
         "visibility"
       ],
-      "kind": "open",
-      "risk": "ui",
-      "executionHost": "presentationSurface",
+      "kind": "delegate",
+      "risk": "execute",
+      "executionHost": "workspaceHost",
       "availability": {
         "desktop": {
           "available": true
         },
         "cli": {
-          "available": false,
-          "reason": "This delivery profile has no live presentation surface"
+          "available": true
         },
         "peer": {
           "available": true,
           "requiredCapabilities": [
-            "product_control_v1",
-            "product_control_presentation_v1"
+            "product_control_v1"
           ]
         },
         "remoteControl": {
           "available": true
         },
         "detachedDispatch": {
-          "available": false,
-          "reason": "This delivery profile has no live presentation surface"
+          "available": true
         }
       },
       "inputSchema": {
         "type": "object",
-        "additionalProperties": false
+        "additionalProperties": true
       },
       "outputSchema": {
         "type": "object",
         "additionalProperties": true
       },
-      "openReason": "unstructuredInteraction",
+      "delegateTools": [
+        "PageManage"
+      ],
       "presentationTarget": {
         "kind": "scene",
         "sceneId": "pages"
@@ -10178,92 +10174,90 @@
       }
     },
     {
-      "id": "feature.pages:open:unpublish",
+      "id": "feature.pages:delegate:unpublish",
       "capabilityId": "feature.pages",
       "itemIds": [
         "unpublish"
       ],
-      "kind": "open",
-      "risk": "ui",
-      "executionHost": "presentationSurface",
+      "kind": "delegate",
+      "risk": "execute",
+      "executionHost": "workspaceHost",
       "availability": {
         "desktop": {
           "available": true
         },
         "cli": {
-          "available": false,
-          "reason": "This delivery profile has no live presentation surface"
+          "available": true
         },
         "peer": {
           "available": true,
           "requiredCapabilities": [
-            "product_control_v1",
-            "product_control_presentation_v1"
+            "product_control_v1"
           ]
         },
         "remoteControl": {
           "available": true
         },
         "detachedDispatch": {
-          "available": false,
-          "reason": "This delivery profile has no live presentation surface"
+          "available": true
         }
       },
       "inputSchema": {
         "type": "object",
-        "additionalProperties": false
+        "additionalProperties": true
       },
       "outputSchema": {
         "type": "object",
         "additionalProperties": true
       },
-      "openReason": "unstructuredInteraction",
+      "delegateTools": [
+        "PageManage"
+      ],
       "presentationTarget": {
         "kind": "scene",
         "sceneId": "pages"
       }
     },
     {
-      "id": "feature.pages:open:delete",
+      "id": "feature.pages:delegate:delete",
       "capabilityId": "feature.pages",
       "itemIds": [
         "delete"
       ],
-      "kind": "open",
-      "risk": "ui",
-      "executionHost": "presentationSurface",
+      "kind": "delegate",
+      "risk": "execute",
+      "executionHost": "workspaceHost",
       "availability": {
         "desktop": {
           "available": true
         },
         "cli": {
-          "available": false,
-          "reason": "This delivery profile has no live presentation surface"
+          "available": true
         },
         "peer": {
           "available": true,
           "requiredCapabilities": [
-            "product_control_v1",
-            "product_control_presentation_v1"
+            "product_control_v1"
           ]
         },
         "remoteControl": {
           "available": true
         },
         "detachedDispatch": {
-          "available": false,
-          "reason": "This delivery profile has no live presentation surface"
+          "available": true
         }
       },
       "inputSchema": {
         "type": "object",
-        "additionalProperties": false
+        "additionalProperties": true
       },
       "outputSchema": {
         "type": "object",
         "additionalProperties": true
       },
-      "openReason": "unstructuredInteraction",
+      "delegateTools": [
+        "PageManage"
+      ],
       "presentationTarget": {
         "kind": "scene",
         "sceneId": "pages"
@@ -25426,10 +25420,16 @@
           "titleZh": "查看账户下的 Pages 与每个页面的当前发布状态",
           "titleEn": "List account Pages and inspect each page's current publishing state",
           "control": {
-            "kind": "open",
-            "reasonCode": "unstructuredInteraction",
-            "reasonZh": "“查看账户下的 Pages 与每个页面的当前发布状态”由多个实时状态相关步骤组成，目前没有一个能确定完成整个流程的单一结构化 Command；智能体会打开精确入口，并把后续交互保留在用户可见界面。",
-            "reasonEn": "“List account Pages and inspect each page's current publishing state” spans multiple live-state-dependent steps and currently has no single structured Command that can deterministically complete the whole workflow; the Agent opens the exact entry and keeps the remaining interaction visible to the user."
+            "kind": "delegate",
+            "tools": [
+              "PageManage"
+            ],
+            "workflowZh": [
+              "使用 PageManage action=list 列出已发布页面的名称、URL、权限和更新时间；published_only=false 包含未发布页面"
+            ],
+            "workflowEn": [
+              "Use PageManage action=list for published Page names, URLs, visibility and update times; published_only=false includes unpublished Pages"
+            ]
           }
         },
         {
@@ -25437,10 +25437,16 @@
           "titleZh": "保存不可变页面版本并浏览版本历史",
           "titleEn": "Save immutable page versions and browse version history",
           "control": {
-            "kind": "open",
-            "reasonCode": "unstructuredInteraction",
-            "reasonZh": "“保存不可变页面版本并浏览版本历史”由多个实时状态相关步骤组成，目前没有一个能确定完成整个流程的单一结构化 Command；智能体会打开精确入口，并把后续交互保留在用户可见界面。",
-            "reasonEn": "“Save immutable page versions and browse version history” spans multiple live-state-dependent steps and currently has no single structured Command that can deterministically complete the whole workflow; the Agent opens the exact entry and keeps the remaining interaction visible to the user."
+            "kind": "delegate",
+            "tools": [
+              "PageManage"
+            ],
+            "workflowZh": [
+              "使用 PageManage action=publish/update 保存完整内容为新版本，action=versions 查看版本历史"
+            ],
+            "workflowEn": [
+              "Use PageManage action=publish/update to save complete content as a new version, and action=versions for history"
+            ]
           }
         },
         {
@@ -25450,16 +25456,13 @@
           "control": {
             "kind": "delegate",
             "tools": [
-              "PagePublish",
-              "PageDeploy"
+              "PageManage"
             ],
             "workflowZh": [
-              "新建内容或保存新版本时用 PagePublish；只有用户明确要求上线时才设置 deploy，并确认可见性",
-              "切换到已保存版本或回滚时用 PageDeploy；私有/relay 链接通过 Pages 场景或工具卡安全打开"
+              "使用 PageManage action=publish/update 保存内容；仅用户要求上线时设置 deploy=true；action=deploy 切换到已有版本"
             ],
             "workflowEn": [
-              "Use PagePublish for new content or a new saved version; set deploy only when the user explicitly asks to publish and confirm visibility",
-              "Use PageDeploy to promote or roll back to an existing saved version; open private/relay links safely through the Pages scene or tool card"
+              "Use PageManage action=publish/update to save content, set deploy=true only when requested, and action=deploy to promote an existing version"
             ]
           }
         },
@@ -25468,10 +25471,16 @@
           "titleZh": "更新标题、公开/私有可见性和访问设置",
           "titleEn": "Update titles, public/private visibility, and access settings",
           "control": {
-            "kind": "open",
-            "reasonCode": "unstructuredInteraction",
-            "reasonZh": "“更新标题、公开/私有可见性和访问设置”由多个实时状态相关步骤组成，目前没有一个能确定完成整个流程的单一结构化 Command；智能体会打开精确入口，并把后续交互保留在用户可见界面。",
-            "reasonEn": "“Update titles, public/private visibility, and access settings” spans multiple live-state-dependent steps and currently has no single structured Command that can deterministically complete the whole workflow; the Agent opens the exact entry and keeps the remaining interaction visible to the user."
+            "kind": "delegate",
+            "tools": [
+              "PageManage"
+            ],
+            "workflowZh": [
+              "使用 PageManage action=update 修改标题，action=permissions 将访问权限设置为 private、relay 或 public"
+            ],
+            "workflowEn": [
+              "Use PageManage action=update for the title and action=permissions to set private, relay or public visibility"
+            ]
           }
         },
         {
@@ -25490,10 +25499,16 @@
           "titleZh": "取消发布页面，同时保留可再次发布的版本",
           "titleEn": "Unpublish a page while retaining versions for later publication",
           "control": {
-            "kind": "open",
-            "reasonCode": "unstructuredInteraction",
-            "reasonZh": "“取消发布页面，同时保留可再次发布的版本”由多个实时状态相关步骤组成，目前没有一个能确定完成整个流程的单一结构化 Command；智能体会打开精确入口，并把后续交互保留在用户可见界面。",
-            "reasonEn": "“Unpublish a page while retaining versions for later publication” spans multiple live-state-dependent steps and currently has no single structured Command that can deterministically complete the whole workflow; the Agent opens the exact entry and keeps the remaining interaction visible to the user."
+            "kind": "delegate",
+            "tools": [
+              "PageManage"
+            ],
+            "workflowZh": [
+              "使用 PageManage action=unpublish 下线页面并保留已保存版本"
+            ],
+            "workflowEn": [
+              "Use PageManage action=unpublish to take a Page offline while retaining saved versions"
+            ]
           }
         },
         {
@@ -25501,10 +25516,16 @@
           "titleZh": "删除单个版本或整个 Page",
           "titleEn": "Delete an individual version or an entire Page",
           "control": {
-            "kind": "open",
-            "reasonCode": "unstructuredInteraction",
-            "reasonZh": "“删除单个版本或整个 Page”由多个实时状态相关步骤组成，目前没有一个能确定完成整个流程的单一结构化 Command；智能体会打开精确入口，并把后续交互保留在用户可见界面。",
-            "reasonEn": "“Delete an individual version or an entire Page” spans multiple live-state-dependent steps and currently has no single structured Command that can deterministically complete the whole workflow; the Agent opens the exact entry and keeps the remaining interaction visible to the user."
+            "kind": "delegate",
+            "tools": [
+              "PageManage"
+            ],
+            "workflowZh": [
+              "使用 PageManage action=delete 删除整个页面；提供 version_id 时仅删除该版本"
+            ],
+            "workflowEn": [
+              "Use PageManage action=delete to delete a Page, or supply version_id to delete only that version"
+            ]
           }
         }
       ],
@@ -25519,12 +25540,14 @@
         "Choose a page and confirm publishing and visibility"
       ],
       "agentExamplesZh": [
-        "打开 Pages",
-        "带我管理已发布的页面"
+        "列出我已发布的 Pages",
+        "把这个页面改成私有",
+        "更新这个页面的内容并上线"
       ],
       "agentExamplesEn": [
-        "Open Pages",
-        "Take me to my published pages"
+        "List my published Pages",
+        "Make this Page private",
+        "Update this Page content and deploy it"
       ],
       "destination": {
         "kind": "scene",
@@ -25570,16 +25593,25 @@
         "Unpublish a page while retaining versions for later publication",
         "删除单个版本或整个 Page",
         "Delete an individual version or an entire Page",
-        "打开 Pages",
-        "带我管理已发布的页面",
-        "Open Pages",
-        "Take me to my published pages",
-        "PagePublish",
-        "PageDeploy",
-        "新建内容或保存新版本时用 PagePublish；只有用户明确要求上线时才设置 deploy，并确认可见性",
-        "切换到已保存版本或回滚时用 PageDeploy；私有/relay 链接通过 Pages 场景或工具卡安全打开",
-        "Use PagePublish for new content or a new saved version; set deploy only when the user explicitly asks to publish and confirm visibility",
-        "Use PageDeploy to promote or roll back to an existing saved version; open private/relay links safely through the Pages scene or tool card"
+        "列出我已发布的 Pages",
+        "把这个页面改成私有",
+        "更新这个页面的内容并上线",
+        "List my published Pages",
+        "Make this Page private",
+        "Update this Page content and deploy it",
+        "PageManage",
+        "使用 PageManage action=list 列出已发布页面的名称、URL、权限和更新时间；published_only=false 包含未发布页面",
+        "Use PageManage action=list for published Page names, URLs, visibility and update times; published_only=false includes unpublished Pages",
+        "使用 PageManage action=publish/update 保存完整内容为新版本，action=versions 查看版本历史",
+        "Use PageManage action=publish/update to save complete content as a new version, and action=versions for history",
+        "使用 PageManage action=publish/update 保存内容；仅用户要求上线时设置 deploy=true；action=deploy 切换到已有版本",
+        "Use PageManage action=publish/update to save content, set deploy=true only when requested, and action=deploy to promote an existing version",
+        "使用 PageManage action=update 修改标题，action=permissions 将访问权限设置为 private、relay 或 public",
+        "Use PageManage action=update for the title and action=permissions to set private, relay or public visibility",
+        "使用 PageManage action=unpublish 下线页面并保留已保存版本",
+        "Use PageManage action=unpublish to take a Page offline while retaining saved versions",
+        "使用 PageManage action=delete 删除整个页面；提供 version_id 时仅删除该版本",
+        "Use PageManage action=delete to delete a Page, or supply version_id to delete only that version"
       ],
       "docsUrl": "https://playbook.openbitfun.com/capabilities/feature.pages/"
     },
