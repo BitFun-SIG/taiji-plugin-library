@@ -219,6 +219,7 @@ export const PANEL_CONTENT_CONFIGS: Record<PanelContentType, PanelContentConfig>
     supportsDownload: false,
     showHeader: false
   },
+  'session-trajectory': { type: 'session-trajectory', displayName: 'Session Trajectory', icon: { glyph: Activity }, supportsCopy: false, supportsDownload: false, showHeader: false },
   'session-usage': {
     type: 'session-usage',
     displayName: 'Context Usage Report',

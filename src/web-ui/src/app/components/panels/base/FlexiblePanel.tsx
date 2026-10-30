@@ -142,6 +142,9 @@ const ThinkingDetailPanel = lazyWithRecovery(() =>
   }))
 );
 
+const TrajectoryRangeDetails = lazyWithRecovery(() => import('@/flow_chat/trajectory/TrajectoryDetails').then(module => ({ default: module.TrajectoryRangeDetails })));
+const TrajectoryDetails = lazyWithRecovery(() => import('@/flow_chat/trajectory/TrajectoryDetails').then(module => ({ default: module.TrajectoryDetails })));
+
 const SessionUsagePanel = lazyWithRecovery(() =>
   import('@/flow_chat/components/usage/SessionUsagePanel').then(module => ({
     default: module.SessionUsagePanel
@@ -889,6 +892,9 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
 
       case 'tool-definitions':
         return renderLazyEditor(<ToolDefinitionsPreview content={typeof content.data?.content === 'string' ? content.data.content : ''} />);
+
+      case 'session-trajectory':
+        return renderLazyEditor(content.data?.range ? <TrajectoryRangeDetails {...content.data} /> : <TrajectoryDetails {...content.data} />);
 
       case 'session-usage':
         return (

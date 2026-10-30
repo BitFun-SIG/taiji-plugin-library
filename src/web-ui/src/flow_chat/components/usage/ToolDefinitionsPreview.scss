@@ -1,3 +1,5 @@
+@use '../../detail-disclosure' as detailDisclosure;
+
 .tool-definitions-preview {
   display: flex;
   flex-direction: column;
@@ -52,7 +54,7 @@
 
   // Match the header indicator's inset once; nested schemas keep the same content edge.
   &__content { padding-inline: 0; }
-  &__content--tool { padding-inline: var(--openbitfun-layout-disclosure-trigger-padding-inline); }
+  &__content--tool { @include detailDisclosure.content-inset; }
   &__nested-trigger { padding-inline: 0; }
 
   &__header {
@@ -68,11 +70,7 @@
       'rose': var(--openbitfun-color-status-danger-emphasis)
     ) {
       &--#{$tone} {
-        background: color-mix(in srgb, #{$color} 10%, var(--openbitfun-color-surface-scene));
-
-        &:is(:hover, :focus-within) {
-          background: color-mix(in srgb, #{$color} 16%, var(--openbitfun-color-surface-scene));
-        }
+        @include detailDisclosure.header-tone($color);
       }
     }
   }

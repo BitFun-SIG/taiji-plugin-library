@@ -545,6 +545,7 @@
           },
           "evidence": [
             "command:load_session_turn_window",
+            "command:load_session_trajectory",
             "command:search_session_content",
             "command:load_session_event_backfill",
             "command:list_persisted_sessions_page",
@@ -3968,7 +3969,7 @@
     },
     {
       "id": "feature.ecosystem-compatibility",
-      "kind": "feature",
+      "kind": "setting",
       "categoryId": "automation",
       "titleZh": "外部导入",
       "titleEn": "External Import",
@@ -4201,15 +4202,15 @@
         }
       ],
       "stepsZh": [
-        "打开“外部导入”并选择应用",
-        "在左侧导航搜索框上方切换自动发现，悬停查看说明；关闭后立即隐藏对应来源的跟随会话，已分叉副本继续保留",
+        "打开“设置 → 工具与集成 → 外部导入”并选择应用",
+        "在外部应用标题旁切换自动发现，悬停查看说明；关闭后立即隐藏对应来源的跟随会话，已分叉副本继续保留",
         "查看分类状态，打开分类弹窗浏览、搜索并选择内容",
         "审阅可导入项目并确认创建副本；Command、Tool、子智能体按已有兼容功能使用",
         "前往对应管理页确认副本启用或连接；当前页不将“已导入”视为可用"
       ],
       "stepsEn": [
-        "Open External Import and choose an app",
-        "Toggle automatic discovery above the sidebar search and hover for details; disabling immediately hides source-following sessions while local forks remain visible",
+        "Open Settings → Tools & integrations → External import and choose an app",
+        "Toggle automatic discovery beside the External apps heading and hover for details; disabling immediately hides source-following sessions while local forks remain visible",
         "Inspect category status, then open a category dialog to browse, search, and select content",
         "Review importable items and confirm copies; use commands, tools and subagents through existing compatibility features",
         "Confirm copy activation or connection in the relevant settings; Imported does not mean available"
@@ -4223,8 +4224,8 @@
         "I want to migrate my Claude Code configuration"
       ],
       "destination": {
-        "kind": "action",
-        "actionId": "surface.ecosystemCompatibility.open"
+        "kind": "settings",
+        "pageId": "tools.external-import"
       },
       "operations": []
     },

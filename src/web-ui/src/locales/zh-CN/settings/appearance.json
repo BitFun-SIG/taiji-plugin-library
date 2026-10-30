@@ -176,5 +176,20 @@
       "allowedParts": "查看当前可用部件",
       "dismiss": "关闭问题详情"
     }
+  },
+  "sidebar": {
+    "title": "左侧导航栏",
+    "reset": "恢复默认",
+    "alwaysVisible": "始终显示",
+    "pinned": "已固定页面",
+    "empty": "尚未固定其他页面",
+    "available": "可添加页面",
+    "moveUp": "上移{{name}}",
+    "moveDown": "下移{{name}}",
+    "remove": "取消固定{{name}}",
+    "addEntry": "固定{{name}}",
+    "noResults": "没有其他可添加的页面",
+    "saveFailed": "保存失败，仍使用之前的导航布局，请重试。",
+    "readFailed": "当前版本无法读取已保存的导航偏好，原数据已保留。可通过恢复默认来替换。"
   }
 }

@@ -18,6 +18,7 @@ import { modelSelectorAppearanceDescriptor } from '@/flow_chat/components/ModelS
 import { reasoningPresetSelectorAppearanceDescriptor } from '@/flow_chat/components/ReasoningPresetSelector.appearance';
 import { acpModeSelectorAppearanceDescriptor } from '@/flow_chat/components/AcpModeSelector.appearance';
 import { flowChatHeaderAppearanceDescriptor } from '@/flow_chat/components/modern/FlowChatHeader.appearance';
+import { trajectoryAppearanceDescriptor } from '@/flow_chat/trajectory/Trajectory.appearance';
 import { flowChatTurnRailAppearanceDescriptor } from '@/flow_chat/components/modern/FlowChatTurnRail.appearance';
 import { sessionFilesBadgeAppearanceDescriptor } from '@/flow_chat/components/modern/SessionFilesBadge.appearance';
 import { codeReviewToolCardAppearanceDescriptor } from '@/flow_chat/tool-cards/CodeReviewToolCard.appearance';
@@ -283,6 +284,7 @@ export function createDefaultAppearanceRegistry(): AppearanceRegistry {
     .registerComponent(acpModeSelectorAppearanceDescriptor)
     .registerComponent(flowChatHeaderAppearanceDescriptor)
     .registerComponent(flowChatTurnRailAppearanceDescriptor)
+    .registerComponent(trajectoryAppearanceDescriptor)
     .registerComponent(sessionFilesBadgeAppearanceDescriptor)
     .registerComponent(codeReviewToolCardAppearanceDescriptor)
     .registerComponent(createAgentPageAppearanceDescriptor)

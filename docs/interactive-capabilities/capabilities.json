@@ -4,7 +4,7 @@
   "title": "OpenBitFun Playbook",
   "origin": "https://playbook.openbitfun.com",
   "source": "src/shared/interactive-capabilities/catalog.json",
-  "digest": "95e9b682d9e2fe6d4d9fe80b6564af3dec33f4b860e1b6ffc7da0eebea4d0e27",
+  "digest": "516e1cab17ad7c33ff1be2777de1c52bb8a47ef0292bed32928843b8d1ee72ae",
   "ownerDigest": "f27c231da2e536e4f2123910f34f862b55d21feb0528bc915d4d13edbd528af9",
   "searchAcceptance": [
     {
@@ -172,8 +172,8 @@
     }
   ],
   "counts": {
-    "features": 23,
-    "settings": 21,
+    "features": 22,
+    "settings": 22,
     "userFacing": 44,
     "documentedItems": 336,
     "controlCoverage": {
@@ -8046,8 +8046,8 @@
         "kind": "static"
       },
       "presentationTarget": {
-        "kind": "action",
-        "actionId": "surface.ecosystemCompatibility.open"
+        "kind": "settings",
+        "pageId": "tools.external-import"
       }
     },
     {
@@ -8092,8 +8092,8 @@
       },
       "openReason": "unstructuredInteraction",
       "presentationTarget": {
-        "kind": "action",
-        "actionId": "surface.ecosystemCompatibility.open"
+        "kind": "settings",
+        "pageId": "tools.external-import"
       }
     },
     {
@@ -8138,8 +8138,8 @@
       },
       "openReason": "unstructuredInteraction",
       "presentationTarget": {
-        "kind": "action",
-        "actionId": "surface.ecosystemCompatibility.open"
+        "kind": "settings",
+        "pageId": "tools.external-import"
       }
     },
     {
@@ -8184,8 +8184,8 @@
       },
       "openReason": "unstructuredInteraction",
       "presentationTarget": {
-        "kind": "action",
-        "actionId": "surface.ecosystemCompatibility.open"
+        "kind": "settings",
+        "pageId": "tools.external-import"
       }
     },
     {
@@ -8230,8 +8230,8 @@
       },
       "openReason": "unstructuredInteraction",
       "presentationTarget": {
-        "kind": "action",
-        "actionId": "surface.ecosystemCompatibility.open"
+        "kind": "settings",
+        "pageId": "tools.external-import"
       }
     },
     {
@@ -8276,8 +8276,8 @@
       },
       "openReason": "unstructuredInteraction",
       "presentationTarget": {
-        "kind": "action",
-        "actionId": "surface.ecosystemCompatibility.open"
+        "kind": "settings",
+        "pageId": "tools.external-import"
       }
     },
     {
@@ -8322,8 +8322,8 @@
       },
       "openReason": "unstructuredInteraction",
       "presentationTarget": {
-        "kind": "action",
-        "actionId": "surface.ecosystemCompatibility.open"
+        "kind": "settings",
+        "pageId": "tools.external-import"
       }
     },
     {
@@ -8368,8 +8368,8 @@
       },
       "openReason": "unstructuredInteraction",
       "presentationTarget": {
-        "kind": "action",
-        "actionId": "surface.ecosystemCompatibility.open"
+        "kind": "settings",
+        "pageId": "tools.external-import"
       }
     },
     {
@@ -8414,8 +8414,8 @@
       },
       "openReason": "unstructuredInteraction",
       "presentationTarget": {
-        "kind": "action",
-        "actionId": "surface.ecosystemCompatibility.open"
+        "kind": "settings",
+        "pageId": "tools.external-import"
       }
     },
     {
@@ -8460,8 +8460,8 @@
       },
       "openReason": "unstructuredInteraction",
       "presentationTarget": {
-        "kind": "action",
-        "actionId": "surface.ecosystemCompatibility.open"
+        "kind": "settings",
+        "pageId": "tools.external-import"
       }
     },
     {
@@ -8506,8 +8506,8 @@
       },
       "openReason": "unstructuredInteraction",
       "presentationTarget": {
-        "kind": "action",
-        "actionId": "surface.ecosystemCompatibility.open"
+        "kind": "settings",
+        "pageId": "tools.external-import"
       }
     },
     {
@@ -8552,8 +8552,8 @@
       },
       "openReason": "unstructuredInteraction",
       "presentationTarget": {
-        "kind": "action",
-        "actionId": "surface.ecosystemCompatibility.open"
+        "kind": "settings",
+        "pageId": "tools.external-import"
       }
     },
     {
@@ -24414,7 +24414,7 @@
     },
     {
       "id": "feature.ecosystem-compatibility",
-      "kind": "feature",
+      "kind": "setting",
       "categoryId": "automation",
       "titleZh": "外部导入",
       "titleEn": "External Import",
@@ -24585,15 +24585,15 @@
         }
       ],
       "stepsZh": [
-        "打开“外部导入”并选择应用",
-        "在左侧导航搜索框上方切换自动发现，悬停查看说明；关闭后立即隐藏对应来源的跟随会话，已分叉副本继续保留",
+        "打开“设置 → 工具与集成 → 外部导入”并选择应用",
+        "在外部应用标题旁切换自动发现，悬停查看说明；关闭后立即隐藏对应来源的跟随会话，已分叉副本继续保留",
         "查看分类状态，打开分类弹窗浏览、搜索并选择内容",
         "审阅可导入项目并确认创建副本；Command、Tool、子智能体按已有兼容功能使用",
         "前往对应管理页确认副本启用或连接；当前页不将“已导入”视为可用"
       ],
       "stepsEn": [
-        "Open External Import and choose an app",
-        "Toggle automatic discovery above the sidebar search and hover for details; disabling immediately hides source-following sessions while local forks remain visible",
+        "Open Settings → Tools & integrations → External import and choose an app",
+        "Toggle automatic discovery beside the External apps heading and hover for details; disabling immediately hides source-following sessions while local forks remain visible",
         "Inspect category status, then open a category dialog to browse, search, and select content",
         "Review importable items and confirm copies; use commands, tools and subagents through existing compatibility features",
         "Confirm copy activation or connection in the relevant settings; Imported does not mean available"
@@ -24607,8 +24607,8 @@
         "I want to migrate my Claude Code configuration"
       ],
       "destination": {
-        "kind": "action",
-        "actionId": "surface.ecosystemCompatibility.open"
+        "kind": "settings",
+        "pageId": "tools.external-import"
       },
       "operations": [],
       "options": [],

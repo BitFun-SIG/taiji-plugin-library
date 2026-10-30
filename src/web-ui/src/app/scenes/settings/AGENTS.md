@@ -51,6 +51,16 @@ pnpm --dir src/web-ui run test:run src/app/scenes/settings/pages/application/Flo
 
 These local DOM/storage fixtures do not establish rendered visuals or live remote behavior.
 
+For Appearance sidebar pinning, capsule selection, ordering, persistence and contribution lifecycle:
+
+```bash
+pnpm --dir src/web-ui run test:run src/app/navigation/sidebarPreferences.test.ts src/app/navigation/sidebarRegistry.test.ts src/app/scenes/settings/pages/application/SidebarSettingsSection.test.tsx src/app/scenes/settings/settingsRegistry.test.ts src/app/components/NavPanel/MainNav.projectCreation.test.tsx src/app/scenes/skills/skillsSceneStore.test.ts
+```
+
+Keep trusted navigation contributions separate from controller-local preferences and
+device-scoped MiniApp pins. These tests simulate Peer activation and capability gates;
+they do not establish live SSH, Remote Control, Peer Device or Detached Dispatch behavior.
+
 For model-pool strategy selection, member search/multi-selection, nested-dialog
 dismissal, preserved records and device-switch isolation, run:
 

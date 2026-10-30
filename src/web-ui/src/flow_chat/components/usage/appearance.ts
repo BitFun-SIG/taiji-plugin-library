@@ -4,7 +4,8 @@ export const contextUsagePopoverAppearanceDescriptor: AppearanceSurfaceDescripto
   id: 'context-usage-popover',
   componentAttribute: 'data-openbitfun-product-component',
   parts: [
-    { id: 'root' }, { id: 'header' }, { id: 'totals' }, { id: 'bar', propertyProfile: 'layout' },
+    { id: 'root' }, { id: 'header' }, { id: 'totals' }, { id: 'body', propertyProfile: 'layout' },
+    { id: 'bar', propertyProfile: 'layout' },
     { id: 'legend' }, { id: 'item' }, { id: 'status', propertyProfile: 'paint', visualRole: 'content' },
   ],
 };

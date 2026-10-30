@@ -9,6 +9,7 @@ import {
 import { FontPreferencePanel } from '@/infrastructure/font-preference';
 import SessionPanelSettingsSection from './SessionPanelSettingsSection';
 import FlowChatWidthSettingsSection from './FlowChatWidthSettingsSection';
+import SidebarSettingsSection from './SidebarSettingsSection';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -30,6 +31,7 @@ const AppearanceSettingsPage: React.FC = () => {
         <ConfigPageSectionStack data-testid="appearance-settings">
           <AppearancePackageConfigSection />
           <FontPreferencePanel />
+          <SidebarSettingsSection />
           <FlowChatWidthSettingsSection />
           <SessionPanelSettingsSection />
         </ConfigPageSectionStack>
