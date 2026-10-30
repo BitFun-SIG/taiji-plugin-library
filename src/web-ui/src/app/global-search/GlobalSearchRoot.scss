@@ -909,8 +909,8 @@ $chevron-box-slack: 5px;
     padding: 2px 6px;
     margin-left: -6px;
     list-style: none;
-    transition: background-color var(--openbitfun-motion-duration-fast, 150ms) ease,
-                color var(--openbitfun-motion-duration-fast, 150ms) ease;
+    transition: background-color var(--openbitfun-motion-duration-fast) ease,
+                color var(--openbitfun-motion-duration-fast) ease;
 
     &::-webkit-details-marker {
       display: none;
@@ -971,13 +971,13 @@ $chevron-box-slack: 5px;
 
   strong {
     color: var(--openbitfun-color-content-primary);
-    font-weight: var(--openbitfun-type-label-selected-font-weight, 600);
+    font-weight: var(--openbitfun-type-label-selected-font-weight);
   }
 
   p {
     margin-block: 4px 8px;
     color: var(--openbitfun-color-content-secondary);
-    line-height: var(--openbitfun-type-body-line-height, 1.4);
+    line-height: var(--openbitfun-type-body-sm-line-height);
   }
 }
 
@@ -990,7 +990,7 @@ $chevron-box-slack: 5px;
 
 .global-search__diagnostic-path {
   color: var(--openbitfun-color-content-muted);
-  font-family: var(--openbitfun-font-family-mono, monospace);
-  font-size: var(--openbitfun-type-micro-font-size, 11px);
+  font-family: var(--openbitfun-font-family-mono);
+  font-size: var(--openbitfun-type-micro-font-size);
   margin-block-start: 2px;
 }
