@@ -104,6 +104,45 @@ describe('GlobalSearchContent accessibility', () => {
     expect(details.querySelector('button')?.disabled).toBe(true);
   });
 
+  it('toggles diagnostic panel and closes it on Escape or click outside', async () => {
+    const failure = { ...snapshot, diagnostics: [{
+      providerId: 'files', code: 'workspace_unavailable', message: 'Connection timed out',
+      workspaceName: 'Remote project', workspacePath: '/srv/project', hostLabel: 'build-host',
+    }] };
+    fixtures.search.mockImplementationOnce((_providers, _request, _signal, onUpdate) => onUpdate(failure));
+    act(() => root.render(<GlobalSearchContent initialQuery="needle" />));
+    await act(async () => { await vi.runOnlyPendingTimersAsync(); });
+
+    const details = container.querySelector('details')!;
+    const summary = details.querySelector('summary')!;
+    expect(details.hasAttribute('open')).toBe(false);
+    expect(details.querySelector('.global-search__diagnostics-panel')).not.toBeNull();
+
+    // Toggle open
+    act(() => {
+      details.open = true;
+      details.dispatchEvent(new Event('toggle'));
+    });
+    expect(details.open).toBe(true);
+
+    // Escape closes diagnostics panel
+    act(() => {
+      container.querySelector('.global-search')!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    });
+    expect(details.open).toBe(false);
+
+    // Reopen and click outside closes diagnostics panel
+    act(() => {
+      details.open = true;
+      details.dispatchEvent(new Event('toggle'));
+    });
+    expect(details.open).toBe(true);
+    act(() => {
+      document.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+    });
+    expect(details.open).toBe(false);
+  });
+
   it('discards old results and ignores late completions after a device switch', async () => {
     act(() => root.render(<GlobalSearchContent />));
     await act(async () => { await vi.runOnlyPendingTimersAsync(); });

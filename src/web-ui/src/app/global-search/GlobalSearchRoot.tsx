@@ -20,7 +20,7 @@ import { OverflowText,
   Dialog,
   DialogBody,
 } from '@openbitfun/ui';
-import { BarChart3, Blocks, CheckSquare2, FileText, Keyboard, MessageSquareText, MessagesSquare, Network, Users } from 'lucide-react';
+import { AlertCircle, BarChart3, Blocks, CheckSquare2, FileText, Keyboard, MessageSquareText, MessagesSquare, Network, Users } from 'lucide-react';
 import { useShortcut } from '@/infrastructure/hooks/useShortcut';
 import { useI18n } from '@/infrastructure/i18n';
 import { getActiveSurfaceScope, onSurfaceActivated } from '@/infrastructure/peer-device/deviceSurface';
@@ -183,6 +183,8 @@ export const GlobalSearchContent: React.FC<GlobalSearchContentProps> = ({
   const retryRef = useRef<{ context: string; providerId: string; previous: GlobalSearchSnapshot } | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [drilldownGroup, setDrilldownGroup] = useState<GlobalSearchDrilldownGroupId | null>(null);
+  const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
+  const diagnosticsRef = useRef<HTMLDetailsElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const inputCompositionActiveRef = useRef(false);
   const listRef = useRef<HTMLDivElement>(null);
@@ -376,13 +378,39 @@ export const GlobalSearchContent: React.FC<GlobalSearchContentProps> = ({
     focusSearchInput();
   }, [focusSearchInput]);
 
+  useEffect(() => {
+    if (snapshot.diagnostics.length === 0) {
+      setDiagnosticsOpen(false);
+    }
+  }, [snapshot.diagnostics.length]);
+
+  useEffect(() => {
+    if (!diagnosticsOpen) return;
+    const handlePointerDownOutside = (event: PointerEvent) => {
+      if (diagnosticsRef.current && !diagnosticsRef.current.contains(event.target as Node)) {
+        setDiagnosticsOpen(false);
+      }
+    };
+    document.addEventListener('pointerdown', handlePointerDownOutside);
+    return () => document.removeEventListener('pointerdown', handlePointerDownOutside);
+  }, [diagnosticsOpen]);
+
   const handleRootKeyDownCapture = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
     if (isImeOwnedKeyboardEvent(event, inputCompositionActiveRef.current)) return;
-    if (event.key !== 'Escape' || !drilldownGroup) return;
-    event.preventDefault();
-    event.stopPropagation();
-    closeGroupDetails();
-  }, [closeGroupDetails, drilldownGroup]);
+    if (event.key === 'Escape') {
+      if (diagnosticsOpen) {
+        event.preventDefault();
+        event.stopPropagation();
+        setDiagnosticsOpen(false);
+        return;
+      }
+      if (drilldownGroup) {
+        event.preventDefault();
+        event.stopPropagation();
+        closeGroupDetails();
+      }
+    }
+  }, [closeGroupDetails, diagnosticsOpen, drilldownGroup]);
 
   const effectiveScope = parsedQuery.scope;
   const emptyLabel = effectiveScope === 'content' && parsedQuery.query.length < 2
@@ -666,26 +694,39 @@ export const GlobalSearchContent: React.FC<GlobalSearchContentProps> = ({
           || snapshot.diagnostics.length > 0) ? (
         <footer className="global-search__footer" data-openbitfun-component="global-search" data-openbitfun-part="footer">
           {snapshot.diagnostics.length > 0 ? (
-            <details className="global-search__diagnostics" data-testid={`${testIdPrefix}-partial-status`}>
-              <summary>{tCommon('nav.search.partialUnavailable')}</summary>
-              <div className="global-search__diagnostic-target">
-                {tCommon('nav.search.diagnosticTarget', { host: hostLabel })}
-              </div>
-              {snapshot.diagnostics.map((diagnostic, index) => (
-                <div className="global-search__diagnostic" key={`${diagnostic.providerId}:${diagnostic.code}:${index}`}>
-                  <strong>{providers.find(provider => provider.id === diagnostic.providerId)?.groups
-                    .map(group => tCommon(`nav.search.groups.${group}`)).join(' / ') ?? diagnostic.providerId}</strong>
-                  {diagnostic.workspaceName ? <div>{diagnostic.workspaceName} · {diagnostic.hostLabel ?? hostLabel}</div> : null}
-                  {diagnostic.workspacePath ? <div className="global-search__diagnostic-path">{diagnostic.workspacePath}</div> : null}
-                  <p>{diagnostic.message}</p>
-                  {diagnostic.retryable !== false ? (
-                    <Button size="sm" variant="outline" disabled={snapshot.isSearching}
-                      onClick={() => retryProvider(diagnostic.providerId)}>
-                      {tCommon('nav.search.retrySource')}
-                    </Button>
-                  ) : null}
+            <details
+              className="global-search__diagnostics"
+              data-testid={`${testIdPrefix}-partial-status`}
+              ref={diagnosticsRef}
+              open={diagnosticsOpen}
+              onToggle={(event) => setDiagnosticsOpen(event.currentTarget.open)}
+            >
+              <summary className="global-search__diagnostics-summary">
+                <AlertCircle size={13} aria-hidden="true" className="global-search__diagnostics-icon" />
+                <span>{tCommon('nav.search.partialUnavailable')}</span>
+              </summary>
+              <div className="global-search__diagnostics-panel">
+                <div className="global-search__diagnostic-target">
+                  {tCommon('nav.search.diagnosticTarget', { host: hostLabel })}
                 </div>
-              ))}
+                {snapshot.diagnostics.map((diagnostic, index) => (
+                  <div className="global-search__diagnostic" key={`${diagnostic.providerId}:${diagnostic.code}:${index}`}>
+                    <div className="global-search__diagnostic-header">
+                      <strong>{providers.find(provider => provider.id === diagnostic.providerId)?.groups
+                        .map(group => tCommon(`nav.search.groups.${group}`)).join(' / ') ?? diagnostic.providerId}</strong>
+                      {diagnostic.workspaceName ? <div>{diagnostic.workspaceName} · {diagnostic.hostLabel ?? hostLabel}</div> : null}
+                    </div>
+                    {diagnostic.workspacePath ? <div className="global-search__diagnostic-path">{diagnostic.workspacePath}</div> : null}
+                    <p>{diagnostic.message}</p>
+                    {diagnostic.retryable !== false ? (
+                      <Button size="sm" variant="outline" disabled={snapshot.isSearching}
+                        onClick={() => retryProvider(diagnostic.providerId)}>
+                        {tCommon('nav.search.retrySource')}
+                      </Button>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
             </details>
           ) : null}
           <span className="global-search__footer-keys" aria-hidden="true">
