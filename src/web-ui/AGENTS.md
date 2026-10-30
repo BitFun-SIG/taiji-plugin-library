@@ -212,6 +212,15 @@ For text-entry guards, composer sanitization, or keyboard focus routing, run
 These cover DOM event ownership, controlled fields, IME and selection preservation;
 they do not establish native OS keyboard or remote transport behavior.
 
+For prompt suggestion whitespace normalization, visibility, acceptance keys, and legacy host events:
+
+```bash
+pnpm --dir src/web-ui run test:run src/flow_chat/store/promptSuggestionStore.test.ts src/flow_chat/hooks/usePromptSuggestionsEnabled.test.tsx src/flow_chat/services/flow-chat-manager/EventHandlerModule.test.ts
+```
+
+These local store/event fixtures include simulated Peer identities and legacy payloads;
+they do not establish native WebView rendering or live remote behavior.
+
 For ecosystem discovery, import, or compatibility status presentation changes:
 
 ```bash

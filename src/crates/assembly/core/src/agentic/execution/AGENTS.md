@@ -34,8 +34,9 @@ a full cache miss. If the model call fails, retry it once unchanged. Both
 attempts share one 80-second deadline and session cancellation. Clear the
 turn's output schema, retain the request prefix and cache routing, and request
 plain text on both attempts. Empty output, the literal `null`, tool calls, and
-content filters do not trigger the retry; all other candidate text is kept
-verbatim. Do not add JSON parsing, format negotiation, correction retries, or
+content filters do not trigger the retry. Trim surrounding whitespace before
+publishing a candidate; preserve its internal whitespace and content verbatim.
+Do not add JSON parsing, format negotiation, correction retries, or
 text reconstruction.
 
 The prepended deferred tool listing renders the session's skill/agent listing
