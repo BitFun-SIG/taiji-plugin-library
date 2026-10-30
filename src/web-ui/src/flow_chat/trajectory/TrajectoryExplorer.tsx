@@ -63,18 +63,18 @@ export const TrajectoryExplorer = forwardRef<TrajectoryExplorerRef, TrajectoryEx
   const hoverPointer = useRef<{ x: number; y: number } | null>(null);
   const [viewport, setViewport] = useState({ left: 0, width: 800 });
   const { nodes, loading, complete, error, supported, retry } = useTrajectory(session, query);
-  const highlightReferenceNode = (node: HTMLElement | null) => {
+  const highlightReferenceNode = useCallback((node: HTMLElement | null) => {
     if (referenceNode.current === node) return;
     referenceNode.current?.removeAttribute('data-reference-hit');
     referenceNode.current = node;
     node?.setAttribute('data-reference-hit', 'true');
-  };
-  const hideReferenceLine = () => {
+  }, []);
+  const hideReferenceLine = useCallback(() => {
     hoverPointer.current = null;
     if (referenceLine.current) referenceLine.current.hidden = true;
     highlightReferenceNode(null);
-  };
-  const positionReferenceLine = () => {
+  }, [highlightReferenceNode]);
+  const positionReferenceLine = useCallback(() => {
     const element = rail.current;
     const line = referenceLine.current;
     const pointer = hoverPointer.current;
@@ -89,17 +89,19 @@ export const TrajectoryExplorer = forwardRef<TrajectoryExplorerRef, TrajectoryEx
     highlightReferenceNode(line.hidden ? null : element.querySelector<HTMLElement>(
       `[data-trajectory-index="${Math.floor(x / NODE_WIDTH)}"]`,
     ));
-  };
+  }, [nodes.length, highlightReferenceNode]);
   const previewPointer = (event: React.PointerEvent<HTMLDivElement>) => {
     if (event.pointerType === 'touch') { hideReferenceLine(); return; }
     hoverPointer.current = { x: event.clientX, y: event.clientY };
     positionReferenceLine();
   };
-  useEffect(() => { if (!nodes.length) hideReferenceLine(); }, [nodes.length]);
+  useEffect(() => { if (!nodes.length) hideReferenceLine(); }, [nodes.length, hideReferenceLine]);
   // A horizontal scroll can mount the hit node after the scroll handler runs.
-  useLayoutEffect(() => { positionReferenceLine(); }, [viewport, nodes]);
+  useLayoutEffect(() => { positionReferenceLine(); }, [viewport, nodes, positionReferenceLine]);
+  const hasRange = !!range;
+  const hasSelection = !!selected;
   useEffect(() => {
-    if (!range && !selected && !busy) return;
+    if (!hasRange && !hasSelection && !busy) return;
     const element = rail.current;
     const document = element?.ownerDocument;
     const dismiss = (event: MouseEvent) => {
@@ -113,14 +115,14 @@ export const TrajectoryExplorer = forwardRef<TrajectoryExplorerRef, TrajectoryEx
     // Let endpoint buttons finish their click before range details are replaced.
     document?.addEventListener('click', dismiss);
     return () => document?.removeEventListener('click', dismiss);
-  }, [!!range, !!selected, busy, clearRange, clearNodeSelection]);
+  }, [hasRange, hasSelection, busy, clearRange, clearNodeSelection]);
   const bounds = useMemo(() => resolveTrajectoryRange(nodes, range), [nodes, range]);
   const matches = useMemo(() => nodes.filter((node, index) => node.matched
     && (!bounds || index >= bounds[0] && index <= bounds[1])), [nodes, bounds]);
   useEffect(() => {
     if (range && !bounds && !loading) { setRange(null); onRangeChange(null, false); }
     if (bounds) onRangeChange(summarizeTrajectoryRange(nodes, bounds), false);
-  }, [nodes, bounds, onRangeChange]);
+  }, [nodes, bounds, onRangeChange, range, loading]);
   const commitRange = (anchor: number, focus: number) => {
     if (!nodes[anchor] || !nodes[focus]) return;
     setRange({ anchor: trajectoryNodeKey(nodes[anchor]), focus: trajectoryNodeKey(nodes[focus]) });
@@ -162,7 +164,7 @@ export const TrajectoryExplorer = forwardRef<TrajectoryExplorerRef, TrajectoryEx
     update();
     const observer = new ResizeObserver(update); observer.observe(element);
     return () => observer.disconnect();
-  }, []);
+  }, [hideReferenceLine]);
   useLayoutEffect(() => {
     const element = rail.current;
     if (!element || revealIndex < 0) return;

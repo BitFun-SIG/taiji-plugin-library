@@ -8,7 +8,10 @@ vi.mock('./trajectoryApi', () => ({ loadTrajectoryPage: mocks.page, loadTrajecto
 vi.mock('@/infrastructure/peer-device/peerDeviceContextState', () => ({ usePeerDeviceModeOptional: () => ({
   peerMode: { active: mocks.peer }, currentPeerCapabilities: { sessionTrajectoryV1: mocks.supported },
 }) }));
-vi.mock('@/infrastructure/peer-device/deviceSurface', () => ({ getActiveSurfaceScope: () => ({ epoch: 1, isCurrent: () => mocks.current }) }));
+vi.mock('@/infrastructure/peer-device/deviceSurface', () => {
+  const scope = { epoch: 1, isCurrent: () => mocks.current };
+  return { getActiveSurfaceScope: () => scope };
+});
 import { useTrajectory } from './useTrajectory';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
@@ -16,7 +19,7 @@ const catalog = { schemaVersion: 1, sessionId: 'session', revision: 'host', tota
   entries: [{ ordinal: 0, storageTurnIndex: 5, turnId: 'a' }, { ordinal: 1, storageTurnIndex: 9, turnId: 'b' }] };
 const session = { sessionId: 'session', workspaceId: 'workspace', workspacePath: '/remote', dialogTurns: [], isPartial: true } as unknown as Session;
 let result: ReturnType<typeof useTrajectory>;
-function Harness({ query = '' }: { query?: string }) { result = useTrajectory(session, query); return null; }
+function Harness({ query = '', value = session }: { query?: string; value?: Session }) { result = useTrajectory(value, query); return null; }
 let root: Root;
 beforeEach(() => {
   vi.useFakeTimers(); mocks.page.mockReset(); mocks.catalog.mockReset(); mocks.current = true; mocks.peer = false; mocks.supported = true;
@@ -52,5 +55,15 @@ describe('trajectory history reader', () => {
     mocks.current = false;
     await act(async () => finish({ status: 'ready', nodes: [{ id: 'old' }], nextNodeOffset: null, endOrdinalExclusive: 1 }));
     expect(result.nodes).toHaveLength(0); expect(mocks.page).toHaveBeenCalledTimes(1);
+  });
+  it('keeps summary reads stable when the live session snapshot changes', async () => {
+    mocks.page.mockResolvedValue({ status: 'ready', nodes: [], nextNodeOffset: null, endOrdinalExclusive: 2 });
+    await act(async () => root.render(<Harness />));
+    await act(async () => { await vi.advanceTimersByTimeAsync(500); });
+    await act(async () => root.render(<Harness value={{ ...session, dialogTurns: [...session.dialogTurns] }} />));
+    await act(async () => { await vi.advanceTimersByTimeAsync(500); });
+    expect(mocks.catalog).toHaveBeenCalledTimes(1);
+    expect(mocks.page).toHaveBeenCalledTimes(1);
+    expect(result.complete).toBe(true);
   });
 });

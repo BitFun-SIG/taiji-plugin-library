@@ -36,8 +36,9 @@ export function useTrajectoryNavigation({ session, items, listRef, rootRef, pres
     };
   }, [rootRef, session?.sessionId, selectionClearRequest]);
   return useCallback(async ({ node, query }: TrajectorySelection): Promise<boolean> => {
-    const source = latest.current.session;
-    if (!source) return false;
+    const activeSession = latest.current.session;
+    if (!activeSession) return false;
+    const source = activeSession;
     const scope = getActiveSurfaceScope();
     cancelPending.current?.();
     const ticket = ++generation.current;
@@ -83,7 +84,7 @@ export function useTrajectoryNavigation({ session, items, listRef, rootRef, pres
       let settled = false;
       let frame: number | undefined;
       const timeout = setTimeout(() => finish(false), 5000);
-      const finish = (value: boolean) => {
+      function finish(value: boolean) {
         if (settled) return;
         settled = true;
         clearTimeout(timeout);
@@ -93,11 +94,11 @@ export function useTrajectoryNavigation({ session, items, listRef, rootRef, pres
         if (!accepted) listRef.current?.clearSearchMatch();
         if (accepted) openTrajectoryPanel(source, node, query, t('trajectory.details'), viewId);
         resolve(accepted);
-      };
-      const cancel = () => finish(false);
+      }
+      function cancel() { finish(false); }
       cancelPending.current = cancel;
-      const retry = () => { frame = requestAnimationFrame(attempt); };
-      const attempt = () => {
+      function retry() { frame = requestAnimationFrame(attempt); }
+      function attempt() {
         if (settled) return;
         if (!current() || performance.now() - started > 5000) { finish(false); return; }
         const values = latest.current.items;
@@ -129,8 +130,8 @@ export function useTrajectoryNavigation({ session, items, listRef, rootRef, pres
         if (!element) { retry(); return; }
         clearHighlight.current = highlightFlowChatFocusTarget(element);
         finish(true);
-      };
+      }
       retry();
     });
-  }, [listRef, rootRef, t, viewId]);
+  }, [listRef, t, viewId]);
 }

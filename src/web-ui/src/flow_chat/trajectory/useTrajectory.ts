@@ -69,9 +69,10 @@ export function useTrajectory(session: Session, query: string) {
     };
     const timer = setTimeout(() => void read(), 150);
     return () => { cancelled = true; clearTimeout(timer); };
-  }, [session.sessionId, catalogRevision, scope.epoch, supported, query, revision]);
-  const projectionCache = useMemo<TrajectoryProjectionCache>(() => new WeakMap(), [session.sessionId, scope.epoch]);
-  const live = useMemo(() => projectLoadedTrajectory(session, query, projectionCache), [session.dialogTurns, session.turnCatalog, query]);
+  }, [session.sessionId, catalogRevision, scope, supported, query, revision]);
+  // Immutable Turn identity, ordinal and query fully determine cached nodes.
+  const projectionCache = useMemo<TrajectoryProjectionCache>(() => new WeakMap(), []);
+  const live = useMemo(() => projectLoadedTrajectory(session, query, projectionCache), [session, query, projectionCache]);
   const nodes = useMemo(() => mergeTrajectoryNodes(history, live), [history, live]);
   return { nodes, loading, error, complete, supported, retry: () => setRevision(value => value + 1) };
 }

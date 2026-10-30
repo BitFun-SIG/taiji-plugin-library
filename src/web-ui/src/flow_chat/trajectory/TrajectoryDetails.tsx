@@ -136,9 +136,11 @@ export function TrajectoryDetails({ sessionId, surfaceId, node, query }: Traject
   const retired = session?.turnCatalog?.complete === true && !session.turnCatalog.entries.some(entry => entry.turnId === node.turnId)
     && !live;
   const turn = retired ? undefined : live ?? cached ?? (surface.surfaceId === surfaceId && retained?.owner === owner && retained.turn.id === node.turnId ? retained.turn : undefined);
+  const hasTurn = !!turn;
+  const hasSession = !!session;
   useEffect(() => { const turn = live ?? cached; if (turn) setRetained({ owner, turn }); }, [live, cached, owner]);
   useEffect(() => {
-    if (turn || retired || !session || surface.surfaceId !== surfaceId) return;
+    if (hasTurn || retired || !hasSession || surface.surfaceId !== surfaceId) return;
     let cancelled = false;
     setLoading(true);
     const current = () => !cancelled && surface.isCurrent();
@@ -160,7 +162,7 @@ export function TrajectoryDetails({ sessionId, surfaceId, node, query }: Traject
       if (current() && turn) setRetained({ owner, turn });
     }).catch(() => {}).finally(() => { if (current()) setLoading(false); });
     return () => { cancelled = true; };
-  }, [node.turnId, sessionId, surfaceId, surface.epoch, retry, !!turn, !!session, retired, owner]);
+  }, [node.turnId, node.turnOrdinal, sessionId, surfaceId, surface, retry, hasTurn, hasSession, retired, owner]);
   const round = turn?.modelRounds.find(item => item.id === node.roundId);
   const item = round?.items.find(item => item.id === node.id);
   const tool = item?.type === 'tool' ? item as FlowToolItem : undefined;
