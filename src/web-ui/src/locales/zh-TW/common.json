@@ -740,6 +740,9 @@
       "theme": "主題",
       "themeConfiguration": "主題配置",
       "appearanceSwitchFailed": "主題切換失敗，請重試。",
+      "feedback": "意見回饋",
+      "feedbackUnavailable": "回饋問卷尚未設定。",
+      "feedbackOpenFailed": "無法開啟回饋問卷。",
       "openSettings": "開啟設定",
       "about": "關於"
     }

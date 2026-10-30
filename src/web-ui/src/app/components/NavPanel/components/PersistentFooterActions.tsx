@@ -40,6 +40,11 @@ import { useHasAppUpdate } from '@/infrastructure/update/useHasAppUpdate';
 import { UpdateDownloadIndicator } from '@/infrastructure/update/UpdateDownloadIndicator';
 import { UpdateMenuItems } from '@/infrastructure/update/UpdateMenuItems';
 import { useUpdateInstallStore } from '@/infrastructure/update/updateInstallStore';
+import { useAccountIdentity } from '@/infrastructure/account-identity';
+import { buildPublicFeedbackFormUrl } from '@/infrastructure/feedback/publicFeedbackForm';
+import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
+import { notificationService } from '@/shared/notification-system';
+import { getVersionInfo } from '@/shared/utils/version';
 
 const RemoteConnectDialog = lazyWithRecovery(() => import('../../RemoteConnectDialog'));
 
@@ -51,6 +56,7 @@ const PersistentFooterActions: React.FC = () => {
     ? t('nav.tooltips.ecosystemCompatibilityUnseen')
     : t('nav.tooltips.ecosystemCompatibility');
   const { enableToolbarMode } = useToolbarModeContext();
+  const accountIdentity = useAccountIdentity();
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuClosing, setMenuClosing] = useState(false);
   const [appearanceSubmenuOpen, setAppearanceSubmenuOpen] = useState(false);
@@ -135,6 +141,23 @@ const PersistentFooterActions: React.FC = () => {
     closeMenu();
     window.dispatchEvent(new Event('nav:show-about'));
   };
+
+  const handleOpenFeedback = useCallback(() => {
+    closeMenu();
+    const account = accountIdentity.status === 'signed-in' ? accountIdentity.me?.user : undefined;
+    const url = buildPublicFeedbackFormUrl(import.meta.env.VITE_OPENBITFUN_FEEDBACK_FORM_URL, {
+      uid: account?.accountId ?? account?.githubId,
+      version: getVersionInfo().version,
+      deviceInfo: typeof navigator === 'undefined' ? undefined : navigator.userAgent,
+    });
+    if (!url) {
+      notificationService.error(t('nav.settingsMenu.feedbackUnavailable'));
+      return;
+    }
+    void systemAPI.openExternal(url).catch(() => {
+      notificationService.error(t('nav.settingsMenu.feedbackOpenFailed'));
+    });
+  }, [accountIdentity.me, accountIdentity.status, closeMenu, t]);
 
   const handleFloatingMode = () => {
     closeMenu();
@@ -277,6 +300,13 @@ const PersistentFooterActions: React.FC = () => {
                   </MenuSection>
                   <MenuSeparator />
                   <UpdateMenuItems onCloseMenu={closeMenu} />
+                  <MenuItem
+                    leading={<Icon name="message-square" size="sm" aria-hidden="true" />}
+                    onClick={handleOpenFeedback}
+                    data-testid="nav-settings-feedback-item"
+                  >
+                    {t('nav.settingsMenu.feedback')}
+                  </MenuItem>
                   <MenuItem
                     leading={<Icon name="gear" size="sm" aria-hidden="true" />}
                     onClick={handleOpenSettings}
