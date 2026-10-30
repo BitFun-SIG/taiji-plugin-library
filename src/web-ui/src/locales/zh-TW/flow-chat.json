@@ -3414,6 +3414,24 @@
         "hidden": "已隱藏",
         "disabledNotice": "小卡片功能已在設定中關閉，這些卡片目前不會顯示。"
       }
+    },
+    "pageManage": {
+      "title": "管理 Pages",
+      "list": "列出 Pages",
+      "publish": "發佈頁面",
+      "update": "更新頁面",
+      "permissions": "存取權限",
+      "delete": "刪除頁面",
+      "versions": "頁面版本",
+      "deploy": "部署頁面",
+      "unpublish": "取消發佈",
+      "private": "僅自己",
+      "relay": "Relay 登入使用者",
+      "public": "公開",
+      "name": "名稱",
+      "updated": "更新時間",
+      "empty": "暫無頁面或版本",
+      "count": "{{count}} 項"
     }
   },
   "welcome": {
