@@ -5,13 +5,26 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import en from '@/locales/en-US/flow-chat.json';
 import { activateSurface } from '@/infrastructure/peer-device/deviceSurface';
 import { PageManageDisplay } from './PageManageToolDisplay';
+import { PagePublishDisplay } from './PagePublishToolDisplay';
+import { PageDeployDisplay } from './PageDeployToolDisplay';
 import { getToolItemCardConfig } from './toolCardMetadata';
 import type { FlowToolItem } from '../types/flow-chat';
 
-const mocks = vi.hoisted(() => ({ openLink: vi.fn(), openExternal: vi.fn(), list: vi.fn(), error: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  openLink: vi.fn(), openExternal: vi.fn(), list: vi.fn(), error: vi.fn(),
+  sessions: new Map<string, { parentSessionId?: string; config: { dispatchJobId?: string } }>(),
+  listeners: new Set<() => void>(),
+}));
+vi.mock('../store/FlowChatStore', () => ({ flowChatStore: {
+  getState: () => ({ sessions: mocks.sessions }),
+  subscribe: (listener: () => void) => { mocks.listeners.add(listener); return () => mocks.listeners.delete(listener); },
+} }));
 vi.mock('@/infrastructure/api/service-api/PageAPI', () => ({ pageAPI: { createOpenLink: mocks.openLink, listPages: mocks.list } }));
 vi.mock('@/infrastructure/api/service-api/SystemAPI', () => ({ systemAPI: { openExternal: mocks.openExternal } }));
 vi.mock('@/shared/notification-system', () => ({ notificationService: { error: mocks.error } }));
+vi.mock('react-i18next', () => ({ useTranslation: () => ({
+  t: (key: string) => String(key.split('.').reduce<unknown>((node, part) => (node as Record<string, unknown>)?.[part], en) ?? key),
+}) }));
 vi.mock('@/infrastructure/i18n', () => ({ useI18n: () => ({
   t: (key: string, params: Record<string, unknown> = {}) => {
     const value = key.split('.').reduce<unknown>((node, part) => (node as Record<string, unknown>)?.[part], en);
@@ -23,13 +36,13 @@ vi.mock('@/infrastructure/i18n', () => ({ useI18n: () => ({
 
 let container: HTMLDivElement;
 let root: Root;
-function render(action: string, result: Record<string, unknown>, success = true) {
+function render(action: string, result: Record<string, unknown>, success = true, Card = PageManageDisplay, sessionId?: string) {
   const toolItem: FlowToolItem = {
     id: 'page-manage', type: 'tool', toolName: 'PageManage', timestamp: 0, status: 'completed',
-    toolCall: { id: 'page-manage', input: { action, slug: 'demo' } },
+    toolCall: { id: 'page-manage', input: { action, slug: 'demo', version_id: 'v1' } },
     toolResult: { success, result, error: success ? undefined : 'Permission denied' },
   };
-  act(() => root.render(<PageManageDisplay toolItem={toolItem} config={getToolItemCardConfig(toolItem)} />));
+  act(() => root.render(<Card toolItem={toolItem} config={getToolItemCardConfig(toolItem)} sessionId={sessionId} />));
 }
 function expand() {
   act(() => container.querySelector<HTMLElement>('[data-openbitfun-part="surface"]')!.click());
@@ -37,11 +50,80 @@ function expand() {
 
 beforeEach(() => {
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
-  vi.clearAllMocks();
+  vi.resetAllMocks();
+  mocks.sessions.clear();
   activateSurface('local');
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
+});
+
+describe.each([
+  ['PageManage', PageManageDisplay], ['PagePublish', PagePublishDisplay], ['PageDeploy', PageDeployDisplay],
+] as const)('%s account link ownership', (_name, Card) => {
+  const result = { slug: 'demo', generation: 'generation-a', version_id: 'v1', deployed: true, url: 'https://relay.example/p/demo' };
+  const button = () => container.querySelector<HTMLButtonElement>('[aria-label="Open production URL"]')!;
+
+  it('opens a normal session result with the recorded identity', async () => {
+    mocks.sessions.set('normal', { config: {} });
+    mocks.openLink.mockResolvedValue({ open_url: 'https://relay.example/access' });
+    render('deploy', result, true, Card, 'normal');
+    await act(async () => { button().click(); });
+    expect(mocks.openLink).toHaveBeenCalledWith('demo', 'generation-a', undefined);
+    expect(mocks.openExternal).toHaveBeenCalledWith('https://relay.example/access');
+  });
+
+  it('never asks the controller for access to a dispatched task or its child', async () => {
+    mocks.sessions.set('dispatch', { config: { dispatchJobId: 'target-job' } });
+    mocks.sessions.set('child', { parentSessionId: 'dispatch', config: {} });
+    for (const sessionId of ['dispatch', 'child']) {
+      render('deploy', result, true, Card, sessionId);
+      expect(button().disabled).toBe(true);
+      expect(button().title).toContain('device that ran the task');
+      await act(async () => { button().click(); });
+    }
+    expect(mocks.list).not.toHaveBeenCalled();
+    expect(mocks.openLink).not.toHaveBeenCalled();
+    expect(mocks.openExternal).not.toHaveBeenCalled();
+  });
+
+  it('waits for session ownership to hydrate and reacts to removal', () => {
+    render('deploy', result, true, Card, 'normal');
+    expect(button().disabled).toBe(true);
+    act(() => {
+      mocks.sessions.set('normal', { config: {} });
+      mocks.listeners.forEach(listener => listener());
+    });
+    expect(button().disabled).toBe(false);
+    act(() => {
+      mocks.sessions.delete('normal');
+      mocks.listeners.forEach(listener => listener());
+    });
+    expect(button().disabled).toBe(true);
+  });
+
+  it('abandons an old-result lookup after switching devices', async () => {
+    let finish!: (value: { slug: string; generation: string }[]) => void;
+    mocks.list.mockImplementation(() => new Promise(resolve => { finish = resolve; }));
+    render('deploy', { ...result, generation: undefined }, true, Card);
+    await act(async () => { button().click(); });
+    act(() => activateSurface('another-peer'));
+    await act(async () => { finish([{ slug: 'demo', generation: 'other-device' }]); });
+    expect(mocks.openLink).not.toHaveBeenCalled();
+    expect(mocks.openExternal).not.toHaveBeenCalled();
+    expect(button().disabled).toBe(true);
+  });
+
+  it('does not open a completed access request after switching devices', async () => {
+    let finish!: (value: { open_url: string }) => void;
+    mocks.openLink.mockImplementation(() => new Promise(resolve => { finish = resolve; }));
+    render('deploy', result, true, Card);
+    await act(async () => { button().click(); });
+    act(() => activateSurface('another-peer'));
+    await act(async () => { finish({ open_url: 'https://relay.example/stale' }); });
+    expect(mocks.openExternal).not.toHaveBeenCalled();
+    expect(mocks.error).not.toHaveBeenCalled();
+  });
 });
 afterEach(() => {
   act(() => root.unmount());

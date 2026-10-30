@@ -1,15 +1,12 @@
-import React, { useCallback, useState, useSyncExternalStore } from 'react';
+import React, { useCallback } from 'react';
 import { Icon, IconButton } from '@openbitfun/ui';
 import { PagePublishToolCard } from '@openbitfun/ui/flow-chat';
 import { useI18n } from '@/infrastructure/i18n';
-import { pageAPI } from '@/infrastructure/api/service-api/PageAPI';
-import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
-import { getActiveSurfaceScope, onSurfaceActivated } from '@/infrastructure/peer-device/deviceSurface';
-import { notificationService } from '@/shared/notification-system';
 import type { ToolCardProps } from '../types/flow-chat';
 import { useToolCardDisclosure } from '../timeline/readerState';
 import { useToolCardHeightContract } from './useToolCardHeightContract';
 import { getToolCardStatus, getToolCardStatusDescription } from './toolCardStatus';
+import { usePageToolOpen } from './usePageToolOpen';
 
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
@@ -18,11 +15,10 @@ function text(value: unknown): string {
   return typeof value === 'string' ? value : '';
 }
 
-export const PageManageDisplay: React.FC<ToolCardProps> = ({ toolItem }) => {
+export const PageManageDisplay: React.FC<ToolCardProps> = ({ toolItem, sessionId }) => {
   const { t, formatDate, formatNumber } = useI18n('flow-chat');
   const [isExpanded, setIsExpanded] = useToolCardDisclosure('isExpanded');
-  const [surface] = useState(getActiveSurfaceScope);
-  const surfaceCurrent = useSyncExternalStore(onSurfaceActivated, () => surface.isCurrent(), () => true);
+  const { canOpen, openPage, unavailableReason } = usePageToolOpen(sessionId);
   const { cardRootRef, applyExpandedState } = useToolCardHeightContract({ toolId: toolItem.id, toolName: toolItem.toolName });
   const input = record(toolItem.isParamsStreaming ? toolItem.partialParams : toolItem.toolCall?.input);
   const result = record(toolItem.toolResult?.result);
@@ -67,19 +63,7 @@ export const PageManageDisplay: React.FC<ToolCardProps> = ({ toolItem }) => {
   }
   const error = status === 'error' ? text(toolItem.toolResult?.error) || t('toolCards.default.failed') : undefined;
   const toggle = useCallback(() => applyExpandedState(isExpanded, !isExpanded, setIsExpanded), [applyExpandedState, isExpanded, setIsExpanded]);
-  const open = async (preview: boolean) => {
-    if (!surface.isCurrent()) return;
-    try {
-      const generation = typeof result.generation === 'string' ? result.generation
-        : (await pageAPI.listPages()).find(page => page.slug === slug)?.generation;
-      if (!surface.isCurrent()) return;
-      if (generation == null) throw new Error('Page no longer exists');
-      const link = await pageAPI.createOpenLink(slug, generation, preview ? version : undefined);
-      if (surface.isCurrent()) await systemAPI.openExternal(link.open_url);
-    } catch {
-      if (surface.isCurrent()) notificationService.error(t('toolCards.pagePublish.openFailed'));
-    }
-  };
+  const generation = typeof result.generation === 'string' ? result.generation : undefined;
   const live = result.deployed === true || result.published === true;
   const preview = result.deployed === false && Boolean(result.preview_url);
   const count = pages?.length ?? versions?.length;
@@ -94,12 +78,14 @@ export const PageManageDisplay: React.FC<ToolCardProps> = ({ toolItem }) => {
         || (success && live ? t('toolCards.pagePublish.publishedTitle')
           : success && preview ? t('toolCards.pagePublish.previewTitle') : undefined)}
       actions={success && slug && (live || preview) ? <>
-        {live && Boolean(result.url) && <IconButton size="sm" variant="quiet" disabled={!surfaceCurrent}
+        {live && Boolean(result.url) && <IconButton size="sm" variant="quiet" disabled={!canOpen}
+          title={!canOpen ? unavailableReason : t('toolCards.pagePublish.openProduction')}
           icon={<Icon name="arrow-up-right" size="sm" />} aria-label={t('toolCards.pagePublish.openProduction')}
-          onClick={() => void open(false)} />}
-        {Boolean(result.preview_url) && version && <IconButton size="sm" variant="quiet" disabled={!surfaceCurrent}
+          onClick={() => void openPage(slug, generation)} />}
+        {Boolean(result.preview_url) && version && <IconButton size="sm" variant="quiet" disabled={!canOpen}
+          title={!canOpen ? unavailableReason : t('toolCards.pagePublish.openPreview')}
           icon={<Icon name="eye" size="sm" />} aria-label={t('toolCards.pagePublish.openPreview')}
-          onClick={() => void open(true)} />}
+          onClick={() => void openPage(slug, generation, version)} />}
       </> : undefined} />
   </div>;
 };

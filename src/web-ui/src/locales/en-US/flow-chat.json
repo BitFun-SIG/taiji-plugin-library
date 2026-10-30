@@ -2166,6 +2166,7 @@
       "untitled": "(unnamed)",
       "publishFailed": "Could not publish OpenBitFun Page",
       "openFailed": "Could not create a secure link for this Page.",
+      "openOnExecutingDevice": "Open this Page from Pages on the device that ran the task.",
       "labelSlug": "slug",
       "labelVersion": "version",
       "labelPath": "url_path",

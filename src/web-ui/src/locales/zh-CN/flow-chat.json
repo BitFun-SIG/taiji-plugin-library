@@ -2166,6 +2166,7 @@
       "untitled": "（未命名）",
       "publishFailed": "无法发布 OpenBitFun Page",
       "openFailed": "无法为该页面创建安全访问链接。",
+      "openOnExecutingDevice": "请在执行此任务的设备上，通过 Pages 打开此页面。",
       "labelSlug": "slug",
       "labelVersion": "version",
       "labelPath": "url_path",

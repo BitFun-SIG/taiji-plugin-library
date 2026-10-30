@@ -2166,6 +2166,7 @@
       "untitled": "（未命名）",
       "publishFailed": "無法發佈 OpenBitFun Page",
       "openFailed": "無法為該頁面建立安全存取連結。",
+      "openOnExecutingDevice": "請在執行此任務的裝置上，透過 Pages 開啟此頁面。",
       "labelSlug": "slug",
       "labelVersion": "version",
       "labelPath": "url_path",
