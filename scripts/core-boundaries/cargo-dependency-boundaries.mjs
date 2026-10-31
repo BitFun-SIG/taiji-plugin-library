@@ -552,6 +552,7 @@ const THIRD_PARTY_CAPABILITY_PROFILES = new Map([
   ['image', {
     label: 'Image',
     packages: new Map([
+      ['openbitfun-computer-use', dependencyProfile(['jpeg', 'png'], { useDefaultFeatures: false })],
       ['openbitfun-services-core', dependencyProfile([], {
         optional: true,
         useDefaultFeatures: false,

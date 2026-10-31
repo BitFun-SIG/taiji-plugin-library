@@ -40,6 +40,50 @@ current invocation may approve them.
 Run `openbitfun --help` or `openbitfun <command> --help` for the complete command and
 option reference.
 
+## Computer Use
+
+CLI chat and `exec` can use the same native Computer Use provider as Desktop on
+Linux, macOS and Windows. Run in the executing machine's graphical user session
+and enable the shared setting:
+
+```bash
+openbitfun computer-use status
+openbitfun computer-use enable
+# macOS: explicitly request the permissions needed by the terminal/CLI host.
+openbitfun computer-use request-permission accessibility
+openbitfun computer-use request-permission screen-recording
+```
+
+`status` reports JSON with the setting, graphical-session availability and OS
+permission states. Availability does not imply consent or an active capture.
+`disable` turns the shared setting off. CLI and Desktop use the same setting;
+OS permission is tied to the executing application and may need separate consent.
+The existing tool approval policy still applies (`exec` rejects asks by default).
+Cancel the active turn with the normal interrupt control to revoke its native
+action lease; process shutdown also stops capture and input.
+
+On macOS, window capture requires macOS 12.3 or newer and Screen Recording;
+Accessibility is needed for application trees and directed input. Windows
+requires an interactive user window station, not a service/session 0. Linux
+requires an X11/Wayland session and its D-Bus session bus. Native capture and
+foreground input use the desktop portal's consented PipeWire surface; AT-SPI
+provides supported background semantic actions. The system portal chooser and
+native permission dialogs appear on the executing machine.
+
+Linux capture needs GStreamer with PipeWire, base and good plugins; OCR needs
+Tesseract with English data (`tesseract-ocr-eng` on Ubuntu). These runtime
+libraries load only when used; their absence does not prevent ordinary CLI
+commands from starting. Source builds additionally need `pkg-config`,
+`libgstreamer1.0-dev`, `libgstreamer-plugins-base1.0-dev`, `libtesseract-dev` and
+`libleptonica-dev` on Ubuntu, or the equivalent development packages.
+
+SSH/headless sessions and remote workspaces do not fall back to the controller's
+desktop. Detached jobs, ACP and the stdio server do not acquire an implicit GUI
+provider. Peer/mobile control can use the executing CLI host's Agent only when
+that host has a graphical provider and local OS consent; Desktop sharing/preview
+commands are not added to CLI peer capabilities. Shared TUI uses the Shared
+Runtime host's provider, never the controller process's desktop.
+
 ## Interactive TUI
 
 The most frequently used commands follow established OpenCode names where an

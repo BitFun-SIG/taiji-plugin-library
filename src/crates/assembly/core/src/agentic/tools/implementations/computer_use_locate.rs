@@ -1,6 +1,6 @@
 //! Accessibility tree locate -- invoked as `ComputerUse` **`action: "locate"`** (same tool as screenshot / keys).
 
-use crate::agentic::tools::computer_use_capability::computer_use_desktop_available;
+use crate::agentic::tools::computer_use_capability::computer_use_host_available;
 use crate::agentic::tools::computer_use_host::{
     suggested_point_crop_half_extent_from_native_bounds, UiElementLocateQuery,
 };
@@ -22,7 +22,7 @@ pub(crate) async fn execute_computer_use_locate(
                 .to_string(),
         ));
     }
-    if !computer_use_desktop_available() {
+    if !computer_use_host_available() {
         return Err(OpenBitFunError::tool(
             "Computer use is not available on this host.".to_string(),
         ));
@@ -42,7 +42,7 @@ pub(crate) async fn execute_computer_use_locate(
 
     let host = context.computer_use_host.as_ref().ok_or_else(|| {
         OpenBitFunError::tool(
-            "Computer use is only available in the OpenBitFun desktop app.".to_string(),
+            "Computer Use requires a native provider on the executing host.".to_string(),
         )
     })?;
 

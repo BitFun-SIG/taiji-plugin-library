@@ -219,3 +219,15 @@ For the inline WeChat QR card, collapsed output, theme contrast and narrow termi
 ```bash
 cargo test --locked -p openbitfun-cli --bin openbitfun ui::tool_cards::tests::
 ```
+
+For native Computer Use host wiring and headless/dispatch admission:
+
+```bash
+cargo test --locked -p openbitfun-cli --bin openbitfun computer_use::
+cargo test --locked -p openbitfun-cli --test cli_command_contracts computer_use_
+```
+
+Native provider and OS fixture checks belong to
+[`services/computer-use`](../../crates/services/computer-use/AGENTS.md). CLI owns
+the main-thread run-loop adapter and provider injection, including Shared TUI's
+executing host. Dispatch, ACP and the stdio server do not infer a GUI provider.
