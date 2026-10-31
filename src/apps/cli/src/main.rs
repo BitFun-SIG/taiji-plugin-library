@@ -226,6 +226,12 @@ fn agent_type_with_harness_profile(agent_type: String, harness_profile: Option<&
 
 #[derive(Subcommand)]
 enum Commands {
+    /// Inspect or configure native Computer Use on this executing machine
+    ComputerUse {
+        #[command(subcommand)]
+        action: computer_use::Action,
+    },
+
     /// Start interactive chat (TUI)
     Chat {
         /// Agent type
@@ -599,6 +605,8 @@ pub(crate) enum BootstrapProfile {
     Interactive,
     Execution,
     Management,
+    /// Dispatch has not negotiated a GUI provider with its submitter.
+    Detached,
 }
 
 impl BootstrapProfile {
@@ -614,7 +622,7 @@ impl BootstrapProfile {
     }
 
     const fn starts_mcp(self) -> bool {
-        matches!(self, Self::Interactive | Self::Execution)
+        matches!(self, Self::Interactive | Self::Execution | Self::Detached)
     }
 
     const fn starts_scheduled_jobs(
@@ -623,7 +631,7 @@ impl BootstrapProfile {
     ) -> bool {
         // Shared TUI owns one workspace and exits after the last controller
         // disconnects. It cannot own the host-wide durable scheduler lease.
-        matches!(self, Self::Interactive | Self::Execution)
+        matches!(self, Self::Interactive | Self::Execution | Self::Detached)
             && matches!(
                 deployment,
                 openbitfun_services_core::runtime_ownership::RuntimeDeployment::Embedded
@@ -634,7 +642,7 @@ impl BootstrapProfile {
         matches!(
             PLUGIN_HOST_LAUNCH_POLICY,
             openbitfun_core::plugin_host::PluginHostLaunchPolicy::Enabled
-        ) && matches!(self, Self::Interactive | Self::Execution)
+        ) && matches!(self, Self::Interactive | Self::Execution | Self::Detached)
     }
 }
 
@@ -898,7 +906,7 @@ async fn initialize_core_services_for_deployment(
     tracing::info!("Global config service initialized");
     if matches!(
         bootstrap_profile,
-        BootstrapProfile::Interactive | BootstrapProfile::Execution
+        BootstrapProfile::Interactive | BootstrapProfile::Execution | BootstrapProfile::Detached
     ) {
         if let Err(error) =
             plugin_host_activation::ensure_configured_plugin_execution_supported().await
@@ -968,6 +976,7 @@ async fn initialize_core_services_for_deployment(
     let agentic_system = agent::agentic_system::init_agentic_system(
         openbitfun_core::product_assembly::DeliveryProfile::Cli,
         runtime_ownership,
+        computer_use::provider(bootstrap_profile),
     )
     .await
     .map_err(|error| anyhow!("Failed to initialize agentic system: {error}"))?;
@@ -1561,6 +1570,10 @@ async fn run_cli() -> Result<()> {
             root_handlers::handle_config_action(action, &config).await?;
         }
 
+        Some(Commands::ComputerUse { action }) => {
+            computer_use::run(action).await?;
+        }
+
         Some(Commands::Health) => {
             root_handlers::handle_health_command()?;
         }
@@ -1733,6 +1746,8 @@ async fn run_interactive_with_session(
     Ok(())
 }
 
+mod computer_use;
+
 fn main() {
     // Install the workspace-owned ring CryptoProvider before any TLS-capable
     // work (relay WS, reqwest rustls paths, Feishu wss) so every client uses
@@ -1750,6 +1765,7 @@ fn main() {
                 .build()
                 .expect("failed to build tokio runtime");
             runtime.block_on(async {
+                let _native_cleanup = openbitfun_computer_use::host_runtime::StopOnExit;
                 let result = run_cli().await;
                 match openbitfun_core::plugin_host::shutdown_configured_plugin_host().await {
                     Ok(Some(report)) => tracing::info!(
@@ -1770,7 +1786,7 @@ fn main() {
         })
         .expect("failed to spawn openbitfun worker thread");
 
-    match worker.join() {
+    match openbitfun_computer_use::host_runtime::join(worker) {
         Ok(Ok(())) => {}
         Ok(Err(err)) => {
             if let Some(reported) = err.downcast_ref::<ReportedCliError>() {

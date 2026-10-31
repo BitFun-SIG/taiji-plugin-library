@@ -612,7 +612,7 @@ cargo test -p openbitfun-core --no-default-features --features agent-runtime,git
 ```
 
 These mock-host tests do not validate native capture, background input or remote
-GUI behavior; native fixtures remain owned by the Desktop Computer Use guide.
+GUI behavior; native fixtures remain owned by the shared Computer Use service guide.
 
 For plain-prompt goal activation and remote goal storage routing:
 
