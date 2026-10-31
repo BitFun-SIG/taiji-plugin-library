@@ -206,7 +206,7 @@ mod macos_applescript_tests {
     /// reports the same syntax errors `osascript` would, so this checks that a
     /// template is valid AppleScript with no side effects.
     fn compiles(script: &str) -> Result<(), String> {
-        let out = std::process::Command::new("/usr/bin/osacompile")
+        let out = openbitfun_services_core::process_manager::create_command("/usr/bin/osacompile")
             .args(["-o", "/dev/null", "-e", script])
             .output()
             .map_err(|e| format!("spawn osacompile: {e}"))?;
