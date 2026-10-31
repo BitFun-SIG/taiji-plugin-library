@@ -721,6 +721,21 @@ fn stream_json_disconnect_then_authorization_failure_emits_one_error_terminal() 
 }
 
 #[test]
+fn computer_use_default_is_enabled_without_requesting_graphical_access() {
+    let environment = CliTestEnvironment::new();
+    let mut command = environment.std_command();
+    command
+        .env("SSH_CONNECTION", "fixture")
+        .args(["computer-use", "status"]);
+    let output = command_output_with_timeout(&mut command, std::time::Duration::from_secs(15));
+    assert!(output.status.success(), "{}", stderr(&output));
+    let status: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(status["computer_use_enabled"], true);
+    assert_eq!(status["provider_available"], false);
+    assert!(status["permissions"].is_null());
+}
+
+#[test]
 fn computer_use_setting_survives_restart_without_a_graphical_session() {
     let environment = CliTestEnvironment::new();
     for (action, enabled) in [("enable", true), ("disable", false)] {
@@ -759,10 +774,6 @@ fn computer_use_agent_status(ssh: bool) -> Vec<serde_json::Value> {
     )]);
     let environment = CliTestEnvironment::new();
     environment.configure_tool_loop_mock_model(server.base_url());
-    let mut enable = environment.std_command();
-    enable.args(["computer-use", "enable"]);
-    let output = command_output_with_timeout(&mut enable, std::time::Duration::from_secs(15));
-    assert!(output.status.success(), "{}", stderr(&output));
     let mut command = environment.std_command();
     if ssh {
         command.env("SSH_CONNECTION", "fixture");
@@ -835,10 +846,6 @@ fn computer_use_native_cli_observes_and_stops_fixture() {
     ]);
     let environment = CliTestEnvironment::new();
     environment.configure_tool_loop_image_model(server.base_url());
-    let mut enable = environment.std_command();
-    enable.args(["computer-use", "enable"]);
-    let output = command_output_with_timeout(&mut enable, std::time::Duration::from_secs(15));
-    assert!(output.status.success(), "{}", stderr(&output));
     let mut command = environment.std_command();
     command.args([
         "exec",

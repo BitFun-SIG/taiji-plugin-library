@@ -43,12 +43,11 @@ option reference.
 ## Computer Use
 
 CLI chat and `exec` can use the same native Computer Use provider as Desktop on
-Linux, macOS and Windows. Run in the executing machine's graphical user session
-and enable the shared setting:
+Linux, macOS and Windows. It is enabled by default when the executing machine has
+a graphical user session; no enable command is needed on a fresh configuration:
 
 ```bash
 openbitfun computer-use status
-openbitfun computer-use enable
 # macOS: explicitly request the permissions needed by the terminal/CLI host.
 openbitfun computer-use request-permission accessibility
 openbitfun computer-use request-permission screen-recording
@@ -56,7 +55,9 @@ openbitfun computer-use request-permission screen-recording
 
 `status` reports JSON with the setting, graphical-session availability and OS
 permission states. Availability does not imply consent or an active capture.
-`disable` turns the shared setting off. CLI and Desktop use the same setting;
+`disable` turns the shared setting off; `enable` restores it. These are persistent,
+optional controls, not startup steps. Existing saved `false` values are preserved
+on upgrade; use `enable` once to change that preference. CLI and Desktop share it;
 OS permission is tied to the executing application and may need separate consent.
 The existing tool approval policy still applies (`exec` rejects asks by default).
 Cancel the active turn with the normal interrupt control to revoke its native

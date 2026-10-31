@@ -52,10 +52,9 @@ static BROWSER_SESSIONS: std::sync::OnceLock<Arc<BrowserSessionRegistry>> =
 /// the headed browser sitting on that port.
 const DEFAULT_HEADLESS_CDP_PORT: u16 = DEFAULT_CDP_PORT + 1;
 
-/// Computer Use is an independent switch from browser control (`ai.computer_use_enabled`
-/// defaults to off, and there is no desktop host outside the desktop app), so ControlHub
+/// Computer Use has an independent setting and native provider from browser control, so ControlHub
 /// must never route recovery through a tool that is absent from the agent's tool list.
-const COMPUTER_USE_UNAVAILABLE_HINT: &str = "Desktop automation is unavailable in this session (Computer Use is off in Settings, or there is no desktop host). Do not call ComputerUse — it is not in your tool list. Use ControlHub browser.navigate for http(s) URLs on a Desktop host and ExecCommand for local files and scripts; ask the user to enable Computer Use in Settings if desktop control is genuinely required.";
+const COMPUTER_USE_UNAVAILABLE_HINT: &str = "Desktop automation is unavailable in this session (Computer Use is disabled, or the executing host has no native graphical provider). Do not call ComputerUse — it is not in your tool list. Use an available ControlHub browser target for http(s) URLs and ExecCommand for local files and scripts. A disabled setting can be changed in Settings or with `openbitfun computer-use enable`; native control also requires a graphical login session on the executing host.";
 
 fn browser_sessions() -> Arc<BrowserSessionRegistry> {
     BROWSER_SESSIONS
@@ -762,7 +761,7 @@ Results: `{ok, domain, action, data? , error?: {code, message, hints}}`. Check o
                         } else if is_remote {
                             json!("Not available in remote workspace sessions")
                         } else {
-                            json!("Computer Use is disabled (ai.computer_use_enabled = false) or no desktop host is present")
+                            json!("Computer Use is disabled (ai.computer_use_enabled = false) or the executing host has no native provider")
                         },
                     },
                     "schema_version": "1.6",

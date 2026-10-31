@@ -24,7 +24,9 @@ inside a graphical login session. macOS keeps the real main thread servicing
 CoreFoundation/main dispatch while the existing async Runtime runs on its worker.
 Shutdown revokes native control before that run loop ends. Startup never prompts
 for OS consent. The `computer-use` CLI command exposes status, the existing
-`ai.computer_use_enabled` switch and explicit native permission requests.
+`ai.computer_use_enabled` switch and explicit native permission requests. The
+shared setting defaults to enabled when absent; saved true/false values survive
+upgrades. Provider availability, OS consent and tool approval are separate gates.
 Linux's GStreamer/Tesseract adapters load system libraries on demand so headless
 CLI startup does not require desktop packages. Missing libraries and plugins
 return explicit capture/OCR errors. The native contract and existing Linux
