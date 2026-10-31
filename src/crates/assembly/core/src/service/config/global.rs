@@ -110,7 +110,7 @@ impl GlobalConfigManager {
         crate::infrastructure::ai::reasoning_catalog::prepare_model_catalog();
 
         #[cfg(feature = "agent-runtime")]
-        spawn_config_file_reload_poller(Arc::clone(&config_service));
+        spawn_config_file_reload_poller();
 
         info!("Global config service initialized");
 
@@ -227,7 +227,7 @@ const CONFIG_FILE_RELOAD_POLL_INTERVAL: std::time::Duration = std::time::Duratio
 /// Polling instead of a file-system watch keeps this working for atomic
 /// replacement, network home directories, and platforms without inotify.
 #[cfg(feature = "agent-runtime")]
-fn spawn_config_file_reload_poller(service: Arc<ConfigService>) {
+fn spawn_config_file_reload_poller() {
     let Ok(runtime) = tokio::runtime::Handle::try_current() else {
         log::warn!("No async runtime available; config file reload polling is disabled");
         return;
@@ -239,6 +239,10 @@ fn spawn_config_file_reload_poller(service: Arc<ConfigService>) {
         let mut last_error: Option<String> = None;
         loop {
             interval.tick().await;
+            // Resolve each tick so a replaced global service is followed.
+            let Ok(service) = GlobalConfigManager::get_service().await else {
+                continue;
+            };
             match service.reload_if_changed_on_disk().await {
                 Ok(_) => last_error = None,
                 Err(error) => {
