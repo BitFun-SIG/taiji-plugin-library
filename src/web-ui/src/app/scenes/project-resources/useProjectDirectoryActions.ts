@@ -49,7 +49,7 @@ export function useProjectDirectoryActions(workspace: WorkspaceInfo, scope: Surf
     setError(null);
     try {
       const confirmed = await confirmDialog({ title: t('directories.removeTitle'), message: t('directories.removeMessage'),
-        preview: path, type: 'warning', confirmDanger: true, confirmText: t('directories.removeConfirm') });
+        type: 'warning', confirmDanger: true, confirmText: t('directories.removeConfirm') });
       if (!confirmed || !current() || !canRemove()) return;
       setRemovingPath(path);
       // Re-read after confirmation so directories added elsewhere are preserved.

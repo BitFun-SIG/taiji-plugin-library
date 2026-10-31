@@ -42,8 +42,8 @@ it('requires confirmation, protects the primary directory and removes only the r
   await act(async () => latest.remove('/reference'));
   expect(mocks.update).not.toHaveBeenCalled();
   await act(async () => latest.remove('/reference'));
-  expect(mocks.confirm).toHaveBeenLastCalledWith(expect.objectContaining({ preview: '/reference', confirmDanger: true,
-    message: 'directories.removeMessage' }));
+  expect(mocks.confirm).toHaveBeenLastCalledWith({ title: 'directories.removeTitle', message: 'directories.removeMessage',
+    type: 'warning', confirmDanger: true, confirmText: 'directories.removeConfirm' });
   expect(mocks.update).toHaveBeenCalledExactlyOnceWith('owned', [{ path: '/keep' }]);
   expect(workspace.relatedPaths).toHaveLength(2);
   expect(latest.removingPath).toBeNull();
