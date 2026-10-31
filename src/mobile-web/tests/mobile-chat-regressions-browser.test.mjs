@@ -57,6 +57,13 @@ test('message times and quiet tool failures work at compact and wide sizes', { t
     await page.click('.chat-task-card__summary');
     await page.waitForSelector('.chat-task-card__step.is-settled');
     assert.equal(await page.$('.chat-task-card__step.is-error'), null, 'ordinary subagent tool failures stay neutral');
+    for (const status of ['failed', 'error', 'cancelled', 'rejected']) {
+      await page.evaluate(async value => (await import('/tests/helpers/mobile-chat-regressions-fixture.tsx')).showTranscript(false, 'subagent', value), status);
+      await page.waitForSelector('.chat-task-card--settled[data-prominent="false"]');
+      assert.equal(await page.$('.chat-task-card__header .chat-tool-card__spinner'), null, `${status} tasks do not keep spinning`);
+    }
+    await page.evaluate(async () => (await import('/tests/helpers/mobile-chat-regressions-fixture.tsx')).showTranscript(true, 'subagent', 'pending_confirmation'));
+    await page.waitForSelector('.chat-task-card[data-prominent="true"]');
     await page.evaluate(async () => (await import('/tests/helpers/mobile-chat-regressions-fixture.tsx')).showTranscript(true));
     await page.waitForSelector('.chat-tool-card[data-prominent="true"]');
     assert.equal(await page.$('.chat-tool-list--collapsed'), null, 'approval stays reachable');

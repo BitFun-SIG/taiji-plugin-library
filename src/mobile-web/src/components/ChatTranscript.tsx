@@ -10,7 +10,6 @@ import {
   ListTodo as LucideListTodo,
   LoaderCircle as LucideLoaderCircle,
   Square as LucideSquare,
-  X as LucideX,
 } from 'lucide-react';
 import ChatToolDetails from './ChatToolDetails';
 import { backgroundDeliveryFromMetadata, readBackgroundDelivery, suppressesBackgroundPresentation } from '../../../shared/background-delivery';
@@ -256,7 +255,7 @@ export const TaskToolCard: React.FC<{
   const [stepsExpanded, setStepsExpanded] = useState(false);
   const isRunning = tool.status === 'running';
   const isCompleted = tool.status === 'completed';
-  const isError = tool.status === 'failed' || tool.status === 'error';
+  const settled = isToolSettled(tool);
   const showCancel = isRunning && !!onCancelTool;
   const taskInfo = parseTaskInfo(tool);
 
@@ -266,7 +265,7 @@ export const TaskToolCard: React.FC<{
     ? formatDuration(now - tool.start_ms)
     : '';
 
-  const statusClass = isRunning ? 'running' : isCompleted ? 'done' : isError ? 'error' : 'pending';
+  const statusClass = isRunning ? 'running' : isCompleted ? 'done' : settled ? 'settled' : 'pending';
 
   const subTools = subItems.filter(i => i.type === 'tool' && i.tool);
   const subToolsDone = subTools.filter(i => i.tool!.status === 'completed').length;
@@ -279,7 +278,7 @@ export const TaskToolCard: React.FC<{
 
 
   return (
-    <MobileCard padding="none" className={`chat-task-card chat-task-card--${statusClass}`} data-prominent={isError || isToolAwaitingApproval(tool) || hasPendingSubtoolApproval}>
+    <MobileCard padding="none" className={`chat-task-card chat-task-card--${statusClass}`} data-prominent={isToolAwaitingApproval(tool) || hasPendingSubtoolApproval}>
       <div className="chat-task-card__header">
         <span className="chat-tool-card__icon">
           {isRunning ? (
@@ -288,9 +287,9 @@ export const TaskToolCard: React.FC<{
             <span className="chat-tool-card__check">
               <LucideCheck width="12" height="12" aria-hidden="true" />
             </span>
-          ) : isError ? (
-            <span className="chat-tool-card__error-icon">
-              <LucideX width="12" height="12" aria-hidden="true" />
+          ) : settled ? (
+            <span className="chat-tool-card__settled-icon">
+              <LucideCircle width="12" height="12" aria-hidden="true" />
             </span>
           ) : (
             <span className="chat-tool-card__spinner" />
