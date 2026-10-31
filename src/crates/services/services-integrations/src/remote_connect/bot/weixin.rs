@@ -659,8 +659,8 @@ impl WeixinProviderClient {
         Ok((images, skipped))
     }
 
-    /// Ordinary files use the same CDN encryption as images, but must remain
-    /// byte attachments rather than being interpreted as image or text input.
+    /// Files and native videos use the same CDN encryption as images. Deliver
+    /// their original bytes as session files; model-specific decoding is separate.
     pub async fn download_inbound_files(
         &self,
         msg: &Value,
@@ -669,7 +669,7 @@ impl WeixinProviderClient {
             .as_array()
             .into_iter()
             .flatten()
-            .filter(|item| item["type"].as_i64() == Some(4))
+            .filter(|item| matches!(item["type"].as_i64(), Some(4 | 5)))
             .collect();
         if items.len() > MAX_INBOUND_FILES {
             return Err(anyhow!(
@@ -679,12 +679,25 @@ impl WeixinProviderClient {
         let mut files = Vec::new();
         let mut remaining = MAX_WEIXIN_FILE_BYTES as usize;
         for item in items {
-            let file = &item["file_item"];
+            let is_video = item["type"].as_i64() == Some(5);
+            let file = &item[if is_video { "video_item" } else { "file_item" }];
+            // The official protocol's file len is plaintext; video_size is
+            // ciphertext (including AES padding), so never compare it to plaintext.
             let declared_size = file["len"]
                 .as_str()
                 .and_then(|v| v.parse::<u64>().ok())
                 .or_else(|| file["len"].as_u64());
             if declared_size.is_some_and(|size| size > remaining as u64) {
+                return Err(anyhow!("Inbound files exceed the 30 MiB message limit"));
+            }
+            let declared_cipher_size = if is_video {
+                file["video_size"].as_u64()
+            } else {
+                None
+            };
+            if declared_cipher_size
+                .is_some_and(|size| size > aes_ecb_ciphertext_len(remaining) as u64)
+            {
                 return Err(anyhow!("Inbound files exceed the 30 MiB message limit"));
             }
             let media = &file["media"];
@@ -704,6 +717,9 @@ impl WeixinProviderClient {
             let encrypted = self
                 .fetch_weixin_cdn_bytes(param, full_url, remaining)
                 .await?;
+            if declared_cipher_size.is_some_and(|size| size != encrypted.len() as u64) {
+                return Err(anyhow!("Downloaded video size does not match the message"));
+            }
             let bytes = decrypt_aes_128_ecb_pkcs7(&encrypted, &key)
                 .map_err(|_| anyhow!("File decryption failed"))?;
             if bytes.len() > remaining {
@@ -714,7 +730,11 @@ impl WeixinProviderClient {
             }
             remaining -= bytes.len();
             files.push(super::inbound_files::InboundFile {
-                name: file["file_name"].as_str().unwrap_or("file.bin").to_owned(),
+                name: if is_video {
+                    format!("weixin_video_{}.mp4", files.len() + 1)
+                } else {
+                    file["file_name"].as_str().unwrap_or("file.bin").to_owned()
+                },
                 bytes,
             });
         }
@@ -1442,23 +1462,24 @@ pub fn has_inbound_image_items(msg: &Value) -> bool {
     })
 }
 
-/// Voice transcripts are supported, but raw voice/video items have no input adapter.
+/// Voice transcripts are supported; raw voice currently has no audio input adapter.
 pub fn has_unsupported_media_items(msg: &Value) -> bool {
     msg["item_list"].as_array().is_some_and(|items| {
         items.iter().any(|item| {
-            item["type"].as_i64() == Some(5)
-                || (item["type"].as_i64() == Some(3)
-                    && !item["voice_item"]["text"]
-                        .as_str()
-                        .is_some_and(|text| !text.trim().is_empty()))
+            item["type"].as_i64() == Some(3)
+                && !item["voice_item"]["text"]
+                    .as_str()
+                    .is_some_and(|text| !text.trim().is_empty())
         })
     })
 }
 
 pub fn has_inbound_file_items(msg: &Value) -> bool {
-    msg["item_list"]
-        .as_array()
-        .is_some_and(|items| items.iter().any(|item| item["type"].as_i64() == Some(4)))
+    msg["item_list"].as_array().is_some_and(|items| {
+        items
+            .iter()
+            .any(|item| matches!(item["type"].as_i64(), Some(4 | 5)))
+    })
 }
 
 pub fn body_from_message(msg: &Value) -> String {
@@ -2395,5 +2416,44 @@ mod tests {
             .unwrap_err();
         assert!(!error.to_string().contains("http://"));
         task.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn native_video_is_downloaded_as_an_unchanged_mp4_file() {
+        let plain = b"\0\0\0\x18ftypmp42binary-video-fixture";
+        let encrypted = encrypt_aes_128_ecb_pkcs7(plain, &[42; 16]);
+        assert_ne!(encrypted.len(), plain.len());
+        for declared in [encrypted.len(), plain.len()] {
+            let (url, task) =
+                mock_file_download(encrypted.clone(), "200 OK", encrypted.len()).await;
+            let message = json!({"item_list":[{"type":5,"video_item":{
+                "video_size":declared,
+                "media":{"full_url":url,"aes_key":B64.encode([42;16])}
+            }}]});
+            assert!(has_inbound_file_items(&message));
+            assert!(!has_unsupported_media_items(&message));
+            let result = test_client("http://unused.invalid".into())
+                .download_inbound_files(&message)
+                .await;
+            if declared == encrypted.len() {
+                let files = result.unwrap();
+                assert_eq!(files[0].name, "weixin_video_1.mp4");
+                assert_eq!(files[0].bytes, plain);
+            } else {
+                assert!(result.unwrap_err().to_string().contains("video size"));
+            }
+            task.await.unwrap();
+        }
+        let client = test_client("http://unused.invalid".into());
+        assert!(client
+            .download_inbound_files(&json!({"item_list":[{"type":5}]}))
+            .await
+            .is_err());
+        assert!(client
+            .download_inbound_files(
+                &json!({"item_list":vec![json!({"type":5}); MAX_INBOUND_FILES+1]})
+            )
+            .await
+            .is_err());
     }
 }

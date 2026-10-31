@@ -1881,7 +1881,7 @@ mod tests {
         bot.chat_states.write().await.clear();
         let epoch = bot.runtime_fence.identity_epoch();
         for message in [
-            json!({"item_list":[{"type":5},{"type":1,"text_item":{"text":"analyze this video"}}]}),
+            json!({"item_list":[{"type":3,"voice_item":{}},{"type":1,"text_item":{"text":"transcribe this voice"}}]}),
             json!({"item_list":[{"type":3,"voice_item":{}}]}),
             json!({"item_list":[{"type":1,"text_item":{"text":"   "}}]}),
         ] {

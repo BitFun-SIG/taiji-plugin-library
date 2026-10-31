@@ -782,7 +782,7 @@ marketplace configuration or installation entry point.
 
 ## Files sent through WeChat
 
-Send an ordinary file in the paired WeChat chat to make it available to the
+Send an ordinary file or a native video in the paired WeChat chat to make it available to the
 selected Agent session. OpenBitFun downloads and decrypts the file, saves it in
 a unique `.openbitfun-inbound-<id>` directory inside that session's workspace,
 and supplies its path to the Agent. Existing files are not overwritten. File
@@ -808,9 +808,10 @@ attachments to Detached Dispatch jobs.
 Messages from one WeChat peer finish attachment preparation and turn admission in
 receive order. Model replies run independently, so approvals and follow-up input
 remain available. Failed image downloads also reject the message with a visible
-error instead of silently submitting empty or partial media input. Videos
-and voice messages without transcripts return an unsupported notice; videos can
-be sent as ordinary files.
+error instead of silently submitting empty or partial media input. Native videos
+are delivered as unchanged `.mp4` files through the same local/remote path;
+video analysis depends on the Agent's available tools. Voice messages without
+transcripts currently return an unsupported notice.
 
 ## WeChat session result notifications
 
