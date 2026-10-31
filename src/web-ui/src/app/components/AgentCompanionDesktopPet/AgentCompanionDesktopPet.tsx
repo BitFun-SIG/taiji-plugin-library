@@ -41,6 +41,15 @@ const WINDOW_EDGE_BUFFER = 4;
  * border gets clipped.
  */
 const WINDOW_VERTICAL_BUFFER = 3;
+/**
+ * Largest pet that still fits beside a bubble inside the host window. The dock
+ * is anchored bottom-right, so anything wider than the window is clipped on the
+ * left; oversized custom spritesheets are scaled down to this box instead.
+ */
+const PET_MAX_DISPLAY_SIZE = {
+  width: WINDOW_MAX_WIDTH - BUBBLE_WIDTH - WINDOW_HORIZONTAL_GAP - WINDOW_EDGE_BUFFER,
+  height: WINDOW_MAX_HEIGHT - WINDOW_VERTICAL_BUFFER * 2,
+};
 const POINTER_HOVER_POLL_INTERVAL_MS = 120;
 const PET_LOOK_HOLD_MS = 960;
 /** Clicks shorter/smaller than this use `show_main_window`; beyond it we start dragging. */
@@ -1205,6 +1214,7 @@ export const AgentCompanionDesktopPet: React.FC = () => {
               lookDirection={trackPetLook && !isDraggingPet ? lookDirection : null}
               nativePetdexSize
               petdexScale={PETDEX_DESKTOP_SCALE}
+              petdexMaxSize={PET_MAX_DISPLAY_SIZE}
               onPetFrameSizeChange={handlePetFrameSizeChange}
               className="openbitfun-agent-companion-window__pet"
              data-openbitfun-component="agent-companion-desktop-pet" data-openbitfun-part="pet"/>
