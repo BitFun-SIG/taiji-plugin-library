@@ -627,14 +627,12 @@ Results: `{ok, domain, action, data? , error?: {code, message, hints}}`. Check o
     ) -> OpenBitFunResult<Vec<ToolResult>> {
         match action {
             "capabilities" => {
-                // `terminal` (TerminalApi) is delivered through a global
-                // registry rather than a field on the context, so we can't be
-                // 100% sure here without round-tripping. We report "likely
-                // available iff a desktop host is present" because that bridge
-                // only exists in OpenBitFun's desktop runtime; the actual call will
-                // surface a clean error if the bridge is offline.
+                // CLI and Desktop register terminal and GUI providers separately.
+                // Read the same terminal registry used by the action dispatcher;
+                // this probe neither initializes the service nor opens a session.
                 let is_remote = context.is_remote();
-                let likely_terminal_available = !is_remote && context.computer_use_host.is_some();
+                let terminal_available =
+                    !is_remote && crate::service::terminal::TerminalApi::from_singleton().is_ok();
                 let browser_session_ids = if is_remote {
                     Vec::new()
                 } else {
@@ -744,7 +742,7 @@ Results: `{ok, domain, action, data? , error?: {code, message, hints}}`. Check o
                             "default_target": selection.as_ref().map(|s| s.target.as_str()).unwrap_or(if builtin_host_available { "builtin" } else { "external" }),
                             "shared_action_contract": true,
                         },
-                        "terminal": { "available": likely_terminal_available, "reason": if likely_terminal_available { Value::Null } else { json!("TerminalApi is only available in contexts that registered it") } },
+                        "terminal": { "available": terminal_available, "reason": if terminal_available { Value::Null } else { json!("TerminalApi is only available in local workspace contexts that registered it") } },
                         "meta":     { "available": true },
                     },
                     "local_client": {

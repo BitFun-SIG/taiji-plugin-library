@@ -798,6 +798,39 @@ fn computer_use_agent_status(ssh: bool) -> Vec<serde_json::Value> {
 }
 
 #[test]
+fn computer_use_provider_does_not_determine_cli_terminal_availability() {
+    let server = MockOpenAiServer::tool_sequence(vec![(
+        "ControlHub".into(),
+        serde_json::json!({"domain":"meta","action":"capabilities"}),
+    )]);
+    let environment = CliTestEnvironment::new();
+    environment.configure_tool_loop_mock_model(server.base_url());
+    let mut command = environment.std_command();
+    command.env("SSH_CONNECTION", "fixture").args([
+        "exec",
+        "Report registered capabilities without starting a terminal or capturing a screen",
+        "--auto",
+        "--no-verify-final-changes",
+        "--output-format",
+        "json",
+    ]);
+    let output = command_output_with_timeout(&mut command, std::time::Duration::from_secs(60));
+    assert!(output.status.success(), "{}", stderr(&output));
+    server.assert_chat_completion_requests(2);
+    let requests = server.chat_completion_request_bodies();
+    let message = requests[1]["messages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|message| message["role"] == "tool")
+        .expect("capability tool result");
+    let payload: serde_json::Value = serde_json::from_str(message["content"].as_str().unwrap())
+        .unwrap_or_else(|error| panic!("invalid capability payload: {error}: {message}"));
+    assert_eq!(payload["domains"]["terminal"]["available"], true);
+    assert_eq!(payload["computer_use"]["available"], false);
+}
+
+#[test]
 fn computer_use_is_not_exposed_by_an_ssh_execution_host() {
     let requests = computer_use_agent_status(true);
     assert!(requests[0]["tools"]
