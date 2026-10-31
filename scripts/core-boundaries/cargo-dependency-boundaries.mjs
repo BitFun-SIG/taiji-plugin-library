@@ -557,6 +557,7 @@ const THIRD_PARTY_CAPABILITY_PROFILES = new Map([
         useDefaultFeatures: false,
         ownerFeatureCapabilities: new Map([
           ['pet-packages', ['gif', 'jpeg', 'png', 'webp']],
+          ['workspace-icons', ['jpeg', 'png', 'webp']],
         ]),
       })],
       ['openbitfun-cli', dependencyProfile(['gif', 'jpeg', 'png', 'webp'], {
@@ -1461,6 +1462,7 @@ export function findProductEntrypointCoreFeatureViolations(
   const CORE_TEST_SUPPORT_FEATURE = 'test-support';
   const reviewedCoreFeatureClosures = new Map([
     ['openbitfun-cli', [
+      'workspace-icons',
       'tools-pages',
       ...coreCompatibilityReviewedFeatures,
       'product-search',
@@ -1528,6 +1530,7 @@ export function findProductEntrypointCoreFeatureViolations(
   ];
   const reviewedActiveCoreFeatureClosures = new Map([
     ['openbitfun-cli', [
+      'workspace-icons',
       'tools-pages',
       ...acpActiveCoreFeatures,
       'i18n-runtime',

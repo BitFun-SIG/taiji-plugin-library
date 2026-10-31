@@ -625,3 +625,14 @@ For HTML preview workspace identity and shared resource-service wiring:
 ```bash
 cargo test --locked -p openbitfun-core --no-default-features --features remote-connect --lib service::filesystem::html_preview::tests
 ```
+
+For host-owned workspace icon persistence, legacy metadata round trips, worktree inheritance,
+concurrent-controller revisions and failed-write preservation:
+
+```bash
+cargo test -p openbitfun-core --no-default-features --features workspace-icons --lib service::workspace::service::icons
+```
+
+These are local fixtures, including an offline SSH workspace record; they do not establish
+live SSH, Relay or Detached Dispatch behavior. `workspace-icons` selects only workspace
+catalog and image service owners; headless task execution need not select it.
