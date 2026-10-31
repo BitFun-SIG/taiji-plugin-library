@@ -796,11 +796,14 @@ failed downloads, and unavailable workspaces produce an explicit error instead
 of submitting an empty message. Complete pending menu selections or approvals
 before sending a file.
 
-The session runtime and bot must run on the same OpenBitFun host. SSH workspaces
-use the session's remote filesystem and never fall back to the host's local
-filesystem. Cross-device bot sessions currently return an unsupported message;
-upload on the target device and provide the path there instead. This input path
-does not submit attachments to Detached Dispatch jobs.
+SSH workspaces use the session's remote filesystem and never fall back to the
+host's local filesystem. Cross-device bot sessions negotiate `session_attachments_v1`,
+transfer the bytes through encrypted device RPC, and use the path returned by the
+execution host. Upgrade an older target host when prompted; file input is never
+silently omitted. Accepted writes finish on the target even if the controller
+disconnects. Retries with the same attachment identity reuse identical saved bytes
+and reject changed or incomplete content. This input path does not submit
+attachments to Detached Dispatch jobs.
 
 ## WeChat session result notifications
 

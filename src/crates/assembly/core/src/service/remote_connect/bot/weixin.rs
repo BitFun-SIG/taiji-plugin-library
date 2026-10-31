@@ -38,9 +38,7 @@ fn inbound_file_rejection(
     state: &BotChatState,
     strings: &'static super::locale::BotStrings,
 ) -> Option<&'static str> {
-    if state.active_remote_device.is_some() || state.account_remote_context {
-        Some(strings.inbound_file_remote_unsupported)
-    } else if state.pending_action.is_some() {
+    if state.pending_action.is_some() {
         Some(strings.inbound_file_pending)
     } else {
         None
@@ -1119,15 +1117,22 @@ impl WeixinBot {
             attachment_prompt, save_inbound_file,
         };
         // Resolve against the immutable routed session, not current UI/workspace state.
-        if forward.remote_target.is_some() {
-            return Err(anyhow!("Cross-device bot file input is unsupported"));
-        }
-        let target = crate::service_agent_runtime::CoreServiceAgentRuntime::remote_file_target(
-            ".",
-            Some(&forward.session_id),
-        )
-        .await
-        .map_err(anyhow::Error::msg)?;
+        let target = if let Some(remote) = &forward.remote_target {
+            remote
+                .require_session_attachments()
+                .await
+                .map_err(anyhow::Error::msg)?;
+            None
+        } else {
+            Some(
+                crate::service_agent_runtime::CoreServiceAgentRuntime::remote_file_target(
+                    ".",
+                    Some(&forward.session_id),
+                )
+                .await
+                .map_err(anyhow::Error::msg)?,
+            )
+        };
         if !self.runtime_fence.is_lifecycle_current()
             || self.runtime_fence.identity_epoch() != identity_epoch
         {
@@ -1141,7 +1146,20 @@ impl WeixinBot {
             {
                 return Err(anyhow!("Bot identity changed during file download"));
             }
-            let path = save_inbound_file(&target, &file).await?;
+            let path = if let Some(remote) = &forward.remote_target {
+                remote
+                    .store_attachment(&file)
+                    .await
+                    .map_err(anyhow::Error::msg)?
+            } else {
+                save_inbound_file(
+                    target
+                        .as_ref()
+                        .ok_or_else(|| anyhow!("Attachment workspace is unavailable"))?,
+                    &file,
+                )
+                .await?
+            };
             content.push_str(&attachment_prompt(&file.name, &path, file.bytes.len()));
         }
         forward.content = content;
@@ -1427,7 +1445,7 @@ mod tests {
     use serde_json::json;
 
     #[test]
-    fn inbound_files_preserve_pending_answers_and_reject_cross_device_paths() {
+    fn inbound_files_preserve_pending_answers_on_local_and_remote_devices() {
         use super::super::command_router::PendingAction;
         use super::super::locale::{strings_for, BotLanguage};
         for language in [BotLanguage::ZhCN, BotLanguage::ZhTW, BotLanguage::EnUS] {
@@ -1443,7 +1461,7 @@ mod tests {
             state.account_remote_context = true;
             assert_eq!(
                 inbound_file_rejection(&state, strings),
-                Some(strings.inbound_file_remote_unsupported)
+                Some(strings.inbound_file_pending)
             );
         }
     }

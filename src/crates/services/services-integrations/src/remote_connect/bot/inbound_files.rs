@@ -1,8 +1,51 @@
 //! Incoming attachments are written through the session-selected filesystem.
 use crate::remote_connect::file_projection::SessionFileTarget;
 use anyhow::{bail, Context, Result};
+use base64::{engine::general_purpose::STANDARD as B64, Engine};
 use openbitfun_runtime_ports::WorkspacePathKind;
+use openbitfun_runtime_ports::{RemoteSessionAttachment, RemoteStoredAttachment};
+use sha2::{Digest, Sha256};
 use tokio::io::AsyncWriteExt;
+
+pub const MAX_SESSION_ATTACHMENT_BYTES: usize = 30 * 1024 * 1024;
+// Serializes duplicate RPC retries through validation, write and publication.
+static SAVE_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
+pub async fn store_session_attachment(
+    target: &SessionFileTarget,
+    session_id: &str,
+    attachment: RemoteSessionAttachment,
+) -> Result<RemoteStoredAttachment> {
+    if session_id.is_empty() || uuid::Uuid::parse_str(&attachment.attachment_id).is_err() {
+        bail!("Invalid session attachment identity");
+    }
+    if attachment.name.len() > 1024
+        || attachment.content_base64.len() > MAX_SESSION_ATTACHMENT_BYTES.div_ceil(3) * 4
+    {
+        bail!("Session attachment exceeds the transfer limit");
+    }
+    let bytes = B64
+        .decode(&attachment.content_base64)
+        .context("Invalid attachment base64")?;
+    if bytes.len() > MAX_SESSION_ATTACHMENT_BYTES {
+        bail!("Session attachment exceeds the transfer limit");
+    }
+    let storage_id = format!(
+        "{:x}",
+        Sha256::digest(format!("{session_id}:{}", attachment.attachment_id))
+    );
+    let file = InboundFile {
+        name: attachment.name,
+        bytes,
+    };
+    let path = save_with_id(target, &file, &storage_id, true).await?;
+    Ok(RemoteStoredAttachment {
+        attachment_id: attachment.attachment_id,
+        name: safe_filename(&file.name),
+        path,
+        size: file.bytes.len() as u64,
+    })
+}
 
 #[derive(Debug)]
 pub struct InboundFile {
@@ -53,6 +96,17 @@ fn safe_filename(name: &str) -> String {
 /// select a path or overwrite a workspace file. Return only after the stream is
 /// closed, so an Agent never receives a path to a partial download.
 pub async fn save_inbound_file(target: &SessionFileTarget, file: &InboundFile) -> Result<String> {
+    save_with_id(target, file, &uuid::Uuid::new_v4().to_string(), false).await
+}
+
+async fn save_with_id(
+    target: &SessionFileTarget,
+    file: &InboundFile,
+    storage_id: &str,
+    replay: bool,
+) -> Result<String> {
+    let _guard = SAVE_LOCK.lock().await;
+
     let root = if target.remote {
         if !target.root.starts_with('/') || target.root.split('/').any(|p| p == ".." || p == ".") {
             bail!("Remote attachment workspace must be an absolute POSIX path");
@@ -74,17 +128,28 @@ pub async fn save_inbound_file(target: &SessionFileTarget, file: &InboundFile) -
             .to_string_lossy()
             .into_owned()
     };
-    let directory = target.fs.join_path(
-        &root,
-        &[&format!(".openbitfun-inbound-{}", uuid::Uuid::new_v4())],
-    );
-    if target.fs.path_kind_no_follow(&directory).await?.is_some() {
-        bail!("Attachment directory already exists");
-    }
-    target.fs.create_dir_all(&directory).await?;
+    let directory = target
+        .fs
+        .join_path(&root, &[&format!(".openbitfun-inbound-{storage_id}")]);
     let path = target
         .fs
         .join_path(&directory, &[&safe_filename(&file.name)]);
+    if let Some(kind) = target.fs.path_kind_no_follow(&directory).await? {
+        if replay
+            && kind == WorkspacePathKind::Directory
+            && target.fs.path_kind_no_follow(&path).await? == Some(WorkspacePathKind::File)
+            && target
+                .fs
+                .read_file_bounded(&path, file.bytes.len())
+                .await?
+                .as_deref()
+                == Some(file.bytes.as_slice())
+        {
+            return Ok(path);
+        }
+        bail!("Attachment identity already exists with different or incomplete content; resend as a new attachment");
+    }
+    target.fs.create_dir_all(&directory).await?;
     let mut file_created = false;
     let saved = async {
         if target.fs.path_kind_no_follow(&directory).await? != Some(WorkspacePathKind::Directory) {
@@ -355,5 +420,85 @@ mod tests {
             assert_eq!(safe_filename(name), expected);
         }
         assert!(safe_filename(&"文".repeat(200)).len() <= 180);
+    }
+
+    #[tokio::test]
+    async fn session_attachment_retries_are_idempotent_scoped_and_conflict_safe() {
+        let directory = tempfile::tempdir().unwrap();
+        let fs = Arc::new(TestFs {
+            root: directory.path().into(),
+            remote: true,
+            offline: false,
+            writes: Mutex::new(vec![]),
+        });
+        let target = SessionFileTarget {
+            fs: fs.clone(),
+            root: "/remote".into(),
+            path: String::new(),
+            remote: true,
+        };
+        let request = RemoteSessionAttachment {
+            attachment_id: uuid::Uuid::new_v4().to_string(),
+            name: "key.pem".into(),
+            content_base64: B64.encode(b"fixture"),
+        };
+        let (first, repeated) = tokio::join!(
+            store_session_attachment(&target, "session-a", request.clone()),
+            store_session_attachment(&target, "session-a", request.clone()),
+        );
+        let first = first.unwrap();
+        assert_eq!(first, repeated.unwrap());
+        assert_eq!(fs.writes.lock().unwrap().len(), 1);
+        let other_session = store_session_attachment(&target, "session-b", request.clone())
+            .await
+            .unwrap();
+        assert_ne!(first.path, other_session.path);
+        let mut conflict = request.clone();
+        conflict.content_base64 = B64.encode(b"changed");
+        assert!(store_session_attachment(&target, "session-a", conflict)
+            .await
+            .is_err());
+        assert_eq!(fs.read_file(&first.path).await.unwrap(), b"fixture");
+        // A lost ACK can be retried after restart: no in-memory receipt is needed.
+        assert_eq!(
+            store_session_attachment(&target, "session-a", request)
+                .await
+                .unwrap(),
+            first
+        );
+    }
+
+    #[tokio::test]
+    async fn invalid_attachment_wire_payload_never_writes() {
+        let directory = tempfile::tempdir().unwrap();
+        let fs = Arc::new(TestFs {
+            root: directory.path().into(),
+            remote: true,
+            offline: false,
+            writes: Mutex::new(vec![]),
+        });
+        let target = SessionFileTarget {
+            fs: fs.clone(),
+            root: "/remote".into(),
+            path: String::new(),
+            remote: true,
+        };
+        for (id, encoded) in [
+            ("../escape".into(), B64.encode(b"fixture")),
+            (uuid::Uuid::new_v4().to_string(), "invalid-base64".into()),
+        ] {
+            assert!(store_session_attachment(
+                &target,
+                "session",
+                RemoteSessionAttachment {
+                    attachment_id: id,
+                    name: "key.pem".into(),
+                    content_base64: encoded
+                }
+            )
+            .await
+            .is_err());
+        }
+        assert!(fs.writes.lock().unwrap().is_empty());
     }
 }
