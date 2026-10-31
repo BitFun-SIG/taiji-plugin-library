@@ -31,6 +31,7 @@ mod plugin_host_activation;
 mod product_assembly;
 mod prompt_stash;
 mod prompts;
+mod remote_control;
 mod root_handlers;
 mod runtime;
 mod self_update;
@@ -993,6 +994,7 @@ async fn initialize_core_services_for_deployment(
     )?);
     // Restore on the executing host for TUI, exec, Shared and detached jobs alike.
     runtime.account_runtime().try_restore_session().await;
+    remote_control::install(&runtime);
     debug_assert!(runtime
         .product()
         .service_availability()

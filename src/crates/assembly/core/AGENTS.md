@@ -632,3 +632,12 @@ For HTML preview workspace identity and shared resource-service wiring:
 ```bash
 cargo test --locked -p openbitfun-core --no-default-features --features remote-connect --lib service::filesystem::html_preview::tests
 ```
+
+For Remote Connect bot restore eligibility and listener shutdown/status:
+
+```bash
+cargo test --locked -p openbitfun-core --no-default-features --features remote-connect --lib -- service::remote_connect::control:: listener_lifecycle_tests
+```
+
+The lifecycle fixtures cover account/config replacement, explicit disablement,
+and task release; real provider message delivery requires a signed-in host.
