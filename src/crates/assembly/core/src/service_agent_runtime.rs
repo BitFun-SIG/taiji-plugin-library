@@ -4147,6 +4147,15 @@ mod tests {
         assert!(
             matches!(result, Err(error) if error.contains("output session workspace is unavailable"))
         );
+        let attachment = openbitfun_runtime_ports::RemoteSessionAttachment {
+            attachment_id: uuid::Uuid::new_v4().to_string(),
+            name: "fixture.pem".into(),
+            content_base64: "Zml4dHVyZQ==".into(),
+        };
+        let stored = CoreRemoteWorkspaceFileRuntimeHost
+            .store_session_attachment(missing, attachment)
+            .await;
+        assert!(matches!(stored, Err(error) if error.contains("no current-workspace fallback")));
     }
 
     #[tokio::test]

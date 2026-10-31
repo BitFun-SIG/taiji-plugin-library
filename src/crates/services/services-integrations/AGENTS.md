@@ -235,6 +235,7 @@ For WeChat inbound CDN files, attachment storage, and provider-neutral bot contr
 
 ```bash
 cargo test --locked -p openbitfun-services-integrations --no-default-features --features remote-connect --lib remote_connect::bot::
+cargo test --locked -p openbitfun-services-integrations --no-default-features --features remote-connect --lib session_attachment_contract_tests
 ```
 
 The attachment fixtures exercise real local file IO and a simulated POSIX remote

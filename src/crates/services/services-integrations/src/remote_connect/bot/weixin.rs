@@ -635,41 +635,28 @@ impl WeixinProviderClient {
             .await
     }
 
-    pub async fn download_inbound_images(&self, msg: &Value) -> (Vec<WeixinIncomingImage>, usize) {
-        let Some(items) = msg["item_list"].as_array() else {
-            return (vec![], 0);
-        };
-        let total_with_param = items
-            .iter()
-            .filter(|item| {
-                item["type"].as_i64() == Some(2)
-                    && item["image_item"]["media"]["encrypt_query_param"]
-                        .as_str()
-                        .is_some_and(|s| !s.is_empty())
-            })
-            .count();
-        let skipped = total_with_param.saturating_sub(MAX_INBOUND_IMAGES);
-
+    pub async fn download_inbound_images(
+        &self,
+        msg: &Value,
+    ) -> Result<(Vec<WeixinIncomingImage>, usize)> {
+        let items: Vec<_> = msg["item_list"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter(|item| item["type"].as_i64() == Some(2))
+            .collect();
+        let skipped = items.len().saturating_sub(MAX_INBOUND_IMAGES);
         let mut images = Vec::new();
-        for item in items {
-            if images.len() >= MAX_INBOUND_IMAGES {
-                break;
-            }
-            if item["type"].as_i64() != Some(2) {
-                continue;
-            }
-            match self.inbound_image_bytes_from_item(item).await {
-                Ok(bytes) => {
-                    images.push(WeixinIncomingImage {
-                        name: format!("weixin_image_{}.jpg", images.len() + 1),
-                        mime_type: sniff_image_mime(&bytes),
-                        bytes,
-                    });
-                }
-                Err(err) => warn!("Weixin inbound image download failed: {err}"),
-            }
+        for item in items.into_iter().take(MAX_INBOUND_IMAGES) {
+            // Missing or failed media must not silently become empty/partial input.
+            let bytes = self.inbound_image_bytes_from_item(item).await?;
+            images.push(WeixinIncomingImage {
+                name: format!("weixin_image_{}.jpg", images.len() + 1),
+                mime_type: sniff_image_mime(&bytes),
+                bytes,
+            });
         }
-        (images, skipped)
+        Ok((images, skipped))
     }
 
     /// Ordinary files use the same CDN encryption as images, but must remain
@@ -714,38 +701,9 @@ impl WeixinProviderClient {
                     .ok_or_else(|| anyhow!("File decryption key is missing"))?,
             )
             .map_err(|_| anyhow!("Invalid file decryption key"))?;
-            let url = full_url
-                .map(str::to_owned)
-                .unwrap_or_else(|| build_cdn_download_url(DEFAULT_CDN_BASE_URL, param));
-            // Do not include signed CDN URLs or encryption keys in errors/logs.
-            let mut response = crate::reqwest_client_builder()
-                .timeout(Duration::from_secs(120))
-                .build()?
-                .get(url)
-                .send()
-                .await
-                .map_err(|_| anyhow!("File download request failed"))?;
-            if !response.status().is_success() {
-                return Err(anyhow!("File download failed: HTTP {}", response.status()));
-            }
-            let limit = aes_ecb_ciphertext_len(remaining);
-            if response
-                .content_length()
-                .is_some_and(|size| size > limit as u64)
-            {
-                return Err(anyhow!("Inbound files exceed the 30 MiB message limit"));
-            }
-            let mut encrypted = Vec::new();
-            while let Some(chunk) = response
-                .chunk()
-                .await
-                .map_err(|_| anyhow!("File download interrupted"))?
-            {
-                if chunk.len() > limit.saturating_sub(encrypted.len()) {
-                    return Err(anyhow!("Inbound files exceed the 30 MiB message limit"));
-                }
-                encrypted.extend_from_slice(&chunk);
-            }
+            let encrypted = self
+                .fetch_weixin_cdn_bytes(param, full_url, remaining)
+                .await?;
             let bytes = decrypt_aes_128_ecb_pkcs7(&encrypted, &key)
                 .map_err(|_| anyhow!("File decryption failed"))?;
             if bytes.len() > remaining {
@@ -795,29 +753,52 @@ impl WeixinProviderClient {
         &self,
         encrypted_query_param: &str,
         full_url: Option<&str>,
+        max_plain_bytes: usize,
     ) -> Result<Vec<u8>> {
         let url = match full_url.map(str::trim).filter(|s| !s.is_empty()) {
             Some(url) => url.to_string(),
-            None => build_cdn_download_url(DEFAULT_CDN_BASE_URL, encrypted_query_param),
+            None if !encrypted_query_param.is_empty() => {
+                build_cdn_download_url(DEFAULT_CDN_BASE_URL, encrypted_query_param)
+            }
+            None => return Err(anyhow!("Media download reference is missing")),
         };
-        let client = crate::reqwest_client_builder()
+        // Signed URLs, response bodies, and encryption keys stay out of errors/logs.
+        let mut response = crate::reqwest_client_builder()
             .timeout(Duration::from_secs(120))
-            .build()?;
-        let resp = client.get(&url).send().await?;
-        let status = resp.status();
-        if !status.is_success() {
-            let body = resp.text().await.unwrap_or_default();
-            return Err(anyhow!("weixin CDN GET {status}: {body}"));
+            .build()?
+            .get(url)
+            .send()
+            .await
+            .map_err(|_| anyhow!("Media download request failed"))?;
+        if !response.status().is_success() {
+            return Err(anyhow!("Media download failed: HTTP {}", response.status()));
         }
-        Ok(resp.bytes().await?.to_vec())
+        let limit = aes_ecb_ciphertext_len(max_plain_bytes);
+        if response
+            .content_length()
+            .is_some_and(|size| size > limit as u64)
+        {
+            return Err(anyhow!("Inbound media exceeds the download limit"));
+        }
+        let mut encrypted = Vec::new();
+        while let Some(chunk) = response
+            .chunk()
+            .await
+            .map_err(|_| anyhow!("Media download interrupted"))?
+        {
+            if chunk.len() > limit.saturating_sub(encrypted.len()) {
+                return Err(anyhow!("Inbound media exceeds the download limit"));
+            }
+            encrypted.extend_from_slice(&chunk);
+        }
+        Ok(encrypted)
     }
 
     async fn inbound_image_bytes_from_item(&self, item: &Value) -> Result<Vec<u8>> {
         let image = &item["image_item"];
         let param = image["media"]["encrypt_query_param"]
             .as_str()
-            .filter(|s| !s.is_empty())
-            .ok_or_else(|| anyhow!("image: missing encrypt_query_param"))?;
+            .unwrap_or_default();
         let full_url = image["media"]["full_url"].as_str();
 
         let key = if let Some(hex_s) = image["aeskey"].as_str().filter(|s| !s.is_empty()) {
@@ -835,11 +816,18 @@ impl WeixinProviderClient {
             None
         };
 
-        let encrypted = self.fetch_weixin_cdn_bytes(param, full_url).await?;
-        match key {
-            Some(key) => decrypt_aes_128_ecb_pkcs7(&encrypted, &key),
-            None => Ok(encrypted),
+        let encrypted = self
+            .fetch_weixin_cdn_bytes(param, full_url, MAX_WEIXIN_FILE_BYTES as usize)
+            .await?;
+        let bytes = match key {
+            Some(key) => decrypt_aes_128_ecb_pkcs7(&encrypted, &key)
+                .map_err(|_| anyhow!("Image decryption failed"))?,
+            None => encrypted,
+        };
+        if bytes.len() > MAX_WEIXIN_FILE_BYTES as usize {
+            return Err(anyhow!("Inbound image exceeds the download limit"));
         }
+        Ok(bytes)
     }
 
     async fn upload_bytes_to_weixin_cdn(
@@ -2363,5 +2351,36 @@ mod tests {
             assert!(!error.to_string().contains("http://"));
             task.await.unwrap();
         }
+    }
+
+    #[tokio::test]
+    async fn image_full_url_download_and_missing_media_are_not_silently_skipped() {
+        let plain = b"binary-image-fixture";
+        let encrypted = encrypt_aes_128_ecb_pkcs7(plain, &[42; 16]);
+        let (url, task) = mock_file_download(encrypted.clone(), "200 OK", encrypted.len()).await;
+        let client = test_client("http://unused.invalid".into());
+        let (images, skipped) = client
+            .download_inbound_images(&json!({"item_list":[{"type":2,"image_item":{
+                "media":{"full_url":url,"aes_key":B64.encode([42;16])}
+            }}]}))
+            .await
+            .unwrap();
+        assert_eq!(skipped, 0);
+        assert_eq!(images[0].bytes, plain);
+        task.await.unwrap();
+        assert!(client
+            .download_inbound_images(&json!({"item_list":[{"type":2}]}))
+            .await
+            .is_err());
+        let (url, task) =
+            mock_file_download(vec![], "200 OK", (MAX_WEIXIN_FILE_BYTES + 32) as usize).await;
+        let error = client
+            .download_inbound_images(
+                &json!({"item_list":[{"type":2,"image_item":{"media":{"full_url":url}}}]}),
+            )
+            .await
+            .unwrap_err();
+        assert!(!error.to_string().contains("http://"));
+        task.await.unwrap();
     }
 }

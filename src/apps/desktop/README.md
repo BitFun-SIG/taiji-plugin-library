@@ -804,6 +804,10 @@ silently omitted. Accepted writes finish on the target even if the controller
 disconnects. Retries with the same attachment identity reuse identical saved bytes
 and reject changed or incomplete content. This input path does not submit
 attachments to Detached Dispatch jobs.
+Messages from one WeChat peer finish attachment preparation and turn admission in
+receive order. Model replies run independently, so approvals and follow-up input
+remain available. Failed image downloads also reject the message with a visible
+error instead of silently submitting empty or partial media input.
 
 ## WeChat session result notifications
 
