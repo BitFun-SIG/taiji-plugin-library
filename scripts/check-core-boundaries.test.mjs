@@ -4622,6 +4622,7 @@ test('capability contract consumers may inherit empty defaults but must select r
       }),
       pathDependency('src/crates/execution/tool-contracts', {
         name: 'openbitfun-agent-tools',
+        features: ['computer-use-contract'],
       }),
     ],
   );
@@ -4648,6 +4649,22 @@ test('capability contract consumers may inherit empty defaults but must select r
     );
     assert.ok(violations.some(({ message }) => /tool-runtime.*openbitfun-runtime-ports/.test(message)),
       `tool-runtime must retain exactly workspace-ports, not ${features.join(', ') || 'an empty edge'}`);
+  }
+  for (const features of [[], ['computer-use-contract', 'mcp-bridge']]) {
+    const mutatedConsumer = {
+      ...toolRuntime,
+      dependencies: [
+        toolRuntime.dependencies[0],
+        { ...toolRuntime.dependencies[1], features },
+      ],
+    };
+    const violations = findTestCapabilityViolations(
+      cargoBoundaries.findCapabilityContractConsumerViolations,
+      [runtimePorts, agentTools, mutatedConsumer],
+      ioContractRules,
+    );
+    assert.ok(violations.some(({ message }) => /tool-runtime.*openbitfun-agent-tools/.test(message)),
+      `tool-runtime must retain exactly computer-use-contract, not ${features.join(', ') || 'an empty edge'}`);
   }
 });
 

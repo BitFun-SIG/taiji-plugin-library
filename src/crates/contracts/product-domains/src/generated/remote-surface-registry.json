@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "digest": "fnv1a64:7c603518d44daff7",
+  "digest": "fnv1a64:ee62faff5c97f12a",
   "retiredCommandPrefixes": [
     {
       "prefix": "lsp_",
@@ -35,6 +35,7 @@
       "wsl_workspaces_v1",
       "computer_use_sharing_v1",
       "product_control_v1",
+      "remote_connect_control_v1",
       "product_control_native_v1",
       "product_control_presentation_v1",
       "cancel_tool",
@@ -76,6 +77,7 @@
       "wsl_workspaces_v1",
       "computer_use_sharing_v1",
       "product_control_v1",
+      "remote_connect_control_v1",
       "product_control_native_v1",
       "product_control_presentation_v1",
       "cancel_tool",
@@ -103,6 +105,7 @@
       "token_usage_statistics",
       "model_channel_routing_v1",
       "product_control_v1",
+      "remote_connect_control_v1",
       "cancel_tool",
       "tool_catalog",
       "session_trajectory_v1",

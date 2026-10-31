@@ -3148,6 +3148,29 @@ pub(crate) async fn execute_forwarded_turn(
     runtime_fence: &super::BotRuntimeFence,
     identity_epoch: u64,
 ) -> ForwardedTurnResult {
+    execute_forwarded_turn_with_submission(
+        forward,
+        interaction_handler,
+        message_sender,
+        verbose_mode,
+        runtime_fence,
+        identity_epoch,
+        None,
+    )
+    .await
+}
+
+/// Notify an ingress queue after admission, without holding it for model output
+/// or a user interaction. Dropping the sender also releases failed/cancelled input.
+pub(crate) async fn execute_forwarded_turn_with_submission(
+    forward: ForwardRequest,
+    interaction_handler: Option<BotInteractionHandler>,
+    message_sender: Option<BotMessageSender>,
+    verbose_mode: bool,
+    runtime_fence: &super::BotRuntimeFence,
+    identity_epoch: u64,
+    submission_finished: Option<tokio::sync::oneshot::Sender<()>>,
+) -> ForwardedTurnResult {
     if !runtime_fence.is_lifecycle_current() || runtime_fence.identity_epoch() != identity_epoch {
         return ForwardedTurnResult {
             completed_remote_tools: Vec::new(),
@@ -3156,8 +3179,14 @@ pub(crate) async fn execute_forwarded_turn(
         };
     }
     if forward.remote_target.is_some() {
-        return execute_remote_forward(forward, interaction_handler, runtime_fence, identity_epoch)
-            .await;
+        return execute_remote_forward(
+            forward,
+            interaction_handler,
+            runtime_fence,
+            identity_epoch,
+            submission_finished,
+        )
+        .await;
     }
     use crate::service::remote_connect::remote_server::{
         get_or_init_global_dispatcher, TrackerEvent,
@@ -3173,7 +3202,7 @@ pub(crate) async fn execute_forwarded_turn(
 
     let target_turn_id = forward.turn_id.clone();
 
-    if let Err(e) = dispatcher
+    let submission = dispatcher
         .send_message(
             &forward.session_id,
             forward.content,
@@ -3182,8 +3211,9 @@ pub(crate) async fn execute_forwarded_turn(
             RemoteConnectSubmissionSource::Bot,
             Some(forward.turn_id.clone()),
         )
-        .await
-    {
+        .await;
+    drop(submission_finished);
+    if let Err(e) = submission {
         let msg = format!("{}{e}", s.send_failed_prefix);
         return ForwardedTurnResult {
             completed_remote_tools: Vec::new(),
@@ -3375,6 +3405,7 @@ async fn execute_remote_forward(
     interaction_handler: Option<BotInteractionHandler>,
     fence: &super::BotRuntimeFence,
     epoch: u64,
+    submission_finished: Option<tokio::sync::oneshot::Sender<()>>,
 ) -> ForwardedTurnResult {
     use openbitfun_services_integrations::remote_connect::bot::remote_turn::observe_turn;
     let s = strings_for(current_bot_language().await);
@@ -3396,6 +3427,7 @@ async fn execute_remote_forward(
             "image_contexts":forward.image_contexts,
         }))
         .await;
+    drop(submission_finished);
     if !current() {
         return empty();
     }
@@ -4439,15 +4471,22 @@ mod handle_chat_tests {
             turn_id: "turn".into(),
             image_contexts: vec![],
         };
-        let result = execute_forwarded_turn(
+        let (submission_finished, admission) = tokio::sync::oneshot::channel();
+        let result = execute_forwarded_turn_with_submission(
             forward,
             None,
             None,
             false,
             &fence,
             fence.identity_epoch() + 1,
+            Some(submission_finished),
         )
         .await;
+        assert!(
+            tokio::time::timeout(std::time::Duration::from_secs(1), admission)
+                .await
+                .is_ok()
+        );
         assert!(result.display_text.is_empty());
         assert!(result.full_text.is_empty());
     }
@@ -4650,6 +4689,7 @@ mod handle_chat_tests {
                         "send_message" => {
                             assert_eq!(command["session_id"],"session-a");
                             assert_eq!(command["image_contexts"][0]["data_url"],"data:image/png;base64,AP8B");
+                            assert_eq!(command["content"].as_str().unwrap().contains("/remote/session-a/key.pem"), supports_interaction);
                             // Legacy hosts may select their own accepted turn ID.
                             serde_json::json!({"resp":"message_sent","session_id":"session-a","turn_id":"accepted-turn"})
                         }
@@ -4672,8 +4712,17 @@ mod handle_chat_tests {
                             }
                         }
                         "get_workspace_info" => serde_json::json!({"resp":"workspace_info", "capabilities":
-                            if supports_interaction { vec!["user_question_interaction_v1"] } else { vec![] }
+                            if supports_interaction { vec!["user_question_interaction_v1", "session_attachments_v1"] } else { vec![] }
                         }),
+                        "store_session_attachment" => {
+                            assert!(supports_interaction);
+                            assert_eq!(command["session_id"], "session-a");
+                            assert_eq!(command["attachment"]["content_base64"], "AP8B");
+                            assert!(uuid::Uuid::parse_str(command["attachment"]["attachment_id"].as_str().unwrap()).is_ok());
+                            serde_json::json!({"resp":"session_attachment_stored","session_id":"session-a",
+                                "attachment":{"attachment_id":command["attachment"]["attachment_id"],
+                                    "name":"key.pem","path":"/remote/session-a/key.pem","size":3}})
+                        }
                         "start_question_interaction" => {
                             assert!(supports_interaction);
                             assert_eq!(command["session_id"], "session-a");
@@ -4726,7 +4775,7 @@ mod handle_chat_tests {
             mime_type: "image/png".into(),
             metadata: None,
         };
-        let forward = handle_chat(
+        let mut forward = handle_chat(
             &mut state,
             "render",
             vec![image],
@@ -4738,6 +4787,23 @@ mod handle_chat_tests {
         let target = forward.remote_target.clone().unwrap();
         state.select_local_device();
         state.current_session_id = Some("unrelated-local-session".into());
+        let capable = target.require_session_attachments().await;
+        if supports_interaction {
+            capable.unwrap();
+            let path = target.store_attachment(&openbitfun_services_integrations::remote_connect::bot::inbound_files::InboundFile {
+                name: "key.pem".into(), bytes: vec![0, 255, 1],
+            }).await.unwrap();
+            assert_eq!(path, "/remote/session-a/key.pem");
+            forward.content.push_str(&path);
+        } else {
+            assert!(capable.unwrap_err().contains("upgrade"));
+            assert!(!calls
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|call| call["cmd"] == "store_session_attachment"));
+        }
+
         let handler: BotInteractionHandler = Arc::new(move |request| {
             Box::pin(async move {
                 assert!(request.reply.contains("Device A"));
@@ -4765,19 +4831,26 @@ mod handle_chat_tests {
             })
         });
         let fence = super::super::BotRuntimeFence::standalone();
-        let result = tokio::time::timeout(
-            std::time::Duration::from_secs(20),
-            execute_forwarded_turn(
-                forward,
-                Some(handler),
-                None,
-                false,
-                &fence,
-                fence.identity_epoch(),
-            ),
-        )
-        .await
-        .unwrap();
+        let (submission_finished, admission) = tokio::sync::oneshot::channel();
+        let execution = execute_forwarded_turn_with_submission(
+            forward,
+            Some(handler),
+            None,
+            false,
+            &fence,
+            fence.identity_epoch(),
+            Some(submission_finished),
+        );
+        tokio::pin!(execution);
+        // Ingress is released after the encrypted submit ACK, while polling and
+        // interactive replies continue independently (including reconnection).
+        tokio::select! {
+            _ = admission => {},
+            _ = &mut execution => panic!("Turn completed before releasing ingress"),
+        }
+        let result = tokio::time::timeout(std::time::Duration::from_secs(20), &mut execution)
+            .await
+            .unwrap();
         assert_eq!(result.full_text, "![image](result.png)");
         assert_eq!(result.completed_remote_tools.len(), 2);
         assert!(result

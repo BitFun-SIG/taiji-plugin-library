@@ -201,3 +201,33 @@ For `/goal` prompt routing (including the pending-session guard):
 cargo test --locked -p openbitfun-cli --bin openbitfun goal_prompts_
 cargo test --locked -p openbitfun-cli --bin openbitfun -- modes::exec::tests:: dispatch::worker::tests::
 ```
+
+For daemon Remote Connect management, private IPC authentication/frame bounds,
+and daemon lifecycle regressions:
+
+```bash
+cargo test --locked -p openbitfun-cli --bin openbitfun daemon::
+```
+
+Bot listeners belong to the daemon. Chat/Shared/dispatch processes call its
+private, versioned endpoint and never replay a mutation after an unknown outcome.
+The executing account is checked before control requests reach the shared owner.
+These loopback fixtures do not establish live Relay or provider connectivity.
+
+For the inline WeChat QR card, collapsed output, theme contrast and narrow terminals:
+
+```bash
+cargo test --locked -p openbitfun-cli --bin openbitfun ui::tool_cards::tests::
+```
+
+For native Computer Use host wiring and headless/dispatch admission:
+
+```bash
+cargo test --locked -p openbitfun-cli --bin openbitfun computer_use::
+cargo test --locked -p openbitfun-cli --test cli_command_contracts computer_use_
+```
+
+Native provider and OS fixture checks belong to
+[`services/computer-use`](../../crates/services/computer-use/AGENTS.md). CLI owns
+the main-thread run-loop adapter and provider injection, including Shared TUI's
+executing host. Dispatch, ACP and the stdio server do not infer a GUI provider.

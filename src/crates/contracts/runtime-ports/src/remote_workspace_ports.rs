@@ -233,8 +233,43 @@ pub trait RemoteInitialSyncRuntimeHost: Send + Sync {
 }
 
 /// Old remote-connect host compatibility trait for remote file projection.
+/// Versioned session attachment input. The execution host chooses its storage path.
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RemoteSessionAttachment {
+    pub attachment_id: String,
+    pub name: String,
+    pub content_base64: String,
+}
+
+impl std::fmt::Debug for RemoteSessionAttachment {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RemoteSessionAttachment")
+            .field("attachment_id", &self.attachment_id)
+            .field("name", &self.name)
+            .field("encoded_bytes", &self.content_base64.len())
+            .finish_non_exhaustive()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RemoteStoredAttachment {
+    pub attachment_id: String,
+    pub name: String,
+    pub path: String,
+    pub size: u64,
+}
+
 #[async_trait::async_trait]
 pub trait RemoteWorkspaceFileRuntimeHost: Send + Sync {
+    /// New controllers negotiate session_attachments_v1 before invoking this.
+    async fn store_session_attachment(
+        &self,
+        _session_id: &str,
+        _attachment: RemoteSessionAttachment,
+    ) -> Result<RemoteStoredAttachment, String> {
+        Err("Session attachments are unsupported on this execution host".into())
+    }
+
     async fn resolve_remote_file_workspace_root(&self, session_id: Option<&str>)
         -> Option<PathBuf>;
 

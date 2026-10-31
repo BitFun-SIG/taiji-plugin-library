@@ -267,7 +267,8 @@ describe('WorkspaceListSection layout styles', () => {
 
     expect(itemSource).toContain('<AssistantAvatar size={22} name={workspaceDisplayName} />');
     expect(itemSource).toContain('<WorkspaceIcon workspace={workspace} />');
-    expect(iconSource).toContain('<Icon glyph={remote ? Server : Folder} size="sm"');
+    expect(iconSource).toContain('projectGlyphs[glyph] : remote ? Server : Folder');
+    expect(iconSource).toContain('<Icon glyph={artwork} size="sm"');
     expect(itemSource).not.toContain('SessionGroup');
     expect(listSource).not.toContain('nav.sessions.viewMenu.grouping.all');
     expect(listSource).not.toContain('workspace-all-sessions-header');

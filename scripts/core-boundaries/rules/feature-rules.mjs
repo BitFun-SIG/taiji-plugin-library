@@ -609,7 +609,9 @@ export const capabilityContractDependencyRules = [
         ['remote-connect'],
         ['product-full'],
       )],
-      ['tool-runtime', capabilityConsumer([capabilityEdge()])],
+      // Native resources consume only the portable automation contract and tokens.
+      ['openbitfun-computer-use', capabilityConsumer([capabilityEdge(['computer-use-contract', 'element-token'])])],
+      ['tool-runtime', capabilityConsumer([capabilityEdge(['computer-use-contract'])])],
     ]),
   },
   {

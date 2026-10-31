@@ -50,10 +50,11 @@ use openbitfun_runtime_ports::{
 };
 pub use openbitfun_runtime_ports::{
     RemoteAssistantWorkspaceFacts, RemoteFileChunkRange, RemoteInitialSyncRuntimeHost,
-    RemoteProjectionPort, RemoteRecentWorkspaceFacts, RemoteSessionMetadata,
-    RemoteSessionWorkspaceIdentity, RemoteWorkspaceFacts, RemoteWorkspaceFileChunk,
-    RemoteWorkspaceFileContent, RemoteWorkspaceFileInfo, RemoteWorkspaceFileRuntimeHost,
-    RemoteWorkspaceKind, RemoteWorkspacePort, RemoteWorkspaceRuntimeHost, RemoteWorkspaceUpdate,
+    RemoteProjectionPort, RemoteRecentWorkspaceFacts, RemoteSessionAttachment,
+    RemoteSessionMetadata, RemoteSessionWorkspaceIdentity, RemoteStoredAttachment,
+    RemoteWorkspaceFacts, RemoteWorkspaceFileChunk, RemoteWorkspaceFileContent,
+    RemoteWorkspaceFileInfo, RemoteWorkspaceFileRuntimeHost, RemoteWorkspaceKind,
+    RemoteWorkspacePort, RemoteWorkspaceRuntimeHost, RemoteWorkspaceUpdate,
 };
 use openbitfun_services_core::product_identity::hidden_data_directory;
 pub use page_upload::{
@@ -560,6 +561,7 @@ pub const REMOTE_CAPABILITY_DIALOG_STEER_V1: &str = "dialog_steer_v1";
 pub const REMOTE_CAPABILITY_USER_QUESTION_INTERACTION_V1: &str = "user_question_interaction_v1";
 pub const REMOTE_CAPABILITY_BACKGROUND_RESULT_DELIVERY_V1: &str = "background_result_delivery_v1";
 pub const REMOTE_CAPABILITY_SESSION_ROLLBACK_V1: &str = "session_rollback_v1";
+pub const REMOTE_CAPABILITY_SESSION_ATTACHMENTS_V1: &str = "session_attachments_v1";
 pub const REMOTE_CAPABILITY_PLAN_BUILD_V1: &str = "plan_build_v1";
 pub use host_stream::REMOTE_CAPABILITY_HOST_STREAM_V1;
 
@@ -570,6 +572,7 @@ fn remote_host_capabilities() -> Vec<String> {
         REMOTE_CAPABILITY_DIALOG_STEER_V1.to_string(),
         "dialog_queue_v1".to_string(),
         REMOTE_CAPABILITY_PLAN_BUILD_V1.to_string(),
+        REMOTE_CAPABILITY_SESSION_ATTACHMENTS_V1.to_string(),
         REMOTE_CAPABILITY_SESSION_ROLLBACK_V1.to_string(),
         REMOTE_CAPABILITY_USER_QUESTION_INTERACTION_V1.to_string(),
         REMOTE_CAPABILITY_BACKGROUND_RESULT_DELIVERY_V1.to_string(),
@@ -851,6 +854,21 @@ where
     H: RemoteWorkspaceFileRuntimeHost + ?Sized,
 {
     match command {
+        RemoteCommand::StoreSessionAttachment {
+            session_id,
+            attachment,
+        } => {
+            match host
+                .store_session_attachment(session_id, attachment.clone())
+                .await
+            {
+                Ok(stored) => RemoteResponse::SessionAttachmentStored {
+                    session_id: session_id.clone(),
+                    attachment: stored,
+                },
+                Err(message) => RemoteResponse::Error { message },
+            }
+        }
         RemoteCommand::ReadFile { path, session_id } => {
             match host
                 .read_remote_file(path, session_id.as_deref(), REMOTE_FILE_MAX_READ_BYTES)
@@ -2836,6 +2854,10 @@ pub enum RemoteCommand {
         known_msg_count: usize,
         known_model_catalog_version: Option<u64>,
     },
+    StoreSessionAttachment {
+        session_id: String,
+        attachment: RemoteSessionAttachment,
+    },
     ReadFile {
         path: String,
         session_id: Option<String>,
@@ -3108,6 +3130,10 @@ pub enum RemoteResponse {
     PermissionMode {
         mode: RemotePermissionMode,
     },
+    SessionAttachmentStored {
+        session_id: String,
+        attachment: RemoteStoredAttachment,
+    },
     FileContent {
         name: String,
         content_base64: String,
@@ -3267,7 +3293,8 @@ where
 
         RemoteCommand::PollSession { .. } => host.handle_poll_command(command).await,
 
-        RemoteCommand::ReadFile { .. }
+        RemoteCommand::StoreSessionAttachment { .. }
+        | RemoteCommand::ReadFile { .. }
         | RemoteCommand::ReadFileChunk { .. }
         | RemoteCommand::GetFileInfo { .. } => host.handle_workspace_file_command(command).await,
 
@@ -5936,5 +5963,40 @@ mod tests {
         });
         assert_eq!(tracker.session_state(), "idle");
         assert!(tracker.is_history_snapshot_required());
+    }
+}
+
+#[cfg(test)]
+mod session_attachment_contract_tests {
+    use super::*;
+    struct LegacyFileHost;
+    #[async_trait::async_trait]
+    impl RemoteWorkspaceFileRuntimeHost for LegacyFileHost {
+        async fn resolve_remote_file_workspace_root(
+            &self,
+            _: Option<&str>,
+        ) -> Option<std::path::PathBuf> {
+            None
+        }
+    }
+    #[tokio::test]
+    async fn attachment_wire_roundtrip_and_unsupported_host_are_explicit() {
+        let wire = serde_json::json!({"cmd":"store_session_attachment","session_id":"session",
+            "attachment":{"attachment_id":"id","name":"key.pem","content_base64":"c2VjcmV0"}});
+        let command: RemoteCommand = serde_json::from_value(wire.clone()).unwrap();
+        assert_eq!(serde_json::to_value(&command).unwrap(), wire);
+        assert!(!format!("{command:?}").contains("c2VjcmV0"));
+        let result = handle_remote_workspace_file_command(&LegacyFileHost, &command).await;
+        assert!(matches!(result, RemoteResponse::Error { .. }));
+        assert!(remote_host_capabilities()
+            .iter()
+            .any(|capability| capability == REMOTE_CAPABILITY_SESSION_ATTACHMENTS_V1));
+        let legacy: RemoteCommand = serde_json::from_value(
+            serde_json::json!({"cmd":"send_message","session_id":"session","content":"hello"}),
+        )
+        .unwrap();
+        let roundtrip: RemoteCommand =
+            serde_json::from_value(serde_json::to_value(&legacy).unwrap()).unwrap();
+        assert_eq!(legacy, roundtrip);
     }
 }
