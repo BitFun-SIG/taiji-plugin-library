@@ -25,6 +25,7 @@ pub(crate) async fn run_daemon() -> Result<()> {
     }
 
     let management = super::control::Server::reserve().await?;
+    let _management_owner = management.owner_lease();
 
     // The daemon is not bound to the caller's cwd; peer commands carry their
     // own workspace paths. Home is a stable root for the runtime context.

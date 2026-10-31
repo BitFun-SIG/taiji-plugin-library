@@ -69,8 +69,13 @@ fn private_options() -> OpenOptions {
     options
 }
 
+#[derive(Clone)]
+pub(crate) struct OwnerLease {
+    _file: Arc<File>,
+}
+
 pub(crate) struct Server {
-    _lease: File,
+    lease: OwnerLease,
     path: PathBuf,
     listener: TcpListener,
     discovery: Discovery,
@@ -102,11 +107,19 @@ impl Server {
             token: format!("{}{}", uuid::Uuid::new_v4(), uuid::Uuid::new_v4()),
         };
         Ok(Self {
-            _lease: lease,
+            lease: OwnerLease {
+                _file: Arc::new(lease),
+            },
             path,
             listener,
             discovery,
         })
+    }
+
+    /// The listener can stop before bot and account cleanup completes. Retain
+    /// this guard in the daemon runner until the entire shutdown has finished.
+    pub(crate) fn owner_lease(&self) -> OwnerLease {
+        self.lease.clone()
     }
 
     fn publish(&self) -> Result<()> {
@@ -415,9 +428,10 @@ async fn restore_caller_routing(runtime: &Arc<CliRuntimeContext>) {
 mod tests {
     use super::*;
     #[tokio::test]
-    async fn daemon_owner_is_exclusive_and_released_on_shutdown() {
+    async fn daemon_owner_outlives_endpoint_until_cleanup_finishes() {
         let root = tempfile::tempdir().unwrap();
         let server = Server::reserve_in(root.path().to_path_buf()).await.unwrap();
+        let cleanup_owner = server.owner_lease();
         server.publish().unwrap();
         assert!(Server::reserve_in(root.path().to_path_buf()).await.is_err());
         assert!(
@@ -425,6 +439,12 @@ mod tests {
             "A competing start must not remove the current owner's discovery"
         );
         drop(server);
+        assert!(!root.path().join("endpoint.json").exists());
+        assert!(
+            Server::reserve_in(root.path().to_path_buf()).await.is_err(),
+            "A replacement daemon must wait for bot and account cleanup, even after discovery is withdrawn"
+        );
+        drop(cleanup_owner);
         assert!(Server::reserve_in(root.path().to_path_buf()).await.is_ok());
     }
 
