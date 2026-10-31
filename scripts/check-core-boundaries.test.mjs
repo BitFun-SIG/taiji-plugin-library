@@ -1916,6 +1916,7 @@ const CLI_REVIEWED_CORE_FEATURES = [
   'remote-connect',
   'plugin-runtime',
   'opencode-plugin-host',
+  'dispatch-store',
 ];
 
 const APP_SERVER_REVIEWED_CORE_FEATURES = [
@@ -2912,7 +2913,7 @@ test('CLI dependency closure includes build dependencies and excluded capabiliti
   assert.match(violations[0].message, /openbitfun-core\/product-full/);
 });
 
-test('CLI dependency closure excludes the Core dispatch store', () => {
+test('only the CLI dependency closure may select the Core dispatch store', () => {
   const core = {
     ...packageAt('openbitfun-core', 'src/crates/assembly/core/Cargo.toml'),
     features: { 'dispatch-store': [] },
@@ -2924,17 +2925,30 @@ test('CLI dependency closure excludes the Core dispatch store', () => {
       features: ['dispatch-store'],
     }),
   ]);
-  const cli = packageAt('openbitfun-cli', 'src/apps/cli/Cargo.toml', [
-    pathDependency('src/crates/assembly/bridge', { name: 'bridge' }),
-  ]);
-
-  const violations = findProductEntrypointCoreFeatureViolations(
-    [cli, bridge, core],
+  const closureViolations = (rootName, manifestPath) => findProductEntrypointCoreFeatureViolations(
+    [
+      packageAt(rootName, manifestPath, [
+        pathDependency('src/crates/assembly/bridge', { name: 'bridge' }),
+      ]),
+      bridge,
+      core,
+    ],
     { root: TEST_ROOT, crateLayoutRules },
   );
 
-  assert.equal(violations.length, 1);
-  assert.match(violations[0].message, /openbitfun-core\/dispatch-store/);
+  // The CLI is the reviewed outbound dispatch controller.
+  assert.deepEqual(
+    closureViolations('openbitfun-cli', 'src/apps/cli/Cargo.toml')
+      .filter((violation) => /dispatch-store/.test(violation.message)),
+    [],
+  );
+
+  const acpViolations = closureViolations(
+    'openbitfun-acp',
+    'src/crates/interfaces/acp/Cargo.toml',
+  );
+  assert.equal(acpViolations.length, 1);
+  assert.match(acpViolations[0].message, /openbitfun-core\/dispatch-store/);
 });
 
 test('cargo layer checker rejects reverse edges across dependency kinds', () => {
