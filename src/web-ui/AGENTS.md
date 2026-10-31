@@ -86,6 +86,9 @@ For icon changes, also run `pnpm --dir src/web-ui run icons:check` and the focus
 form decorations are generated from Lucide by `pnpm --dir src/web-ui run icons:generate`.
 General-purpose icons use Lucide; the four harness modes, Git branch, brand logos,
 mascots, and device overview artwork retain their authored assets.
+External-product identities reuse `src/shared/ui/ProductBrandIcon.tsx` and its
+`productBrandIcons.ts` asset catalog across import, sign-in, and account views;
+keep product assets and light/dark rendering out of page-local mappings.
 
 Choose the smallest matching check:
 
@@ -107,6 +110,15 @@ an intent-review inventory, not a pass/fail gate; do not mechanically replace
 deliberate layout transitions or animate virtualized content. Rely on CI for
 full lint, build, and broad test coverage unless the local change specifically
 needs it.
+
+For Agent creation, hidden internal IDs, editing, and surface-switch draft fences:
+
+```bash
+pnpm --dir src/web-ui run test:run src/app/scenes/agents/components/CreateAgentDialog.test.tsx src/app/scenes/agents/components/suggestAgentId.test.ts src/app/scenes/agents/components/CreateAgentPage.presentation.test.ts src/app/scenes/agents/AgentsScene.test.tsx src/app/scenes/personal-overview/PersonalOverviewScene.actions.test.tsx
+```
+
+These DOM fixtures cover local forms and simulated Peer surface switches;
+they do not establish native rendering or live remote behavior.
 
 For navigation-divider dragging, elastic feedback, cancellation, and keyboard resizing:
 
@@ -172,6 +184,15 @@ also run the focused state contracts:
 pnpm --dir src/web-ui run test:run src/app/services/sessionSceneLifecycle.test.ts src/flow_chat/services/sessionActivation.test.ts src/flow_chat/services/storeSync.test.ts src/app/stores/sceneStore.test.ts
 ```
 
+For top workspace tab recent-session disclosure, selection and reconciliation:
+
+```bash
+pnpm --dir src/web-ui run test:run src/app/components/SceneBar/SceneBar.test.tsx src/app/stores/sceneStore.test.ts src/app/services/sessionSceneLifecycle.test.ts src/app/hooks/useSessionTabLabels.test.tsx src/shared/ui/MenuPopover.test.tsx src/shared/ui/MenuComposition.contract.test.ts
+```
+
+These local DOM/store fixtures cover bounded history, legacy tabs and simulated
+SSH/Peer identities; they do not establish native rendering or live remote behavior.
+
 For composer mode restoration, passive synchronization, or explicit mode selection:
 
 ```bash
@@ -190,6 +211,15 @@ For text-entry guards, composer sanitization, or keyboard focus routing, run
 `pnpm --dir src/web-ui run test:run src/shared/utils/textInputGuard.test.tsx src/flow_chat/components/RichTextInput.test.tsx src/flow_chat/hooks/useComposerDefaultFocus.test.tsx src/flow_chat/utils/chatInputKeyOwnership.test.ts`.
 These cover DOM event ownership, controlled fields, IME and selection preservation;
 they do not establish native OS keyboard or remote transport behavior.
+
+For prompt suggestion whitespace normalization, visibility, acceptance keys, and legacy host events:
+
+```bash
+pnpm --dir src/web-ui run test:run src/flow_chat/store/promptSuggestionStore.test.ts src/flow_chat/hooks/usePromptSuggestionsEnabled.test.tsx src/flow_chat/services/flow-chat-manager/EventHandlerModule.test.ts
+```
+
+These local store/event fixtures include simulated Peer identities and legacy payloads;
+they do not establish native WebView rendering or live remote behavior.
 
 For ecosystem discovery, import, or compatibility status presentation changes:
 
@@ -217,6 +247,26 @@ pnpm --dir src/web-ui run test:run src/app/components/NavPanel/components/Worksp
 ```
 
 These DOM and store fixtures do not establish native rendering or live remote behavior.
+
+For assistant history disclosure and default-session selection:
+
+```bash
+pnpm --dir src/web-ui run test:run src/app/components/NavPanel/sections/workspaces/WorkspaceListSectionLayout.test.ts src/app/components/NavPanel/sections/workspaces/AssistantSessionHistory.test.tsx src/app/components/NavPanel/sections/workspaces/assistantSessionPreferences.test.ts
+```
+
+These local fixtures cover inline disclosure and legacy-host preference gating;
+they do not establish native rendering or live remote behavior.
+
+For session grouping/list motion, scroll anchoring, interruption and retained project disclosure:
+
+```bash
+pnpm --dir src/web-ui run test:run src/app/components/NavPanel/sections/workspaces/SessionViewTransition.test.tsx src/app/components/NavPanel/sections/workspaces/WorkspaceListSection.test.tsx src/app/components/NavPanel/sections/workspaces/WorkspaceListSectionLayout.test.ts src/app/components/NavPanel/components/WorkspaceSessionGroupingToggle.test.tsx
+pnpm run motion:audit
+```
+
+These DOM fixtures use measured-layout and animation stubs, including simulated
+Peer surface switches; they do not establish native animation fidelity or live
+SSH, Remote Control, Peer Device or Detached Dispatch behavior.
 
 For application update discovery, skip persistence, notification timing, and
 download/install transitions, run the focused behavior tests (these do not
@@ -268,3 +318,20 @@ These DOM and handshake fixtures cover local, legacy Desktop, CLI and unknown pe
 device changes, per-device remote preferences and legacy local migration, stale
 review launches, overview/tool-card gates, restored panels, and the controller-owned
 URL opener. They do not establish live macOS-to-Linux Peer Device or native browser behavior.
+
+For the composer context overview, category highlighting/previews, Session Usage side-panel loading, report summaries, navigation, and retained session ownership:
+
+```bash
+pnpm --dir src/web-ui run test:run src/flow_chat/components/ChatInputWorkspaceStrip.test.tsx src/flow_chat/services/usageReportService.test.ts src/flow_chat/services/openSessionContextPreview.test.ts src/flow_chat/components/usage/SessionUsageComponents.test.tsx src/flow_chat/components/usage/ToolDefinitionsPreview.test.tsx src/flow_chat/components/usage/usageReportUtils.test.ts src/app/components/panels/content-canvas/hooks/canvasPanelOwnership.test.tsx
+```
+
+These local DOM/store fixtures include simulated SSH report data, Peer surface switches,
+and the dispatch report source; they do not establish live remote behavior or visual fidelity.
+
+For canvas split tab placement, layout transitions, and lower-pane tab actions:
+
+```bash
+pnpm --dir src/web-ui run test:run src/app/components/panels/content-canvas/editor-area/EditorArea.test.tsx src/app/components/panels/content-canvas/CanvasToolbar.test.tsx src/app/components/panels/content-canvas/tab-bar/TabBar.test.tsx
+```
+
+These local DOM/store fixtures do not establish native rendering or live remote behavior.

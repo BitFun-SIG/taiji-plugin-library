@@ -12,6 +12,8 @@ use sha2::{Digest, Sha256};
 use std::{path::Path, sync::Arc};
 use tokio::io::{AsyncReadExt, AsyncSeekExt};
 
+pub mod transfer;
+
 pub struct HtmlPreviewSource {
     fs: Arc<dyn WorkspaceFileSystem>,
     root: String,
@@ -190,11 +192,19 @@ impl HtmlPreviewSource {
                         "Symbolic links are not available in remote HTML preview",
                     ));
                 }
-                if current != requested && metadata.kind != WorkspacePathKind::Directory {
+                if current == requested {
+                    if metadata.kind != WorkspacePathKind::File {
+                        return Err(not_found());
+                    }
+                    // Reuse the final no-follow lookup instead of paying for
+                    // another SFTP round trip to the same path.
+                    return Ok((requested, metadata));
+                }
+                if metadata.kind != WorkspacePathKind::Directory {
                     return Err(not_found());
                 }
             }
-            requested
+            return Err(not_found());
         } else {
             let canonical = tokio::fs::canonicalize(&requested)
                 .await

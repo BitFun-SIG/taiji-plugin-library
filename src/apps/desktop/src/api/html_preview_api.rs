@@ -12,18 +12,18 @@ use axum::{
     routing::any,
     Router,
 };
-use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
+use futures::TryStreamExt;
 use openbitfun_core::service::filesystem::html_preview::resolve_html_preview_source;
 use openbitfun_product_domains::{
     html_preview::{
         HtmlPreviewError, HtmlPreviewErrorCode as Code, HtmlPreviewResource,
-        HtmlPreviewResourceReply, HtmlPreviewResourceRequest, MAX_PREVIEW_BYTES,
-        PREVIEW_CHUNK_BYTES,
+        HtmlPreviewResourceReply, HtmlPreviewResourceRequest,
     },
     remote_surface::PeerHostCapability,
 };
 use openbitfun_services_integrations::remote_connect::{
-    html_preview::HtmlPreviewSource, RemoteCommand, RemoteResponse,
+    html_preview::transfer::{HtmlPreviewReader as PreviewReader, HtmlPreviewTransfer},
+    RemoteCommand, RemoteResponse,
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -58,27 +58,6 @@ pub struct HtmlPreviewCreateResponse {
 #[serde(rename_all = "camelCase")]
 pub struct HtmlPreviewReleaseRequest {
     pub session_id: String,
-}
-
-#[async_trait::async_trait]
-trait PreviewReader: Send + Sync {
-    fn is_current(&self) -> bool {
-        true
-    }
-    async fn read(
-        &self,
-        request: &HtmlPreviewResourceRequest,
-    ) -> Result<HtmlPreviewResource, HtmlPreviewError>;
-}
-
-#[async_trait::async_trait]
-impl PreviewReader for HtmlPreviewSource {
-    async fn read(
-        &self,
-        request: &HtmlPreviewResourceRequest,
-    ) -> Result<HtmlPreviewResource, HtmlPreviewError> {
-        HtmlPreviewSource::read(self, request).await
-    }
 }
 
 struct PeerPreviewReader {
@@ -177,7 +156,7 @@ struct PreviewState {
     cookie_name: String,
     entry_path: String,
     request: HtmlPreviewResourceRequest,
-    reader: Arc<dyn PreviewReader>,
+    transfer: Arc<HtmlPreviewTransfer>,
     closed: watch::Receiver<bool>,
 }
 
@@ -266,18 +245,22 @@ async fn start_preview(
     reader: Arc<dyn PreviewReader>,
     mut request: HtmlPreviewResourceRequest,
 ) -> Result<HtmlPreviewCreateResponse, String> {
-    let entry = reader.read(&request).await.map_err(|error| error.message)?;
-    validate_chunk(&entry, &request).map_err(|error| error.message)?;
+    let (shutdown, closed) = watch::channel(false);
+    let transfer = Arc::new(HtmlPreviewTransfer::new(reader, closed.clone()));
+    let entry = transfer
+        .open(request.clone(), false, None)
+        .await
+        .map_err(|error| error.message)?
+        .metadata;
     request.expected_source = Some(entry.source);
     let token = Uuid::new_v4().simple().to_string();
     let session_id = Uuid::new_v4().simple().to_string();
-    let (shutdown, closed) = watch::channel(false);
     let state = PreviewState {
         token: token.clone(),
         cookie_name: format!("openbitfun_html_preview_{session_id}"),
         entry_path: entry.entry_path,
         request,
-        reader,
+        transfer,
         closed: closed.clone(),
     };
     let listener = TcpListener::bind(("127.0.0.1", 0))
@@ -320,68 +303,6 @@ pub async fn html_preview_release(request: HtmlPreviewReleaseRequest) -> Result<
     Ok(())
 }
 
-impl PreviewState {
-    async fn read(
-        &self,
-        request: &HtmlPreviewResourceRequest,
-    ) -> Result<HtmlPreviewResource, HtmlPreviewError> {
-        let mut closed = self.closed.clone();
-        if *closed.borrow() || !self.reader.is_current() {
-            return Err(HtmlPreviewError::unavailable(
-                "HTML preview is no longer available",
-            ));
-        }
-        tokio::select! {
-            _ = closed.wait_for(|closed| *closed) => Err(HtmlPreviewError::unavailable("HTML preview was closed")),
-            result = self.reader.read(request) => {
-                let resource = result?;
-                if *self.closed.borrow() || !self.reader.is_current() { return Err(HtmlPreviewError::unavailable("HTML preview is no longer available")); }
-                validate_chunk(&resource, request)?;
-                Ok(resource)
-            }
-        }
-    }
-}
-
-fn validate_chunk(
-    file: &HtmlPreviewResource,
-    request: &HtmlPreviewResourceRequest,
-) -> Result<(), HtmlPreviewError> {
-    if file.size > MAX_PREVIEW_BYTES
-        || file.offset != request.offset
-        || file.offset > file.size
-        || file.source.is_empty()
-        || file.revision.is_empty()
-        || request
-            .expected_source
-            .as_ref()
-            .is_some_and(|source| source != &file.source)
-        || request
-            .expected_revision
-            .as_ref()
-            .is_some_and(|revision| revision != &file.revision)
-        || file.content_base64.len() > PREVIEW_CHUNK_BYTES.div_ceil(3) * 4
-    {
-        return Err(HtmlPreviewError::unavailable(
-            "Invalid HTML preview resource chunk",
-        ));
-    }
-    let bytes = BASE64
-        .decode(&file.content_base64)
-        .map_err(|_| HtmlPreviewError::unavailable("Invalid HTML preview resource encoding"))?;
-    let expected = if request.metadata_only {
-        0
-    } else {
-        (file.size - file.offset).min(PREVIEW_CHUNK_BYTES as u64) as usize
-    };
-    if bytes.len() != expected {
-        return Err(HtmlPreviewError::unavailable(
-            "Incomplete HTML preview resource chunk",
-        ));
-    }
-    Ok(())
-}
-
 async fn preview_handler(
     State(state): State<PreviewState>,
     method: Method,
@@ -404,7 +325,7 @@ async fn preview_handler(
                 .any(|(key, value)| key == state.cookie_name && value == state.token)
         });
     if *state.closed.borrow()
-        || !state.reader.is_current()
+        || !state.transfer.is_current()
         || (method != Method::GET && method != Method::HEAD)
     {
         return response(StatusCode::NOT_FOUND, "Not found");
@@ -415,7 +336,11 @@ async fn preview_handler(
             .status(StatusCode::FOUND)
             .header(
                 header::LOCATION,
-                format!("/{}", encode_url_path(&state.entry_path)),
+                if index_entry_filename(&state.entry_path).is_some() {
+                    "/".to_string()
+                } else {
+                    format!("/{}", encode_url_path(&state.entry_path))
+                },
             )
             .header(
                 header::SET_COOKIE,
@@ -438,47 +363,65 @@ async fn preview_handler(
         Ok(relative) => relative.into_owned(),
         Err(_) => return response(StatusCode::BAD_REQUEST, "Invalid preview path"),
     };
+    let index_entry = index_entry_filename(&state.entry_path);
+    if index_entry.is_some_and(|filename| relative == filename || relative == state.entry_path) {
+        // The site router must see its public root, including when a link uses
+        // the entry filename or an older workspace-prefixed preview URL.
+        return Response::builder()
+            .status(StatusCode::FOUND)
+            .header(header::LOCATION, site_root_url(&uri))
+            .header(header::CACHE_CONTROL, "no-store")
+            .header(header::REFERRER_POLICY, "no-referrer")
+            .body(Body::empty())
+            .unwrap_or_else(|_| response(StatusCode::BAD_REQUEST, "Invalid preview path"));
+    }
     let mut request = state.request.clone();
-    request.resource_path = Some(relative);
+    request.resource_path = if index_entry.is_some() && relative.is_empty() {
+        None
+    } else {
+        Some(relative.clone())
+    };
     request.metadata_only = method == Method::HEAD;
-    let first = match state.read(&request).await {
-        Ok(file) => file,
+    let bypass_cache = force_resource_reload(&headers);
+    let resource = match state
+        .transfer
+        .open(
+            request.clone(),
+            bypass_cache,
+            uri.path_and_query().map(|path| path.as_str().to_string()),
+        )
+        .await
+    {
+        Ok(resource) => resource,
+        Err(error)
+            if error.code == Code::NotFound
+                && index_entry.is_some()
+                && is_document_route(&relative, &headers) =>
+        {
+            // Existing files always win. Only document navigation can use the
+            // selected index as a history-router fallback; assets, authorization
+            // failures and offline owners retain their original error. None is
+            // the existing v1 entry request, so older peer hosts work unchanged.
+            request.resource_path = None;
+            match state
+                .transfer
+                .open(request, bypass_cache, Some(site_root_url(&uri)))
+                .await
+            {
+                Ok(resource) => resource,
+                Err(error) => return preview_error_response(error),
+            }
+        }
         Err(error) => return preview_error_response(error),
     };
-    let size = first.size;
-    let content_type = first.mime_type.clone();
-    request.expected_revision = Some(first.revision.clone());
-    let body = if method == Method::HEAD {
-        Body::empty()
-    } else {
-        let stream = futures::stream::try_unfold(
-            (state, request, Some(first)),
-            move |(state, mut request, first)| async move {
-                let file = match first {
-                    Some(file) => file,
-                    None => state
-                        .read(&request)
-                        .await
-                        .map_err(|error| std::io::Error::other(error.message))?,
-                };
-                if file.offset == file.size {
-                    return Ok::<_, std::io::Error>(None);
-                }
-                let bytes = BASE64
-                    .decode(file.content_base64)
-                    .map_err(std::io::Error::other)?;
-                request.offset += bytes.len() as u64;
-                // An empty sentinel ends the stream without another RPC at EOF.
-                let next = (request.offset == size).then(|| HtmlPreviewResource {
-                    offset: size,
-                    content_base64: String::new(),
-                    ..file
-                });
-                Ok(Some((bytes, (state, request, next))))
-            },
-        );
-        Body::from_stream(stream)
-    };
+    let size = resource.metadata.size;
+    let content_type = resource.metadata.mime_type;
+    let body = Body::from_stream(
+        resource
+            .body
+            .map_ok(|bytes| bytes.to_vec())
+            .map_err(|error| std::io::Error::other(error.message)),
+    );
     Response::builder()
         .status(StatusCode::OK)
         .header(header::CONTENT_TYPE, content_type)
@@ -493,6 +436,81 @@ async fn preview_handler(
                 "Invalid preview response",
             )
         })
+}
+
+fn index_entry_filename(entry_path: &str) -> Option<&str> {
+    entry_path.rsplit('/').next().filter(|filename| {
+        filename.eq_ignore_ascii_case("index.html") || filename.eq_ignore_ascii_case("index.htm")
+    })
+}
+
+fn site_root_url(uri: &Uri) -> String {
+    match uri.query() {
+        Some(query) => format!("/?{query}"),
+        None => "/".to_string(),
+    }
+}
+
+fn is_document_route(path: &str, headers: &HeaderMap) -> bool {
+    // Explicit filenames (including missing .html pages) remain ordinary file
+    // requests. Browser fetches that accept */* are not page navigations.
+    if path
+        .trim_end_matches('/')
+        .rsplit('/')
+        .next()
+        .is_some_and(|part| part.contains('.'))
+    {
+        return false;
+    }
+    if headers
+        .get("sec-fetch-dest")
+        .is_some_and(|value| value != "document" && value != "iframe" && value != "frame")
+    {
+        return false;
+    }
+    headers
+        .get_all(header::ACCEPT)
+        .iter()
+        .filter_map(|value| value.to_str().ok())
+        .any(|value| {
+            value.split(',').any(|range| {
+                let mut parts = range.trim().split(';');
+                parts
+                    .next()
+                    .is_some_and(|mime| mime.trim().eq_ignore_ascii_case("text/html"))
+                    && parts.all(|parameter| {
+                        let Some((name, value)) = parameter.trim().split_once('=') else {
+                            return true;
+                        };
+                        !name.trim().eq_ignore_ascii_case("q")
+                            || value
+                                .trim()
+                                .parse::<f32>()
+                                .is_ok_and(|quality| quality > 0.0 && quality <= 1.0)
+                    })
+            })
+        })
+}
+
+fn force_resource_reload(headers: &HeaderMap) -> bool {
+    [header::CACHE_CONTROL, header::PRAGMA].iter().any(|name| {
+        headers
+            .get_all(name)
+            .iter()
+            .filter_map(|value| value.to_str().ok())
+            .any(|value| {
+                value.split(',').any(|directive| {
+                    let (name, value) = directive
+                        .trim()
+                        .split_once('=')
+                        .unwrap_or((directive.trim(), ""));
+                    name.trim().eq_ignore_ascii_case("no-cache")
+                        || name.trim().eq_ignore_ascii_case("no-store")
+                        || (name.trim().eq_ignore_ascii_case("max-age")
+                            && value.trim().trim_matches('"') == "0")
+                })
+            })
+    })
 }
 
 fn preview_error_response(error: HtmlPreviewError) -> Response {

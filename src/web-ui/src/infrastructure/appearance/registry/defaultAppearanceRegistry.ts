@@ -9,7 +9,7 @@ import { markdownAppearanceDescriptor } from '@/infrastructure/markdown/appearan
 import { chatInputAppearanceDescriptor } from '@/flow_chat/components/ChatInput.appearance';
 import { harnessProfileSelectorAppearanceDescriptor } from '@/flow_chat/components/HarnessProfileSelector.appearance';
 import { composerVoiceInputAppearanceDescriptor } from '@/flow_chat/components/voice/ComposerVoiceInputButton.appearance';
-import { sessionUsagePanelAppearanceDescriptor } from '@/flow_chat/components/usage/appearance';
+import { contextUsagePopoverAppearanceDescriptor, sessionUsagePanelAppearanceDescriptor, toolDefinitionsPreviewAppearanceDescriptor } from '@/flow_chat/components/usage/appearance';
 import { richTextInputAppearanceDescriptor } from '@/flow_chat/components/RichTextInput.appearance';
 import { modelRoundItemAppearanceDescriptor } from '@/flow_chat/components/modern/ModelRoundItem.appearance';
 import { deepReviewActionBarAppearanceDescriptor } from '@/flow_chat/deep-review/action-bar/appearance';
@@ -18,6 +18,7 @@ import { modelSelectorAppearanceDescriptor } from '@/flow_chat/components/ModelS
 import { reasoningPresetSelectorAppearanceDescriptor } from '@/flow_chat/components/ReasoningPresetSelector.appearance';
 import { acpModeSelectorAppearanceDescriptor } from '@/flow_chat/components/AcpModeSelector.appearance';
 import { flowChatHeaderAppearanceDescriptor } from '@/flow_chat/components/modern/FlowChatHeader.appearance';
+import { trajectoryAppearanceDescriptor } from '@/flow_chat/trajectory/Trajectory.appearance';
 import { flowChatTurnRailAppearanceDescriptor } from '@/flow_chat/components/modern/FlowChatTurnRail.appearance';
 import { sessionFilesBadgeAppearanceDescriptor } from '@/flow_chat/components/modern/SessionFilesBadge.appearance';
 import { codeReviewToolCardAppearanceDescriptor } from '@/flow_chat/tool-cards/CodeReviewToolCard.appearance';
@@ -44,7 +45,6 @@ import { exportImageAppearanceDescriptor } from '@/flow_chat/components/modern/E
 import { userMessageItemAppearanceDescriptor } from '@/flow_chat/components/modern/UserMessageItem.appearance';
 import { externalHistoryNoticeAppearanceDescriptor } from '@/flow_chat/components/ExternalHistoryNotice.appearance';
 import { sessionUsageReportCardAppearanceDescriptor } from '@/flow_chat/components/usage/SessionUsageReportCard.appearance';
-import { sessionUsageModalAppearanceDescriptor } from '@/flow_chat/components/usage/SessionUsageModal.appearance';
 import { createPlanDisplayAppearanceDescriptor } from '@/flow_chat/tool-cards/CreatePlanDisplay.appearance';
 import { editorConfigAppearanceDescriptor } from '@/app/scenes/settings/pages/development/EditorSettingsPage.appearance';
 import { appearanceSettingsAppearanceDescriptor } from '@/app/scenes/settings/pages/application/AppearanceSettingsPage.appearance';
@@ -57,6 +57,7 @@ import { contextMenuAppearanceDescriptor } from '@/shared/context-menu-system/ap
 import { contextListAppearanceDescriptor } from '@/shared/context-system/appearance';
 import { notificationAppearanceDescriptor } from '@/shared/notification-system/appearance';
 import { imageLightboxAppearanceDescriptor } from '@/shared/ui/ImageLightbox.appearance';
+import { productBrandIconAppearanceDescriptor } from '@/shared/ui/ProductBrandIcon.appearance';
 import { canvasToolAppearanceDescriptor } from '@/tools/openbitfun-canvas/appearance';
 import { generativeWidgetAppearanceDescriptor } from '@/tools/generative-widget/appearance';
 import { editorToolAppearanceDescriptor } from '@/tools/editor/appearance';
@@ -272,6 +273,8 @@ export function createDefaultAppearanceRegistry(): AppearanceRegistry {
     .registerComponent(harnessProfileSelectorAppearanceDescriptor)
     .registerComponent(composerVoiceInputAppearanceDescriptor)
     .registerComponent(sessionUsagePanelAppearanceDescriptor)
+    .registerComponent(contextUsagePopoverAppearanceDescriptor)
+    .registerComponent(toolDefinitionsPreviewAppearanceDescriptor)
     .registerComponent(richTextInputAppearanceDescriptor)
     .registerComponent(modelRoundItemAppearanceDescriptor)
     .registerComponent(deepReviewActionBarAppearanceDescriptor)
@@ -281,6 +284,7 @@ export function createDefaultAppearanceRegistry(): AppearanceRegistry {
     .registerComponent(acpModeSelectorAppearanceDescriptor)
     .registerComponent(flowChatHeaderAppearanceDescriptor)
     .registerComponent(flowChatTurnRailAppearanceDescriptor)
+    .registerComponent(trajectoryAppearanceDescriptor)
     .registerComponent(sessionFilesBadgeAppearanceDescriptor)
     .registerComponent(codeReviewToolCardAppearanceDescriptor)
     .registerComponent(createAgentPageAppearanceDescriptor)
@@ -307,7 +311,6 @@ export function createDefaultAppearanceRegistry(): AppearanceRegistry {
     .registerComponent(userMessageItemAppearanceDescriptor)
     .registerComponent(externalHistoryNoticeAppearanceDescriptor)
     .registerComponent(sessionUsageReportCardAppearanceDescriptor)
-    .registerComponent(sessionUsageModalAppearanceDescriptor)
     .registerComponent(createPlanDisplayAppearanceDescriptor)
     .registerComponent(editorConfigAppearanceDescriptor)
     .registerComponent(appearanceSettingsAppearanceDescriptor)
@@ -325,6 +328,7 @@ export function createDefaultAppearanceRegistry(): AppearanceRegistry {
     .registerComponent(contextListAppearanceDescriptor)
     .registerComponent(notificationAppearanceDescriptor)
     .registerComponent(imageLightboxAppearanceDescriptor)
+    .registerComponent(productBrandIconAppearanceDescriptor)
     .registerComponent(canvasToolAppearanceDescriptor)
     .registerComponent(generativeWidgetAppearanceDescriptor)
     .registerComponent(editorToolAppearanceDescriptor)

@@ -355,3 +355,80 @@ async fn head_skips_content_and_oversized_or_truncated_files_fail() {
         .size = Some(MAX_PREVIEW_BYTES + 1);
     assert_eq!(source.read(&input).await.unwrap_err().code, Code::TooLarge);
 }
+
+#[tokio::test]
+async fn cached_remote_assets_recheck_path_policy_and_owner_availability() {
+    use super::transfer::HtmlPreviewTransfer;
+    use futures::TryStreamExt;
+    let (source, fs) = fixture().await;
+    let (_close, closed) = tokio::sync::watch::channel(false);
+    let transfer = Arc::new(HtmlPreviewTransfer::new(Arc::new(source), closed));
+    let input = request(Some("assets/app.js"));
+    transfer
+        .open(input.clone(), false, None)
+        .await
+        .unwrap()
+        .body
+        .try_collect::<Vec<_>>()
+        .await
+        .unwrap();
+    let reads = fs.reads.lock().unwrap().len();
+    fs.nodes
+        .lock()
+        .unwrap()
+        .get_mut("/repo/site/dist/assets")
+        .unwrap()
+        .metadata
+        .kind = WorkspacePathKind::Symlink;
+    assert!(matches!(
+        transfer.open(input.clone(), false, None).await,
+        Err(HtmlPreviewError {
+            code: Code::Forbidden,
+            ..
+        })
+    ));
+    assert_eq!(
+        fs.reads.lock().unwrap().len(),
+        reads,
+        "A cached body cannot bypass no-follow checks"
+    );
+    fs.nodes
+        .lock()
+        .unwrap()
+        .get_mut("/repo/site/dist/assets")
+        .unwrap()
+        .metadata
+        .kind = WorkspacePathKind::Directory;
+    transfer
+        .open(input.clone(), false, None)
+        .await
+        .unwrap()
+        .body
+        .try_collect::<Vec<_>>()
+        .await
+        .unwrap();
+    fs.nodes
+        .lock()
+        .unwrap()
+        .remove("/repo/site/dist/assets/app.js");
+    // The root has another app.js. It is a different resolved path/revision,
+    // so the former site's cached bytes cannot be reused for that fallback.
+    let response = transfer.open(input.clone(), false, None).await.unwrap();
+    let body = response
+        .body
+        .try_fold(Vec::new(), |mut all, bytes| async move {
+            all.extend_from_slice(&bytes);
+            Ok(all)
+        })
+        .await
+        .unwrap();
+    assert_eq!(body, b"wrong-project");
+    fs.offline.store(true, Ordering::SeqCst);
+    assert!(matches!(
+        transfer.open(input, false, None).await,
+        Err(HtmlPreviewError {
+            code: Code::Unavailable,
+            ..
+        })
+    ));
+}

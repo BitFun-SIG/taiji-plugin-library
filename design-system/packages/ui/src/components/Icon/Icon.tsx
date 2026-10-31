@@ -16,6 +16,7 @@ import {
   BookOpen,
   BookSearch,
   CalendarClock,
+  ChartSpline,
   Check,
   ChevronDown,
   ChevronLeft,
@@ -93,8 +94,10 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { classNames } from "../../internal/classNames";
+import { CloudGit } from './cloudGit';
 import { Galaxy } from './galaxy';
 import { LayersPlus } from './layersPlus';
+import { PlayingCardsFan } from './playingCardsFan';
 import gitUrl from "./assets/git.svg";
 import thinkingUrl from "./assets/thinking.svg";
 import creativeUrl from "./assets/creative.svg";
@@ -126,6 +129,7 @@ export const iconNames = [
   "book-search",
   "browser",
   "calendar-clock",
+  "chart-spline",
   "check-circle",
   "check-fill",
   "check-line",
@@ -135,6 +139,7 @@ export const iconNames = [
   "circle",
   "circle-arrow-right",
   "clock",
+  "cloud-git",
   "code",
   "command-mac",
   "commit",
@@ -176,6 +181,7 @@ export const iconNames = [
   "palette",
   "panels-top-left",
   "pin",
+  "playing-cards-fan",
   "plus",
   "plug",
   "progress-25",
@@ -256,6 +262,7 @@ const lineGlyphs = {
   "book-search": BookSearch,
   "browser": Globe,
   "calendar-clock": CalendarClock,
+  "chart-spline": ChartSpline,
   "check-circle": CircleCheck,
   "check-fill": CircleCheck,
   "check-line": Check,
@@ -265,6 +272,7 @@ const lineGlyphs = {
   "circle": Circle,
   "circle-arrow-right": CircleArrowRight,
   "clock": Clock,
+  "cloud-git": CloudGit,
   "git-pull-request": GitPullRequest,
   "history": History,
   "target": Target,
@@ -307,6 +315,7 @@ const lineGlyphs = {
   "palette": Palette,
   "panels-top-left": PanelsTopLeft,
   "pin": Pin,
+  "playing-cards-fan": PlayingCardsFan,
   "plus": Plus,
   "plug": Plug,
   "progress-25": LoaderCircle,
