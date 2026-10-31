@@ -1120,6 +1120,15 @@ impl WeixinBot {
             return;
         }
         let language = current_bot_language().await;
+        if weixin_provider::has_unsupported_media_items(&message) {
+            self.try_send_text(
+                &peer,
+                super::locale::strings_for(language).inbound_media_unsupported,
+                "media-unsupported",
+            )
+            .await;
+            return;
+        }
         let downloaded = self.inbound_image_attachments_from_message(&message).await;
         if !self.runtime_fence.is_lifecycle_current()
             || self.runtime_fence.identity_epoch() != identity_epoch
@@ -1171,6 +1180,15 @@ impl WeixinBot {
         } else {
             body
         };
+        if text.trim().is_empty() {
+            self.try_send_text(
+                &peer,
+                super::locale::strings_for(language).inbound_media_unsupported,
+                "empty-message",
+            )
+            .await;
+            return;
+        }
         if self.runtime_fence.is_lifecycle_current()
             && self.runtime_fence.identity_epoch() == identity_epoch
         {
@@ -1854,6 +1872,32 @@ mod tests {
             }
         });
         (base, rx, task)
+    }
+
+    #[tokio::test]
+    async fn unsupported_media_and_empty_input_never_route_partial_or_empty_turns() {
+        let (base, mut requests, server) = mock_outbound(vec!["{}"; 3], None).await;
+        let bot = test_bot(base).await;
+        bot.chat_states.write().await.clear();
+        let epoch = bot.runtime_fence.identity_epoch();
+        for message in [
+            json!({"item_list":[{"type":5},{"type":1,"text_item":{"text":"analyze this video"}}]}),
+            json!({"item_list":[{"type":3,"voice_item":{}}]}),
+            json!({"item_list":[{"type":1,"text_item":{"text":"   "}}]}),
+        ] {
+            bot.process_provider_message("peer".into(), message, epoch)
+                .await;
+            let reply = requests.recv().await.unwrap();
+            assert!(reply["msg"]["item_list"][0]["text_item"]["text"]
+                .as_str()
+                .unwrap()
+                .contains("Agent"));
+            assert!(bot.chat_states.read().await.is_empty());
+        }
+        server.await.unwrap();
+        assert!(!weixin_provider::has_unsupported_media_items(
+            &json!({"item_list":[{"type":3,"voice_item":{"text":"transcribed voice"}}]})
+        ));
     }
 
     #[tokio::test]

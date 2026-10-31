@@ -1442,6 +1442,19 @@ pub fn has_inbound_image_items(msg: &Value) -> bool {
     })
 }
 
+/// Voice transcripts are supported, but raw voice/video items have no input adapter.
+pub fn has_unsupported_media_items(msg: &Value) -> bool {
+    msg["item_list"].as_array().is_some_and(|items| {
+        items.iter().any(|item| {
+            item["type"].as_i64() == Some(5)
+                || (item["type"].as_i64() == Some(3)
+                    && !item["voice_item"]["text"]
+                        .as_str()
+                        .is_some_and(|text| !text.trim().is_empty()))
+        })
+    })
+}
+
 pub fn has_inbound_file_items(msg: &Value) -> bool {
     msg["item_list"]
         .as_array()
