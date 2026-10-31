@@ -87,6 +87,14 @@ impl Server {
             .truncate(false)
             .open(directory.join("owner.lock"))?;
         FileExt::try_lock_exclusive(&lease).context("another CLI daemon owns Remote Connect")?;
+        let path = directory.join("endpoint.json");
+        // A crashed owner can leave discovery behind. Only the new exclusive
+        // owner may remove it; Windows rename cannot replace an existing file.
+        match std::fs::remove_file(&path) {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error).context("retire stale CLI daemon discovery"),
+        }
         let listener = TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0)).await?;
         let discovery = Discovery {
             version: VERSION,
@@ -95,21 +103,27 @@ impl Server {
         };
         Ok(Self {
             _lease: lease,
-            path: directory.join("endpoint.json"),
+            path,
             listener,
             discovery,
         })
     }
 
-    pub(crate) async fn run(self, host: Arc<CliRemoteControlHost>) -> Result<()> {
-        // Publish only after the account, bot owner and command router are ready.
+    fn publish(&self) -> Result<()> {
         let temp = self
             .path
             .with_extension(format!("{}.tmp", uuid::Uuid::new_v4()));
         let mut file = private_options().create_new(true).open(&temp)?;
         file.write_all(&serde_json::to_vec(&self.discovery)?)?;
         file.sync_all()?;
+        drop(file);
         std::fs::rename(&temp, &self.path)?;
+        Ok(())
+    }
+
+    pub(crate) async fn run(self, host: Arc<CliRemoteControlHost>) -> Result<()> {
+        // Publish only after the account, bot owner and command router are ready.
+        self.publish()?;
         let mut clients = tokio::task::JoinSet::new();
         loop {
             tokio::select! {
@@ -404,9 +418,32 @@ mod tests {
     async fn daemon_owner_is_exclusive_and_released_on_shutdown() {
         let root = tempfile::tempdir().unwrap();
         let server = Server::reserve_in(root.path().to_path_buf()).await.unwrap();
+        server.publish().unwrap();
         assert!(Server::reserve_in(root.path().to_path_buf()).await.is_err());
+        assert!(
+            root.path().join("endpoint.json").exists(),
+            "A competing start must not remove the current owner's discovery"
+        );
         drop(server);
         assert!(Server::reserve_in(root.path().to_path_buf()).await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn stale_discovery_is_replaced_after_exclusive_owner_recovery() {
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join("endpoint.json");
+        std::fs::write(&path, b"old crashed owner").unwrap();
+        let server = Server::reserve_in(root.path().to_path_buf()).await.unwrap();
+        assert!(
+            !path.exists(),
+            "Stale discovery must not be advertised during startup"
+        );
+        server.publish().unwrap();
+        let discovery: Discovery = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        assert_eq!(discovery.version, VERSION);
+        assert_eq!(discovery.port, server.listener.local_addr().unwrap().port());
+        drop(server);
+        assert!(!path.exists());
     }
 
     #[tokio::test]
