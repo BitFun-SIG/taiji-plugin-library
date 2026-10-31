@@ -213,3 +213,9 @@ Bot listeners belong to the daemon. Chat/Shared/dispatch processes call its
 private, versioned endpoint and never replay a mutation after an unknown outcome.
 The executing account is checked before control requests reach the shared owner.
 These loopback fixtures do not establish live Relay or provider connectivity.
+
+For the inline WeChat QR card, collapsed output, theme contrast and narrow terminals:
+
+```bash
+cargo test --locked -p openbitfun-cli --bin openbitfun ui::tool_cards::tests::
+```

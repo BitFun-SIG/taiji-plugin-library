@@ -106,13 +106,19 @@ impl RemoteBotControl {
                 Some(service) => service.is_bot_running(bot_type).await,
                 None => false,
             };
+            let login_required = match service {
+                Some(service) => service.bot_requires_login(bot_type).await,
+                None => false,
+            };
             let disabled = data.disabled_bots.iter().any(|id| id == bot_type);
             channels.push(json!({
                 "method": bot_type,
                 "configured": configured_bot(&data, bot_type).is_some() || paired,
                 "paired": paired,
                 "listenerRunning": listener_running,
-                "state": if listener_running { if paired { "listening" } else { "awaiting_pairing" } } else { "stopped" },
+                "loginRequired": login_required,
+                "state": if login_required { "login_required" } else if listener_running { if paired { "listening" } else { "awaiting_pairing" } } else { "stopped" },
+                "lastError": if login_required { Some("WeChat credentials expired; use weixin-login-start to sign in again") } else { None },
                 "restoreOnRestart": paired && !disabled,
                 "requiresPairing": configured_bot(&data, bot_type).is_some() && !paired,
                 "lastRestoreError": self.restore_errors.lock().await.get(bot_type).cloned(),
@@ -228,6 +234,8 @@ impl RemoteBotControl {
                 .as_ref()
                 .ok_or_else(|| anyhow!("Remote Connect host is unavailable"))?;
             if service.is_bot_running(bot_type).await {
+                anyhow::ensure!(!service.bot_requires_login(bot_type).await,
+                    "weixin_login_required: The provider rejected the saved credentials; use weixin-login-start to sign in again");
                 let effective = self.status_without_holder(&data, bot_type, true, &scope.0);
                 let connection = if effective["paired"] == true {
                     None
@@ -375,7 +383,7 @@ impl RemoteBotControl {
         Ok(
             json!({ "sessionKey": response.session_key, "qrImageUrl": qr.image_url, "qrTerminal": qr.terminal,
             "loginStatus": "awaiting_scan", "message": response.message,
-            "nextStep": "In a terminal, show qrTerminal verbatim in a code block; otherwise display qrImageUrl. Then call weixin-login-poll with sessionKey. QR confirmation saves credentials on this host and starts the bot listener; send the returned pairing code in WeChat." }),
+            "nextStep": "The CLI TUI displays qrTerminal in the tool card; ask the user to scan it without retyping the QR. Other terminal surfaces may show qrTerminal verbatim; graphical surfaces display qrImageUrl. Then call weixin-login-poll with sessionKey. QR confirmation saves credentials on this host and starts the bot listener; send the returned pairing code in WeChat." }),
         )
     }
 

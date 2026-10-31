@@ -20,8 +20,10 @@ When `OpenBitFunControl` is available, use its search/get flow for Remote Connec
 before starting or managing bots, Mobile Web, or LAN access. Execute the returned
 operations on the current host. On CLI, the daemon owns persistent listeners and
 can be started by the management tool; do not build a separate polling script.
-For WeChat in a terminal, show `qrTerminal` verbatim in a code block; on a graphical
-surface display `qrImageUrl`. Poll the same login session, refresh the displayed QR
+The CLI TUI renders WeChat `qrTerminal` directly in the tool card; tell the user to
+scan that card without retyping its QR. Other terminal surfaces can show `qrTerminal`
+verbatim in a code block; on a graphical surface display `qrImageUrl`.
+Poll the same login session, refresh the displayed QR
 when the result supplies a new one, then give the user the returned bot pairing
 code. QR login alone is not a running, paired bot.
 Read status after changes and distinguish listening, awaiting pairing, stopped,

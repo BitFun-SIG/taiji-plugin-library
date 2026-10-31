@@ -320,7 +320,9 @@ Connect, stop a channel, or enable Mobile Web. Claw uses `OpenBitFunControl`
 the local CLI daemon when needed; closing the chat leaves listeners running.
 Use `daemon install` if they should also return after a machine reboot.
 
-For WeChat, scan the returned QR code and let Claw finish login polling, then
+For WeChat, the TUI displays a full black-on-white QR in the tool card, including
+when tool details are collapsed. Widen the terminal if the card asks for more
+columns; scroll to the latest QR if a login refreshes it. Scan the QR and let Claw finish login polling, then
 send the returned six-digit pairing code to the bot. QR login only obtains the
 credentials; the separate pairing step authorizes message routing. Telegram
 and Feishu accept a private JSON credential file on the executing host, for

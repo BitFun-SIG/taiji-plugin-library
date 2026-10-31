@@ -4,7 +4,7 @@
   "title": "OpenBitFun Playbook",
   "origin": "https://playbook.openbitfun.com",
   "source": "src/shared/interactive-capabilities/catalog.json",
-  "digest": "34f88b0e8dce11a562d17ed2c4cc40f5d488a42821b585179592f547cd2cb9d9",
+  "digest": "2eb272d6820970e0c8ac677714ca03495729fa4a9cd458f1b89a4de726971107",
   "ownerDigest": "df28e5eed6e3190741899ebf236bc5fb426d2469187e437839a349a7136c7c34",
   "searchAcceptance": [
     {
@@ -25594,8 +25594,8 @@
           "id": "weixin-login-start",
           "titleZh": "开始微信扫码登录",
           "titleEn": "Begin WeChat QR login",
-          "descriptionZh": "生成微信登录二维码。终端逐字显示 qrTerminal，图形界面显示 qrImageUrl，再用 sessionKey 调用轮询；扫码本身尚未完成机器人监听和配对。",
-          "descriptionEn": "Create a WeChat login QR. Show qrTerminal verbatim in terminals or qrImageUrl in graphical surfaces, then poll using sessionKey. Scanning alone does not complete bot listening and pairing.",
+          "descriptionZh": "生成微信登录二维码。CLI TUI 在工具卡片中直接显示 qrTerminal，无需模型重写；其他终端逐字显示，图形界面显示 qrImageUrl，再用 sessionKey 轮询。扫码本身尚未完成机器人监听和配对。",
+          "descriptionEn": "Create a WeChat login QR. CLI TUI renders qrTerminal in the tool card without model transcription; other terminals show it verbatim and graphical surfaces show qrImageUrl. Poll using sessionKey; scanning alone does not complete listening and pairing.",
           "risk": "write",
           "inputSchema": {
             "additionalProperties": false,

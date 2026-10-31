@@ -4726,8 +4726,8 @@
           "id": "weixin-login-start",
           "titleZh": "开始微信扫码登录",
           "titleEn": "Begin WeChat QR login",
-          "descriptionZh": "生成微信登录二维码。终端逐字显示 qrTerminal，图形界面显示 qrImageUrl，再用 sessionKey 调用轮询；扫码本身尚未完成机器人监听和配对。",
-          "descriptionEn": "Create a WeChat login QR. Show qrTerminal verbatim in terminals or qrImageUrl in graphical surfaces, then poll using sessionKey. Scanning alone does not complete bot listening and pairing."
+          "descriptionZh": "生成微信登录二维码。CLI TUI 在工具卡片中直接显示 qrTerminal，无需模型重写；其他终端逐字显示，图形界面显示 qrImageUrl，再用 sessionKey 轮询。扫码本身尚未完成机器人监听和配对。",
+          "descriptionEn": "Create a WeChat login QR. CLI TUI renders qrTerminal in the tool card without model transcription; other terminals show it verbatim and graphical surfaces show qrImageUrl. Poll using sessionKey; scanning alone does not complete listening and pairing."
         },
         {
           "id": "weixin-login-poll",

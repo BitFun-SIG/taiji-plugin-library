@@ -961,6 +961,18 @@ impl RemoteConnectService {
         }
     }
 
+    pub async fn bot_requires_login(&self, bot_type: &str) -> bool {
+        match bot_type {
+            "weixin" => self
+                .weixin_bot
+                .read()
+                .await
+                .as_ref()
+                .is_some_and(|bot| bot.requires_login()),
+            _ => false,
+        }
+    }
+
     pub async fn bot_connected_info(&self) -> Option<String> {
         self.bot_connected_info.read().await.clone()
     }
