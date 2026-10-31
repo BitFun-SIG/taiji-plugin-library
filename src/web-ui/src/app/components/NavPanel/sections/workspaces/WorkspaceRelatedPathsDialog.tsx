@@ -70,10 +70,6 @@ function normalizeDrafts(drafts: DraftRelatedPath[]): RelatedPath[] {
   }));
 }
 
-export const WorkspaceRelatedPathsDialog: React.FC<WorkspaceRelatedPathsDialogProps> = props => props.initialAdd
-  ? <WorkspaceRelatedPathAddDialog workspace={props.workspace} isOpen={props.isOpen} onClose={props.onClose} />
-  : <WorkspaceRelatedPathsManager {...props} />;
-
 const WorkspaceRelatedPathsManager: React.FC<WorkspaceRelatedPathsDialogProps> = ({
   workspace,
   isOpen,
@@ -493,5 +489,10 @@ function DirectoryCells({ name, path, description, icon, actions }: {
     <div role="cell" className="workspace-related-paths-dialog__actions"><div>{actions}</div></div>
   </>;
 }
+
+
+export const WorkspaceRelatedPathsDialog: React.FC<WorkspaceRelatedPathsDialogProps> = props => props.initialAdd
+  ? <WorkspaceRelatedPathAddDialog workspace={props.workspace} isOpen={props.isOpen} onClose={props.onClose} />
+  : <WorkspaceRelatedPathsManager {...props} />;
 
 export default WorkspaceRelatedPathsDialog;

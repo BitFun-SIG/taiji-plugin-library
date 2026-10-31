@@ -25,13 +25,13 @@ export default function WorkspaceIconDialog({ workspace, onClose }: { workspace:
   const dark = useWorkspaceIconImageDraft(scope, initial?.darkImageData);
   const activeImage = imageTarget === 'dark' ? dark : light;
   const themedImages = initial?.supportsThemedImages === true;
+  const fileInput = useRef<HTMLInputElement>(null);
   const chooseImage = (target: 'default' | 'light' | 'dark') => {
     if (target === 'dark' && !themedImages) return;
     setImageTarget(target); fileTarget.current = target; fileInput.current?.click();
   };
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const fileInput = useRef<HTMLInputElement>(null);
   const retry = useRef<{ payload: string; id: string }>();
   useEffect(() => onSurfaceActivated(onClose), [onClose]);
   useEffect(() => {
@@ -40,6 +40,10 @@ export default function WorkspaceIconDialog({ workspace, onClose }: { workspace:
       setGlyph(live.snapshot.icon.glyph ?? 'default');
     }
   }, [initial, live.snapshot]);
+  const imageError = mode === 'image' && (light.error || dark.error);
+  const disabled = saving || !initial || (mode === 'image' && (light.pending || dark.pending || imageError
+    || (!light.image && !dark.image && !initial.icon.assetId)))
+    || (!(iconColors as readonly string[]).includes(color) && !/^#[\da-f]{6}$/i.test(color));
   const submit = async () => {
     if (!initial || disabled) return;
     const input: WorkspaceIconInput = mode === 'default'
@@ -56,10 +60,6 @@ export default function WorkspaceIconDialog({ workspace, onClose }: { workspace:
       if (!isSurfaceChangedError(cause) && scope.isCurrent()) setError(t('nav.workspaces.icon.saveFailed', { reason: String(cause) }));
     } finally { if (scope.isCurrent()) setSaving(false); }
   };
-  const imageError = mode === 'image' && (light.error || dark.error);
-  const disabled = saving || !initial || (mode === 'image' && (light.pending || dark.pending || imageError
-    || (!light.image && !dark.image && !initial.icon.assetId)))
-    || (!(iconColors as readonly string[]).includes(color) && !/^#[\da-f]{6}$/i.test(color));
   return <Dialog className="workspace-icon-editor__dialog" open onOpenChange={open => { if (!open && !saving) onClose(); }} size="md">
     <DialogHeader className="workspace-icon-editor__header">
       <DialogHeading className="workspace-icon-editor__heading"><DialogTitle>{t('nav.workspaces.icon.title')}</DialogTitle></DialogHeading>

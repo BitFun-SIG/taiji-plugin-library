@@ -84,6 +84,12 @@ function rulesEqual(left: ProjectPermissionRule[], right: ProjectPermissionRule[
   });
 }
 
+export const WorkspaceProjectPermissionsDialog: React.FC<WorkspaceProjectPermissionsDialogProps> = (props) => {
+  const scope = useSyncExternalStore(onSurfaceActivated, getActiveSurfaceScope, getActiveSurfaceScope);
+  return <WorkspaceProjectPermissionsContent {...props} scope={scope}
+    key={scope.key(scope.epoch, props.workspace.id, props.workspace.rootPath, props.workspace.connectionId)} />;
+};
+
 export function WorkspaceProjectPermissionsPanel({ workspace, isActive, refreshKey }: {
   workspace: WorkspaceInfo;
   isActive: boolean;
@@ -91,12 +97,6 @@ export function WorkspaceProjectPermissionsPanel({ workspace, isActive, refreshK
 }) {
   return <WorkspaceProjectPermissionsDialog workspace={workspace} isOpen={isActive} refreshKey={refreshKey} presentation="inline" />;
 }
-
-export const WorkspaceProjectPermissionsDialog: React.FC<WorkspaceProjectPermissionsDialogProps> = (props) => {
-  const scope = useSyncExternalStore(onSurfaceActivated, getActiveSurfaceScope, getActiveSurfaceScope);
-  return <WorkspaceProjectPermissionsContent {...props} scope={scope}
-    key={scope.key(scope.epoch, props.workspace.id, props.workspace.rootPath, props.workspace.connectionId)} />;
-};
 
 function WorkspaceProjectPermissionsContent({
   workspace,
