@@ -124,6 +124,17 @@
       "secondaryBorder": { "$type": "color", "$value": "color-mix(in srgb, {color.accent.secondary} 25%, transparent)" }
     },
     "identity": {
+      "project": {
+        "$description": "User-selected project identity colors; independent of status, selection and assistant identity.",
+        "blue": { "$type": "color", "$value": "{ref.color.blue.400}" },
+        "cyan": { "$type": "color", "$value": "{ref.color.cyan.400}" },
+        "green": { "$type": "color", "$value": "{ref.color.green.400}" },
+        "yellow": { "$type": "color", "$value": "{ref.color.amber.400}" },
+        "orange": { "$type": "color", "$value": "{ref.color.amber.550}" },
+        "red": { "$type": "color", "$value": "{ref.color.red.400}" },
+        "purple": { "$type": "color", "$value": "{ref.color.purple.500}" },
+        "pink": { "$type": "color", "$value": "{ref.color.pink.400}" }
+      },
       "assistant": {
         "$description": "Named assistant identity used where it must remain distinct from the primary and secondary product accents.",
         "content": { "$type": "color", "$value": "{ref.color.pink.500}" },
