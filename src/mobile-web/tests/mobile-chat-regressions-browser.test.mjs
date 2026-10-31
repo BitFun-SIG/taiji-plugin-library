@@ -2,6 +2,15 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { launchBrowser, startSourceServer } from './helpers/browser-account-harness.mjs';
 
+async function closeDetails(page) {
+  await page.waitForFunction(() => {
+    const sheet = document.querySelector('.chat-tool-details[data-state="open"]');
+    return sheet && sheet.getAnimations({ subtree: true }).every(animation => animation.playState === 'finished');
+  });
+  await page.click('.chat-tool-details[data-state="open"] button[aria-label="Close"]');
+  await page.waitForFunction(() => !document.querySelector('.chat-tool-details'));
+}
+
 test('message times and quiet tool failures work at compact and wide sizes', { timeout: 60000 }, async () => {
   const source = await startSourceServer();
   const browser = await launchBrowser();
@@ -29,11 +38,25 @@ test('message times and quiet tool failures work at compact and wide sizes', { t
       await page.waitForFunction(() => document.body.innerText.includes('HTTP 404'));
       assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
       if (process.env.MOBILE_CHAT_SCREENSHOT) await page.screenshot({ path: `${process.env.MOBILE_CHAT_SCREENSHOT}-${width}.png` });
-      await page.click('.chat-tool-details button[aria-label="Close"]');
-      await page.waitForSelector('.chat-tool-details', { hidden: true });
+      await closeDetails(page);
       await page.click('.chat-tool-list__header');
       await page.waitForSelector('.chat-tool-list__header[aria-expanded="false"]');
     }
+    await page.evaluate(async () => (await import('/tests/helpers/mobile-chat-regressions-fixture.tsx')).showTranscript(false, 'ordered'));
+    await page.waitForSelector('.chat-thinking');
+    assert.equal(await page.$('.chat-thinking--streaming'), null, 'failed/cancelled reads are settled');
+    assert.equal(await page.$('.chat-tool-card'), null, 'failed reads stay in the ordered read summary');
+    await page.click('.chat-thinking button');
+    assert.equal(await page.$$eval('.chat-read-tools .chat-tool-details__trigger', nodes => nodes.length), 7);
+    await page.click('.chat-read-tools .chat-tool-details__trigger:nth-child(3)');
+    await page.waitForFunction(() => document.body.innerText.includes('HTTP 404'));
+    await closeDetails(page);
+
+    await page.evaluate(async () => (await import('/tests/helpers/mobile-chat-regressions-fixture.tsx')).showTranscript(false, 'subagent'));
+    await page.waitForSelector('.chat-task-card__summary');
+    await page.click('.chat-task-card__summary');
+    await page.waitForSelector('.chat-task-card__step.is-settled');
+    assert.equal(await page.$('.chat-task-card__step.is-error'), null, 'ordinary subagent tool failures stay neutral');
     await page.evaluate(async () => (await import('/tests/helpers/mobile-chat-regressions-fixture.tsx')).showTranscript(true));
     await page.waitForSelector('.chat-tool-card[data-prominent="true"]');
     assert.equal(await page.$('.chat-tool-list--collapsed'), null, 'approval stays reachable');
