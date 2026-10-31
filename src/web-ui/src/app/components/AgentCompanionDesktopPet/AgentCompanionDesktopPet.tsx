@@ -20,6 +20,7 @@ import { isReducedMotionPreferred } from '@/shared/utils/motionPreference';
 import { getPetLookDirection } from '@/infrastructure/config/services/agentCompanionPetSprite';
 import { startAgentCompanionDrag } from '@/infrastructure/config/services/AgentCompanionDragService';
 import { prepareAgentCompanionPointerDrag, type CompanionPointerDrag } from '@/infrastructure/config/services/AgentCompanionPointerDragService';
+import { createCompanionWindowResizer, isCompanionViewportShort } from './agentCompanionWindowResize';
 import './AgentCompanionDesktopPet.scss';
 
 const log = createLogger('AgentCompanionDesktopPet');
@@ -181,6 +182,10 @@ export const AgentCompanionDesktopPet: React.FC = () => {
   const [isSendingComposer, setIsSendingComposer] = useState(false);
   const [hoveredBubbleSessionId, setHoveredBubbleSessionId] = useState<string | null>(null);
   const dockRef = useRef<HTMLDivElement>(null);
+  const windowResizer = useMemo(() => createCompanionWindowResizer(
+    size => api.invoke('resize_agent_companion_desktop_pet', { width: size.width, height: size.height }),
+    error => log.warn('Failed to resize Agent companion window', error),
+  ), []);
   const bubblesRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const composerInputRef = useRef<HTMLInputElement>(null);
@@ -465,23 +470,43 @@ export const AgentCompanionDesktopPet: React.FC = () => {
       activePetSize.width,
       Math.min(WINDOW_MAX_WIDTH, Math.ceil(measuredDockWidth)),
     );
+    // Rounded up so converting to physical pixels cannot shave a row or column.
+    const nextWindowHeight = Math.ceil(nextHeight);
 
-    if (!Number.isFinite(nextWidth) || !Number.isFinite(nextHeight)) {
+    if (!Number.isFinite(nextWidth) || !Number.isFinite(nextWindowHeight)) {
       log.warn('Skipped invalid Agent companion window resize', {
         width: nextWidth,
-        height: nextHeight,
+        height: nextWindowHeight,
       });
       return;
     }
 
-    void api.invoke('resize_agent_companion_desktop_pet', {
-        width: nextWidth,
-        height: nextHeight,
-      })
-      .catch(error => {
-        log.warn('Failed to resize Agent companion window', error);
-      });
-  }, [activePetSize.height, activePetSize.width, composingSessionId, visibleTasks]);
+    windowResizer.request({ width: nextWidth, height: nextWindowHeight });
+  }, [activePetSize.height, activePetSize.width, composingSessionId, visibleTasks, windowResizer]);
+
+  useEffect(() => {
+    // The host can change the window behind the dock's back (display or DPI
+    // changes, a request the platform did not apply). Ask again whenever the
+    // viewport comes out smaller than the dock needs; the host ignores requests
+    // that already match, so this cannot loop.
+    const reassertWindowSize = () => {
+      const target = windowResizer.target();
+      if (target && isCompanionViewportShort(
+        { width: window.innerWidth, height: window.innerHeight },
+        target,
+      )) {
+        log.debug('Re-requesting Agent companion window size', {
+          viewportWidth: window.innerWidth,
+          viewportHeight: window.innerHeight,
+          width: target.width,
+          height: target.height,
+        });
+        windowResizer.request(target);
+      }
+    };
+    window.addEventListener('resize', reassertWindowSize);
+    return () => window.removeEventListener('resize', reassertWindowSize);
+  }, [windowResizer]);
 
   useEffect(() => {
     if (IS_WINDOWS_WEBVIEW && !trackPetLook) {
