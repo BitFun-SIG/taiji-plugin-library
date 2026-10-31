@@ -780,6 +780,28 @@ project installation remains unsupported; choose user scope to install on the
 serving host. Mobile/bot controls, CLI peers and Detached Dispatch do not gain a
 marketplace configuration or installation entry point.
 
+## Files sent through WeChat
+
+Send an ordinary file in the paired WeChat chat to make it available to the
+selected Agent session. OpenBitFun downloads and decrypts the file, saves it in
+a unique `.openbitfun-inbound-<id>` directory inside that session's workspace,
+and supplies its path to the Agent. Existing files are not overwritten. File
+contents stay out of the message text; the Agent can read the saved file using
+its tools. Files remain available for later turns and can be removed manually
+when no longer needed. On POSIX filesystems, directories use `0700` and files
+use `0600` permissions.
+
+A message accepts up to five files totaling 30 MiB. Missing download information,
+failed downloads, and unavailable workspaces produce an explicit error instead
+of submitting an empty message. Complete pending menu selections or approvals
+before sending a file.
+
+The session runtime and bot must run on the same OpenBitFun host. SSH workspaces
+use the session's remote filesystem and never fall back to the host's local
+filesystem. Cross-device bot sessions currently return an unsupported message;
+upload on the target device and provide the path there instead. This input path
+does not submit attachments to Detached Dispatch jobs.
+
 ## WeChat session result notifications
 
 While the WeChat bot is running, completed turns in its currently selected local

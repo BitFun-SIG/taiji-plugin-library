@@ -34,6 +34,19 @@ use openbitfun_agent_runtime::event_bus::EventSubscriberResult;
 
 const LONG_POLL_TIMEOUT_SECS: u64 = 36;
 
+fn inbound_file_rejection(
+    state: &BotChatState,
+    strings: &'static super::locale::BotStrings,
+) -> Option<&'static str> {
+    if state.active_remote_device.is_some() || state.account_remote_context {
+        Some(strings.inbound_file_remote_unsupported)
+    } else if state.pending_action.is_some() {
+        Some(strings.inbound_file_pending)
+    } else {
+        None
+    }
+}
+
 /// Maximum proactive messages held for one peer before they are merged into a
 /// single reply. Older entries are dropped so a peer that never comes back
 /// cannot grow the backlog without bound.
@@ -963,6 +976,13 @@ impl WeixinBot {
                             "Please send the 6-digit pairing code from OpenBitFun Desktop Remote Connect."
                         };
                         self.try_send_text(&peer, err, "pairing-prompt").await;
+                    } else if weixin_provider::has_inbound_file_items(msg) {
+                        self.try_send_text(
+                            &peer,
+                            super::locale::strings_for(language).need_pairing,
+                            "pairing-file-hint",
+                        )
+                        .await;
                     } else if weixin_provider::has_inbound_image_items(msg) {
                         let err = if language.is_chinese() {
                             "\u{914d}\u{5bf9}\u{8bf7}\u{76f4}\u{63a5}\u{53d1}\u{9001} 6 \u{4f4d}\u{6570}\u{5b57}\u{914d}\u{5bf9}\u{7801}\u{ff1b}\u{5b8c}\u{6210}\u{914d}\u{5bf9}\u{540e}\u{518d}\u{53d1}\u{9001}\u{56fe}\u{7247}\u{4e0e}\u{52a9}\u{624b}\u{5bf9}\u{8bdd}\u{3002}"
@@ -1065,7 +1085,13 @@ impl WeixinBot {
                             .await;
                     }
                     let body = weixin_provider::body_from_message(&msg_value);
-                    let text = if body.trim().is_empty() && !images.is_empty() {
+                    let text = if body.trim().is_empty()
+                        && weixin_provider::has_inbound_file_items(&msg_value)
+                    {
+                        super::locale::strings_for(language)
+                            .inbound_file_message
+                            .to_string()
+                    } else if body.trim().is_empty() && !images.is_empty() {
                         if language.is_chinese() {
                             "[\u{7528}\u{6237}\u{53d1}\u{9001}\u{4e86}\u{4e00}\u{5f20}\u{56fe}\u{7247}]".to_string()
                         } else {
@@ -1074,7 +1100,8 @@ impl WeixinBot {
                     } else {
                         body
                     };
-                    bot.handle_incoming_message(peer, &text, images).await;
+                    bot.handle_incoming_message(peer, &text, images, &msg_value)
+                        .await;
                 });
             }
         }
@@ -1082,11 +1109,51 @@ impl WeixinBot {
         info!("Weixin message loop stopped");
     }
 
+    async fn prepare_inbound_files(
+        &self,
+        forward: &mut super::command_router::ForwardRequest,
+        message: &Value,
+        identity_epoch: u64,
+    ) -> Result<()> {
+        use openbitfun_services_integrations::remote_connect::bot::inbound_files::{
+            attachment_prompt, save_inbound_file,
+        };
+        // Resolve against the immutable routed session, not current UI/workspace state.
+        if forward.remote_target.is_some() {
+            return Err(anyhow!("Cross-device bot file input is unsupported"));
+        }
+        let target = crate::service_agent_runtime::CoreServiceAgentRuntime::remote_file_target(
+            ".",
+            Some(&forward.session_id),
+        )
+        .await
+        .map_err(anyhow::Error::msg)?;
+        if !self.runtime_fence.is_lifecycle_current()
+            || self.runtime_fence.identity_epoch() != identity_epoch
+        {
+            return Err(anyhow!("Bot identity changed before file download"));
+        }
+        let files = self.api.download_inbound_files(message).await?;
+        let mut content = forward.content.clone();
+        for file in files {
+            if !self.runtime_fence.is_lifecycle_current()
+                || self.runtime_fence.identity_epoch() != identity_epoch
+            {
+                return Err(anyhow!("Bot identity changed during file download"));
+            }
+            let path = save_inbound_file(&target, &file).await?;
+            content.push_str(&attachment_prompt(&file.name, &path, file.bytes.len()));
+        }
+        forward.content = content;
+        Ok(())
+    }
+
     async fn handle_incoming_message(
         self: &Arc<Self>,
         peer_id: String,
         text: &str,
         images: Vec<ImageAttachment>,
+        message: &Value,
     ) {
         if !self.runtime_fence.is_lifecycle_current() {
             return;
@@ -1147,8 +1214,22 @@ impl WeixinBot {
         if self.runtime_fence.identity_epoch() != command_identity_epoch {
             return;
         }
+        let has_files = weixin_provider::has_inbound_file_items(message);
+        let strings = super::locale::strings_for(language);
+        if has_files {
+            if let Some(reason) = inbound_file_rejection(state, strings) {
+                drop(states);
+                self.try_send_text(&peer_id, reason, "file-rejected").await;
+                return;
+            }
+        }
         let was_remote = state.account_remote_context || state.active_remote_device.is_some();
-        let command = parse_command(text);
+        let command = if has_files {
+            // A caption is file input, never a menu selection or approval answer.
+            super::command_router::BotCommand::ChatMessage(text.to_owned())
+        } else {
+            parse_command(text)
+        };
         let mut result = handle_command(state, command, images).await;
         if !was_remote && (state.account_remote_context || state.active_remote_device.is_some()) {
             append_remote_push_notice(&mut result, language);
@@ -1165,6 +1246,28 @@ impl WeixinBot {
             return;
         }
 
+        if has_files {
+            if let Some(forward) = result.forward_to_session.as_mut() {
+                let prepared = self
+                    .prepare_inbound_files(forward, message, command_identity_epoch)
+                    .await;
+                if !self.runtime_fence.is_lifecycle_current()
+                    || self.runtime_fence.identity_epoch() != command_identity_epoch
+                {
+                    return;
+                }
+                if let Err(error) = prepared {
+                    warn!("Weixin inbound file preparation failed: {error}");
+                    self.try_send_text(
+                        &peer_id,
+                        &format!("{}{error}", strings.inbound_file_failed_prefix),
+                        "file-receive-failed",
+                    )
+                    .await;
+                    return;
+                }
+            }
+        }
         self.send_handle_result(&peer_id, &result).await;
 
         if let Some(forward) = result.forward_to_session {
@@ -1322,6 +1425,28 @@ impl EventSubscriber for WeixinSessionOutputSubscriber {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn inbound_files_preserve_pending_answers_and_reject_cross_device_paths() {
+        use super::super::command_router::PendingAction;
+        use super::super::locale::{strings_for, BotLanguage};
+        for language in [BotLanguage::ZhCN, BotLanguage::ZhTW, BotLanguage::EnUS] {
+            let strings = strings_for(language);
+            let mut state = BotChatState::new("peer".into());
+            assert!(inbound_file_rejection(&state, strings).is_none());
+            state.set_pending(PendingAction::SelectDevice { options: vec![] });
+            assert_eq!(
+                inbound_file_rejection(&state, strings),
+                Some(strings.inbound_file_pending)
+            );
+            assert!(state.pending_action.is_some());
+            state.account_remote_context = true;
+            assert_eq!(
+                inbound_file_rejection(&state, strings),
+                Some(strings.inbound_file_remote_unsupported)
+            );
+        }
+    }
 
     #[test]
     fn context_token_error_heuristic_uses_provider_contract() {
