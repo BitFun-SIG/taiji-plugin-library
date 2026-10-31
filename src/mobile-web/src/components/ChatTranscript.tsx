@@ -17,6 +17,7 @@ import { backgroundDeliveryFromMetadata, readBackgroundDelivery, suppressesBackg
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { MobileButton, MobileCard, MobileDisclosure, MobileMessage } from '@openbitfun/ui/mobile';
 import { useI18n } from '../i18n';
+import { messageTimestamp } from '../i18n/messageTime';
 import type { ActiveTurnSnapshot, ChatMessage, ChatMessageItem, RemoteToolStatus } from '../services/RemoteSessionManager';
 import ChatAskQuestionCard from './ChatAskQuestionCard';
 import { MarkdownContent } from './ChatMarkdown';
@@ -460,10 +461,10 @@ const ToolCard: React.FC<{
     ? formatDuration(now - tool.start_ms)
     : '';
 
-  const statusClass = isRunning ? 'running' : isCompleted ? 'done' : isError ? 'error' : 'pending';
+  const statusClass = isRunning ? 'running' : isCompleted ? 'done' : isError ? 'settled' : 'pending';
 
   return (
-    <MobileCard padding="none" className={`chat-tool-card chat-tool-card--${statusClass}`} data-prominent={isError || isToolAwaitingApproval(tool)}>
+    <MobileCard padding="none" className={`chat-tool-card chat-tool-card--${statusClass}`} data-prominent={isToolAwaitingApproval(tool)}>
       <div className="chat-tool-card__row">
         <span className="chat-tool-card__icon">
           {isRunning ? (
@@ -473,8 +474,8 @@ const ToolCard: React.FC<{
               <LucideCheck width="12" height="12" aria-hidden="true" />
             </span>
           ) : isError ? (
-            <span className="chat-tool-card__error-icon">
-              <LucideX width="12" height="12" aria-hidden="true" />
+            <span className="chat-tool-card__settled-icon">
+              <LucideCircle width="12" height="12" aria-hidden="true" />
             </span>
           ) : (
             <span className="chat-tool-card__spinner" />
@@ -583,8 +584,8 @@ export const ToolList: React.FC<{
 
   if (!tools || tools.length === 0) return null;
 
-  // Decisions and failures must remain visible outside collapsed process groups.
-  if (tools.length <= TOOL_LIST_COLLAPSE_THRESHOLD || tools.some(tool => isToolAwaitingApproval(tool) || ['failed', 'error'].includes(tool.status))) {
+  // Decisions remain visible; ordinary tool failures stay available in the details.
+  if (tools.length <= TOOL_LIST_COLLAPSE_THRESHOLD || tools.some(tool => isToolAwaitingApproval(tool))) {
     return (
       <div className="chat-tool-list">
         {tools.map((tc) => (
@@ -979,8 +980,17 @@ export function renderActiveTurnItems(
 
 interface OptimisticMessage {
   id: string;
+  timestamp?: string;
   text: string;
   images: Array<{ name: string; data_url: string }>;
+}
+
+function MessageTimestamp({ value }: { value?: string }) {
+  const { formatDate } = useI18n();
+  const date = messageTimestamp(value);
+  return date ? <time className="chat-msg__timestamp" dateTime={date.toISOString()}>
+    {formatDate(date, { dateStyle: 'short', timeStyle: 'short' })}
+  </time> : null;
 }
 
 function BackgroundExecutionReceipt({ completed, children }: { completed: boolean; children: React.ReactNode }) {
@@ -1059,6 +1069,7 @@ const ChatTranscript: React.FC<ChatTranscriptProps> = ({
           return (
             <MobileMessage
               key={message.id}
+              actions={<MessageTimestamp value={message.timestamp} />}
               className={`chat-msg chat-msg--user${menuMessageId === message.id ? ' chat-msg--menu-active' : ''}`}
               roleType="user"
               onTouchStart={(event) => onMessageTouchStart(message, event)}
@@ -1109,6 +1120,7 @@ const ChatTranscript: React.FC<ChatTranscriptProps> = ({
           return (
             <MobileMessage
               key={message.id}
+              actions={<MessageTimestamp value={message.timestamp} />}
               className={`chat-msg chat-msg--assistant chat-msg--collapsed${menuMessageId === message.id ? ' chat-msg--menu-active' : ''}`}
               roleType="assistant"
               onTouchStart={(event) => onMessageTouchStart(message, event)}
@@ -1125,6 +1137,7 @@ const ChatTranscript: React.FC<ChatTranscriptProps> = ({
         return (
           <MobileMessage
             key={message.id}
+              actions={<MessageTimestamp value={message.timestamp} />}
             className={`chat-msg chat-msg--assistant${menuMessageId === message.id ? ' chat-msg--menu-active' : ''}`}
             roleType="assistant"
             onTouchStart={(event) => onMessageTouchStart(message, event)}
@@ -1247,7 +1260,7 @@ const ChatTranscript: React.FC<ChatTranscriptProps> = ({
       })()}
 
       {optimisticMessage && (
-        <MobileMessage className="chat-msg chat-msg--user" roleType="user">
+        <MobileMessage className="chat-msg chat-msg--user" roleType="user" actions={<MessageTimestamp value={optimisticMessage.timestamp} />}>
           <div className="chat-msg__user-content">
             {optimisticMessage.text}
             {optimisticMessage.images.length > 0 && (
