@@ -17,7 +17,7 @@
 use crate::service_agent_runtime::{
     remote_opened_workspace_catalog, remote_workspace_display_name, remote_workspace_metadata,
 };
-use log::{error, info};
+use log::{error, info, warn};
 use serde_json::Value;
 use std::sync::{Arc, OnceLock};
 
@@ -880,19 +880,55 @@ async fn list_devices(state: &mut BotChatState, s: &'static BotStrings) -> Handl
         }
     };
 
-    // Build a selectable list: "0. Local" + each online device.
-    let online: Vec<_> = devices.into_iter().filter(|d| d.online).collect();
-
-    let mut options: Vec<(String, String)> =
-        vec![("local".to_string(), s.devices_local.to_string())];
-
-    for d in &online {
-        options.push((d.device_id.clone(), d.device_name.clone()));
+    // The relay lists every account host, including the one serving this bot.
+    let local_device_id = crate::service::remote_connect::DeviceIdentity::from_current_machine()
+        .map(|identity| identity.device_id)
+        .map_err(|e| warn!("Bot list_devices could not resolve the local device id: {e}"))
+        .ok();
+    if let (Some(local_id), Some(active)) = (
+        local_device_id.as_deref(),
+        state.active_remote_device.as_ref(),
+    ) {
+        if active.device_id == local_id {
+            info!("Bot active device is this host; switching back to the local target");
+            state.select_local_device();
+        }
     }
+    let options = device_menu_options(local_device_id.as_deref(), devices, s);
 
     let view = device_selection_view(state, &options, s);
     state.set_pending(PendingAction::SelectDevice { options });
     result_from_menu(state, view)
+}
+
+/// Build the selectable device list: the local host first, then every other
+/// online account device. The relay entry for this host is folded into the
+/// local entry so the same machine is never offered twice.
+fn device_menu_options(
+    local_device_id: Option<&str>,
+    devices: Vec<crate::service::remote_connect::account::DeviceInfo>,
+    s: &'static BotStrings,
+) -> Vec<(String, String)> {
+    let mut local_label = s.devices_local.to_string();
+    let mut remote = Vec::new();
+    for d in devices {
+        if local_device_id == Some(d.device_id.as_str()) {
+            let name = d
+                .device_alias
+                .as_deref()
+                .map(str::trim)
+                .filter(|alias| !alias.is_empty())
+                .unwrap_or(d.device_name.as_str());
+            if !name.trim().is_empty() {
+                local_label = format!("{} ({})", s.devices_local, name.trim());
+            }
+        } else if d.online {
+            remote.push((d.device_id, d.device_name));
+        }
+    }
+    let mut options = vec![("local".to_string(), local_label)];
+    options.extend(remote);
+    options
 }
 
 fn device_selection_view(
@@ -4399,6 +4435,47 @@ mod menu_tests {
         assert!(!text.contains("2. 返回"), "{text}");
         assert!(text.contains("0"), "{text}");
         assert!(text.contains("/menu"), "{text}");
+    }
+
+    #[test]
+    fn device_menu_folds_this_host_into_the_local_entry() {
+        let s = strings_for(BotLanguage::ZhCN);
+        let device = |id: &str, name: &str, online: bool| {
+            serde_json::from_value::<crate::service::remote_connect::account::DeviceInfo>(
+                serde_json::json!({
+                    "device_id": id,
+                    "device_name": name,
+                    "online": online,
+                    "last_seen_at": 0,
+                }),
+            )
+            .expect("device info")
+        };
+        let devices = vec![
+            device("self-id", "ecs-openbitfun-personal-lwb", true),
+            device("mac-id", "MacBook-Pro-2.local", true),
+            device("offline-id", "old-laptop", false),
+        ];
+
+        let options = device_menu_options(Some("self-id"), devices.clone(), s);
+        assert_eq!(
+            options,
+            vec![
+                (
+                    "local".to_string(),
+                    format!("{} (ecs-openbitfun-personal-lwb)", s.devices_local)
+                ),
+                ("mac-id".to_string(), "MacBook-Pro-2.local".to_string()),
+            ]
+        );
+
+        // Without a resolvable local id nothing is hidden.
+        let options = device_menu_options(None, devices, s);
+        assert_eq!(options.len(), 3);
+        assert_eq!(
+            options[0],
+            ("local".to_string(), s.devices_local.to_string())
+        );
     }
 
     #[test]

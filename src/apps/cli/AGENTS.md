@@ -112,8 +112,9 @@ restrictions remain enforced.
 - Assemble CLI through `DeliveryProfile::Cli` and validated product Runtime
   parts. Hiding a command is not a backend capability restriction.
 - The CLI selects the reviewed `openbitfun-core` owner-feature closure
-  (`agent-runtime`, `external-sources`, `plugin-runtime`, `remote-connect`, and
-  `ssh-remote`) plus the Code Agent atomic tool owners and the independent
+  (`agent-runtime`, `external-sources`, `plugin-runtime`, `remote-connect`,
+  `ssh-remote`, and `dispatch-store` for the `dispatch outbound` controller)
+  plus the Code Agent atomic tool owners and the independent
   `tools-pages` owner. Pages binds to the executing host's AccountRuntime;
   controller-local account state must not enable remote tools. It must not register
   DeepReview, DeepResearch, MiniApp, or Canvas agents/tools. Do not replace the

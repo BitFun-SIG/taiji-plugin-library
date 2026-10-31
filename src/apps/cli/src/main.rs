@@ -387,7 +387,11 @@ enum Commands {
         action: DaemonAction,
     },
 
-    /// Run and inspect persistent tasks owned by this machine
+    /// Run persistent tasks owned by this machine, or dispatch them to another host
+    ///
+    /// `dispatch outbound ...` is the controller: it submits a job to an SSH
+    /// connection or account device and observes it. The other verbs are the
+    /// JSON target protocol that controllers invoke on this machine.
     Dispatch {
         #[command(subcommand)]
         action: DispatchAction,
@@ -779,6 +783,11 @@ pub(crate) enum DispatchAction {
     Continue,
     /// Read persisted session facts (usage report) without starting a turn
     Query,
+    /// Submit jobs to, and observe jobs on, another OpenBitFun host
+    Outbound {
+        #[command(subcommand)]
+        action: dispatch::outbound::OutboundAction,
+    },
     #[command(name = "__workspace_provision", hide = true)]
     WorkspaceProvision,
     #[command(name = "__workspace_bundle_begin", hide = true)]
@@ -2291,6 +2300,39 @@ mod dispatch_command_tests {
             .render_long_help()
             .to_string();
         assert!(!dispatch_help.contains("__run"));
+        assert!(dispatch_help.contains("outbound"));
+
+        let outbound = Cli::try_parse_from([
+            "openbitfun",
+            "dispatch",
+            "outbound",
+            "submit",
+            "--target",
+            "device:mac-id",
+            "--approval-policy",
+            "reject-and-report",
+            "fix the flaky test",
+        ])
+        .expect("parse outbound submit");
+        assert!(matches!(
+            outbound.command,
+            Some(Commands::Dispatch {
+                action: DispatchAction::Outbound {
+                    action: crate::dispatch::outbound::OutboundAction::Submit { ref target, .. }
+                }
+            }) if target == "device:mac-id"
+        ));
+        // Approval policy is never defaulted for an unattended job.
+        assert!(Cli::try_parse_from([
+            "openbitfun",
+            "dispatch",
+            "outbound",
+            "submit",
+            "--target",
+            "mac",
+            "prompt",
+        ])
+        .is_err());
     }
 }
 

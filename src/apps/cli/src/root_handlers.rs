@@ -52,6 +52,7 @@ pub(crate) async fn handle_dispatch_action(action: DispatchAction) -> Result<()>
         openbitfun_core::product_assembly::DeliveryProfile::Cli,
     )?;
     let verb = match action {
+        DispatchAction::Outbound { action } => return crate::dispatch::outbound::run(action).await,
         DispatchAction::Run { job } => return crate::dispatch::run_worker(job).await,
         DispatchAction::WorkspaceProvisionRun { job } => {
             return crate::dispatch::run_workspace_provision(job)

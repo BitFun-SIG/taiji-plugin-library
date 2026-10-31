@@ -281,6 +281,23 @@ protocol version before submitting or inspecting jobs. See the
 [detached task architecture](../../../docs/architecture/detached-task-dispatch.md)
 for the transport and workspace-snapshot contract.
 
+To dispatch from this machine, use the controller commands. They print JSON and
+work from any Git checkout:
+
+```bash
+openbitfun dispatch outbound targets
+openbitfun dispatch outbound submit --target "MacBook-Pro-2.local" \
+  --approval-policy reject-and-report "Run the integration tests and fix failures"
+openbitfun dispatch outbound status <job-id> --cursor 0
+openbitfun dispatch outbound list
+openbitfun dispatch outbound cancel <job-id>
+```
+
+`--target` accepts an account device name or alias, `device:<deviceId>`, or
+`ssh:<connectionId>`. Device targets need this machine to be signed in to the
+same account; an offline device is an error, never a local fallback. The target
+works in its own worktree branched from `--base-ref` (default `HEAD`).
+
 The `remote` approval policy lets a controller answer pending tool permissions.
 Interactive questions from `AskUserQuestion` are unavailable for dispatch jobs;
 provide required task choices in the prompt instead of waiting for a question.
