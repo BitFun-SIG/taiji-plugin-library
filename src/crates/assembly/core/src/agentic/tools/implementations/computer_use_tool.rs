@@ -1734,9 +1734,12 @@ Use ExecCommand for genuine shell work, never ad hoc GUI capture, clipboard or i
         let Ok(service) = GlobalConfigManager::get_service().await else {
             return false;
         };
-        let ai: crate::service::config::types::AIConfig =
-            service.get_config(Some("ai")).await.unwrap_or_default();
-        ai.computer_use_enabled
+        // Missing legacy fields are defaulted by the config owner. A failed
+        // read must not turn that default into authorization.
+        service
+            .get_config::<bool>(Some("ai.computer_use_enabled"))
+            .await
+            .unwrap_or(false)
     }
 
     async fn is_available_in_context(&self, context: Option<&ToolUseContext>) -> bool {

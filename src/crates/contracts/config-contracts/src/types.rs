@@ -3765,6 +3765,19 @@ mod tests {
         assert!(reloaded.computer_use_enabled);
         assert_eq!(reloaded.max_rounds, 42);
 
+        // Only an absent legacy field takes the default; damaged preferences
+        // must remain errors instead of silently enabling native control.
+        for invalid in [
+            serde_json::json!("false"),
+            serde_json::Value::Null,
+            serde_json::json!(1),
+        ] {
+            assert!(serde_json::from_value::<AIConfig>(serde_json::json!({
+                "computer_use_enabled": invalid
+            }))
+            .is_err());
+        }
+
         for enabled in [false, true] {
             let config: AIConfig = serde_json::from_value(serde_json::json!({
                 "computer_use_enabled": enabled,

@@ -32,9 +32,11 @@ pub(crate) async fn execute_computer_use_locate(
             "Computer use configuration is unavailable.".to_string(),
         ));
     };
-    let ai: crate::service::config::types::AIConfig =
-        service.get_config(Some("ai")).await.unwrap_or_default();
-    if !ai.computer_use_enabled {
+    let enabled = service
+        .get_config::<bool>(Some("ai.computer_use_enabled"))
+        .await
+        .map_err(|_| OpenBitFunError::tool("Computer use configuration is unavailable."))?;
+    if !enabled {
         return Err(OpenBitFunError::tool(
             "Computer use is disabled in OpenBitFun settings.".to_string(),
         ));
