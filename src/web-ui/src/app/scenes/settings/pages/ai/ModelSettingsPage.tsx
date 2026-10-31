@@ -152,7 +152,7 @@ import {
   Tooltip,
   type ComboboxOption,
 } from '@openbitfun/ui';
-import { AlertTriangle, EyeOff, FolderOpen, Loader, Wifi } from 'lucide-react';
+import { AlertTriangle, EyeOff, FolderOpen, Loader, Undo2, Wifi } from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 
 const log = createLogger('ModelSettings');
@@ -2777,7 +2777,22 @@ const ModelSettingsPage: React.FC = () => {
     return (
       <ConfigPageLayout className="openbitfun-model-settings" data-openbitfun-component="model-settings" data-openbitfun-part="root" data-openbitfun-view="selection">
         <ConfigPageHeader
+          className="openbitfun-model-settings__selection-header"
           title={t('providerSelection.title')}
+          extra={(
+            <div className="openbitfun-model-settings__selection-actions" data-openbitfun-component="model-settings" data-openbitfun-part="selectionActions">
+              <Tooltip content={t('actions.back')} trigger="hover-focus">
+                <IconButton
+                  variant="quiet"
+                  size="sm"
+                  aria-label={t('actions.back')}
+                  data-testid="settings-model-provider-back-btn"
+                  icon={<Icon glyph={Undo2} size="sm" />}
+                  onClick={() => setCreationMode(null)}
+                />
+              </Tooltip>
+            </div>
+          )}
         />
 
         <ConfigPageContent className="openbitfun-model-settings__content openbitfun-model-settings__content--selection">
@@ -2887,12 +2902,6 @@ const ModelSettingsPage: React.FC = () => {
                   {isProviderListCollapsed ? <Icon name="chevron-down" size="sm" /> : <Icon name="chevron-up" size="sm" />}
                 </button>
               )}
-            </div>
-
-            <div className="openbitfun-model-settings__selection-actions" data-openbitfun-component="model-settings" data-openbitfun-part="selectionActions">
-              <Button variant="fill" size="sm" onClick={() => setCreationMode(null)}>
-                {t('actions.cancel')}
-              </Button>
             </div>
           </div>
         </ConfigPageContent>
