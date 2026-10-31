@@ -327,7 +327,8 @@
     "blur": {
       "subtle": { "$type": "filter", "$value": "blur(4px) saturate(1.05)" },
       "base": { "$type": "filter", "$value": "blur(8px) saturate(1.1)" },
-      "medium": { "$type": "filter", "$value": "blur(12px) saturate(1.2)" }
+      "medium": { "$type": "filter", "$value": "blur(12px) saturate(1.2)" },
+      "strong": { "$description": "Wide-radius frosting for translucent floating panels over detailed content.", "$type": "filter", "$value": "blur(32px) saturate(1.3)" }
     }
   },
   "opacity": {
